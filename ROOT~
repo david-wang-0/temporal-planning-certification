@@ -1,0 +1,12 @@
+session "temporal-planning-certification" = 
+  Temporal_AI_Planning_Languages_Semantics +
+  "Timed_Automata" +
+  options [document = pdf, document_output = "output"]
+(*theories [document = false]
+    A
+    B
+  theories
+    Ccd
+    D*)
+  document_files
+    "root.tex"
