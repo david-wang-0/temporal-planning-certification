@@ -1,7 +1,9 @@
 session "temporal-planning-certification" = 
-  Temporal_AI_Planning_Languages_Semantics +
-  "Timed_Automata" +
+  HOL +
   options [document = pdf, document_output = "output"]
+  sessions
+    Temporal_AI_Planning_Languages_Semantics
+    Timed_Automata
 (*theories [document = false]
     A
     B

@@ -1,31 +1,8 @@
 theory Diagonal_Timed_Automata
-  imports Main
+  imports Base
 begin
 
 chapter \<open>Basic Definitions and Semantics\<close>
-
-section \<open>Time\<close>
-
-class time = linordered_ab_group_add +
-  assumes dense: "x < y \<Longrightarrow> \<exists>z. x < z \<and> z < y"
-  assumes non_trivial: "\<exists> x. x \<noteq> 0"
-
-begin
-
-lemma non_trivial_neg: "\<exists> x. x < 0"
-proof -
-  from non_trivial obtain x where "x \<noteq> 0" by auto
-  then show ?thesis
-  proof (cases "x < 0", auto, goal_cases)
-    case 1
-    then have "x > 0" by auto
-    then have "(-x) < 0" by auto
-    then show ?case by blast
-  qed
-qed
-
-end
-
 
 text \<open>
 clock \<open>'c\<close> \<open>\<le>\<close> clock \<open>'c\<close> + time \<open>'t\<close>
@@ -46,8 +23,7 @@ datatype ('c, 't :: time) dconstraint =
 section \<open>Syntactic Definition\<close>
 
 text \<open>
-  For an informal description of timed automata we refer to Bengtsson and Yi \<^cite>\<open>"BengtssonY03"\<close>.
-  We define a timed automaton \<open>A\<close>
+  This is a copy of \<^cite>\<open>Wimmer2016\<close>
 \<close>
 
 type_synonym

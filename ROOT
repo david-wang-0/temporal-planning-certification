@@ -12,3 +12,4 @@ session "temporal-planning-certification" =
     D*)
   document_files
     "root.tex"
+    "root.bib"
