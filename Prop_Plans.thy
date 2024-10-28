@@ -61,7 +61,7 @@ type_synonym ('p) state_sequence = "nat \<Rightarrow> ('p state)"
 
 text \<open>Happening Time Points\<close>
 definition htps::"('p, 't::time) plan \<Rightarrow> 't set" where
-"htps \<pi> \<equiv> {t |a t d. (a, t, d) \<in> set \<pi>} \<union> {t + d |a t d. (a, t, d) \<in> set \<pi>}"
+"htps \<pi> \<equiv> {t |a t d. (a, t, d) \<in> \<pi>} \<union> {t + d |a t d. (a, t, d) \<in> \<pi>}"
 
 text \<open>Happening Sequences\<close>
 type_synonym ('p, 't) happening_sequence = "('t \<times> 'p snap_action) set"
