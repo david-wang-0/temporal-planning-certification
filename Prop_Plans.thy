@@ -115,10 +115,7 @@ definition mutex_snap_action::"'p snap_action \<Rightarrow> 'p snap_action \<Rig
 subsubsection \<open>Non-mutex snap-action sequence\<close>
 
 text \<open>This will not work as such. Equality for snap-actions must first take the original action
-into account, but this is something to worry about later. (in a locale?)\<close>
-
-text \<open>Again, this needs an index to distinguish between actions and therefore snap-actions, but this 
-is to worry about later (in the locale).\<close>
+into account, but this is something to worry about later.\<close>
 definition nm_sa_seq::"('p, 't) happening_sequence \<Rightarrow> 't \<Rightarrow> bool" where
 "nm_sa_seq B \<epsilon> \<equiv> \<not>(\<exists>t u. \<exists>a b. a \<noteq> b \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u)"
 
