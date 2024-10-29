@@ -191,35 +191,35 @@ locale temp_planning_problem =
     and act::     "'action indexing"
   assumes wf_init:  "init \<subseteq> props" 
       and wf_goal:  "goal \<subseteq> props"
-      and act_id:   "\<forall>s t. s = t \<longleftrightarrow> (\<forall>a \<in> actions. 
-          at_start a = s \<longleftrightarrow> at_start a = t 
-        \<and> at_end a = s \<longleftrightarrow> at_end a = t)
-        \<and> (\<forall>a \<in> actions. \<forall> b \<in> actions. a \<noteq> b \<longrightarrow> at_start a \<noteq> at_start b \<and> at_end a \<noteq> at_end b)
-        \<and> (\<forall>a \<in> actions. at_start a \<noteq> at_end a)
-      "
       and wf_acts: "let 
-          snap_props      = \<lambda>s. pre s \<union> adds s \<union> dels s
+          snap_props = \<lambda>s. pre s \<union> adds s \<union> dels s
         in (\<forall>a \<in> actions. 
           snap_props (at_start_a) \<subseteq> props
         \<and> snap_props (at_end a) \<subseteq> props
         \<and> over_all a \<subseteq> props)"
-      and prop_numbering:   "complete_sequence props p"
-      and action_numbering: "complete_sequence actions act"
+      and at_start_inj: "inj_on at_start actions"
+      and at_end_inj:   "inj_on at_end actions"
+      and snaps_disj:   "(at_start ` actions) \<inter> (at_end ` actions) = {}"
+      and prop_numbering:   "bij_betw p {j. j < card props} props"
+      and action_numbering: "bij_betw act {j. j < card actions} actions"
 begin 
 definition apply_effects::"'proposition set \<Rightarrow> 'snap_action set \<Rightarrow> 'proposition set" where
 "apply_effects M S \<equiv> (M - \<Union>(dels ` S)) \<union> \<Union>(adds ` S)"
 
 definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" where
 "mutex_snap_action a b = (
-  a = b \<or>
   pre a \<inter> ((adds b) \<union> (dels b)) \<noteq> {} \<or>
   (adds a \<inter> dels b) \<noteq> {} \<or>
   pre b \<inter> ((adds a) \<union> (dels a)) \<noteq> {} \<or>
   (adds b \<inter> dels a) \<noteq> {}
 )"
 
+lemma act_inj_on: "inj_on act {j. j < card actions}"
+  using action_numbering bij_betw_def by blast
 
 end
+
+find_theorems name: "disj*on"
 
 locale temporal_plan = temp_planning_problem _ _ _ _ _ _ _ _ upper pre
   for upper::   "'action  \<Rightarrow> ('t::time) upper_bound"
