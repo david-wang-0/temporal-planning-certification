@@ -29,13 +29,15 @@ datatype alpha = Unit
 context temp_planning_problem
 begin
 
-definition P ("P\<^sub>_" 65) where "P \<equiv> p"
+definition prop_numbers ("p\<^sub>_" 65) where "prop_numbers \<equiv> p"
 
 definition "N = card props"
 
 definition A ("A\<^sub>_" 65) where "A \<equiv> act"
 
 definition "M = card actions"
+
+definition "true_const \<equiv> GE Stop 0"
 
 text \<open>Preventing time from passing in any location other than the main location.\<close>
 fun invs::"(('proposition, 'action) clock, 't, ('proposition, 'action, 'snap_action) state) invassn" where
@@ -50,11 +52,13 @@ definition init_asmt::"(('proposition, 'action) clock, 't) clkassn list" where
 "init_asmt \<equiv> map (\<lambda>x. (PropClock x, 1)) init_pos"
 
 definition initial_transition::"(alpha, ('proposition, 'action) clock, 't, ('proposition, 'action, 'snap_action) state) transition" where
-"initial_transition \<equiv> (Init, GE Stop 0, Unit, init_asmt, Main)"
+"initial_transition \<equiv> (Init, true_const, Unit, init_asmt, Main)"
 
 text \<open>The transition from the main location \<open>l\<^sub>\<delta>\<close> to the \<open>0\<^sup>t\<^sup>h\<close> location of the state decoding path \<open>s\<^sub>0\<close>.\<close>
 definition main_to_decoding::"(alpha, ('proposition, 'action) clock, 't, ('proposition, 'action, 'snap_action) state) transition" where
-"main_to_decoding \<equiv> (Main, GE Stop 0, Unit, [(Stop, 0)], PropDecoding (p 0))"
+"main_to_decoding \<equiv> (Main, true_const, Unit, [(Stop, 0)], PropDecoding (p 0))"
+
+subsubsection \<open>State decoding\<close>
 
 text \<open>The transitions between the decoding locations for the propositional clocks \<open>cp\<^sub>i\<close>\<close>
 definition prop_decoding::"(alpha, ('proposition, 'action) clock, 't, ('proposition, 'action, 'snap_action) state) transition set" where
@@ -64,7 +68,7 @@ definition prop_decoding::"(alpha, ('proposition, 'action) clock, 't, ('proposit
 text \<open>A transition from the decoding locations for propositional clocks to the decoding locations for
 the execution clocks\<close>
 definition prop_decoding_to_exec_decoding::"(alpha, ('proposition, 'action) clock, 't, ('proposition, 'action, 'snap_action) state) transition" where
-"prop_decoding_to_exec_decoding \<equiv> (PropDecoding (p N), GE Stop 0, Unit, [], ExecDecoding (act 0))"
+"prop_decoding_to_exec_decoding \<equiv> (PropDecoding (p N), true_const, Unit, [], ExecDecoding (act 0))"
 
 text \<open>The transitions between the decoding locations for the execution clocks \<open>cr\<^sub>a\<close>\<close>
 definition exec_decoding::"(alpha, ('proposition, 'action) clock, 't, ('proposition, 'action, 'snap_action) state) transition set" where
@@ -73,16 +77,15 @@ definition exec_decoding::"(alpha, ('proposition, 'action) clock, 't, ('proposit
 
 text \<open>The transition from the execution decoding locations to the decision-making locations\<close>
 definition exec_decoding_to_decision_making::"(alpha, ('proposition, 'action) clock, 't, ('proposition, 'action, 'snap_action) state) transition" where
-"exec_decoding_to_decision_making \<equiv> (ExecDecoding (act M), GE Stop 0, Unit, [], Decision (at_start (act 0)))"
+"exec_decoding_to_decision_making \<equiv> (ExecDecoding (act M), true_const, Unit, [], Decision (at_start (act 0)))"
 
-text \<open>The transitions between the decision-making locations\<close>
+subsubsection \<open>Decision-making\<close>
 definition AND_ALL::"(('proposition, 'action) clock, 't) dconstraint list \<Rightarrow> (('proposition, 'action) clock, 't) dconstraint" where
-"AND_ALL xs = fold AND xs (GE Stop 0)"
+"AND_ALL xs = fold AND xs (true_const)"
 
-text \<open>Numbering for snap_actions\<close>
+text \<open>Numbering for snap_actions. This is too difficult to work with.\<close>
 definition s::"nat \<Rightarrow> 'snap_action" where
 "s n \<equiv> if (n mod 2 = 0) then (at_start (act (n div 2))) else (at_end (act (n div 2)))"
-
 
 lemma "bij_betw s {n. n < 2 * M} (at_start ` actions \<union> at_end ` actions)"
 proof -
@@ -339,18 +342,35 @@ proof -
     using bij_betw_combine[OF 1 2 snaps_disj] 3 by simp
 qed
 
-
 definition interfering_snaps::"'snap_action \<Rightarrow> 'snap_action list" where
 "interfering_snaps a = sorted_key_list_of_set (inv s) {b. a \<noteq> b \<and> mutex_snap_action a b}"
 
+text \<open>This is easier to work with.\<close>
 definition interfering_at_start::"'snap_action \<Rightarrow> 'action list" where
-"interfering_at_start a = sorted_key_list_of_set act {A. at_start A \<noteq> a \<and> mutex a (at_start a)}"
+"interfering_at_start a = sorted_key_list_of_set (inv act) {A. at_start A \<noteq> a \<and> mutex_snap_action a (at_start A)}"
+
+definition start_constraints::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 't) dconstraint list" where
+"start_constraints a = map (\<lambda>b. GT (Start b) \<epsilon>) (interfering_at_start a)"
+
+definition interfering_at_end::"'snap_action \<Rightarrow> 'action list" where
+"interfering_at_end a = sorted_key_list_of_set (inv act) {A. at_end A \<noteq> a \<and> mutex_snap_action a (at_end A)}"
+
+definition end_constraints::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 't) dconstraint list" where
+"end_constraints a = map (\<lambda>b. GT (End b) \<epsilon>) (interfering_at_end a)"
 
 definition sep::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 't) dconstraint" where
-"sep a \<equiv> AND_ALL (map (\<lambda>b. GT (Start b) \<epsilon>) (interfering_snaps a))"
+"sep a \<equiv> AND_ALL (start_constraints a @ end_constraints a)"
 
+text \<open>The clock constraints for the precondition\<close>
+definition prop_clocks::"'snap_action \<Rightarrow> ('proposition, 'action) clock list" where
+"prop_clocks a \<equiv> map PropClock (sorted_key_list_of_set (inv p) (pre a))"
+
+definition pre_constraint::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 't) dconstraint" where
+"pre_constraint a \<equiv> AND_ALL (map (\<lambda>c. EQ c 1) (prop_clocks a))"
+
+text \<open>The guard constraints\<close>
 definition guard::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 't) dconstraint" where
-"guard s \<equiv> undefined"
+"guard a \<equiv> AND (sep a) (pre_constraint a)"
 
 definition guard_at_start::"'action \<Rightarrow> (('proposition, 'action) clock, 't::time) dconstraint" where
 "guard_at_start a \<equiv> AND (guard (at_start a)) (EQ (Running a) 0)"
@@ -368,8 +388,15 @@ AND (AND (guard (at_end a)) (EQ (Running a) 1)) (AND l u)"
 
 definition decision_making::"(alpha, ('proposition, 'action) clock, 't, ('proposition, 'action, 'snap_action) state) transition set" where
 "decision_making \<equiv> 
-  {(Decision (at_start (act m)), CEQ (Running (act m)) Delta 1, Unit, [(Running (act m), 1)], ExecDecoding (act (m + 1))) | m. m < M}
-  \<union> {(ExecDecoding (act m), CEQ (Running (act m)) Delta 0, Unit, [(Running (act m), 0)], ExecDecoding (act (m + 1))) | m. m < M}"
+  {(Decision (at_start (act m)), guard (at_start (act m)), Unit, [(ExecStart (act m), 1)], Decision (at_end (act m))) | m. m < M}
+  \<union> {(Decision (at_start (act m)), true_const, Unit, [(ExecStart (act m), 0)], Decision (at_end (act m))) | m. m < M}
+  \<union> {(Decision (at_end (act m)), guard (at_end (act m)), Unit, [(ExecEnd (act m), 1)], Decision (at_start (act (Suc m)))) | m. Suc m < M}
+  \<union> {(Decision (at_end (act m)), true_const, Unit, [(ExecEnd (act m), 0)], Decision (at_start (act (Suc m)))) | m. Suc m < M}"
+
+definition dm_to_exec::"(alpha, ('proposition, 'action) clock, 't, ('proposition, 'action, 'snap_action) state) transition" where
+"dm_to_exec \<equiv> (Decision (at_end (act M)), true_const, Unit, [], Execution (at_start (act 0)))"
+
+subsubsection \<open>Execution\<close>
 
 end
 

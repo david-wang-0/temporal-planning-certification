@@ -217,6 +217,9 @@ definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightar
 lemma act_inj_on: "inj_on act {j. j < card actions}"
   using action_numbering bij_betw_def by blast
 
+lemma act_img_action: "act ` {n. n < card actions} = actions"
+  using action_numbering[simplified bij_betw_def] by simp
+
 end
 
 find_theorems name: "disj*on"
