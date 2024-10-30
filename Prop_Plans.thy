@@ -182,14 +182,14 @@ locale temp_planning_problem =
     and at_start::"'action  \<Rightarrow> 'snap_action"
     and at_end::  "'action  \<Rightarrow> 'snap_action"
     and over_all::"'action  \<Rightarrow> 'proposition set"
-    and lower::   "'action  \<Rightarrow> ('t::time) lower_bound"
-    and upper::   "'action  \<Rightarrow> 't upper_bound"
+    and lower::   "'action  \<Rightarrow> ('time::time) lower_bound"
+    and upper::   "'action  \<Rightarrow> 'time upper_bound"
     and pre::     "'snap_action \<Rightarrow> 'proposition set"
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
     and p::       "'proposition indexing"
     and act::     "'action indexing"
-    and \<epsilon>::       "'t"
+    and \<epsilon>::       "'time"
   assumes wf_init:  "init \<subseteq> props" 
       and wf_goal:  "goal \<subseteq> props"
       and wf_acts: "let 
@@ -221,36 +221,51 @@ lemma act_inj_on: "inj_on act {j. j < card actions}"
 lemma act_img_action: "act ` {n. n < card actions} = actions"
   using action_numbering[simplified bij_betw_def] by simp
 
+definition snap_actions::"'snap_action set" where
+"snap_actions \<equiv> (at_start ` actions) \<union> (at_end ` actions)"
+
 end
 
-find_theorems name: "disj*on"
 
 locale temporal_plan = temp_planning_problem _ _ _ _ _ _ _ _ upper pre
-  for upper::   "'action  \<Rightarrow> ('t::time) upper_bound"
+  for upper::   "'action  \<Rightarrow> ('time::time) upper_bound"
   and pre::     "'snap_action \<Rightarrow> 'proposition set" +
-fixes \<pi>::"nat \<rightharpoonup> ('action \<times> 't \<times> 't)"
+fixes \<pi>::"nat \<rightharpoonup> ('action \<times> 'time \<times> 'time)"
+assumes plan_actions_in_problem: "(a, t, d) \<in> ran \<pi> \<Longrightarrow> a \<in> actions"
 begin
   
 text \<open>Happening Time Points\<close>
-definition htps::"'t set" where
+definition htps::"'time set" where
 "htps \<equiv> {t |a t d. (a, t, d) \<in> ran \<pi>} \<union> {t + d |a t d. (a, t, d) \<in> ran \<pi>}"
+
+definition htpl::"'time list" where
+"htpl = sorted_list_of_set htps"
+
+find_theorems name: "sort*key"
+
+definition time_indexing::"nat \<Rightarrow> 'time" where
+"time_indexing \<equiv> fold (\<lambda>(t, i) f. f(i:= t)) (zip htpl (sorted_list_of_set {n. n < length htpl})) (\<lambda>x. 0)"
+
+lemma time_indexing_bij_betw: "bij_betw time_indexing {n. n < card htps} htps"
+  sorry
 
 text \<open>Happening Sequences\<close>
 
-definition plan_happ_seq::"('t \<times> 'snap_action) set" where
+definition plan_happ_seq::"('time \<times> 'snap_action) set" where
 "plan_happ_seq \<equiv> 
     {(t, at_start a) | a t d. (a, t, d) \<in> ran \<pi>} 
   \<union> {(t + d, at_end a) | a t d. (a, t, d) \<in> ran \<pi>}"
 
-definition happ_at::"('t \<times> 'snap_action) set \<Rightarrow> 't \<Rightarrow> 'snap_action set" where
+definition happ_at::"('time \<times> 'snap_action) set \<Rightarrow> 'time \<Rightarrow> 'snap_action set" where
 "happ_at B t \<equiv> {s |s. (t, s) \<in> B}"
 
+
 text \<open>Invariants\<close>
-definition plan_inv_seq::"('proposition, 't) invariant_sequence" where
+definition plan_inv_seq::"('proposition, 'time) invariant_sequence" where
 "plan_inv_seq \<equiv>
   {(t', over_all a) | a t d t'. (a, t, d) \<in> ran \<pi> \<and> (t < t' \<and> t' \<le> t + d)}"
 
-definition invs_at::"('proposition, 't) invariant_sequence \<Rightarrow> 't \<Rightarrow> 'proposition set" where
+definition invs_at::"('proposition, 'time) invariant_sequence \<Rightarrow> 'time \<Rightarrow> 'proposition set" where
 "invs_at Inv t \<equiv> \<Union>{p | p. (t, p) \<in> Inv}"
 
 
@@ -260,15 +275,15 @@ text \<open>This will not work as such. Equality for snap-actions must first tak
 into account, but this is something to worry about later. (in a locale?)\<close>
 
 text \<open>From the locale assumptions, we know that if a is not b then \<close>
-definition nm_sa_seq::"('t \<times> 'snap_action) set \<Rightarrow> bool" where
+definition nm_sa_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_sa_seq B \<equiv> \<not>(\<exists>t u. t - u \<le> \<epsilon> \<and> u - t \<le> \<epsilon> \<and> (\<exists>a b. a \<noteq> b \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u \<longrightarrow> \<not>(mutex_snap_action a b)))"
 
 subsubsection \<open>Valid state sequence\<close>
 
 definition valid_state_sequence::"
   'proposition state_sequence 
-\<Rightarrow> ('t \<times> 'snap_action) set
-\<Rightarrow> ('proposition, 't) invariant_sequence 
+\<Rightarrow> ('time \<times> 'snap_action) set
+\<Rightarrow> ('proposition, 'time) invariant_sequence 
 \<Rightarrow> bool" where
 "valid_state_sequence M B Inv \<equiv> (
   let 

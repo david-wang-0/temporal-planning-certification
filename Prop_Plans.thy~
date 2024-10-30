@@ -189,6 +189,7 @@ locale temp_planning_problem =
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
     and p::       "'proposition indexing"
     and act::     "'action indexing"
+    and \<epsilon>::       "'t"
   assumes wf_init:  "init \<subseteq> props" 
       and wf_goal:  "goal \<subseteq> props"
       and wf_acts: "let 
@@ -259,8 +260,8 @@ text \<open>This will not work as such. Equality for snap-actions must first tak
 into account, but this is something to worry about later. (in a locale?)\<close>
 
 text \<open>From the locale assumptions, we know that if a is not b then \<close>
-definition nm_sa_seq::"('t \<times> 'snap_action) set \<Rightarrow> 't \<Rightarrow> bool" where
-"nm_sa_seq B \<epsilon> \<equiv> \<not>(\<exists>t u. \<exists>a b. a \<noteq> b \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u)"
+definition nm_sa_seq::"('t \<times> 'snap_action) set \<Rightarrow> bool" where
+"nm_sa_seq B \<equiv> \<not>(\<exists>t u. t - u \<le> \<epsilon> \<and> u - t \<le> \<epsilon> \<and> (\<exists>a b. a \<noteq> b \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u \<longrightarrow> \<not>(mutex_snap_action a b)))"
 
 subsubsection \<open>Valid state sequence\<close>
 
@@ -268,9 +269,8 @@ definition valid_state_sequence::"
   'proposition state_sequence 
 \<Rightarrow> ('t \<times> 'snap_action) set
 \<Rightarrow> ('proposition, 't) invariant_sequence 
-\<Rightarrow> 't
 \<Rightarrow> bool" where
-"valid_state_sequence M B Inv \<epsilon> \<equiv> (
+"valid_state_sequence M B Inv \<equiv> (
   let 
     T = fst ` B 
   in
@@ -284,7 +284,7 @@ definition valid_state_sequence::"
         apply_effects (M i) S = (M (Suc i))
         \<and> invs \<subseteq> (M i)
         \<and> pres \<subseteq> (M i)
-        \<and> nm_sa_seq B \<epsilon>
+        \<and> nm_sa_seq B
     ))
 )"
 
@@ -299,13 +299,13 @@ definition no_self_overlap::"bool" where
   \<and> t \<le> u \<and> u \<le> t + d)"
 
 
-definition valid_plan::"'t \<Rightarrow> bool" where
-"valid_plan \<epsilon> \<equiv> \<exists>M. (
+definition valid_plan::"bool" where
+"valid_plan \<equiv> \<exists>M. (
   let 
     B = plan_happ_seq;
     Inv = plan_inv_seq
   in
-    valid_state_sequence M B Inv \<epsilon>
+    valid_state_sequence M B Inv
     \<and> no_self_overlap
     \<and> (M 0) = init
     \<and> (M (card B - 1)) = goal
