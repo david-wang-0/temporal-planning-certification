@@ -1,5 +1,5 @@
 theory Compilation
-  imports Prop_Plans Diagonal_Timed_Automata
+  imports Temporal_Plans Diagonal_Timed_Automata
 begin
 
 text \<open>This formalisation follows the pen-and-paper compilation defined by Gigante, et al.\<close>
@@ -462,8 +462,10 @@ end
 context temporal_plan
 begin
 
+abbreviation "B" where "B \<equiv> happ_at plan_happ_seq"
+
 subsection \<open>Definitions\<close>
-subsubsection \<open>Proposition and execution model\<close>
+subsubsection \<open>Proposition and execution state\<close>
 definition prop_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> bool" where
 "prop_model W Q \<equiv> \<forall>p. (W (PropClock p) = 1 \<longleftrightarrow> p \<in> Q) \<and> (W (PropClock p) = 0 \<longleftrightarrow> p \<notin> Q)"
 
@@ -472,21 +474,27 @@ definition delta_prop_model::"(('proposition, 'action) clock, 'time) cval \<Righ
 
 type_synonym 'a exec_state = "'a set"
 
-definition exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action exec_state \<Rightarrow> bool" where
+definition exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
 "exec_model W E \<equiv> \<forall>a \<in> actions. (W (Running a) = 1 \<longleftrightarrow> a \<in> E) \<and> (W (Running a) = 0 \<longleftrightarrow> a \<notin> E)"
 
-definition delta_exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action exec_state \<Rightarrow> bool" where
+definition delta_exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
 "delta_exec_model W E \<equiv> \<forall>a \<in> actions. ((W (Running a)) - (W Delta) = 1 \<longleftrightarrow> a \<in> E) \<and> ((W (Running a)) - (W Delta) = 0 \<longleftrightarrow> a \<notin> E)"
 
-definition partial_exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action exec_state \<Rightarrow> bool" where
+definition partial_exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
 "partial_exec_model W E \<equiv> \<forall>m < M. (W (Running (act m)) = 1 \<longleftrightarrow> (act m) \<in> E) \<and> (W (Running (act m)) = 0 \<longleftrightarrow> (act m) \<notin> E)"
+
+definition exec_state_sequence::"('time \<times> 'action) set" where
+"exec_state_sequence \<equiv> {(t, a) |s t a. (s, at_start a) \<in> plan_happ_seq \<and> s < t 
+                  \<and> \<not>(\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' < t)}"
+
+definition exec_state_sequence'::"('time \<times> 'action) set" where
+"exec_state_sequence' \<equiv> {(t, a) |s t a. (s, at_start a) \<in> plan_happ_seq \<and> s \<le> t 
+                  \<and> \<not>(\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' \<le> t)}"
 
 
 subsubsection \<open>Execution time\<close>
 definition argmax::"('ty::linordered_ab_group_add \<Rightarrow> bool) \<Rightarrow> 'ty" where
 "argmax P \<equiv> if (\<exists>x. P x) then (Greatest P) else 0"
-
-abbreviation "B" where "B \<equiv> happ_at plan_happ_seq"
 
 definition last_snap_exec::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
 "last_snap_exec a t = argmax (\<lambda>t'. t' < t \<and> a \<in> B t')"
@@ -499,8 +507,6 @@ definition last_snap_exec'::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'tim
 
 definition exec_time'::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
 "exec_time' a t = (let t' = last_snap_exec' a t in t - t')"
-
-
 
 lemma a_not_in_b_last_unchanged: "a \<notin> B t \<Longrightarrow> last_snap_exec' a t = last_snap_exec a t"
 proof -
@@ -586,10 +592,79 @@ qed
 lemma exec_time_full_upd_eq_exec_time': "partial_exec_time_update a t M = exec_time' a t"
   using partial_exec_time_update_def exec_time_def exec_time'_def 
     a_not_in_b_last_unchanged a_in_b_last_now B_lim_M_eq_B 
+  by simp 
+
+lemma subseq_last_snap_exec: "(Suc l) < length htpl \<Longrightarrow> last_snap_exec a (time_index (Suc l)) = last_snap_exec' a (time_index l)"
+proof -
+  assume a: "(Suc l) < length htpl"
+  
+  have "last_snap_exec a (time_index (Suc l)) = argmax (\<lambda>t'. t' < (time_index (Suc l)) \<and> a \<in> B t')"
+    unfolding last_snap_exec_def ..
+
+  define t where 
+    "t = argmax (\<lambda>t'. t' < (time_index (Suc l)) \<and> a \<in> B t')"    
+
+  define s where
+    "s = argmax (\<lambda>t'. t' \<le> (time_index l) \<and> a \<in> B t')" 
+  
+  have cl: "length htpl = card htps" using htpl_def by fastforce
+  
+  have tl_ord: "time_index l < time_index (Suc l)" 
+    using time_index_ord a
+    by blast
+  
+  from t_def consider "\<exists>t'. t' < (time_index (Suc l)) \<and> a \<in> B t'" 
+    | "\<not>(\<exists>t'. t' < (time_index (Suc l)) \<and> a \<in> B t')" by auto
+  hence "t = s"
+  proof cases
+    case 1
+    then obtain t' where
+      t': "t' < time_index (Suc l)" 
+      "a \<in> B t'" by blast
+    from this(2)
+    have "t' \<in> set htpl" using a_in_B_iff_t_in_htps 
+      using finite_htps htpl_def by auto
+    
+    have "\<not> (\<exists>t'. (time_index l) < t' \<and> t' < (time_index (Suc l)) \<and> t' \<in> set htpl)"
+    proof (rule notI)
+      assume "\<exists>t'>time_index l. t' < time_index (Suc l) \<and> t' \<in> set htpl"
+      with time_index_bij_betw_list
+      obtain l' where
+        l': "l' < length htpl"
+        "time_index l < time_index l'"
+        "time_index l' < time_index (Suc l)"
+        by (metis in_set_conv_nth)
+      hence "l' < (Suc l)"
+        by (metis not_less_iff_gr_or_eq time_index_ord)
+      moreover
+      have "l < l'" using l'
+        by (metis Suc_lessD a linorder_neqE_nat order_less_asym' time_index_ord)
+      ultimately
+      show "False" by simp
+    qed
+    hence nothing_happens: "\<not> (\<exists>t'>time_index l. t' < time_index (Suc l) \<and> a \<in> B t')"
+      using a_in_B_iff_t_in_htps finite_htps htpl_def by auto
+  
+    from nothing_happens t' s_def
+    have "s = argmax (\<lambda>t'. t' < (time_index (Suc l)) \<and> a \<in> B t')"
+      by (meson linorder_not_le order_less_le_trans tl_ord)      
+    hence "t = s" using last_snap_exec_def t_def by blast
+    thus?thesis by simp
+  next
+    case 2
+    hence "\<not> (\<exists>t' \<le> time_index l. a \<in> B t')" using tl_ord by force
+    with 2 t_def[simplified argmax_def] s_def[simplified argmax_def]
+    show ?thesis  by auto
+  qed
+  thus "last_snap_exec a (time_index (Suc l)) = last_snap_exec' a (time_index l)" 
+    using s_def t_def last_snap_exec_def last_snap_exec'_def by auto
+  qed
+
+lemma updated_exec_time_and_next: 
+  assumes "Suc l < length htpl"
+  shows "exec_time a (time_index (Suc l)) = (exec_time' a (time_index l)) + (time_index (Suc l) - time_index l)"
+  using subseq_last_snap_exec[OF assms] exec_time_def exec_time'_def 
   by simp
-
-lemma updated_exec_time_and_next: "exec_time a (t (Suc l)) = (exec_time' a (t l)) + (t (Suc l) - t l)"
-
 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
 

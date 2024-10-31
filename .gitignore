@@ -16,6 +16,8 @@ output/
 
 *#*#
 
+*.thy.marks
+
 # TeX-related #
 ###############
 ## Core latex/pdflatex auxiliary files:
