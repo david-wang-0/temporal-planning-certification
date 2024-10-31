@@ -464,7 +464,7 @@ begin
 
 abbreviation "B" where "B \<equiv> happ_at plan_happ_seq"
 
-subsection \<open>Definitions\<close>
+subsection \<open>Definitions that connect the plan to the automaton\<close>
 subsubsection \<open>Proposition and execution state\<close>
 definition prop_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> bool" where
 "prop_model W Q \<equiv> \<forall>p. (W (PropClock p) = 1 \<longleftrightarrow> p \<in> Q) \<and> (W (PropClock p) = 0 \<longleftrightarrow> p \<notin> Q)"
@@ -647,10 +647,11 @@ lemma a_in_b_last_now: "a \<in> B t \<Longrightarrow> last_snap_exec' a t = t"
   max_or_zero_def
   by (auto intro: Greatest_equality)
 
-lemma subseq_last_snap_exec: "(Suc l) < length htpl \<Longrightarrow> last_snap_exec a (time_index (Suc l)) = last_snap_exec' a (time_index l)"
+lemma subseq_last_snap_exec:
+  assumes fp: finite_plan
+      and llen: "(Suc l) < length htpl" 
+shows "last_snap_exec a (time_index (Suc l)) = last_snap_exec' a (time_index l)"
 proof -
-  assume a: "(Suc l) < length htpl"
-  
   have "last_snap_exec a (time_index (Suc l)) = max_or_zero (\<lambda>t'. t' < (time_index (Suc l)) \<and> a \<in> B t')"
     unfolding last_snap_exec_def ..
 
@@ -663,7 +664,7 @@ proof -
   have cl: "length htpl = card htps" using htpl_def by fastforce
   
   have tl_ord: "time_index l < time_index (Suc l)" 
-    using time_index_ord a
+    using time_index_ord llen
     by blast
   
   from t_def consider "\<exists>t'. t' < (time_index (Suc l)) \<and> a \<in> B t'" 
@@ -676,9 +677,9 @@ proof -
       "a \<in> B t'" by blast
     from this(2)
     have "t' \<in> set htpl" using a_in_B_iff_t_in_htps 
-      using finite_htps htpl_def by auto
+      using finite_htps[OF fp] htpl_def by auto
     
-    from no_actions_between_indexed_timepoints[OF a] t' s_def
+    from no_actions_between_indexed_timepoints[OF assms] t' s_def
     have "s = max_or_zero (\<lambda>t'. t' < (time_index (Suc l)) \<and> a \<in> B t')"
       by (meson linorder_not_le order_less_le_trans tl_ord)
     hence "t = s" using last_snap_exec_def t_def by blast
@@ -694,7 +695,8 @@ proof -
   qed
 
 lemma updated_exec_time_and_next: 
-  assumes "Suc l < length htpl"
+  assumes finite_plan
+      and "Suc l < length htpl"
   shows "exec_time a (time_index (Suc l)) = (exec_time' a (time_index l)) + (time_index (Suc l) - time_index l)"
   using subseq_last_snap_exec[OF assms] exec_time_def exec_time'_def 
   by simp
@@ -757,6 +759,19 @@ lemma exec_time_full_upd_eq_exec_time':
     a_not_in_b_last_unchanged a_in_b_last_now B_lim_M_eq_B[OF assms(1)]
   by simp 
 
+subsection \<open>Simulated execution of a single snap-action\<close>
+
+lemma main_loc_delta_prop_model: 
+  assumes "prop_model W Q"
+      and "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>\<^bsup>d\<^esup> \<langle>Main, W'\<rangle>"
+    shows "delta_prop_model W' Q"
+proof -
+  have "((W' (PropClock p)) - (W' Delta) = 1 \<longleftrightarrow> p \<in> Q) \<and> ((W' (PropClock p)) - (W' Delta) = 0 \<longleftrightarrow> p \<notin> Q)" for p
+  proof -
+    have "(W (PropClock p) = 1 \<longleftrightarrow> p \<in> Q) \<and> (W (PropClock p) = 0 \<longleftrightarrow> p \<notin> Q)" using assms(1) prop_model_def by auto
+    
+  qed
+qed
 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
 

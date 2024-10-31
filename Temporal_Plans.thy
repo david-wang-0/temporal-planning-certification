@@ -226,12 +226,13 @@ proof -
   show "finite htps" unfolding htps_def by auto
 qed
 
+find_theorems "sorted_key_list_of_set ?f ?A"
+
 lemma set_htpl_eq_htps: 
   assumes finite_plan
   shows "htps = set htpl" 
-  unfolding htpl_def finite_htps 
-    using set_sorted_list_of_set[OF finite_htps[OF assms(1)]]
-    by blast
+  unfolding htpl_def set_sorted_list_of_set[OF finite_htps[OF assms(1)]]
+  by blast
 
 lemma time_index_bij_betw_set:
   assumes "finite_plan"
