@@ -80,8 +80,6 @@ locale temporal_plan = temp_planning_problem _ _ _ _ _ _ _ _ upper pre
   for upper::   "'action  \<Rightarrow> ('time::time) upper_bound" (* these are redefined to maintain type parameters *)
   and pre::     "'snap_action \<Rightarrow> 'proposition set" +
 fixes \<pi>::       "'i \<rightharpoonup> ('action \<times> 'time \<times> 'time)"
-assumes plan_actions_in_problem: "(a, t, d) \<in> ran \<pi> \<Longrightarrow> a \<in> actions"
-    and finite_plan: "finite (dom \<pi>)"
 begin
   
 text \<open>Happening Time Points\<close>
@@ -91,41 +89,12 @@ definition htps::"'time set" where
 definition htpl::"'time list" where
 "htpl = sorted_list_of_set htps"
 
-lemma finite_htps: "finite htps"
-proof -
-  have 1: "finite ((\<lambda>(a, t, d). t) ` (ran \<pi>))" 
-    "finite ((\<lambda>(a, t, d). t + d) ` (ran \<pi>))"
-    using finite_plan[THEN finite_ran] by simp+
-  moreover
-  have "(\<lambda>(a, t, d). t) ` (ran \<pi>) = {t |a t d. (a, t, d) \<in> ran \<pi>}" by force
-  moreover
-  have " (\<lambda>(a, t, d). t + d) ` (ran \<pi>)  = {t + d |a t d. (a, t, d) \<in> ran \<pi>}" by force
-  ultimately
-  show "finite htps" unfolding htps_def by auto
-qed
-
 abbreviation time_index::"nat \<Rightarrow> 'time" where
 "time_index \<equiv> ((!) htpl)"
 
 lemma time_index_bij_betw_list: "bij_betw time_index {n. n < length htpl} (set htpl)"
-  using bij_betw_nth distinct_sorted_list_of_set htpl_def[symmetric]
+  using bij_betw_nth distinct_sorted_list_of_set htpl_def[symmetric] lessThan_def
   by metis
-
-lemma time_index_bij_betw_set: "bij_betw time_index {n. n < card htps} htps"
-proof -
-  have 1:"card htps = length htpl" using htpl_def by simp
-  have 2: "htps = set htpl" unfolding htpl_def finite_htps 
-    using set_sorted_list_of_set[OF finite_htps]
-    by blast
-  have 3: "distinct htpl" unfolding htpl_def by simp
-  show "bij_betw time_index {n. n < card htps} htps"
-    apply (subst 1)
-    apply (subst 2)
-    using time_index_bij_betw_list
-    by blast
-qed
-
-lemmas time_index_ord = strict_sorted_list_of_set[of htps, simplified htpl_def[symmetric], THEN sorted_wrt_nth_less]
 
 text \<open>Happening Sequences\<close>
 
@@ -136,19 +105,6 @@ definition plan_happ_seq::"('time \<times> 'snap_action) set" where
 
 definition happ_at::"('time \<times> 'snap_action) set \<Rightarrow> 'time \<Rightarrow> 'snap_action set" where
 "happ_at B t \<equiv> {s |s. (t, s) \<in> B}"
-
-lemma a_in_B_iff_t_in_htps: "(\<exists>a. a \<in> happ_at plan_happ_seq t) \<longleftrightarrow> (t \<in> htps)"
-proof
-  assume "\<exists>a. a \<in> happ_at plan_happ_seq t"
-  then obtain a where
-    "(t, a) \<in> plan_happ_seq" using happ_at_def by auto
-  thus "t \<in> htps" using plan_happ_seq_def htps_def by auto
-next
-  assume "t \<in> local.htps"
-  then obtain a where
-    "(t, a) \<in> plan_happ_seq" using plan_happ_seq_def htps_def by force
-  thus "\<exists>a. a \<in> happ_at plan_happ_seq t" using happ_at_def by blast
-qed
 
 text \<open>Invariants\<close>
 definition plan_inv_seq::"('proposition, 'time) invariant_sequence" where
@@ -178,9 +134,7 @@ definition unique_increasing_sequence::"('t :: linorder) set \<Rightarrow> 't in
 "unique_increasing_sequence T t \<equiv>
     complete_sequence T t
   \<and> (\<forall>i j. i < j \<and> j < card T \<longrightarrow> (t i) < (t j))"
-
-thm sorted_wrt_nth_less
-             
+  
 definition valid_state_sequence::"
   'proposition state_sequence 
 \<Rightarrow> ('time \<times> 'snap_action) set
@@ -215,6 +169,15 @@ definition no_self_overlap::"bool" where
   \<and> t \<le> u \<and> u \<le> t + d)"
 
 
+definition plan_actions_in_problem::bool where
+"plan_actions_in_problem \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> a \<in> actions"
+
+definition finite_plan::bool where
+"finite_plan \<equiv> finite (dom \<pi>)"
+
+definition durations_non_zero::bool where
+"durations_non_zero \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 \<le> d"
+
 definition valid_plan::"bool" where
 "valid_plan \<equiv> \<exists>M. (
   let 
@@ -225,6 +188,94 @@ definition valid_plan::"bool" where
     \<and> no_self_overlap
     \<and> (M 0) = init
     \<and> (M (card B - 1)) = goal
+    \<and> plan_actions_in_problem
+    \<and> finite_plan
+    \<and> durations_non_zero
 )"
 end
+
+context temporal_plan
+begin
+
+lemma a_in_B_iff_t_in_htps: "(\<exists>a. a \<in> happ_at plan_happ_seq t) \<longleftrightarrow> (t \<in> htps)"
+proof
+  assume "\<exists>a. a \<in> happ_at plan_happ_seq t"
+  then obtain a where
+    "(t, a) \<in> plan_happ_seq" using happ_at_def by auto
+  thus "t \<in> htps" using plan_happ_seq_def htps_def by auto
+next
+  assume "t \<in> local.htps"
+  then obtain a where
+    "(t, a) \<in> plan_happ_seq" using plan_happ_seq_def htps_def by force
+  thus "\<exists>a. a \<in> happ_at plan_happ_seq t" using happ_at_def by blast
+qed
+
+lemma finite_htps: 
+  assumes "finite_plan"
+    shows "finite htps"
+proof -
+  have 1: "finite ((\<lambda>(a, t, d). t) ` (ran \<pi>))" 
+    "finite ((\<lambda>(a, t, d). t + d) ` (ran \<pi>))"
+    using \<open>finite_plan\<close>[simplified finite_plan_def]
+    by (simp add: finite_ran)+
+  moreover
+  have "(\<lambda>(a, t, d). t) ` (ran \<pi>) = {t |a t d. (a, t, d) \<in> ran \<pi>}" by force
+  moreover
+  have " (\<lambda>(a, t, d). t + d) ` (ran \<pi>)  = {t + d |a t d. (a, t, d) \<in> ran \<pi>}" by force
+  ultimately
+  show "finite htps" unfolding htps_def by auto
+qed
+
+lemma set_htpl_eq_htps: 
+  assumes finite_plan
+  shows "htps = set htpl" 
+  unfolding htpl_def finite_htps 
+    using set_sorted_list_of_set[OF finite_htps[OF assms(1)]]
+    by blast
+
+lemma time_index_bij_betw_set:
+  assumes "finite_plan"
+  shows "bij_betw time_index {n. n < card htps} htps"
+proof -
+  have 1: "card htps = length htpl" using htpl_def by simp
+  have 3: "distinct htpl" unfolding htpl_def by simp
+  show "bij_betw time_index {n. n < card htps} htps"
+    apply (subst 1)
+    apply (subst set_htpl_eq_htps[OF assms])
+    using time_index_bij_betw_list
+    by blast
+qed
+
+lemmas time_index_ord = strict_sorted_list_of_set[of htps, simplified htpl_def[symmetric], THEN sorted_wrt_nth_less]
+
+lemma no_non_indexed_time_points: 
+  assumes a: "(Suc l) < length htpl"
+  shows "\<not> (\<exists>t'. (time_index l) < t' \<and> t' < (time_index (Suc l)) \<and> t' \<in> set htpl)"
+proof (rule notI)
+  assume "\<exists>t'>time_index l. t' < time_index (Suc l) \<and> t' \<in> set htpl"
+  with time_index_bij_betw_list
+  obtain l' where
+    l': "l' < length htpl"
+    "time_index l < time_index l'"
+    "time_index l' < time_index (Suc l)"
+    by (metis in_set_conv_nth)
+  hence "l' < (Suc l)"
+    by (metis not_less_iff_gr_or_eq time_index_ord)
+  moreover
+  have "l < l'" using l'
+    by (metis Suc_lessD linorder_neqE_nat order_less_asym' a time_index_ord)
+  ultimately
+  show "False" by simp
+qed
+
+lemma no_actions_between_indexed_timepoints: 
+  assumes "finite_plan"
+    "(Suc l) < length htpl"
+  shows "\<not> (\<exists>t'>time_index l. t' < time_index (Suc l) \<and> a \<in> happ_at plan_happ_seq t')"
+  using no_non_indexed_time_points[OF assms(2)] 
+    a_in_B_iff_t_in_htps finite_htps[OF assms(1)] htpl_def by auto
+
+
+end
+
 end
