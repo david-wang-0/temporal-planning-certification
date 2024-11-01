@@ -52,6 +52,8 @@ locale temp_planning_problem =
       and snaps_disj:   "(at_start ` actions) \<inter> (at_end ` actions) = {}"
       and prop_numbering:   "bij_betw p {n. n < card props} props"
       and action_numbering: "bij_betw act {n. n < card actions} actions"
+      and some_props:       "card props > 0"
+      and some_actions:     "card actions > 0"
 begin 
 definition apply_effects::"'proposition set \<Rightarrow> 'snap_action set \<Rightarrow> 'proposition set" where
 "apply_effects M S \<equiv> (M - \<Union>(dels ` S)) \<union> \<Union>(adds ` S)"
@@ -67,8 +69,27 @@ definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightar
 lemma act_inj_on: "inj_on act {n. n < card actions}"
   using action_numbering bij_betw_def by blast
 
-lemma act_img_action: "act ` {n. n < card actions} = actions"
+lemma act_img_actions: "act ` {n. n < card actions} = actions"
   using action_numbering[simplified bij_betw_def] by simp
+
+lemma act_dom: "m < card actions \<Longrightarrow> act m \<in> actions" 
+  using act_img_actions by blast
+
+lemma p_inj_on: "inj_on p {n. n < card props}"
+  using prop_numbering bij_betw_def by blast
+
+lemma p_img_props: "p ` {n. n < card props} = props"
+  using prop_numbering[simplified bij_betw_def] by simp
+
+lemma p_in_props_iff: "pr \<in> props \<longleftrightarrow> (\<exists>i < card props. p i = pr)"
+  using p_img_props by force
+
+lemma props_pred: fixes P
+  shows "(\<forall>pr \<in> props. P pr) \<longleftrightarrow> (\<forall>i < card props. P (p i))"
+  using p_in_props_iff by auto
+
+lemma p_dom: "n < card props \<Longrightarrow> p n \<in> props" 
+  using p_img_props by blast
 
 definition snap_actions::"'snap_action set" where
 "snap_actions \<equiv> (at_start ` actions) \<union> (at_end ` actions)"

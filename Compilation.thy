@@ -19,10 +19,10 @@ datatype ('proposition, 'action) clock =
   | Stop
   | PropClock 'proposition
   | Running 'action
-  | Start 'action
-  | End 'action
-  | ExecStart 'action
-  | ExecEnd 'action
+  | StartDur 'action
+  | EndDur   'action
+  | ExecStartSnap 'action
+  | ExecEndSnap    'action
 
 datatype alpha = Unit
 
@@ -31,11 +31,11 @@ begin
 
 definition prop_numbers ("p\<^sub>_" 65) where "prop_numbers \<equiv> p"
 
-definition "N = card props"
+abbreviation "N \<equiv> card props"
 
 definition A ("A\<^sub>_" 65) where "A \<equiv> act"
 
-definition "M = card actions"
+abbreviation "M \<equiv> card actions"
 
 definition "true_const \<equiv> GE Stop 0"
 
@@ -103,7 +103,7 @@ proof -
       hence 0: "x div 2 \<in> {m. m < M}"
             "y div 2 \<in> {m. m < M}" by auto
       
-      from this[simplified M_def] action_numbering[THEN bij_betw_apply]
+      from this[simplified ] action_numbering[THEN bij_betw_apply]
       have 1: "act (x div 2) \<in> actions"
            "act (y div 2) \<in> actions"
         by blast+
@@ -116,7 +116,7 @@ proof -
       have "act (x div 2) = act (y div 2)" 
         using at_start_inj
         by (blast dest: inj_onD)
-      hence "x div 2 = y div 2" using act_inj_on[simplified inj_on_def] 0[simplified M_def] by blast
+      hence "x div 2 = y div 2" using act_inj_on[simplified inj_on_def] 0[simplified ] by blast
       moreover
       from a
       have "x mod 2 = y mod 2" by simp
@@ -129,11 +129,11 @@ proof -
       fix x
       assume "x \<in> snap ` {n. n < 2 * M \<and> n mod 2 = 0}"
       then obtain n where
-        n: "n \<in> {n. n < 2 * (card actions)}"
+        n: "n \<in> {n. n < 2 * M}"
         "n mod 2 = 0"
-        "snap n = x" using M_def by auto
-      hence "n div 2 \<in> {n. n < card actions}" by auto
-      hence "act (n div 2) \<in> actions" using act_img_action by blast
+        "snap n = x"  by auto
+      hence "n div 2 \<in> {n. n < M}" by auto
+      hence "act (n div 2) \<in> actions" using act_img_actions by blast
       with n(2, 3)[simplified snap_def]
       show "x \<in> at_start ` actions" using action_numbering
         by auto
@@ -145,43 +145,43 @@ proof -
         "a \<in> actions"
         by force
       
-      hence 1: "a \<in> act ` {n. n < card actions}" using act_img_action
+      hence 1: "a \<in> act ` {n. n < M}" using act_img_actions
         by simp
       
-      have 2: "(\<lambda>n. n div 2) ` {n. n < 2 * card actions} = {n. n < card actions}"
+      have 2: "(\<lambda>n. n div 2) ` {n. n < 2 * M} = {n. n < M}"
       proof (rule equalityI; rule subsetI)
         fix x 
-        assume "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * card actions}"
+        assume "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * M}"
         then obtain n where
           "x = n div 2"
-          "n < 2 * card actions"
+          "n < 2 * M"
           by blast
-        hence "x < card actions" by linarith
-        thus "x \<in> {n. n < card actions}"
+        hence "x < M" by linarith
+        thus "x \<in> {n. n < M}"
           by simp
       next 
         fix x
-        assume "x \<in> {n. n < card actions}"
-        hence "x < card actions" by simp
-        hence "2 * x < 2 * card actions" by simp
+        assume "x \<in> {n. n < M}"
+        hence "x < M" by simp
+        hence "2 * x < 2 * M" by simp
         then obtain n where
           "n div 2 = x"
-          "n < 2 * card actions"
+          "n < 2 * M"
           using div_mult_self1_is_m zero_less_numeral by blast
-        thus "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * card actions}"
+        thus "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * M}"
           by blast
       qed
       
-      have 3: "{n div 2 | n. n < 2 * (card actions) \<and> n mod 2 = 0} = {n div 2 | n. n < 2 * (card actions)}"
+      have 3: "{n div 2 | n. n < 2 * M \<and> n mod 2 = 0} = {n div 2 | n. n < 2 * M}"
       proof (rule equalityI; rule subsetI)
-        show "\<And>x. x \<in> {n div 2 |n. n < 2 * card actions \<and> n mod 2 = 0} \<Longrightarrow> x \<in> {n div 2 |n. n < 2 * card actions}" by blast
+        show "\<And>x. x \<in> {n div 2 |n. n < 2 * M \<and> n mod 2 = 0} \<Longrightarrow> x \<in> {n div 2 |n. n < 2 * M}" by blast
       next
         fix x
-        assume "x \<in> {n div 2 |n. n < 2 * card actions}" 
+        assume "x \<in> {n div 2 |n. n < 2 * M}" 
         then obtain n where
-          n: "n < 2 * card actions"
+          n: "n < 2 * M"
           "n div 2 = x" by blast
-        have "\<exists>m. m < 2 * card actions \<and> m mod 2 = 0 \<and> m div 2 = x"
+        have "\<exists>m. m < 2 * M \<and> m mod 2 = 0 \<and> m div 2 = x"
         proof (cases "n mod 2 = 0")
           case True
           with n
@@ -191,14 +191,14 @@ proof -
           then have "n mod 2 = 1" by auto
           hence "(n - 1) div 2 = n div 2" "(n - 1) mod 2 = 0" by presburger+
           moreover
-          have "n - 1 < 2 * card actions" using n(1) by linarith
+          have "n - 1 < 2 * M" using n(1) by linarith
           ultimately
           show ?thesis using n(2) by meson
         qed
-        thus "x \<in> {n div 2 |n. n < 2 * card actions \<and> n mod 2 = 0}" by auto
+        thus "x \<in> {n div 2 |n. n < 2 * M \<and> n mod 2 = 0}" by auto
       qed
       
-      have "a \<in> act ` {n div 2 | n. n < 2 * M \<and> n mod 2 = 0}" unfolding M_def 
+      have "a \<in> act ` {n div 2 | n. n < 2 * M \<and> n mod 2 = 0}"  
         using 1[simplified 2[symmetric]]
         by (subst 3, blast)
       with xa
@@ -221,7 +221,7 @@ proof -
       hence 0: "x div 2 \<in> {m. m < M}"
             "y div 2 \<in> {m. m < M}" by auto
       
-      from this[simplified M_def] action_numbering[THEN bij_betw_apply]
+      from this[simplified ] action_numbering[THEN bij_betw_apply]
       have 1: "act (x div 2) \<in> actions"
            "act (y div 2) \<in> actions"
         by blast+
@@ -234,7 +234,7 @@ proof -
       have "act (x div 2) = act (y div 2)" 
         using at_end_inj
         by (blast dest: inj_onD)
-      hence "x div 2 = y div 2" using act_inj_on[simplified inj_on_def] 0[simplified M_def] by blast
+      hence "x div 2 = y div 2" using act_inj_on[simplified inj_on_def] 0[simplified ] by blast
       moreover
       from a
       have "x mod 2 = y mod 2" by simp
@@ -247,11 +247,11 @@ proof -
       fix x
       assume "x \<in> snap ` {n. n < 2 * M \<and> n mod 2 = 1}"
       then obtain n where
-        n: "n \<in> {n. n < 2 * (card actions)}"
+        n: "n \<in> {n. n < 2 * M}"
         "n mod 2 = 1"
-        "snap n = x" using M_def by auto
-      hence "n div 2 \<in> {n. n < card actions}" by auto
-      hence "act (n div 2) \<in> actions" using act_img_action by blast
+        "snap n = x" by auto
+      hence "n div 2 \<in> {n. n < M}" by auto
+      hence "act (n div 2) \<in> actions" using act_img_actions by blast
       with n(2, 3)[simplified snap_def]
       show "x \<in> at_end ` actions" using action_numbering
         by auto
@@ -263,43 +263,42 @@ proof -
         "a \<in> actions"
         by force
       
-      hence 1: "a \<in> act ` {n. n < card actions}" using act_img_action
-        by simp
+      hence 1: "a \<in> act ` {n. n < M}" using act_img_actions by simp
       
-      have 2: "(\<lambda>n. n div 2) ` {n. n < 2 * card actions} = {n. n < card actions}"
+      have 2: "(\<lambda>n. n div 2) ` {n. n < 2 * M} = {n. n < M}"
       proof (rule equalityI; rule subsetI)
         fix x 
-        assume "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * card actions}"
+        assume "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * M}"
         then obtain n where
           "x = n div 2"
-          "n < 2 * card actions"
+          "n < 2 * M"
           by blast
-        hence "x < card actions" by linarith
-        thus "x \<in> {n. n < card actions}"
+        hence "x < M" by linarith
+        thus "x \<in> {n. n < M}"
           by simp
       next 
         fix x
-        assume "x \<in> {n. n < card actions}"
-        hence "x < card actions" by simp
-        hence "2 * x < 2 * card actions" by simp
+        assume "x \<in> {n. n < M}"
+        hence "x < M" by simp
+        hence "2 * x < 2 * M" by simp
         then obtain n where
           "n div 2 = x"
-          "n < 2 * card actions"
+          "n < 2 * M"
           using div_mult_self1_is_m zero_less_numeral by blast
-        thus "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * card actions}"
+        thus "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * M}"
           by blast
       qed
       
-      have 3: "{n div 2 | n. n < 2 * (card actions) \<and> n mod 2 = 1} = {n div 2 | n. n < 2 * (card actions)}"
+      have 3: "{n div 2 | n. n < 2 * M \<and> n mod 2 = 1} = {n div 2 | n. n < 2 * M}"
       proof (rule equalityI; rule subsetI)
-        show "\<And>x. x \<in> {n div 2 |n. n < 2 * card actions \<and> n mod 2 = 1} \<Longrightarrow> x \<in> {n div 2 |n. n < 2 * card actions}" by blast
+        show "\<And>x. x \<in> {n div 2 |n. n < 2 * M \<and> n mod 2 = 1} \<Longrightarrow> x \<in> {n div 2 |n. n < 2 * M}" by blast
       next
         fix x
-        assume "x \<in> {n div 2 |n. n < 2 * card actions}" 
+        assume "x \<in> {n div 2 |n. n < 2 * M}" 
         then obtain n where
-          n: "n < 2 * card actions"
+          n: "n < 2 * M"
           "n div 2 = x" by blast
-        have "\<exists>m. m < 2 * card actions \<and> m mod 2 = 1 \<and> m div 2 = x"
+        have "\<exists>m. m < 2 * M \<and> m mod 2 = 1 \<and> m div 2 = x"
         proof (cases "n mod 2 = 1")
           case True
           with n
@@ -309,14 +308,14 @@ proof -
           then have nm2: "n mod 2 = 0" by auto
           hence "(Suc n) div 2 = n div 2" "(Suc n) mod 2 = 1" by presburger+
           moreover
-          have "Suc n < 2 * card actions" using n(1) nm2 by auto
+          have "Suc n < 2 * M" using n(1) nm2 by auto
           ultimately
           show ?thesis using n(2) by meson
         qed
-        thus "x \<in> {n div 2 |n. n < 2 * card actions \<and> n mod 2 = 1}" by auto
+        thus "x \<in> {n div 2 |n. n < 2 * M \<and> n mod 2 = 1}" by auto
       qed
       
-      have "a \<in> act ` {n div 2 | n. n < 2 * M \<and> n mod 2 = 1}" unfolding M_def 
+      have "a \<in> act ` {n div 2 | n. n < 2 * M \<and> n mod 2 = 1}"  
         using 1[simplified 2[symmetric]]
         by (subst 3, blast)
       with xa
@@ -353,13 +352,13 @@ definition interfering_at_start::"'snap_action \<Rightarrow> nat list" where
 "interfering_at_start a = sorted_list_of_set {n. at_start (act n) \<noteq> a \<and> mutex_snap_action a (at_start (act n))}"
 
 definition start_constraints::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
-"start_constraints a = map (\<lambda>b. GT (Start (act b)) \<epsilon>) (interfering_at_start a)"
+"start_constraints a = map (\<lambda>b. GT (StartDur (act b)) \<epsilon>) (interfering_at_start a)"
 
 definition interfering_at_end::"'snap_action \<Rightarrow> nat list" where
 "interfering_at_end a = sorted_list_of_set {n. at_end (act n) \<noteq> a \<and> mutex_snap_action a (at_end (act n))}"
 
 definition end_constraints::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
-"end_constraints a = map (\<lambda>b. GT (End (act b)) \<epsilon>) (interfering_at_end a)"
+"end_constraints a = map (\<lambda>b. GT (EndDur (act b)) \<epsilon>) (interfering_at_end a)"
 
 definition sep::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
 "sep a \<equiv> AND_ALL (start_constraints a @ end_constraints a)"
@@ -381,20 +380,20 @@ definition guard_at_start::"'action \<Rightarrow> (('proposition, 'action) clock
 definition guard_at_end::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
 "guard_at_end a \<equiv> 
   let l = case (lower a) of 
-    (lower_bound.GT t) \<Rightarrow> GT (Start a) t
-  | (lower_bound.GE t) \<Rightarrow> GE (Start a) t;
+    (lower_bound.GT t) \<Rightarrow> GT (StartDur a) t
+  | (lower_bound.GE t) \<Rightarrow> GE (StartDur a) t;
   u = case (upper a) of 
-    (upper_bound.LT t) \<Rightarrow> LT (Start a) t
-  | (upper_bound.LE t) \<Rightarrow> LE (Start a) t
+    (upper_bound.LT t) \<Rightarrow> LT (StartDur a) t
+  | (upper_bound.LE t) \<Rightarrow> LE (StartDur a) t
   in
 AND (AND (guard (at_end a)) (EQ (Running a) 1)) (AND l u)"
 
 definition decision_making::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition set" where
 "decision_making \<equiv> 
-  {(Decision (at_start (act m)), guard (at_start (act m)), Unit, [(ExecStart (act m), 1)], Decision (at_end (act m))) | m. m < M}
-  \<union> {(Decision (at_start (act m)), true_const, Unit, [(ExecStart (act m), 0)], Decision (at_end (act m))) | m. m < M}
-  \<union> {(Decision (at_end (act m)), guard (at_end (act m)), Unit, [(ExecEnd (act m), 1)], Decision (at_start (act (Suc m)))) | m. Suc m < M}
-  \<union> {(Decision (at_end (act m)), true_const, Unit, [(ExecEnd (act m), 0)], Decision (at_start (act (Suc m)))) | m. Suc m < M}"
+  {(Decision (at_start (act m)), guard (at_start (act m)), Unit, [(ExecStartSnap (act m), 1)], Decision (at_end (act m))) | m. m < M}
+  \<union> {(Decision (at_start (act m)), true_const, Unit, [(ExecStartSnap (act m), 0)], Decision (at_end (act m))) | m. m < M}
+  \<union> {(Decision (at_end (act m)), guard (at_end (act m)), Unit, [(ExecEndSnap (act m), 1)], Decision (at_start (act (Suc m)))) | m. Suc m < M}
+  \<union> {(Decision (at_end (act m)), true_const, Unit, [(ExecEndSnap (act m), 0)], Decision (at_start (act (Suc m)))) | m. Suc m < M}"
 
 definition dm_to_exec::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition" where
 "dm_to_exec \<equiv> (Decision (at_end (act M)), true_const, Unit, [], Execution (at_start (act 0)))"
@@ -411,16 +410,16 @@ definition effects::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 
 "effects s \<equiv> del_effects s @ add_effects s"
 
 definition at_start_effects::"'action \<Rightarrow> (('proposition, 'action) clock, 'time) clkassn list" where
-"at_start_effects a \<equiv> (Running a, 1) # (ExecStart a, 0) # effects (at_start a)"
+"at_start_effects a \<equiv> (Running a, 1) # (StartDur a, 0) # effects (at_start a)"
 
 definition at_end_effects::"'action \<Rightarrow> (('proposition, 'action) clock, 'time) clkassn list" where
-"at_end_effects a \<equiv> (Running a, 0) # (ExecEnd a, 0) # effects (at_start a)"
+"at_end_effects a \<equiv> (Running a, 0) # (EndDur a, 0) # effects (at_start a)"
 
 definition execution::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition set" where
 "execution \<equiv> 
-  {(Execution (at_start (act m)), EQ (ExecStart (act m)) 1, Unit, at_start_effects (act m), Execution (at_end (act m))) | m. m < M}
+  {(Execution (at_start (act m)), EQ (ExecStartSnap (act m)) 1, Unit, at_start_effects (act m), Execution (at_end (act m))) | m. m < M}
   \<union> {(Execution (at_start (act m)), true_const, Unit, [], Execution (at_end (act m))) | m. m < M}
-  \<union> {(Execution (at_end (act m)), EQ (ExecEnd (act m)) 1, Unit, at_end_effects (act m), Execution (at_end (act (Suc m)))) | m. Suc m < M}
+  \<union> {(Execution (at_end (act m)), EQ (ExecEndSnap (act m)) 1, Unit, at_end_effects (act m), Execution (at_end (act (Suc m)))) | m. Suc m < M}
   \<union> {(Execution (at_end (act m)), true_const, Unit, [], Decision (at_start (act (Suc m)))) | m. Suc m < M}"
 
 
@@ -466,19 +465,31 @@ abbreviation "B" where "B \<equiv> happ_at plan_happ_seq"
 
 subsection \<open>Definitions that connect the plan to the automaton\<close>
 subsubsection \<open>Proposition and execution state\<close>
+abbreviation prop_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> 'proposition \<Rightarrow> bool" where
+"prop_corr W Q prop \<equiv> (W (PropClock prop) = 1 \<longleftrightarrow> prop \<in> Q) \<and> (W (PropClock prop) = 0 \<longleftrightarrow> prop \<notin> Q)"
+
 definition prop_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> bool" where
-"prop_model W Q \<equiv> \<forall>p. (W (PropClock p) = 1 \<longleftrightarrow> p \<in> Q) \<and> (W (PropClock p) = 0 \<longleftrightarrow> p \<notin> Q)"
+"prop_model W Q \<equiv> \<forall>p \<in> props. prop_corr W Q p"
+
+abbreviation delta_prop_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> 'proposition \<Rightarrow> bool" where
+"delta_prop_corr W Q prop \<equiv> (W (PropClock prop) - W Delta = 1 \<longleftrightarrow> prop \<in> Q) \<and> (W (PropClock prop) - W Delta = 0 \<longleftrightarrow> prop \<notin> Q)"
 
 definition delta_prop_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> bool" where
-"delta_prop_model W Q \<equiv> \<forall>p. ((W (PropClock p)) - (W Delta) = 1 \<longleftrightarrow> p \<in> Q) \<and> ((W (PropClock p)) - (W Delta) = 0 \<longleftrightarrow> p \<notin> Q)"
+"delta_prop_model W Q \<equiv> \<forall>p \<in> props. delta_prop_corr W Q p"
 
 type_synonym 'a exec_state = "'a set"
 
+abbreviation exec_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> 'action \<Rightarrow> bool" where
+"exec_corr W E a \<equiv> (W (Running a) = 1 \<longleftrightarrow> a \<in> E) \<and> (W (Running a) = 0 \<longleftrightarrow> a \<notin> E)"
+
 definition exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
-"exec_model W E \<equiv> \<forall>a \<in> actions. (W (Running a) = 1 \<longleftrightarrow> a \<in> E) \<and> (W (Running a) = 0 \<longleftrightarrow> a \<notin> E)"
+"exec_model W E \<equiv> \<forall>a \<in> actions. exec_corr W E a"
+
+abbreviation delta_exec_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> 'action \<Rightarrow> bool" where
+"delta_exec_corr W E a \<equiv> ((W (Running a)) - (W Delta) = 1 \<longleftrightarrow> a \<in> E) \<and> ((W (Running a)) - (W Delta) = 0 \<longleftrightarrow> a \<notin> E)"
 
 definition delta_exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
-"delta_exec_model W E \<equiv> \<forall>a \<in> actions. ((W (Running a)) - (W Delta) = 1 \<longleftrightarrow> a \<in> E) \<and> ((W (Running a)) - (W Delta) = 0 \<longleftrightarrow> a \<notin> E)"
+"delta_exec_model W E \<equiv> \<forall>a \<in> actions. delta_exec_corr W E a"
 
 definition partial_exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
 "partial_exec_model W E \<equiv> \<forall>m < M. (W (Running (act m)) = 1 \<longleftrightarrow> (act m) \<in> E) \<and> (W (Running (act m)) = 0 \<longleftrightarrow> (act m) \<notin> E)"
@@ -724,10 +735,10 @@ next
      and x: "x \<in> S"
   hence "x \<in> at_start ` actions \<or> x \<in> at_end ` actions" 
     unfolding snap_actions_def by blast
-  hence "\<exists>m. m < (card actions) \<and> (x = at_start (act m) \<or> x = at_end (act m))" 
-    using act_img_action by force
+  hence "\<exists>m. m < M \<and> (x = at_start (act m) \<or> x = at_end (act m))" 
+    using act_img_actions by force
   with x
-  show "x \<in> limited_snap_action_set S M" unfolding M_def limited_snap_action_set_def
+  show "x \<in> limited_snap_action_set S M" unfolding  limited_snap_action_set_def
     by blast
 qed
 
@@ -762,15 +773,312 @@ lemma exec_time_full_upd_eq_exec_time':
 subsection \<open>Simulated execution of a single snap-action\<close>
 
 lemma main_loc_delta_prop_model: 
-  assumes "prop_model W Q"
-      and "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>\<^bsup>d\<^esup> \<langle>Main, W'\<rangle>"
+  assumes initial: "prop_model W Q"
+      and delta: "W Delta = 0"
+      and transition: "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>\<^bsup>d\<^esup> \<langle>Main, W'\<rangle>"
     shows "delta_prop_model W' Q"
 proof -
-  have "((W' (PropClock p)) - (W' Delta) = 1 \<longleftrightarrow> p \<in> Q) \<and> ((W' (PropClock p)) - (W' Delta) = 0 \<longleftrightarrow> p \<notin> Q)" for p
+  have "delta_prop_corr W' Q p" (is "?goal") if "p \<in> props" for p
   proof -
-    have "(W (PropClock p) = 1 \<longleftrightarrow> p \<in> Q) \<and> (W (PropClock p) = 0 \<longleftrightarrow> p \<notin> Q)" using assms(1) prop_model_def by auto
+    have W: "prop_corr W Q p" using assms(1) that prop_model_def by auto
+    have W': "W' = W \<oplus> d" by (cases rule: step_t.cases[OF transition]) simp
     
+    have "W' (PropClock p) = 1 + d \<longleftrightarrow> p \<in> Q"
+         "W' (PropClock p) = d \<longleftrightarrow> p \<notin> Q"
+         "W' Delta = d"
+      using W delta W'[simplified cval_add_def] by simp+
+    thus ?goal by force
   qed
+  thus "delta_prop_model W' Q" using delta_prop_model_def by simp
+qed 
+
+lemma main_loc_delta_exec_model: 
+  assumes initial: "exec_model W Q"
+      and delta: "W Delta = 0"
+      and transition: "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>\<^bsup>d\<^esup> \<langle>Main, W'\<rangle>"
+    shows "delta_exec_model W' Q"
+proof -
+  have "delta_exec_corr W' Q a" (is "?goal") if "a \<in> actions" for a
+  proof -
+    have W: "exec_corr W Q a" using assms(1) that exec_model_def by auto
+    have W': "W' = W \<oplus> d" by (cases rule: step_t.cases[OF transition]) simp
+    
+    have "W' (Running a) = 1 + d \<longleftrightarrow> a \<in> Q"
+         "W' (Running a) = d \<longleftrightarrow> a \<notin> Q"
+         "W' Delta = d"
+      using W delta W'[simplified cval_add_def] by simp+
+    thus ?goal by force
+  qed
+  thus "delta_exec_model W' Q" using delta_exec_model_def by simp
+qed 
+
+lemma main_to_prop_decoding:
+  assumes pc: "prop_model W Q"
+      and ac: "exec_model W E"
+      and delta: "W Delta = 0"
+      and stop: "W Stop \<ge> 0"
+    shows "\<exists>W'. \<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>PropDecoding (p 0), W'\<rangle> 
+    \<and> delta_prop_model W' Q \<and> delta_exec_model W' E \<and> W' Stop = 0"
+proof -
+  have "\<And>W' d. prop_model W Q \<and> exec_model W E \<and> W Delta = 0 \<and> \<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>\<^bsup>d\<^esup> \<langle>Main, W'\<rangle> \<Longrightarrow> delta_prop_model W' Q \<and> delta_exec_model W' E"
+    using main_loc_delta_exec_model main_loc_delta_prop_model
+    by blast
+  obtain d W' where 
+    W': "W' = W \<oplus> d"
+        "d \<ge> 0" by auto
+  
+  have W_inv: "W \<turnstile> inv_of \<T> Main" unfolding inv_of_def prob_automaton_def
+    using stop by auto
+  
+  have W'_inv: "W' \<turnstile> inv_of \<T> Main" unfolding inv_of_def prob_automaton_def cval_add_def W'(1)
+    using stop W'(2) by auto
+  
+  from W_inv W'_inv W'
+  have "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>\<^bsup>d\<^esup> \<langle>Main, W'\<rangle>"
+    using step_t.intros by blast
+  with pc ac delta
+  have W'1: "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>Main, W'\<rangle> \<and> delta_prop_model W' Q \<and> delta_exec_model W' E" 
+    using main_loc_delta_exec_model main_loc_delta_prop_model by blast
+  
+  have W'_stop: "W' Stop \<ge> 0" unfolding W' cval_add_def using stop W' by simp
+  have "\<T> \<turnstile> \<langle>Main, W'\<rangle> \<rightarrow>\<^bsub>Unit\<^esub> \<langle>PropDecoding (p 0), W'(Stop := 0)\<rangle>"
+    apply (rule step_a.intros)
+       apply (subst trans_of_def)
+    apply (subst prob_automaton_def)
+       apply (subst main_to_decoding_def)
+       apply auto[1]
+      apply (simp add: true_const_def)
+      apply (auto simp: W'_stop)[1]
+    subgoal
+    unfolding prob_automaton_def cval_add_def W'(1) inv_of_def
+    using stop W'(2) by auto
+  by auto
+  
+  from step_a[OF this, THEN step, OF refl]
+  have W'2: "\<T> \<turnstile> \<langle>Main, W'\<rangle> \<rightarrow>* \<langle>PropDecoding (p 0), W'(Stop := 0)\<rangle>"  .
+  
+  from W'1
+  have "delta_prop_model (W'(Stop := 0)) Q \<and> delta_exec_model (W'(Stop := 0)) E"
+    unfolding delta_exec_model_def delta_prop_model_def by simp
+  moreover
+  from W'1[THEN conjunct1] W'2
+  have " \<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>PropDecoding (p 0), W'(Stop := 0)\<rangle>" using steps_trans by fast
+  ultimately
+  show ?thesis by auto
+qed
+
+abbreviation prop_dec_automaton ("\<T> pd") where 
+"prop_dec_automaton \<equiv> (prop_decoding \<union> {prop_decoding_to_exec_decoding}, invs)"
+
+fun is_boolean_clock::"('proposition, 'action) clock \<Rightarrow> bool" where
+"is_boolean_clock (PropClock _) = True"
+| "is_boolean_clock (Running _) = True"
+| "is_boolean_clock _ = False"
+
+fun is_propositional_clock::"('proposition, 'action) clock \<Rightarrow> bool" where
+"is_propositional_clock (PropClock _) = True"
+| "is_propositional_clock _ = False"
+
+fun is_exec_clock::"('proposition, 'action) clock \<Rightarrow> bool" where
+"is_exec_clock (Running _) = True"
+| "is_exec_clock _ = False"
+
+
+lemma restr_set_p: "restr_set p N = props"
+  using restr_set_bij[simplified lessThan_def] prop_numbering by auto
+
+lemma restr_set_a: "restr_set act M = actions"
+  using restr_set_bij[simplified lessThan_def] action_numbering by auto
+
+lemma boolean_state_decoding:
+  assumes prop_clocks: "delta_prop_model W Q"
+      and exec_clocks: "delta_exec_model W E"
+      and stop: "W Stop = 0"
+  shows "\<exists>W'. \<T> pd \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W'\<rangle> 
+    \<and> prop_model W' Q \<and> exec_model W' E \<and> (\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W c = W' c)"
+proof -
+  have propositional_decoding_step:
+      "\<exists>W'. \<T> pd \<turnstile> \<langle>PropDecoding (p n), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p (Suc n)), W'\<rangle> 
+            \<and> (\<forall>i < Suc n. prop_corr W' Q (p i))
+            \<and> (\<forall>i \<ge> Suc n. i < N \<longrightarrow> delta_prop_corr W' Q (p i))
+            \<and> (\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)
+            \<and> W' Stop = 0"
+      if  done_props: "\<forall>i < n. prop_corr W Q (p i)"
+      and to_do_props: "\<forall>i \<ge> n. i < N \<longrightarrow> delta_prop_corr W Q (p i)"
+      and n_lt_N: "n < N"
+      and stop_inv: "W Stop = 0"
+    for W n
+  proof -
+    have dpcn: "delta_prop_corr W Q (p n)" using to_do_props n_lt_N by blast
+
+    from stop_inv
+    have W'_stop: "(W(PropClock (p n) := 0)) Stop = 0" by simp
+
+    { assume a: "p n \<notin> Q"
+      define W' where [simp]: "W' = (W(PropClock (p n) := 0))"
+      have "\<T> pd \<turnstile> \<langle>PropDecoding (p n), W\<rangle> \<rightarrow>\<^bsub>Unit\<^esub> \<langle>PropDecoding (p (Suc n)), W'\<rangle>"
+        apply (rule step_a.intros)
+           apply (subst trans_of_def)
+           apply (subst prop_decoding_def)
+        using dpcn \<open>n < N\<close> apply auto[1]
+        using a dpcn apply auto[1]
+        unfolding inv_of_def using W'_stop
+        by auto
+      hence "\<T> pd \<turnstile> \<langle>PropDecoding (p n), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p (Suc n)), W'\<rangle>"
+        using steps.step[OF step_a refl] by auto
+      moreover
+      have "\<forall>i < Suc n. prop_corr W' Q (p i)" using a dpcn done_props less_Suc_eq by auto
+      moreover
+      have "\<forall>i \<ge> Suc n. i < N \<longrightarrow>  delta_prop_corr W' Q (p i)" 
+      proof - 
+        from p_inj_on[simplified inj_on_def] 
+        have 1: "\<forall>x y. x < N \<and> y < N \<longrightarrow> p x = p y \<longrightarrow> x = y" by blast
+        have "\<And>i. Suc n \<le> i \<Longrightarrow> i < N \<Longrightarrow> p i \<noteq> p n"
+          subgoal for i
+            apply (subst (asm) Suc_le_eq)
+            apply (rule notI)
+            apply (frule less_trans, assumption)
+            using 1 by blast
+          done
+        with to_do_props
+        show "\<forall>i \<ge> Suc n. i < N \<longrightarrow> delta_prop_corr W' Q (p i)" by simp
+      qed
+      moreover
+      have "(\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)" by auto
+      moreover
+      have "W' Stop = 0" using stop_inv by auto
+      ultimately
+      have "\<T> pd \<turnstile> \<langle>PropDecoding (p n), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p (Suc n)), W'\<rangle> 
+            \<and> (\<forall>i < Suc n. prop_corr W' Q (p i))
+            \<and> (\<forall>i \<ge> Suc n. i < N \<longrightarrow> delta_prop_corr W' Q (p i))
+            \<and> (\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)
+            \<and> W' Stop = 0" by blast
+    }
+    moreover
+    { assume a:"p n \<in> Q"
+      define W' where [simp]: "W' = (W(PropClock (p n) := 1))"
+      have 1: "W (PropClock (p n)) - W Delta = 1 \<Longrightarrow> W \<turnstile> CEQ (PropClock (p n)) Delta 1"
+        by (metis add.commute clock_val.intros(9) diff_add_cancel)
+      
+      have "\<T> pd \<turnstile> \<langle>PropDecoding (p n), W\<rangle> \<rightarrow>\<^bsub>Unit\<^esub> \<langle>PropDecoding (p (Suc n)), W'\<rangle>"
+        apply (rule step_a.intros[where g = "CEQ (PropClock (p n)) Delta 1"])
+        apply (subst trans_of_def)
+           apply (subst prop_decoding_def)
+        using dpcn \<open>n < N\<close> apply auto[1]
+        using a conjunct1[OF dpcn] apply (intro 1) apply auto[1]
+        unfolding inv_of_def using W'_stop by auto
+      hence "\<T> pd \<turnstile> \<langle>PropDecoding (p n), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p (Suc n)), W'\<rangle>"
+        using steps.step[OF step_a refl] by auto
+      moreover
+      have "\<forall>i < Suc n. prop_corr W' Q (p i)" using a dpcn  done_props less_Suc_eq by auto
+      moreover
+      have "\<forall>i \<ge> Suc n. i < N \<longrightarrow>  delta_prop_corr W' Q (p i)" 
+      proof - 
+        from p_inj_on[simplified inj_on_def] 
+        have 1: "\<forall>x y. x < N \<and> y < N \<longrightarrow> p x = p y \<longrightarrow> x = y" by blast
+        have "\<And>i. Suc n \<le> i \<Longrightarrow> i < N \<Longrightarrow> p i \<noteq> p n"
+          subgoal for i
+            apply (subst (asm) Suc_le_eq)
+            apply (rule notI)
+            apply (frule less_trans, assumption)
+            using 1 by blast
+          done
+        with to_do_props
+        show "\<forall>i \<ge> Suc n. i < N \<longrightarrow> delta_prop_corr W' Q (p i)" by simp
+      qed
+      moreover
+      have "(\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)" by auto
+      moreover
+      have "W' Stop = 0" using stop_inv by auto
+      ultimately
+      have "\<T> pd \<turnstile> \<langle>PropDecoding (p n), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p (Suc n)), W'\<rangle> 
+            \<and> (\<forall>i < Suc n. prop_corr W' Q (p i))
+            \<and> (\<forall>i \<ge> Suc n. i < N \<longrightarrow> delta_prop_corr W' Q (p i))
+            \<and> (\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)
+            \<and> W' Stop = 0" by blast
+    }
+    ultimately
+    show ?thesis by blast
+  qed
+
+
+  have propositional_decoding_strong: 
+    "\<exists>W'. \<T> pd \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p (Suc n)), W'\<rangle> 
+    \<and> (\<forall>i < Suc n. prop_corr W' Q (p i)) 
+    \<and> (\<forall>i \<ge> Suc n. i < N \<longrightarrow> delta_prop_corr W' Q (p i)) 
+    \<and> (\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)
+    \<and> W' Stop = 0" 
+    if "n < N" for n
+    using that
+  proof (induction n)
+    case 0
+    have "\<forall>i < 0. prop_corr W Q (p i)" by simp
+    moreover
+    have "\<forall>i \<ge> 0. i < N \<longrightarrow> delta_prop_corr W Q (p i)" 
+      using p_in_props_iff delta_prop_model_def prop_clocks by blast
+    moreover
+    have "delta_exec_model W E" using exec_clocks .
+    moreover
+    have "0 < N" using some_props .
+    moreover
+    have "W Stop = 0" using stop .
+    ultimately
+    show ?case using propositional_decoding_step by presburger
+  next
+    case (Suc n)
+    then obtain W' where
+      steps: "\<T> pd \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p (Suc n)), W'\<rangle>"
+      and done_props: "\<forall>i<Suc n. prop_corr W' Q (p i)"
+      and to_do_props: "\<forall>i\<ge>Suc n. i < N \<longrightarrow> delta_prop_corr W' Q (p i)"
+      and other_inv: "(\<forall>c. \<not> is_propositional_clock c \<longrightarrow> W c = W' c)"
+      and stop_inv: "W' Stop = 0" by auto
+    from propositional_decoding_step[OF done_props to_do_props \<open>Suc n < N\<close> stop_inv]
+    obtain W'' where
+        steps': "\<T> pd \<turnstile> \<langle>PropDecoding (p (Suc n)), W'\<rangle> \<rightarrow>* \<langle>PropDecoding (p (Suc (Suc n))), W''\<rangle>"
+        and other: "\<forall>i<Suc (Suc n). prop_corr W'' Q (p i)"
+         "\<forall>i\<ge>Suc (Suc n). i < N \<longrightarrow> delta_prop_corr W'' Q (p i)"
+        "(\<forall>c. \<not> is_propositional_clock c \<longrightarrow> W' c = W'' c)" 
+        "W'' Stop = 0" by blast
+    from steps_trans[OF steps steps'] other_inv other
+    show ?case by auto
+  qed
+
+  
+  have propositional_decoding: "\<exists>W'. \<T> pd \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p N), W'\<rangle> 
+    \<and> prop_model W' Q
+    \<and> delta_exec_model W' E 
+    \<and> (\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)
+    \<and> W' Stop = 0" 
+    using propositional_decoding_strong[where n = "N - 1"] Suc_diff_1[OF some_props] some_props
+    prop_model_def[simplified props_pred] exec_clocks[simplified delta_exec_model_def] delta_exec_model_def
+    by auto
+
+  have prop_dec_to_exec_dec: "\<T> pd \<turnstile> \<langle>PropDecoding (p N), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act 0), W\<rangle>" if "W Stop = 0" for W
+    apply (rule steps.step)
+     defer
+     apply (rule steps.refl, rule step_a, rule step_a.intros)
+       apply (subst trans_of_def, subst prop_decoding_to_exec_decoding_def)
+       apply auto[1]
+    unfolding true_const_def apply (auto simp: that)[1]
+    unfolding inv_of_def apply (auto simp: that)[1]
+    by simp
+  
+  have to_exec_decoding_start: "\<exists>W'. \<T> pd \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act 0), W'\<rangle> 
+    \<and> prop_model W' Q
+    \<and> delta_exec_model W' E 
+    \<and> (\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)
+    \<and> W' Stop = 0"
+  proof -
+    from propositional_decoding
+    obtain W' where 
+    W': "\<T> pd \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p N), W'\<rangle>"
+      "prop_model W' Q"
+      "delta_exec_model W' E"
+      "(\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)"
+      "W' Stop = 0" by auto
+    show ?thesis using steps_trans[OF W'(1) prop_dec_to_exec_dec[where W = W', OF W'(5)]] W' by blast                         
+  qed
+
 qed
 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
