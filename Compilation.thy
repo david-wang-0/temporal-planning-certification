@@ -27,7 +27,7 @@ datatype ('proposition, 'action) clock =
 datatype alpha = Unit
 
 context temp_planning_problem
-begin                 
+begin
 
 definition prop_numbers ("p\<^sub>_" 65) where "prop_numbers \<equiv> p"
 
@@ -870,6 +870,10 @@ qed
 abbreviation prop_dec_automaton ("\<T> pd") where 
 "prop_dec_automaton \<equiv> (prop_decoding \<union> {prop_decoding_to_exec_decoding}, invs)"
 
+
+abbreviation es_dec_automaton ("\<T> ed") where 
+"es_dec_automaton \<equiv> (exec_decoding, invs)"
+
 fun is_boolean_clock::"('proposition, 'action) clock \<Rightarrow> bool" where
 "is_boolean_clock (PropClock _) = True"
 | "is_boolean_clock (Running _) = True"
@@ -912,7 +916,7 @@ proof -
     have dpcn: "delta_prop_corr W Q (p n)" using to_do_props n_lt_N by blast
 
     from stop_inv
-    have W'_stop: "(W(PropClock (p n) := 0)) Stop = 0" by simp
+    have W'_stop: "(W(PropClock (p n) := x)) Stop = 0" for x by simp
 
     { assume a: "p n \<notin> Q"
       define W' where [simp]: "W' = (W(PropClock (p n) := 0))"
@@ -1046,11 +1050,10 @@ proof -
   
   have propositional_decoding: "\<exists>W'. \<T> pd \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p N), W'\<rangle> 
     \<and> prop_model W' Q
-    \<and> delta_exec_model W' E 
     \<and> (\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)
     \<and> W' Stop = 0" 
     using propositional_decoding_strong[where n = "N - 1"] Suc_diff_1[OF some_props] some_props
-    prop_model_def[simplified props_pred] exec_clocks[simplified delta_exec_model_def] delta_exec_model_def
+    prop_model_def[simplified props_pred]
     by auto
 
   have prop_dec_to_exec_dec: "\<T> pd \<turnstile> \<langle>PropDecoding (p N), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act 0), W\<rangle>" if "W Stop = 0" for W
@@ -1069,7 +1072,7 @@ proof -
     \<and> (\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)
     \<and> W' Stop = 0"
   proof -
-    from propositional_decoding
+    from propositional_decoding exec_clocks[simplified delta_exec_model_def] delta_exec_model_def
     obtain W' where 
     W': "\<T> pd \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p N), W'\<rangle>"
       "prop_model W' Q"
@@ -1079,6 +1082,154 @@ proof -
     show ?thesis using steps_trans[OF W'(1) prop_dec_to_exec_dec[where W = W', OF W'(5)]] W' by blast                         
   qed
 
+
+  have execution_decoding_step: 
+    "\<exists>W'. \<T> ed \<turnstile> \<langle>ExecDecoding (act m), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act (Suc m)), W'\<rangle> 
+    \<and> (\<forall>i < Suc m. exec_corr W' E (act i)) 
+    \<and> (\<forall>i \<ge> Suc m. i < M \<longrightarrow> delta_exec_corr W' E (act i)) 
+    \<and> (\<forall>c. \<not>(is_exec_clock c) \<longrightarrow> W c = W' c)
+    \<and> W' Stop = 0"
+      if  done_acts: "\<forall>i < m. exec_corr W E (act i)"
+      and to_do_acts: "\<forall>i \<ge> m. i < M \<longrightarrow> delta_exec_corr W E (act i)"
+      and m_lim: "m < M"
+      and stop_inv: "W Stop = 0" for m W
+  proof -
+    have decm: "delta_exec_corr W E (act m)" using to_do_acts m_lim by blast
+
+    from stop_inv
+    have W'_stop: "(W(Running (act m) := x)) Stop = 0" for x by simp
+
+    { assume a: "act m \<notin> E"
+      define W' where [simp]: "W' = (W(Running (act m) := 0))"
+      have "\<T> ed \<turnstile> \<langle>ExecDecoding (act m), W\<rangle> \<rightarrow>\<^bsub>Unit\<^esub> \<langle>ExecDecoding (act (Suc m)), W'\<rangle>"
+        apply (rule step_a.intros)
+           apply (subst trans_of_def)
+           apply (subst exec_decoding_def)
+        using decm \<open>m < M\<close> apply auto[1]
+        using a decm apply auto[1]
+        unfolding inv_of_def using W'_stop
+        by auto
+      hence "\<T> ed \<turnstile> \<langle>ExecDecoding (act m), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act (Suc m)), W'\<rangle>"
+        using steps.step[OF step_a refl] by auto
+      moreover
+      have "\<forall>i < Suc m. exec_corr W' E (act i)" using a decm done_acts less_Suc_eq by auto
+      moreover
+      have "\<forall>i \<ge> Suc m. i < M \<longrightarrow>  delta_exec_corr W' E (act i)" 
+      proof - 
+        from act_inj_on[simplified inj_on_def] 
+        have 1: "\<forall>x y. x < M \<and> y < M \<longrightarrow> act x = act y \<longrightarrow> x = y" by blast
+        have "\<And>i. Suc m \<le> i \<Longrightarrow> i < M \<Longrightarrow> act i \<noteq> act m"
+          subgoal for i
+            apply (subst (asm) Suc_le_eq)
+            apply (rule notI)
+            apply (frule less_trans, assumption)
+            using 1 by blast
+          done
+        with to_do_acts
+        show "\<forall>i \<ge> Suc m. i < M \<longrightarrow> delta_exec_corr W' E (act i)" by simp
+      qed
+      moreover
+      have "(\<forall>c. \<not>(is_exec_clock c) \<longrightarrow> W c = W' c)" by auto
+      moreover
+      have "W' Stop = 0" using stop_inv by auto
+      ultimately
+      have "\<T> ed \<turnstile> \<langle>ExecDecoding (act m), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act (Suc m)), W'\<rangle> 
+      \<and> (\<forall>i < Suc m. exec_corr W' E (act i))
+      \<and> (\<forall>i \<ge> Suc m. i < M \<longrightarrow> delta_exec_corr W' E (act i))
+      \<and> (\<forall>c. \<not>(is_exec_clock c) \<longrightarrow> W c = W' c)
+      \<and> W' Stop = 0" by blast
+    }
+    moreover
+    { assume a: "act m \<in> E"
+      define W' where [simp]: "W' = (W(Running (act m) := 1))"
+      have 1: "W (Running (act m)) - W Delta = 1 \<Longrightarrow> W \<turnstile> CEQ (Running (act m)) Delta 1"
+        by (metis add.commute clock_val.intros(9) diff_add_cancel)
+      
+      have "\<T> ed \<turnstile> \<langle>ExecDecoding (act m), W\<rangle> \<rightarrow>\<^bsub>Unit\<^esub> \<langle>ExecDecoding (act (Suc m)), W'\<rangle>"
+        apply (rule step_a.intros[where g = "CEQ (Running (act m)) Delta 1"])
+           apply (subst trans_of_def)
+           apply (subst exec_decoding_def)
+        using decm \<open>m < M\<close> apply auto[1]
+        apply (rule 1) using a decm apply blast
+        unfolding inv_of_def using W'_stop
+        by auto
+      hence "\<T> ed \<turnstile> \<langle>ExecDecoding (act m), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act (Suc m)), W'\<rangle>"
+        using steps.step[OF step_a refl] by auto
+      moreover
+      have "\<forall>i < Suc m. exec_corr W' E (act i)" using a decm done_acts less_Suc_eq by auto
+      moreover
+      have "\<forall>i \<ge> Suc m. i < M \<longrightarrow>  delta_exec_corr W' E (act i)" 
+      proof - 
+        from act_inj_on[simplified inj_on_def] 
+        have 1: "\<forall>x y. x < M \<and> y < M \<longrightarrow> act x = act y \<longrightarrow> x = y" by blast
+        have "\<And>i. Suc m \<le> i \<Longrightarrow> i < M \<Longrightarrow> act i \<noteq> act m"
+          subgoal for i
+            apply (subst (asm) Suc_le_eq)
+            apply (rule notI)
+            apply (frule less_trans, assumption)
+            using 1 by blast
+          done
+        with to_do_acts
+        show "\<forall>i \<ge> Suc m. i < M \<longrightarrow> delta_exec_corr W' E (act i)" by simp
+      qed
+      moreover
+      have "(\<forall>c. \<not>(is_exec_clock c) \<longrightarrow> W c = W' c)" by auto
+      moreover
+      have "W' Stop = 0" using stop_inv by auto
+      ultimately
+      have "\<T> ed \<turnstile> \<langle>ExecDecoding (act m), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act (Suc m)), W'\<rangle> 
+            \<and> (\<forall>i < Suc m. exec_corr W' E (act i))
+            \<and> (\<forall>i \<ge> Suc m. i < M \<longrightarrow> delta_exec_corr W' E (act i))
+            \<and> (\<forall>c. \<not>(is_exec_clock c) \<longrightarrow> W c = W' c)
+            \<and> W' Stop = 0" by blast
+    }
+    ultimately
+    show ?thesis by blast
+  qed
+
+  have execution_decoding_strong: "\<exists>W'. \<T> ed \<turnstile> \<langle>ExecDecoding (act 0), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act (Suc m)), W'\<rangle> 
+    \<and> (\<forall>i < Suc m. exec_corr W' E (act i)) 
+    \<and> (\<forall>i \<ge> Suc m. i < M \<longrightarrow> delta_exec_corr W' E (act i)) 
+    \<and> (\<forall>c. \<not>(is_exec_clock c) \<longrightarrow> W c = W' c)
+    \<and> W' Stop = 0"
+    if to_do_acts: "delta_exec_model W E"
+    and m_lim: "m < M"
+    and stop_inv: "W Stop = 0"for m W
+    using that
+  proof (induction m)
+    case 0
+    have "\<forall>i < 0. exec_corr W E (act i)" using to_do_acts by simp
+    moreover
+    have "\<forall>i \<ge> 0. i < M \<longrightarrow> delta_exec_corr W E (act i)" using to_do_acts delta_exec_model_def act_pred by simp
+    ultimately
+    show ?case using execution_decoding_step stop_inv some_actions by presburger
+  next
+    case (Suc m)
+    then obtain W' where
+      step: "\<T> ed \<turnstile> \<langle>ExecDecoding (act 0), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act (Suc m)), W'\<rangle>"
+      and "\<forall>i<Suc m. exec_corr W' E (act i)"
+      "\<forall>i\<ge>Suc m. i < M \<longrightarrow> delta_exec_corr W' E (act i)"
+      and other_inv:"(\<forall>c. \<not> is_exec_clock c \<longrightarrow> W c = W' c)"
+      and "W' Stop = 0" by auto
+    from execution_decoding_step[OF this(2,3) \<open>Suc m < M\<close>] this
+    obtain W'' where
+      W'': "\<T> ed \<turnstile> \<langle>ExecDecoding (act (Suc m)), W'\<rangle> \<rightarrow>* \<langle>ExecDecoding (act (Suc (Suc m))), W''\<rangle>"
+        "\<forall>i<Suc (Suc m). exec_corr W'' E (act i)"
+        "\<forall>i\<ge>Suc (Suc m). i < M \<longrightarrow> delta_exec_corr W'' E (act i)"
+        "\<forall>c. \<not> is_exec_clock c \<longrightarrow> W' c = W'' c"
+        "W'' Stop = 0" by auto
+    from steps_trans[OF step(1) W''(1)] W'' other_inv
+    show ?case by auto
+  qed
+
+  have exec_decoding: "\<exists>W'. \<T> ed \<turnstile> \<langle>ExecDecoding (act 0), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W'\<rangle> 
+    \<and> exec_model W' E 
+    \<and> (\<forall>c. \<not>(is_exec_clock c) \<longrightarrow> W c = W' c)
+    \<and> W' Stop = 0"
+    if dem: "delta_exec_model W E"
+    and stop_inv: "W Stop = 0"for W
+    using execution_decoding_strong[OF dem, where m = "M - 1", OF _ stop_inv] 
+      Suc_diff_1[OF some_actions] some_actions exec_model_def[simplified act_pred] by simp
 qed
 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
