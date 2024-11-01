@@ -898,7 +898,7 @@ lemma boolean_state_decoding:
   assumes prop_clocks: "delta_prop_model W Q"
       and exec_clocks: "delta_exec_model W E"
       and stop: "W Stop = 0"
-  shows "\<exists>W'. \<T> pd \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W'\<rangle> 
+  shows "\<exists>W'. \<T> \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W'\<rangle> 
     \<and> prop_model W' Q \<and> exec_model W' E \<and> (\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W c = W' c)"
 proof -
   have propositional_decoding_step:
@@ -1230,6 +1230,39 @@ proof -
     and stop_inv: "W Stop = 0"for W
     using execution_decoding_strong[OF dem, where m = "M - 1", OF _ stop_inv] 
       Suc_diff_1[OF some_actions] some_actions exec_model_def[simplified act_pred] by simp
+
+
+  have "le_ta (\<T> pd) \<T>" unfolding prob_automaton_def le_ta_def trans_of_def inv_of_def by simp
+  from ta_superset[OF _ this] to_exec_decoding_start
+  obtain W' where 
+  W': "\<T> \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act 0), W'\<rangle>"
+    "prop_model W' Q"
+    "delta_exec_model W' E"
+    "(\<forall>c. \<not>(is_propositional_clock c) \<longrightarrow> W c = W' c)"
+    "W' Stop = 0" by blast
+  
+  have "le_ta (\<T> ed) \<T>" unfolding prob_automaton_def le_ta_def trans_of_def inv_of_def by simp
+  from ta_superset[OF _ this] exec_decoding W'
+  obtain W'' where
+    W'': "\<T> \<turnstile> \<langle>ExecDecoding (act 0), W'\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W''\<rangle>" 
+    "exec_model W'' E" 
+    "\<forall>c. \<not>(is_exec_clock c) \<longrightarrow> W' c = W'' c"
+    "W'' Stop = 0" by blast
+  with W'
+  have pmW'': "prop_model W'' Q" unfolding prop_model_def by auto
+  
+  have invW'': "(\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W c = W'' c)" 
+  proof -
+    have "\<not>(is_boolean_clock c) \<longrightarrow> \<not>(is_propositional_clock c)" for c
+      by (cases c) simp+
+    moreover
+    have "\<not>(is_boolean_clock c) \<longrightarrow> \<not>(is_exec_clock c)" for c
+      by (cases c) simp+
+    ultimately
+    show ?thesis using W'(4) W''(3) by auto
+  qed
+  
+  show ?thesis using steps_trans[OF W'(1) W''(1)] W'' pmW'' invW'' by blast
 qed
 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"

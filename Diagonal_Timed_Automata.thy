@@ -175,4 +175,63 @@ lemma steps_trans: "A \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langl
 lemma steps_twist: "A \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langle>l', u'\<rangle> \<Longrightarrow> A \<turnstile> \<langle>l', u'\<rangle> \<rightarrow> \<langle>l'', u''\<rangle> \<Longrightarrow> A \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langle>l'', u''\<rangle>"
   by (induction rule: steps.induct) auto
 
+
+definition le_ta::"('a, 'c, 't, 's) ta \<Rightarrow> ('a, 'c, 't, 's) ta \<Rightarrow> bool" where
+"le_ta A B \<equiv> (\<forall>t \<in> trans_of A. t \<in> trans_of B) \<and> (inv_of A = inv_of B)"
+
+
+lemma ta_superset: "A \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langle>l', u'\<rangle> \<Longrightarrow> le_ta A B  \<Longrightarrow> B \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langle>l', u'\<rangle>"
+proof (induction rule: steps.induct)
+  case (refl A l u)
+  then show ?case by blast
+next
+  case (step A l u l' u' l'' u'')
+  hence \<open>B \<turnstile> \<langle>l, u\<rangle> \<rightarrow> \<langle>l',u'\<rangle>\<close> 
+  proof (induction rule: step.induct)
+    case (step_a A l u a l' u')
+    then obtain g s where
+      facts: "A \<turnstile> l \<longrightarrow>\<^bsup>g,a,s\<^esup> l'" 
+      "u \<turnstile> g" 
+      "u' \<turnstile> inv_of A l'" 
+      "u' = [s]u" by (cases rule: step_a.cases) simp
+    
+    with \<open>le_ta A B\<close>
+    have "B \<turnstile> l \<longrightarrow>\<^bsup>g,a,s\<^esup> l'"  unfolding le_ta_def by blast
+    moreover
+    from facts \<open>le_ta A B\<close>
+    have "u' \<turnstile> inv_of B l'" unfolding le_ta_def by auto
+    ultimately
+    show ?case
+      apply -
+      apply (rule step.step_a, rule step_a.intros)
+      using facts by auto
+  next
+    case (step_t A l u d l' u')
+    then obtain d where
+      d: "0 \<le> d"
+      and u': "u' = u \<oplus> d"
+      and l': "l' = l"
+      and u_inv: "u \<turnstile> inv_of A l"
+      and u'_inv: "u \<oplus> d \<turnstile> inv_of A l"
+      by blast
+
+    
+    have invs: "u \<turnstile> inv_of B l" "u \<oplus> d \<turnstile> inv_of B l" 
+      using u_inv u'_inv \<open>le_ta A B\<close>
+      unfolding le_ta_def by simp+
+    
+    show ?case
+      apply (rule step.step_t)
+      apply (subst l')
+      apply (subst u')
+      apply (rule step_t.intros)
+        apply (rule invs(1))
+       apply (rule invs(2))
+      by (rule d)
+  qed
+  moreover
+  have "B \<turnstile> \<langle>l', u'\<rangle> \<rightarrow>* \<langle>l'',u''\<rangle>" using step by blast
+  ultimately
+  show ?case by (rule steps.step)
+qed
 end
