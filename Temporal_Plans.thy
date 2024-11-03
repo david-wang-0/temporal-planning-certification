@@ -54,6 +54,7 @@ locale temp_planning_problem =
       and action_numbering: "bij_betw act {n. n < card actions} actions"
       and some_props:       "card props > 0"
       and some_actions:     "card actions > 0"
+      and eps_range:        "0 \<le> \<epsilon>"
 begin 
 
 text \<open>Some additional definitions\<close>
@@ -88,8 +89,6 @@ lemma act_pred: fixes P
 
 lemma act_dom: "m < card actions \<Longrightarrow> act m \<in> actions" 
   using act_img_actions by blast
-
-
 
 lemma p_inj_on: "inj_on p {n. n < card props}"
   using prop_numbering bij_betw_def by blast
@@ -127,9 +126,7 @@ definition htpl::"'time list" where
 abbreviation time_index::"nat \<Rightarrow> 'time" where
 "time_index \<equiv> ((!) htpl)"
 
-lemma time_index_bij_betw_list: "bij_betw time_index {n. n < length htpl} (set htpl)"
-  using bij_betw_nth distinct_sorted_list_of_set htpl_def[symmetric] lessThan_def
-  by metis
+      
 
 text \<open>Happening Sequences\<close>
 
@@ -156,8 +153,19 @@ text \<open>This will not work as such. Equality for snap-actions must first tak
 into account, but this is something to worry about later. (in a locale?)\<close>
 
 text \<open>From the locale assumptions, we know that if a is not b then \<close>
-definition nm_sa_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
-"nm_sa_seq B \<equiv> \<not>(\<exists>t u. t - u \<le> \<epsilon> \<and> u - t \<le> \<epsilon> \<and> (\<exists>a b. a \<noteq> b \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u \<longrightarrow> \<not>(mutex_snap_action a b)))"
+definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
+"nm_happ_seq B \<equiv> \<not>(\<exists>t u a b. t - u \<le> \<epsilon> \<and> u - t \<le> \<epsilon> \<and> a \<noteq> b \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u 
+  \<and> mutex_snap_action a b)"
+
+lemma nm_happ_seq_alt:
+  assumes "nm_happ_seq B"
+    "t - u \<le> \<epsilon>" 
+    "u - t \<le> \<epsilon>" 
+    "a \<noteq> b" 
+    "a \<in> happ_at B t" 
+    "b \<in> happ_at B u"
+  shows "\<not>(mutex_snap_action a b)"
+  using assms unfolding nm_happ_seq_def by blast
 
 subsubsection \<open>Valid state sequence\<close>
 
@@ -189,7 +197,7 @@ definition valid_state_sequence::"
         apply_effects (M i) S = (M (Suc i))
         \<and> invs \<subseteq> (M i)
         \<and> pres \<subseteq> (M i)
-        \<and> nm_sa_seq B
+        \<and> nm_happ_seq B
     ))
 )"
 
@@ -203,6 +211,16 @@ definition no_self_overlap::"bool" where
   \<and> Some (a, u, e) = \<pi> j
   \<and> t \<le> u \<and> u \<le> t + d)"
 
+lemma no_self_overlap_spec:
+  assumes no_self_overlap
+    "(a, t, d) \<in> ran \<pi>"
+    "(a, u, e) \<in> ran \<pi>"
+    "t \<noteq> u \<or> d \<noteq> e"
+  shows
+    "\<not>(t \<le> u \<and> u \<le> t + d)"
+  using assms 
+  unfolding no_self_overlap_def ran_def by force
+
 
 definition plan_actions_in_problem::bool where
 "plan_actions_in_problem \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> a \<in> actions"
@@ -211,7 +229,7 @@ definition finite_plan::bool where
 "finite_plan \<equiv> finite (dom \<pi>)"
 
 definition durations_positive::bool where
-"durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 \<le> d"
+"durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 < d"
 
 definition valid_plan::"bool" where
 "valid_plan \<equiv> \<exists>M. (
@@ -244,6 +262,7 @@ next
     "(t, a) \<in> plan_happ_seq" using plan_happ_seq_def htps_def by force
   thus "\<exists>a. a \<in> happ_at plan_happ_seq t" using happ_at_def by blast
 qed
+
 
 lemma at_start_in_happ_seqE: 
   assumes in_happ_seq: "(t, at_start a) \<in> plan_happ_seq"
@@ -295,7 +314,7 @@ proof -
     next
       case False
       from \<open>durations_positive\<close>[simplified durations_positive_def] d_in_ran e(1)
-      consider "t \<le> t + d" | "t \<le> t + e" by auto
+      consider "t \<le> t + d" | "t \<le> t + e" by fastforce
       hence False 
         apply cases
         using False \<open>no_self_overlap\<close>[simplified no_self_overlap_def] ij 
@@ -367,23 +386,21 @@ proof -
       proof cases
         case 1
         with \<open>durations_positive\<close>[simplified durations_positive_def] t'd'_in_ran td_t'd'
-        have "t' \<le> t + d" by auto
+        have "t' \<le> t + d" by force
         with False ij 1
         show ?thesis using \<open>no_self_overlap\<close>[simplified no_self_overlap_def] by force
       next
         case 2
         with \<open>durations_positive\<close>[simplified durations_positive_def] td_in_ran td_t'd'
-        have "t \<le> t' + d'"by (metis le_add_same_cancel1)
+        have "t \<le> t' + d'" by (metis less_add_same_cancel1 order_less_imp_le)
         with False ij 2
         show ?thesis using \<open>no_self_overlap\<close>[simplified no_self_overlap_def] by force
       qed
     qed
   qed
   ultimately
-  show ?thesis
-    apply -
-    by (rule ex1I, auto)
-  qed
+  show ?thesis apply - by (rule ex1I, auto)
+qed
 
 
 lemma finite_htps: 
@@ -410,6 +427,12 @@ lemma set_htpl_eq_htps:
   unfolding htpl_def set_sorted_list_of_set[OF finite_htps[OF assms(1)]]
   by blast
 
+
+lemma time_index_bij_betw_list: "bij_betw time_index {n. n < length htpl} (set htpl)"
+  using bij_betw_nth distinct_sorted_list_of_set htpl_def[symmetric] lessThan_def
+  by metis
+
+
 lemma time_index_bij_betw_set:
   assumes "finite_plan"
   shows "bij_betw time_index {n. n < card htps} htps"
@@ -423,7 +446,18 @@ proof -
     by blast
 qed
 
-lemmas time_index_ord = strict_sorted_list_of_set[of htps, simplified htpl_def[symmetric], THEN sorted_wrt_nth_less]
+lemmas time_index_strict_sorted = strict_sorted_list_of_set[of htps, simplified htpl_def[symmetric], THEN sorted_wrt_nth_less]
+
+lemma time_index_strict_mono_on: 
+  "strict_mono_on {n. n < length htpl} time_index" 
+  using time_index_strict_sorted unfolding monotone_on_def
+  by blast
+
+lemmas time_index_sorted = sorted_list_of_set(2)[of htps, simplified htpl_def[symmetric], THEN sorted_nth_mono]
+
+lemma time_index_mono_on:
+  "mono_on {n. n < length htpl} time_index" 
+  using time_index_sorted unfolding monotone_on_def by auto
 
 lemma no_non_indexed_time_points: 
   assumes a: "(Suc l) < length htpl"
@@ -437,10 +471,10 @@ proof (rule notI)
     "time_index l' < time_index (Suc l)"
     by (metis in_set_conv_nth)
   hence "l' < (Suc l)"
-    by (metis not_less_iff_gr_or_eq time_index_ord)
+    by (metis not_less_iff_gr_or_eq time_index_strict_sorted)
   moreover
   have "l < l'" using l'
-    by (metis Suc_lessD linorder_neqE_nat order_less_asym' a time_index_ord)
+    by (metis Suc_lessD linorder_neqE_nat order_less_asym' a time_index_strict_sorted)
   ultimately
   show "False" by simp
 qed

@@ -85,268 +85,7 @@ subsubsection \<open>Decision-making\<close>
 definition AND_ALL::"(('proposition, 'action) clock, 'time) dconstraint list \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
 "AND_ALL xs = fold AND xs (true_const)"
 
-text \<open>Numbering for snap_actions. This is hard to work with.\<close>
-definition snap::"nat \<Rightarrow> 'snap_action" where
-"snap n \<equiv> if (n mod 2 = 0) then (at_start (act (n div 2))) else (at_end (act (n div 2)))"
-
-lemma "bij_betw snap {n. n < 2 * M} (at_start ` actions \<union> at_end ` actions)"
-proof -
-  have 1: "bij_betw snap {n. n < 2 * M \<and> n mod 2 = 0} (at_start ` actions)"
-  proof -
-    have "inj_on snap {n. n < 2 * M \<and> n mod 2 = 0}"
-    proof (rule inj_onI)
-      fix x y
-      assume a: "x \<in> {n. n < 2 * M \<and> n mod 2 = 0}" 
-             "y \<in> {n. n < 2 * M \<and> n mod 2 = 0}" 
-             "snap x = snap y" 
-      
-      hence 0: "x div 2 \<in> {m. m < M}"
-            "y div 2 \<in> {m. m < M}" by auto
-      
-      from this[simplified ] action_numbering[THEN bij_betw_apply]
-      have 1: "act (x div 2) \<in> actions"
-           "act (y div 2) \<in> actions"
-        by blast+
-      
-      from a
-      have 2: "at_start (act (x div 2)) = at_start (act (y div 2))"  
-        using snap_def by auto
-      
-      from 1 2
-      have "act (x div 2) = act (y div 2)" 
-        using at_start_inj
-        by (blast dest: inj_onD)
-      hence "x div 2 = y div 2" using act_inj_on[simplified inj_on_def] 0[simplified ] by blast
-      moreover
-      from a
-      have "x mod 2 = y mod 2" by simp
-      ultimately
-      show "x = y" by (metis div_mod_decomp)
-    qed
-    moreover
-    have "snap ` {n. n < 2 * M \<and> n mod 2 = 0} = (at_start ` actions)"
-    proof (rule equalityI; rule subsetI)
-      fix x
-      assume "x \<in> snap ` {n. n < 2 * M \<and> n mod 2 = 0}"
-      then obtain n where
-        n: "n \<in> {n. n < 2 * M}"
-        "n mod 2 = 0"
-        "snap n = x"  by auto
-      hence "n div 2 \<in> {n. n < M}" by auto
-      hence "act (n div 2) \<in> actions" using act_img_actions by blast
-      with n(2, 3)[simplified snap_def]
-      show "x \<in> at_start ` actions" using action_numbering
-        by auto
-    next
-      fix x
-      assume "x \<in> at_start ` actions"
-      then obtain a where
-        xa: "x = at_start a"
-        "a \<in> actions"
-        by force
-      
-      hence 1: "a \<in> act ` {n. n < M}" using act_img_actions
-        by simp
-      
-      have 2: "(\<lambda>n. n div 2) ` {n. n < 2 * M} = {n. n < M}"
-      proof (rule equalityI; rule subsetI)
-        fix x 
-        assume "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * M}"
-        then obtain n where
-          "x = n div 2"
-          "n < 2 * M"
-          by blast
-        hence "x < M" by linarith
-        thus "x \<in> {n. n < M}"
-          by simp
-      next 
-        fix x
-        assume "x \<in> {n. n < M}"
-        hence "x < M" by simp
-        hence "2 * x < 2 * M" by simp
-        then obtain n where
-          "n div 2 = x"
-          "n < 2 * M"
-          using div_mult_self1_is_m zero_less_numeral by blast
-        thus "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * M}"
-          by blast
-      qed
-      
-      have 3: "{n div 2 | n. n < 2 * M \<and> n mod 2 = 0} = {n div 2 | n. n < 2 * M}"
-      proof (rule equalityI; rule subsetI)
-        show "\<And>x. x \<in> {n div 2 |n. n < 2 * M \<and> n mod 2 = 0} \<Longrightarrow> x \<in> {n div 2 |n. n < 2 * M}" by blast
-      next
-        fix x
-        assume "x \<in> {n div 2 |n. n < 2 * M}" 
-        then obtain n where
-          n: "n < 2 * M"
-          "n div 2 = x" by blast
-        have "\<exists>m. m < 2 * M \<and> m mod 2 = 0 \<and> m div 2 = x"
-        proof (cases "n mod 2 = 0")
-          case True
-          with n
-          show ?thesis by metis
-        next
-          case False
-          then have "n mod 2 = 1" by auto
-          hence "(n - 1) div 2 = n div 2" "(n - 1) mod 2 = 0" by presburger+
-          moreover
-          have "n - 1 < 2 * M" using n(1) by linarith
-          ultimately
-          show ?thesis using n(2) by meson
-        qed
-        thus "x \<in> {n div 2 |n. n < 2 * M \<and> n mod 2 = 0}" by auto
-      qed
-      
-      have "a \<in> act ` {n div 2 | n. n < 2 * M \<and> n mod 2 = 0}"  
-        using 1[simplified 2[symmetric]]
-        by (subst 3, blast)
-      with xa
-      show "x \<in> snap ` {n. n < 2 * M \<and> n mod 2 = 0}"
-        unfolding snap_def by auto
-    qed
-    ultimately
-    show "bij_betw snap {n. n < 2 * M \<and> n mod 2 = 0} (at_start ` actions)"
-      using bij_betw_imageI by blast
-  qed
-  have 2: "bij_betw snap {n. n < 2 * M \<and> n mod 2 = 1} (at_end ` actions)"
-  proof -
-    have "inj_on snap {n. n < 2 * M \<and> n mod 2 = 1}"
-    proof (rule inj_onI)
-      fix x y
-      assume a: "x \<in> {n. n < 2 * M \<and> n mod 2 = 1}" 
-             "y \<in> {n. n < 2 * M \<and> n mod 2 = 1}" 
-             "snap x = snap y" 
-      
-      hence 0: "x div 2 \<in> {m. m < M}"
-            "y div 2 \<in> {m. m < M}" by auto
-      
-      from this[simplified ] action_numbering[THEN bij_betw_apply]
-      have 1: "act (x div 2) \<in> actions"
-           "act (y div 2) \<in> actions"
-        by blast+
-      
-      from a
-      have 2: "at_end (act (x div 2)) = at_end (act (y div 2))"  
-        using snap_def by auto
-      
-      from 1 2
-      have "act (x div 2) = act (y div 2)" 
-        using at_end_inj
-        by (blast dest: inj_onD)
-      hence "x div 2 = y div 2" using act_inj_on[simplified inj_on_def] 0[simplified ] by blast
-      moreover
-      from a
-      have "x mod 2 = y mod 2" by simp
-      ultimately
-      show "x = y" by (metis div_mod_decomp)
-    qed
-    moreover
-    have "snap ` {n. n < 2 * M \<and> n mod 2 = 1} = (at_end ` actions)"
-    proof (rule equalityI; rule subsetI)
-      fix x
-      assume "x \<in> snap ` {n. n < 2 * M \<and> n mod 2 = 1}"
-      then obtain n where
-        n: "n \<in> {n. n < 2 * M}"
-        "n mod 2 = 1"
-        "snap n = x" by auto
-      hence "n div 2 \<in> {n. n < M}" by auto
-      hence "act (n div 2) \<in> actions" using act_img_actions by blast
-      with n(2, 3)[simplified snap_def]
-      show "x \<in> at_end ` actions" using action_numbering
-        by auto
-    next
-      fix x
-      assume "x \<in> at_end ` actions"
-      then obtain a where
-        xa: "x = at_end a"
-        "a \<in> actions"
-        by force
-      
-      hence 1: "a \<in> act ` {n. n < M}" using act_img_actions by simp
-      
-      have 2: "(\<lambda>n. n div 2) ` {n. n < 2 * M} = {n. n < M}"
-      proof (rule equalityI; rule subsetI)
-        fix x 
-        assume "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * M}"
-        then obtain n where
-          "x = n div 2"
-          "n < 2 * M"
-          by blast
-        hence "x < M" by linarith
-        thus "x \<in> {n. n < M}"
-          by simp
-      next 
-        fix x
-        assume "x \<in> {n. n < M}"
-        hence "x < M" by simp
-        hence "2 * x < 2 * M" by simp
-        then obtain n where
-          "n div 2 = x"
-          "n < 2 * M"
-          using div_mult_self1_is_m zero_less_numeral by blast
-        thus "x \<in> (\<lambda>n. n div 2) ` {n. n < 2 * M}"
-          by blast
-      qed
-      
-      have 3: "{n div 2 | n. n < 2 * M \<and> n mod 2 = 1} = {n div 2 | n. n < 2 * M}"
-      proof (rule equalityI; rule subsetI)
-        show "\<And>x. x \<in> {n div 2 |n. n < 2 * M \<and> n mod 2 = 1} \<Longrightarrow> x \<in> {n div 2 |n. n < 2 * M}" by blast
-      next
-        fix x
-        assume "x \<in> {n div 2 |n. n < 2 * M}" 
-        then obtain n where
-          n: "n < 2 * M"
-          "n div 2 = x" by blast
-        have "\<exists>m. m < 2 * M \<and> m mod 2 = 1 \<and> m div 2 = x"
-        proof (cases "n mod 2 = 1")
-          case True
-          with n
-          show ?thesis by metis
-        next
-          case False
-          then have nm2: "n mod 2 = 0" by auto
-          hence "(Suc n) div 2 = n div 2" "(Suc n) mod 2 = 1" by presburger+
-          moreover
-          have "Suc n < 2 * M" using n(1) nm2 by auto
-          ultimately
-          show ?thesis using n(2) by meson
-        qed
-        thus "x \<in> {n div 2 |n. n < 2 * M \<and> n mod 2 = 1}" by auto
-      qed
-      
-      have "a \<in> act ` {n div 2 | n. n < 2 * M \<and> n mod 2 = 1}"  
-        using 1[simplified 2[symmetric]]
-        by (subst 3, blast)
-      with xa
-      show "x \<in> snap ` {n. n < 2 * M \<and> n mod 2 = 1}"
-        unfolding snap_def by auto
-    qed
-    ultimately
-    show "bij_betw snap {n. n < 2 * M \<and> n mod 2 = 1} (at_end ` actions)"
-      using bij_betw_imageI by blast
-  qed
-  have 3: \<open>{n. n < 2 * M \<and> n mod 2 = 0} \<union> {n. n < 2 * M \<and> n mod 2 = 1} = {n. n < 2 * M}\<close>
-  proof (rule equalityI; rule subsetI) 
-    fix x
-    assume "x \<in> {n. n < 2 * M \<and> n mod 2 = 0} \<union> {n. n < 2 * M \<and> n mod 2 = 1}"
-    thus "x \<in> {n. n < 2 * M}" by blast
-  next
-    fix x
-    assume "x \<in> {n. n < 2 * M}"
-    moreover
-    have "x mod 2 = 1 \<or> x mod 2 = 0" by presburger
-    ultimately
-    show "x \<in> {n. n < 2 * M \<and> n mod 2 = 0} \<union> {n. n < 2 * M \<and> n mod 2 = 1}" by blast
-  qed
-  show "bij_betw snap {n. n < 2 * M} (at_start ` actions \<union> at_end ` actions)"
-    using bij_betw_combine[OF 1 2 snaps_disj] 3 by simp
-qed
-
-definition interfering_snaps::"'snap_action \<Rightarrow> 'snap_action list" where
-"interfering_snaps a = sorted_key_list_of_set (inv snap) {b. a \<noteq> b \<and> mutex_snap_action a b}"
-
-text \<open>This is easier to work with.\<close>
+text \<open>Interfering snap-actions\<close>
 
 definition interfering_at_start::"'snap_action \<Rightarrow> nat list" where
 "interfering_at_start a = sorted_list_of_set {n. at_start (act n) \<noteq> a \<and> mutex_snap_action a (at_start (act n))}"
@@ -506,27 +245,6 @@ abbreviation "ES t \<equiv> {a. (t, a) \<in> exec_state_sequence}"
 
 abbreviation "IES t \<equiv> {a. (t, a) \<in> exec_state_sequence'}"
 
-lemma not_execution_when_starting:
-  assumes "(at_start a) \<in> B t" 
-  shows "a \<notin> ES t"
-proof (rule notI)
-  assume "a \<in> ES t"
-  then obtain s where
-    started: "a \<in> actions \<and> (s, at_start a) \<in> plan_happ_seq \<and> s < t"
-    and not_ended: "\<not>(\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' < t)"
-    unfolding exec_state_sequence_def by blast
-
-  from started
-  obtain d where
-    "(a, s, d) \<in> ran \<pi>" 
-    unfolding plan_happ_seq_def
-qed
-
-lemma execution_when_ending:
-  assumes "(at_end a) \<in> B t"
-    shows "a \<in> ES t"
-  sorry
-
 lemma inc_es_is_next_es:
   assumes "finite_plan"
       and "Suc l < length htpl"
@@ -538,10 +256,10 @@ proof (rule equalityI; rule subsetI)
     s: "a \<in> actions \<and> (s, at_start a) \<in> plan_happ_seq \<and> s \<le> time_index l"
     "\<not>(\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' \<le> time_index l)"
     unfolding exec_state_sequence'_def by blast
-  from this(2) time_index_ord[rotated, OF assms(2)] no_actions_between_indexed_timepoints[OF assms]
+  from this(2) time_index_strict_sorted[rotated, OF assms(2)] no_actions_between_indexed_timepoints[OF assms]
   have "\<not>(\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' < time_index (Suc l))"
     using happ_at_def by fastforce
-  with time_index_ord[rotated, OF \<open>Suc l < length htpl\<close>] s(1)
+  with time_index_strict_sorted[rotated, OF \<open>Suc l < length htpl\<close>] s(1)
   show "a \<in> ES (time_index (Suc l))" using exec_state_sequence_def by force
 next
   fix a
@@ -558,7 +276,7 @@ next
   have "\<not>(\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' \<le> time_index l)" 
   proof (rule notI)
     assume "\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' \<le> time_index l"
-    with time_index_ord assms(2)
+    with time_index_strict_sorted assms(2)
     have "\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' < time_index (Suc l)" by fastforce
     with s(4)
     show "False" by blast
@@ -569,7 +287,7 @@ qed
 
 lemma last_ies_empty:
   assumes pap: "plan_actions_in_problem"
-      and dnz: "durations_non_zero"
+      and dnz: "durations_positive"
       and fp:  "finite_plan"
   shows "IES (time_index (length htpl - 1)) = {}" (is "IES ?te = {}")
 proof -
@@ -592,7 +310,7 @@ proof -
       case 1
       hence "\<exists>a' t d. (s, at_start a) = (t, at_start a') \<and> (a', t, d) \<in> ran \<pi>" by simp
       with assms(1)[simplified plan_actions_in_problem_def]
-      show ?thesis by (metis Pair_inject at_start_inj inj_on_contraD s(1))
+      show ?thesis by (metis Pair_inject at_start_inj_on inj_on_contraD s(1))
     next
       case 2
       hence "\<exists>a' t d. (s, at_start a) = (t + d, at_end a') \<and> (a', t, d) \<in> ran \<pi>" by auto
@@ -603,7 +321,7 @@ proof -
     then obtain d where
       d: "(a, s, d) \<in> ran \<pi>"
       "(s + d, at_end a) \<in> plan_happ_seq" using plan_happ_seq_def by blast
-    with s(4) assms(2)[simplified durations_non_zero_def]
+    with s(4) assms(2)[simplified durations_positive_def]
     have "s + d > ?te" by fastforce
     
     have "t \<le> ?te" if "t \<in> set htpl" for t
@@ -615,7 +333,7 @@ proof -
       proof (cases "n < length htpl - 1")
         case True
         with n
-        show ?thesis using time_index_ord by fastforce
+        show ?thesis using time_index_strict_sorted by fastforce
       next
         case False
         hence "n = length htpl - 1" using n by linarith
@@ -630,6 +348,92 @@ proof -
     show False using \<open>s + d > ?te\<close> by fastforce
   qed
   thus "IES ?te = {}" by blast
+qed
+
+
+lemma not_executing_when_starting:
+  assumes snap_in_B: "(at_start a) \<in> B t"
+      and a_in_actions: "a \<in> actions"
+      and no_self_overlap: no_self_overlap
+      and durations_positive: durations_positive
+      and plan_actions_in_problem: plan_actions_in_problem
+  shows "a \<notin> ES t"
+proof (rule notI)
+  assume "a \<in> ES t"
+  then obtain s where
+    started: "a \<in> actions \<and> (s, at_start a) \<in> plan_happ_seq \<and> s < t"
+    and not_ended: "\<not>(\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' < t)"
+    unfolding exec_state_sequence_def by blast
+  
+  from started
+  obtain d where
+    as_in_plan: "(a, s, d) \<in> ran \<pi>"
+    using at_start_in_happ_seqE assms by blast+
+  hence "(s + d, at_end a) \<in> plan_happ_seq" unfolding plan_happ_seq_def by blast
+  with durations_positive[simplified durations_positive_def] as_in_plan not_ended 
+  have t_sd: "t \<le> s + d" by fastforce
+  
+  from snap_in_B
+  obtain d' where
+    at_in_plan: "(a, t, d') \<in> ran \<pi>" 
+    using at_start_in_happ_seqE assms unfolding happ_at_def by blast
+
+  from started as_in_plan t_sd at_in_plan
+  show False using no_self_overlap[THEN no_self_overlap_spec] by fastforce
+qed
+
+lemma executing_when_ending:
+  assumes snap_in_B: "(at_end a) \<in> B t"
+      and a_in_actions: "a \<in> actions"
+      and no_self_overlap: no_self_overlap
+      and durations_positive: durations_positive
+      and plan_actions_in_problem: plan_actions_in_problem
+    shows "a \<in> ES t"
+proof -
+  from snap_in_B
+  obtain s d where
+    s: "(a, s, d) \<in> ran \<pi>"   
+    "t = s + d"
+    using at_end_in_happ_seqE assms unfolding happ_at_def by blast
+  with durations_positive[simplified durations_positive_def] 
+  have "(s, at_start a) \<in> plan_happ_seq \<and> s < t" unfolding plan_happ_seq_def by auto
+  moreover
+  have "\<not>(\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' < t)"
+  proof (rule notI)
+    assume "\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' < t"
+    then obtain s' where
+      s': "(s', at_end a) \<in> plan_happ_seq" 
+      "s \<le> s' \<and> s' < t" by auto
+  
+    then obtain \<tau> \<delta> where
+      \<tau>: "(a, \<tau>, \<delta>) \<in> ran \<pi>"
+      "s' = \<tau> + \<delta>"
+      using at_end_in_happ_seqE assms by blast
+
+    hence "(\<tau>, at_start a) \<in> plan_happ_seq" unfolding plan_happ_seq_def by blast
+
+    consider "\<tau> \<le> s" | "s \<le> \<tau>" by fastforce
+    thus False
+    proof cases
+      case 1
+      with s'(2) s(2) \<tau>(2)
+      have "\<tau> = s \<longrightarrow> \<delta> \<noteq> d" by blast
+      with no_self_overlap[THEN no_self_overlap_spec, OF \<tau>(1) s(1)] 1 s'(2) \<tau>(2) 
+      show ?thesis by blast
+    next
+      case 2
+      from \<open>s \<le> s' \<and> s' < t\<close>[simplified \<open>t = s + d\<close> \<open>s' = \<tau> + \<delta>\<close>] 
+        durations_positive[simplified durations_positive_def] \<open>(a, \<tau>, \<delta>) \<in> ran \<pi>\<close>
+      have "\<tau> \<le> s + d" by (meson less_add_same_cancel1 order_le_less_trans order_less_imp_le)
+      moreover
+      from 2 s'(2) s(2) \<tau>(2)
+      have "\<tau> = s \<longrightarrow> \<delta> \<noteq> d" by blast
+      ultimately 
+      show ?thesis using 2 no_self_overlap[THEN no_self_overlap_spec, OF s(1) \<tau>(1)] by blast
+    qed
+  qed
+  ultimately
+  show ?thesis unfolding exec_state_sequence_def using a_in_actions by blast
 qed
 
 subsubsection \<open>Execution time\<close>
@@ -696,7 +500,7 @@ proof -
   have cl: "length htpl = card htps" using htpl_def by fastforce
   
   have tl_ord: "time_index l < time_index (Suc l)" 
-    using time_index_ord llen
+    using time_index_strict_sorted llen
     by blast
   
   from t_def consider "\<exists>t'. t' < (time_index (Suc l)) \<and> a \<in> B t'" 
@@ -732,6 +536,16 @@ lemma updated_exec_time_and_next:
   shows "exec_time a (time_index (Suc l)) = (exec_time' a (time_index l)) + (time_index (Suc l) - time_index l)"
   using subseq_last_snap_exec[OF assms] exec_time_def exec_time'_def 
   by simp
+
+lemma exec_time_and_epsilon:
+  assumes nm: "nm_happ_seq plan_happ_seq"
+      and b_in_B: "a \<in> B t"
+      and mutex: "mutex_snap_action a b"
+      and s_exec: "\<exists>u \<le> t. b \<in> B u"
+    shows "exec_time b t > \<epsilon>"
+proof -
+  show ?thesis sorry
+qed
 
 subsubsection \<open>Restricting snap action sets by an upper limit on the index\<close>
 
