@@ -126,8 +126,6 @@ definition htpl::"'time list" where
 abbreviation time_index::"nat \<Rightarrow> 'time" where
 "time_index \<equiv> ((!) htpl)"
 
-      
-
 text \<open>Happening Sequences\<close>
 
 definition plan_happ_seq::"('time \<times> 'snap_action) set" where
@@ -147,25 +145,13 @@ definition invs_at::"('proposition, 'time) invariant_sequence \<Rightarrow> 'tim
 "invs_at Inv t \<equiv> \<Union>{p | p. (t, p) \<in> Inv}"
 
 
-subsubsection \<open>Non-mutex snap-action sequence\<close>
+subsubsection \<open>Non-mutex happening sequence\<close>
 
-text \<open>This will not work as such. Equality for snap-actions must first take the original action
-into account, but this is something to worry about later. (in a locale?)\<close>
-
-text \<open>From the locale assumptions, we know that if a is not b then \<close>
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
-"nm_happ_seq B \<equiv> \<not>(\<exists>t u a b. t - u \<le> \<epsilon> \<and> u - t \<le> \<epsilon> \<and> a \<noteq> b \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u 
-  \<and> mutex_snap_action a b)"
-
-lemma nm_happ_seq_alt:
-  assumes "nm_happ_seq B"
-    "t - u \<le> \<epsilon>" 
-    "u - t \<le> \<epsilon>" 
-    "a \<noteq> b" 
-    "a \<in> happ_at B t" 
-    "b \<in> happ_at B u"
-  shows "\<not>(mutex_snap_action a b)"
-  using assms unfolding nm_happ_seq_def by blast
+"nm_happ_seq B \<equiv> 
+  \<forall>t u a b. (t - u \<le> \<epsilon> \<and> u - t \<le> \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
+    \<longrightarrow> ((a \<noteq> b \<longrightarrow> mutex_snap_action a b) 
+    \<and> (a = b \<longrightarrow> t = u))"
 
 subsubsection \<open>Valid state sequence\<close>
 

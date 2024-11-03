@@ -539,11 +539,19 @@ lemma updated_exec_time_and_next:
 
 lemma exec_time_and_epsilon:
   assumes nm: "nm_happ_seq plan_happ_seq"
-      and b_in_B: "a \<in> B t"
+      and a_at_t: "a \<in> B t"
       and mutex: "mutex_snap_action a b"
       and s_exec: "\<exists>u \<le> t. b \<in> B u"
     shows "exec_time b t > \<epsilon>"
 proof -
+  from s_exec 
+  obtain u where
+    b: "u \<le> t" 
+    "b \<in> B u" by auto
+  with nm[simplified nm_happ_seq_def] mutex a_at_t s_exec
+
+  with exec_time_def[simplified last_snap_exec_def, simplified max_or_zero_def] s_exec 
+  have "exec_time b t = (GREATEST t'. t' < t \<and> b \<in> B t')" sorry
   show ?thesis sorry
 qed
 
@@ -1084,7 +1092,7 @@ proof -
     W'': "\<T> \<turnstile> \<langle>ExecDecoding (act 0), W'\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W''\<rangle>" 
     "exec_model W'' E" 
     "\<forall>c. \<not>(is_exec_clock c) \<longrightarrow> W' c = W'' c"
-    "W'' Stop = 0" by blast
+    "W'' Stop = 0" by metis
   with W'
   have pmW'': "prop_model W'' Q" unfolding prop_model_def by auto
   
