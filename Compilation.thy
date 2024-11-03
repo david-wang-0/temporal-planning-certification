@@ -506,6 +506,27 @@ abbreviation "ES t \<equiv> {a. (t, a) \<in> exec_state_sequence}"
 
 abbreviation "IES t \<equiv> {a. (t, a) \<in> exec_state_sequence'}"
 
+lemma not_execution_when_starting:
+  assumes "(at_start a) \<in> B t" 
+  shows "a \<notin> ES t"
+proof (rule notI)
+  assume "a \<in> ES t"
+  then obtain s where
+    started: "a \<in> actions \<and> (s, at_start a) \<in> plan_happ_seq \<and> s < t"
+    and not_ended: "\<not>(\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' < t)"
+    unfolding exec_state_sequence_def by blast
+
+  from started
+  obtain d where
+    "(a, s, d) \<in> ran \<pi>" 
+    unfolding plan_happ_seq_def
+qed
+
+lemma execution_when_ending:
+  assumes "(at_end a) \<in> B t"
+    shows "a \<in> ES t"
+  sorry
+
 lemma inc_es_is_next_es:
   assumes "finite_plan"
       and "Suc l < length htpl"
@@ -899,7 +920,9 @@ lemma boolean_state_decoding:
       and exec_clocks: "delta_exec_model W E"
       and stop: "W Stop = 0"
   shows "\<exists>W'. \<T> \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W'\<rangle> 
-    \<and> prop_model W' Q \<and> exec_model W' E \<and> (\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W c = W' c)"
+    \<and> prop_model W' Q 
+    \<and> exec_model W' E 
+    \<and> (\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W c = W' c)"
 proof -
   have propositional_decoding_step:
       "\<exists>W'. \<T> pd \<turnstile> \<langle>PropDecoding (p n), W\<rangle> \<rightarrow>* \<langle>PropDecoding (p (Suc n)), W'\<rangle> 
@@ -1264,6 +1287,8 @@ proof -
   
   show ?thesis using steps_trans[OF W'(1) W''(1)] W'' pmW'' invW'' by blast
 qed
+
+lemma decision_making:
 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
 

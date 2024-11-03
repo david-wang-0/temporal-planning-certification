@@ -47,8 +47,8 @@ locale temp_planning_problem =
           snap_props (at_start_a) \<subseteq> props
         \<and> snap_props (at_end a) \<subseteq> props
         \<and> over_all a \<subseteq> props)"
-      and at_start_inj: "inj_on at_start actions"
-      and at_end_inj:   "inj_on at_end actions"
+      and at_start_inj_on: "inj_on at_start actions"
+      and at_end_inj_on:   "inj_on at_end actions"
       and snaps_disj:   "(at_start ` actions) \<inter> (at_end ` actions) = {}"
       and prop_numbering:   "bij_betw p {n. n < card props} props"
       and action_numbering: "bij_betw act {n. n < card actions} actions"
@@ -210,8 +210,8 @@ definition plan_actions_in_problem::bool where
 definition finite_plan::bool where
 "finite_plan \<equiv> finite (dom \<pi>)"
 
-definition durations_non_zero::bool where
-"durations_non_zero \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 \<le> d"
+definition durations_positive::bool where
+"durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 \<le> d"
 
 definition valid_plan::"bool" where
 "valid_plan \<equiv> \<exists>M. (
@@ -225,12 +225,12 @@ definition valid_plan::"bool" where
     \<and> (M (card B - 1)) = goal
     \<and> plan_actions_in_problem
     \<and> finite_plan
-    \<and> durations_non_zero
+    \<and> durations_positive
 )"
 end
 
 context temporal_plan
-begin
+begin           
 
 lemma a_in_B_iff_t_in_htps: "(\<exists>a. a \<in> happ_at plan_happ_seq t) \<longleftrightarrow> (t \<in> htps)"
 proof
@@ -244,6 +244,147 @@ next
     "(t, a) \<in> plan_happ_seq" using plan_happ_seq_def htps_def by force
   thus "\<exists>a. a \<in> happ_at plan_happ_seq t" using happ_at_def by blast
 qed
+
+lemma at_start_in_happ_seqE: 
+  assumes in_happ_seq: "(t, at_start a) \<in> plan_happ_seq"
+      and a_in_actions: "a \<in> actions"
+      and no_self_overlap
+      and durations_positive
+      and plan_actions_in_problem
+  shows "\<exists>!d. (a, t, d) \<in> ran \<pi>"
+proof -
+  have some_in_ran: "(a, t, SOME x. (a, t, x) \<in> ran \<pi>) \<in> ran \<pi>"
+  proof -
+    from in_happ_seq[simplified plan_happ_seq_def]
+    consider "(t, at_start a) \<in> {(t, at_start a)|a t d. (a, t, d) \<in> ran \<pi>}" 
+        | "(t, at_start a) \<in>  {(t + d, at_end a) |a t d. (a, t, d) \<in> ran \<pi>}"
+        by blast
+    then
+    have "\<exists>d. (a, t, d) \<in> ran \<pi>"
+    proof cases
+      case 1
+      with \<open>plan_actions_in_problem\<close>[simplified plan_actions_in_problem_def]
+      have "\<exists>a' d. at_start a = at_start a'\<and> (a', t, d) \<in> ran \<pi> \<and> a' \<in> actions" by auto
+      with 1 a_in_actions at_start_inj_on[simplified inj_on_def]
+      show ?thesis by blast
+    next
+      case 2
+      with \<open>plan_actions_in_problem\<close>[simplified plan_actions_in_problem_def]
+      have "\<exists>a' t' d. (t, at_start a) = (t' + d, at_end a') \<and> (a', t', d) \<in> ran \<pi> \<and> a' \<in> actions" by blast
+      with 2 a_in_actions snaps_disj
+      have False by blast
+      thus ?thesis ..
+    qed
+    thus ?thesis ..
+  qed
+  moreover
+  have "d = (SOME x. (a, t, x) \<in> ran \<pi>)" if d_in_ran: "(a, t, d) \<in> ran \<pi>" for d
+  proof -
+    from some_in_ran
+    obtain e where
+      e: "(a, t, e) \<in> ran \<pi>"
+      "e = (SOME x. (a, t, x) \<in> ran \<pi>)" by auto
+    from e(1) d_in_ran
+    obtain i j where
+      ij: "\<pi> i = Some (a, t, d)"
+      "\<pi> j = Some (a, t, e)" unfolding ran_def by blast
+    have "d = e" 
+    proof (cases "i = j")
+      case True
+      then show ?thesis using ij by auto
+    next
+      case False
+      from \<open>durations_positive\<close>[simplified durations_positive_def] d_in_ran e(1)
+      consider "t \<le> t + d" | "t \<le> t + e" by auto
+      hence False 
+        apply cases
+        using False \<open>no_self_overlap\<close>[simplified no_self_overlap_def] ij 
+        by fastforce+
+      then show ?thesis by simp
+    qed
+    with e
+    show ?thesis by simp
+  qed
+  ultimately
+  show ?thesis by blast
+qed
+
+lemma at_end_in_happ_seqE:
+  assumes in_happ_seq: "(s, at_end a) \<in> plan_happ_seq"
+      and a_in_actions: "a \<in> actions"
+      and no_self_overlap
+      and durations_positive
+      and plan_actions_in_problem
+    shows "\<exists>!(t,d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"
+proof -
+  define pair where "pair = (SOME (t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d)"
+  from in_happ_seq[simplified plan_happ_seq_def]
+  consider "(s, at_end a) \<in> {(t, at_start a)|a t d. (a, t, d) \<in> ran \<pi>}" 
+      | "(s, at_end a) \<in>  {(t + d, at_end a) |a t d. (a, t, d) \<in> ran \<pi>}"
+      by blast
+    then
+  have some_in_ran: "(a, pair) \<in> ran \<pi> 
+    \<and> s = fst pair + snd pair"
+  proof cases
+    case 1
+    with \<open>plan_actions_in_problem\<close>[simplified plan_actions_in_problem_def] 
+    have "\<exists>a' d. (s, at_end a) = (s, at_start a') \<and> (a', s, d) \<in> ran \<pi> \<and> a' \<in> actions" by blast
+    with snaps_disj 1 a_in_actions
+    show ?thesis by blast
+  next
+    case 2
+    with \<open>plan_actions_in_problem\<close>[simplified plan_actions_in_problem_def]
+    have "\<exists>a' t d. (s, at_end a) = (t + d, at_end a') \<and>(a', t, d) \<in> ran \<pi> \<and> a' \<in> actions" by blast
+    with at_end_inj_on[simplified inj_on_def] a_in_actions
+    have "\<exists>t d. (a, t, d) \<in> ran \<pi> \<and> s = t + d" by blast
+    thus ?thesis using some_eq_ex[where P = "\<lambda>(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"] pair_def by auto
+  qed
+  moreover
+  have "p = pair" if td_def: "p = (t, d)" and td_in_ran: "(a, t, d) \<in> ran \<pi>" and td_eq_s: "t + d = s" for t d p
+  proof -
+    obtain t' d' where
+      t'd'_def: "pair = (t', d')" by fastforce
+    with some_in_ran
+    have t'd'_in_ran: "(a, t', d') \<in> ran \<pi>"
+      and t'd'_eq_s: "s = t' + d'" by simp+
+      
+    with td_in_ran
+    obtain i j where
+      ij: "\<pi> i = Some (a, t, d)"
+      "\<pi> j = Some (a, t', d')" unfolding ran_def by blast
+    
+
+    from td_eq_s t'd'_eq_s
+    have td_t'd': "t + d = t' + d'" by simp
+    show "p = pair"
+    proof (cases "i = j")
+      case True
+      then show ?thesis using pair_def ij t'd'_def td_def by simp
+    next
+      case False
+      consider "t \<le> t'" | "t' \<le> t" by fastforce
+      thus ?thesis 
+      proof cases
+        case 1
+        with \<open>durations_positive\<close>[simplified durations_positive_def] t'd'_in_ran td_t'd'
+        have "t' \<le> t + d" by auto
+        with False ij 1
+        show ?thesis using \<open>no_self_overlap\<close>[simplified no_self_overlap_def] by force
+      next
+        case 2
+        with \<open>durations_positive\<close>[simplified durations_positive_def] td_in_ran td_t'd'
+        have "t \<le> t' + d'"by (metis le_add_same_cancel1)
+        with False ij 2
+        show ?thesis using \<open>no_self_overlap\<close>[simplified no_self_overlap_def] by force
+      qed
+    qed
+  qed
+  ultimately
+  show ?thesis
+    apply -
+    by (rule ex1I, auto)
+  qed
+
 
 lemma finite_htps: 
   assumes "finite_plan"
