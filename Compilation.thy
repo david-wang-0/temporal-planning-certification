@@ -541,12 +541,12 @@ lemma exec_time_and_epsilon:
   assumes nm: "nm_happ_seq plan_happ_seq"
       and a_at_t: "a \<in> B t"
       and mutex: "mutex_snap_action a b"
-      and s_exec: "\<exists>u \<le> t. b \<in> B u"
+      and s_exec: "\<exists>u < t. b \<in> B u"
     shows "exec_time b t > \<epsilon>"
 proof -
   from s_exec 
   obtain u where
-    b: "u \<le> t" 
+    b: "u < t" 
     "b \<in> B u" by auto
   with nm[simplified nm_happ_seq_def] mutex a_at_t s_exec
 
@@ -1098,11 +1098,9 @@ proof -
   
   have invW'': "(\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W c = W'' c)" 
   proof -
-    have "\<not>(is_boolean_clock c) \<longrightarrow> \<not>(is_propositional_clock c)" for c
-      by (cases c) simp+
+    have "\<not>(is_boolean_clock c) \<longrightarrow> \<not>(is_propositional_clock c)" for c by (cases c) simp+
     moreover
-    have "\<not>(is_boolean_clock c) \<longrightarrow> \<not>(is_exec_clock c)" for c
-      by (cases c) simp+
+    have "\<not>(is_boolean_clock c) \<longrightarrow> \<not>(is_exec_clock c)" for c by (cases c) simp+
     ultimately
     show ?thesis using W'(4) W''(3) by auto
   qed

@@ -7,7 +7,6 @@ section \<open>Time\<close>
 class time = linordered_ab_group_add + one +
   assumes dense: "x < y \<Longrightarrow> \<exists>z. x < z \<and> z < y"
   assumes non_trivial: "\<exists> x. x \<noteq> 0"
-
 begin
 
 lemma non_trivial_neg: "\<exists> x. x < 0"
