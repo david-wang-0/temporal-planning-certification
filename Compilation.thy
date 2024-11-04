@@ -76,6 +76,9 @@ text \<open>The transitions between the decoding locations for the execution clo
 definition exec_decoding::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition set" where
 "exec_decoding \<equiv> {(ExecDecoding (act m), CEQ (Running (act m)) Delta 1, Unit, [(Running (act m), 1)], ExecDecoding (act (m + 1))) | m. m < M}
   \<union> {(ExecDecoding (act m), CEQ (Running (act m)) Delta 0, Unit, [(Running (act m), 0)], ExecDecoding (act (m + 1))) | m. m < M}"
+(* To do: We index into (act M) here. Executable when actions are numbered from 0 to M - 1?
+Change the locations to use number parameters?
+ *)
 
 text \<open>The transition from the execution decoding locations to the decision-making locations\<close>
 definition exec_decoding_to_decision_making::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition" where
@@ -158,9 +161,10 @@ definition execution::"(alpha, ('proposition, 'action) clock, 'time, ('propositi
 "execution \<equiv> 
   {(Execution (at_start (act m)), EQ (ExecStartSnap (act m)) 1, Unit, at_start_effects (act m), Execution (at_end (act m))) | m. m < M}
   \<union> {(Execution (at_start (act m)), true_const, Unit, [], Execution (at_end (act m))) | m. m < M}
-  \<union> {(Execution (at_end (act m)), EQ (ExecEndSnap (act m)) 1, Unit, at_end_effects (act m), Execution (at_end (act (Suc m)))) | m. Suc m < M}
-  \<union> {(Execution (at_end (act m)), true_const, Unit, [], Decision (at_start (act (Suc m)))) | m. Suc m < M}"
-
+  \<union> {(Execution (at_end (act m)), EQ (ExecEndSnap (act m)) 1, Unit, at_end_effects (act m), Execution (at_end (act (Suc m)))) | m. m < M}
+  \<union> {(Execution (at_end (act m)), true_const, Unit, [], Decision (at_start (act (Suc m)))) | m. m < M}"
+(* To do: again, a non-existent action is being accessed
+The benefit here is that there is no need to change the indexing to {0..<2M} *)
 
 subsubsection \<open>Over-all conditions\<close>
 abbreviation "action_list \<equiv> map act (sorted_list_of_set {m. m < M})"
@@ -215,8 +219,6 @@ abbreviation delta_prop_corr::"(('proposition, 'action) clock, 'time) cval \<Rig
 
 definition delta_prop_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> bool" where
 "delta_prop_model W Q \<equiv> \<forall>p \<in> props. delta_prop_corr W Q p"
-
-type_synonym 'a exec_state = "'a set"
 
 abbreviation exec_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> 'action \<Rightarrow> bool" where
 "exec_corr W E a \<equiv> (W (Running a) = 1 \<longleftrightarrow> a \<in> E) \<and> (W (Running a) = 0 \<longleftrightarrow> a \<notin> E)"
@@ -1177,14 +1179,50 @@ proof -
   show ?thesis using steps_trans[OF W'(1) W''(1)] W'' pmW'' invW'' by blast
 qed
 
+definition exec_start_snap_corr::"(('proposition, 'action) clock, 'time) cval 
+  \<Rightarrow> 'snap_action state 
+  \<Rightarrow> 'action 
+  \<Rightarrow> bool" where
+"exec_start_snap_corr W Q a \<equiv> (W (ExecStartSnap a) = 1 \<longleftrightarrow> (at_start a) \<in> Q) 
+  \<and> (W (ExecStartSnap a) = 0 \<longleftrightarrow> (at_start a) \<notin> Q)"
+
+definition exec_end_snap_corr::"(('proposition, 'action) clock, 'time) cval 
+  \<Rightarrow> 'snap_action state 
+  \<Rightarrow> 'action 
+  \<Rightarrow> bool" where
+"exec_end_snap_corr W Q a \<equiv> (W (ExecEndSnap a) = 1 \<longleftrightarrow> (at_start a) \<in> Q) 
+  \<and> (W (ExecEndSnap a) = 0 \<longleftrightarrow> (at_start a) \<notin> Q)"
+
+definition snap_execution_state_correct::"(('proposition, 'action) clock, 'time) cval 
+  \<Rightarrow> 'snap_action state
+  \<Rightarrow> bool" where
+"snap_execution_state_correct W Q \<equiv> \<forall>a \<in> actions. exec_start_snap_corr W Q a \<and> exec_end_snap_corr W Q a"
+
+
+fun is_snap_exec_clock::"('proposition, 'action) clock \<Rightarrow> bool" where
+  "is_snap_exec_clock (ExecStartSnap _) = True"
+| "is_snap_exec_clock (ExecEndSnap _) = True"
+| "is_snap_exec_clock _ = False"
+
+definition decision_making_automaton ("\<T> dm") where
+"decision_making_automaton = (decision_making \<union> {dm_to_exec}, invs)"
+
 lemma decision_making:
-  assumes prop_clocks: "delta_prop_model W Q"
-      and exec_clocks: "delta_exec_model W E"
+  assumes l_len: "l < length htpl" 
+      and MS_valid: "valid_state_sequence MS"
+      and prop_clocks: "prop_model W (MS l)"
+      and exec_clocks: "exec_model W (ES (time_index l))"
+      and start_durs: "\<forall>a. W (StartDur a) = exec_time (at_start a) (time_index l)"
+      and end_durs: "\<forall>a. W (EndDur a) = exec_time (at_end a) (time_index l)"
       and stop: "W Stop = 0"
-  shows "\<exists>W'. \<T> \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W'\<rangle> 
-    \<and> prop_model W' Q 
-    \<and> exec_model W' E 
-    \<and> (\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W c = W' c)" sorry
+  shows "\<exists>W'. \<T> \<turnstile> \<langle>Decision (at_start (act 0)), W\<rangle> \<rightarrow>* \<langle>Decision (at_start (act M)), W'\<rangle> 
+    \<and> snap_execution_state_correct W (B (time_index l))
+    \<and> (\<forall>c. \<not>(is_snap_exec_clock c) \<longrightarrow> W c = W' c)"
+proof -
+  {
+
+  }
+qed
 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
 

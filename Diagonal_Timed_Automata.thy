@@ -73,11 +73,11 @@ section \<open>Operational Semantics\<close>
 
 type_synonym ('c, 't) cval = "'c \<Rightarrow> 't"
 
-definition cval_add :: "('c,'t) cval \<Rightarrow> 't::time \<Rightarrow> ('c,'t) cval" (infixr "\<oplus>" 64)
+definition cval_add :: "('c,'t::time) cval \<Rightarrow> 't \<Rightarrow> ('c,'t) cval" (infixr "\<oplus>" 64)
 where
   "u \<oplus> d = (\<lambda> x. u x + d)"
 
-inductive clock_val :: "('c, 't) cval \<Rightarrow> ('c, 't::time) dconstraint \<Rightarrow> bool" ("_ \<turnstile> _" [62, 62] 62)
+inductive clock_val :: "('c, 't::time) cval \<Rightarrow> ('c, 't) dconstraint \<Rightarrow> bool" ("_ \<turnstile> _" [62, 62] 62)
 where
   "\<lbrakk>u \<turnstile> cc1; u \<turnstile> cc2\<rbrakk> \<Longrightarrow> u \<turnstile> AND cc1 cc2" |
   "\<lbrakk>u c < d\<rbrakk> \<Longrightarrow> u \<turnstile> LT c d" |
@@ -176,8 +176,9 @@ lemma steps_twist: "A \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langl
   by (induction rule: steps.induct) auto
 
 
-definition le_ta::"('a, 'c, 't, 's) ta \<Rightarrow> ('a, 'c, 't, 's) ta \<Rightarrow> bool" where
-"le_ta A B \<equiv> (\<forall>t \<in> trans_of A. t \<in> trans_of B) \<and> (inv_of A = inv_of B)"
+definition le_ta::"('a, 'c, 't::time, 's) ta \<Rightarrow> ('a, 'c, 't, 's) ta \<Rightarrow> bool" where
+"le_ta A B \<equiv> (\<forall>t \<in> trans_of A. t \<in> trans_of B) 
+  \<and> (\<forall>v s. v \<turnstile> inv_of A s \<longrightarrow> v \<turnstile> inv_of B s)"
 
 
 lemma ta_superset: "A \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langle>l', u'\<rangle> \<Longrightarrow> le_ta A B  \<Longrightarrow> B \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langle>l', u'\<rangle>"

@@ -184,15 +184,14 @@ definition unique_increasing_sequence::"('t :: linorder) set \<Rightarrow> 't in
   
 definition valid_state_sequence::"
   'proposition state_sequence 
-\<Rightarrow> ('time \<times> 'snap_action) set
-\<Rightarrow> ('proposition, 'time) invariant_sequence 
 \<Rightarrow> bool" where
-"valid_state_sequence M B Inv \<equiv> (
+"valid_state_sequence M \<equiv> (
   let 
-    T = fst ` B 
+    t = time_index;
+    Inv = plan_inv_seq;
+    B = plan_happ_seq
   in
-    \<exists>t. unique_increasing_sequence T t
-    \<and> (\<forall>i. Suc i < card T \<longrightarrow> (
+    (\<forall>i. Suc i < length htpl \<longrightarrow> (
       let 
         S = happ_at B (t i);
         pres = \<Union>(pre ` S);
@@ -250,20 +249,15 @@ definition durations_valid::bool where
 "durations_valid \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> satisfies_duration_bounds a d"
 
 definition valid_plan::"bool" where
-"valid_plan \<equiv> \<exists>M. (
-  let 
-    B = plan_happ_seq;
-    Inv = plan_inv_seq
-  in
-    valid_state_sequence M B Inv
+"valid_plan \<equiv> \<exists>M. 
+    valid_state_sequence M
     \<and> no_self_overlap
     \<and> (M 0) = init
-    \<and> (M (card B - 1)) = goal
+    \<and> (M (length htpl - 1)) = goal
     \<and> plan_actions_in_problem
     \<and> finite_plan
     \<and> durations_positive
-    \<and> durations_valid
-)"
+    \<and> durations_valid"
 end
 
 context temporal_plan
