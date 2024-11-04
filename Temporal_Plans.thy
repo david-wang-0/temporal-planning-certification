@@ -107,6 +107,19 @@ lemma p_dom: "n < card props \<Longrightarrow> p n \<in> props"
   using p_img_props by blast
 
 
+subsubsection \<open>Generalising \<open>\<epsilon>\<close> and \<open>0\<close>-separation plan-validity\<close>
+definition \<delta>::"'time" where
+"\<delta> \<equiv> (if (\<epsilon> = 0) then LEAST n. n > 0 else \<epsilon>)"
+
+lemma "\<epsilon> = 0 \<Longrightarrow> x \<ge> \<delta> \<longleftrightarrow> x > 0"
+  unfolding \<delta>_def
+  apply simp
+  apply (rule iffI)
+  using Least_le ge_least_gt_0 
+  by auto
+
+lemma "\<epsilon> > 0 \<Longrightarrow> x \<ge> \<delta> \<longleftrightarrow> x \<ge> \<epsilon>"
+  unfolding \<delta>_def by auto
 end
 
 
@@ -147,9 +160,10 @@ definition invs_at::"('proposition, 'time) invariant_sequence \<Rightarrow> 'tim
 
 subsubsection \<open>Non-mutex happening sequence\<close>
 
+
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_happ_seq B \<equiv> 
-  \<forall>t u a b. (t - u \<le> \<epsilon> \<and> u - t \<le> \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
+  \<forall>t u a b. (t - u < \<delta> \<and> u - t < \<delta> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
     \<longrightarrow> ((a \<noteq> b \<longrightarrow> mutex_snap_action a b) 
     \<and> (a = b \<longrightarrow> t = u))"
 
@@ -418,32 +432,51 @@ lemma time_index_bij_betw_list: "bij_betw time_index {n. n < length htpl} (set h
   using bij_betw_nth distinct_sorted_list_of_set htpl_def[symmetric] lessThan_def
   by metis
 
+lemma time_index_inj_on_list: "inj_on time_index {n. n < length htpl}" 
+  using bij_betw_def time_index_bij_betw_list by blast
+
+lemma time_index_img_list: "time_index ` {n. n < length htpl} = set htpl"
+  using time_index_bij_betw_list unfolding bij_betw_def by blast
+
+lemma card_htps_len_htpl: "card htps = length htpl" using htpl_def by simp
 
 lemma time_index_bij_betw_set:
   assumes "finite_plan"
   shows "bij_betw time_index {n. n < card htps} htps"
 proof -
-  have 1: "card htps = length htpl" using htpl_def by simp
   have 3: "distinct htpl" unfolding htpl_def by simp
   show "bij_betw time_index {n. n < card htps} htps"
-    apply (subst 1)
+    apply (subst card_htps_len_htpl)
     apply (subst set_htpl_eq_htps[OF assms])
     using time_index_bij_betw_list
     by blast
 qed
 
-lemmas time_index_strict_sorted = strict_sorted_list_of_set[of htps, simplified htpl_def[symmetric], THEN sorted_wrt_nth_less]
+lemma time_index_inj_on_set:
+  assumes "finite_plan"
+  shows "inj_on time_index {n. n < card htps}" 
+  using time_index_bij_betw_set[OF assms] bij_betw_def by blast
 
-lemma time_index_strict_mono_on: 
+lemma time_index_img_set:
+  assumes "finite_plan"
+  shows "time_index ` {n. n < card htps} = htps" 
+  using time_index_bij_betw_set[OF assms] unfolding bij_betw_def by blast
+
+lemmas time_index_strict_sorted_list = strict_sorted_list_of_set[of htps, simplified htpl_def[symmetric], THEN sorted_wrt_nth_less]
+
+lemma time_index_strict_mono_on_list: 
   "strict_mono_on {n. n < length htpl} time_index" 
-  using time_index_strict_sorted unfolding monotone_on_def
+  using time_index_strict_sorted_list unfolding monotone_on_def
   by blast
 
-lemmas time_index_sorted = sorted_list_of_set(2)[of htps, simplified htpl_def[symmetric], THEN sorted_nth_mono]
+lemmas time_index_sorted_list = sorted_list_of_set(2)[of htps, simplified htpl_def[symmetric], THEN sorted_nth_mono]
 
-lemma time_index_mono_on:
+lemma time_index_mono_on_list:
   "mono_on {n. n < length htpl} time_index" 
-  using time_index_sorted unfolding monotone_on_def by auto
+  using time_index_sorted_list unfolding monotone_on_def by auto
+
+lemmas time_index_strict_sorted_set = time_index_strict_sorted_list[simplified card_htps_len_htpl[symmetric]]
+lemmas time_index_sorted_set = time_index_sorted_list[simplified card_htps_len_htpl[symmetric]]
 
 lemma no_non_indexed_time_points: 
   assumes a: "(Suc l) < length htpl"
@@ -457,10 +490,10 @@ proof (rule notI)
     "time_index l' < time_index (Suc l)"
     by (metis in_set_conv_nth)
   hence "l' < (Suc l)"
-    by (metis not_less_iff_gr_or_eq time_index_strict_sorted)
+    by (metis not_less_iff_gr_or_eq time_index_strict_sorted_list)
   moreover
   have "l < l'" using l'
-    by (metis Suc_lessD linorder_neqE_nat order_less_asym' a time_index_strict_sorted)
+    by (metis Suc_lessD linorder_neqE_nat order_less_asym' a time_index_strict_sorted_list)
   ultimately
   show "False" by simp
 qed

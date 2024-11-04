@@ -4,7 +4,7 @@ begin
   
 section \<open>Time\<close>
 
-class time = linordered_ab_group_add + one +
+class time = wellorder + ordered_ab_group_add + one +
   assumes dense: "x < y \<Longrightarrow> \<exists>z. x < z \<and> z < y"
   assumes non_trivial: "\<exists> x. x \<noteq> 0"
 begin
@@ -20,17 +20,20 @@ proof -
     then show ?case by blast
   qed
 qed
+
+
+lemma least_time_gt_0: "(LEAST n. n > 0) > 0"
+proof -
+  have "Ex (\<lambda>x. 0 < x)" using diff_gt_0_iff_gt non_trivial_neg by blast
+  thus ?thesis using LeastI_ex by auto
+qed
+
+lemma "0 < x \<Longrightarrow> (LEAST n. 0 < n) \<le> x" using Least_le by simp
+lemma ge_least_gt_0: "Least ((<) 0) \<le> x \<Longrightarrow> 0 < x" using least_time_gt_0 by auto
+
+
+lemma GreatestI_ex_time: "\<exists>t. P t \<Longrightarrow> P (Greatest P)" (* Sledgehammer *)
+  using least_time_gt_0 local.dense local.not_less_Least by auto
 end
-
-definition restr_set::"(nat \<Rightarrow> 't) \<Rightarrow> nat \<Rightarrow> 't set" where
-"restr_set f n = f ` {..<n}"
-
-lemma restr_set_bij: "bij_betw f {..<n} S \<Longrightarrow> restr_set f n = S"
-  apply (subst restr_set_def)
-  apply (subst (asm) bij_betw_def)
-  by (drule conjunct2)
-
-lemma lt_in_restr: "n < m \<Longrightarrow> f n \<in> restr_set f m"
-  using restr_set_def by fast
 
 end
