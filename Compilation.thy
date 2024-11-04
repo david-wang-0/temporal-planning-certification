@@ -542,35 +542,93 @@ lemma exec_time_and_epsilon:
       and mutex: "mutex_snap_action s b \<or> s = b"
       and finite_plan: finite_plan
     shows "exec_time b t \<ge> \<delta>"
-proof -
-  show ?thesis 
-  proof (cases "\<exists>u < t. b \<in> B u")
-    case True
-    have "(\<lambda>u. u < t \<and> b \<in> B u) (last_snap_exec b t)" (is "?t < t \<and> b \<in> B ?t")
-      unfolding pt_def using GreatestI_ex_time[OF True] by auto
-    with nm 
-    have "t - ?t \<ge> \<delta> \<or> ?t - t \<ge> \<delta>" unfolding happ_at_def nm_happ_seq_def sorry
-      
-    show ?thesis sorry
-  next
-    case False
-    have 1: "time_index 0 \<le> u" if "B u \<noteq> {}" for u
-    proof -
-      have "u \<in> set htpl" using that a_in_B_iff_t_in_htps set_htpl_eq_htps[OF finite_plan] by auto
-      hence "\<exists>i. time_index i = u \<and> i < length htpl" using time_index_img_list by force
-      thus "time_index 0 \<le> u" using time_index_sorted_list by blast
-    qed
-    moreover
-    have "Least (\<lambda>t. B t \<noteq> {}) = (time_index 0)" 
-    proof (rule Least_equality[OF _ 1])
-      have "card htps > 0" using a_in_B_iff_t_in_htps s_at_t card_gt_0_iff finite_htps finite_plan by blast
-      hence "time_index 0 \<in> htps" using time_index_img_set[OF finite_plan] by blast
-      thus "B (time_index 0) \<noteq> {}" using a_in_B_iff_t_in_htps by auto
-    qed
-    ultimately
-    have "t - last_snap_exec b t \<ge> \<delta>" using s_at_t False unfolding pt_def by auto
-    thus ?thesis unfolding exec_time_def by simp
+proof (cases "\<exists>u < t. b \<in> B u")
+  case True
+  have b_at_t': "(\<lambda>u. u < t \<and> b \<in> B u) (last_snap_exec b t)" (is "?t < t \<and> b \<in> B ?t")
+    unfolding pt_def using GreatestI_ex_time[OF True] by auto
+  have nm_cond: "t - ?t < \<delta> \<and> ?t - t < \<delta> \<and> s \<in> (B t) \<and> b \<in> (B ?t) 
+    \<longrightarrow> ((s \<noteq> b \<longrightarrow> \<not>mutex_snap_action s b) \<and> (s = b \<longrightarrow> t = ?t))" using nm nm_happ_seq_def by blast
+  hence "\<not>(s \<noteq> b \<longrightarrow> \<not>mutex_snap_action s b) \<or> \<not>(s = b \<longrightarrow> t = ?t)
+    \<longrightarrow> t - ?t \<ge> \<delta> \<or> ?t - t \<ge> \<delta> \<or> s \<notin> (B t) \<or> b \<notin> (B ?t)" by auto
+  hence "\<not>(s \<noteq> b \<longrightarrow> \<not>mutex_snap_action s b) \<or> \<not>(s = b \<longrightarrow> t = ?t)
+    \<longrightarrow> t - ?t \<ge> \<delta> \<or> ?t - t \<ge> \<delta>"  using s_at_t b_at_t' by blast
+  hence "(s \<noteq> b \<and> mutex_snap_action s b) \<or> (s = b \<and> t \<noteq> ?t)
+    \<longrightarrow> t - ?t \<ge> \<delta> \<or> ?t - t \<ge> \<delta>"  by blast
+  moreover
+  have "s \<noteq> b \<longrightarrow> mutex_snap_action s b" using mutex by blast
+  moreover
+  have "t \<noteq> ?t" using b_at_t' by auto
+  ultimately
+  consider "t - ?t \<ge> \<delta>" | "?t - t \<ge> \<delta>" by auto
+  note c = this
+  
+  have "t > ?t" using b_at_t' by blast
+  moreover
+  have "\<delta> \<ge> 0" using \<delta>_def eps_range least_time_gt_0 less_le_not_le by fastforce
+  ultimately 
+  have "t - ?t \<ge> \<delta>"  apply (cases rule: c) apply blast using order.trans by fastforce
+  thus ?thesis using exec_time_def by auto
+next
+  case False
+  have 1: "time_index 0 \<le> u" if "B u \<noteq> {}" for u
+  proof -
+    have "u \<in> set htpl" using that a_in_B_iff_t_in_htps set_htpl_eq_htps[OF finite_plan] by auto
+    hence "\<exists>i. time_index i = u \<and> i < length htpl" using time_index_img_list by force
+    thus "time_index 0 \<le> u" using time_index_sorted_list by blast
+  qed
+  moreover
+  have "Least (\<lambda>t. B t \<noteq> {}) = (time_index 0)" 
+  proof (rule Least_equality[OF _ 1])
+    have "card htps > 0" using a_in_B_iff_t_in_htps s_at_t card_gt_0_iff finite_htps finite_plan by blast
+    hence "time_index 0 \<in> htps" using time_index_img_set[OF finite_plan] by blast
+    thus "B (time_index 0) \<noteq> {}" using a_in_B_iff_t_in_htps by auto
+  qed
+  ultimately
+  have "t - last_snap_exec b t \<ge> \<delta>" using s_at_t False unfolding pt_def by auto
+  thus ?thesis unfolding exec_time_def by simp
 qed
+
+lemma exec_time_and_duration:
+  assumes "at_end a \<in> B t"
+      and a_in_actions: "a \<in> actions"
+      and no_self_overlap
+      and durations_positive
+      and plan_actions_in_problem
+  shows "\<exists>t' d. (a, t', d) \<in> ran \<pi> \<and> exec_time (at_start a) t = d"
+proof -
+  have "\<exists>!(s,d). (a, s, d) \<in> ran \<pi> \<and> t = s + d" using at_end_in_happ_seqE[OF _ assms(2,3,4,5)] assms(1)[simplified happ_at_def] by simp
+  then obtain s d where
+    sd: "(a, s, d) \<in> ran \<pi>" 
+    "t = s + d" by auto
+  with \<open>durations_positive\<close>
+  have wit: "s < t \<and> at_start a \<in> B s" unfolding happ_at_def plan_happ_seq_def durations_positive_def by force
+  moreover
+  have "t' \<le> s" if "t' < t" "at_start a \<in> B t'" for t'
+  proof (rule ccontr)
+    assume "\<not> t' \<le> s"
+    hence st': "s < t'" by simp
+    from that(2)[simplified happ_at_def]
+    obtain d' where
+       t'd': "(a, t', d') \<in> ran \<pi>" 
+      using at_start_in_happ_seqE[OF _ assms(2,3,4,5)]  by blast
+    thus False using that st' sd \<open>no_self_overlap\<close>[THEN no_self_overlap_spec] by force
+  qed
+  ultimately
+  have "(GREATEST s. s < t \<and> at_start a \<in> B s) = s" unfolding Greatest_def by fastforce
+  hence "exec_time (at_start a) t = d" using sd(2) wit unfolding exec_time_def pt_def by auto
+  thus ?thesis using sd(1) by blast
+qed
+
+lemma exec_time_sat_dur_const:
+  assumes "at_end a \<in> B t"
+      and a_in_actions: "a \<in> actions"
+      and no_self_overlap
+      and durations_positive
+      and plan_actions_in_problem
+      and durations_valid
+    shows "satisfies_duration_bounds a (exec_time (at_start a) t)"
+  using exec_time_and_duration[OF assms(1,2,3,4,5)] \<open>durations_valid\<close>[simplified durations_valid_def]
+  by blast
 
 subsubsection \<open>Restricting snap action sets by an upper limit on the index\<close>
 
@@ -1120,6 +1178,13 @@ proof -
 qed
 
 lemma decision_making:
+  assumes prop_clocks: "delta_prop_model W Q"
+      and exec_clocks: "delta_exec_model W E"
+      and stop: "W Stop = 0"
+  shows "\<exists>W'. \<T> \<turnstile> \<langle>PropDecoding (p 0), W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W'\<rangle> 
+    \<and> prop_model W' Q 
+    \<and> exec_model W' E 
+    \<and> (\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W c = W' c)" sorry
 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
 

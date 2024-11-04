@@ -69,6 +69,10 @@ definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightar
   (adds b \<inter> dels a) \<noteq> {}
 )"
 
+lemma mutex_snap_action_symm: "mutex_snap_action a b \<Longrightarrow> mutex_snap_action b a" 
+  unfolding mutex_snap_action_def
+  by (erule disjE; blast)+
+
 definition snap_actions::"'snap_action set" where
 "snap_actions \<equiv> (at_start ` actions) \<union> (at_end ` actions)"
 
@@ -147,7 +151,7 @@ definition plan_happ_seq::"('time \<times> 'snap_action) set" where
   \<union> {(t + d, at_end a) | a t d. (a, t, d) \<in> ran \<pi>}"
 
 definition happ_at::"('time \<times> 'snap_action) set \<Rightarrow> 'time \<Rightarrow> 'snap_action set" where
-"happ_at B t \<equiv> {s |s. (t, s) \<in> B}"
+"happ_at B t \<equiv> {s. (t, s) \<in> B}"
 
 text \<open>Invariants\<close>
 definition plan_inv_seq::"('proposition, 'time) invariant_sequence" where
@@ -164,7 +168,7 @@ subsubsection \<open>Non-mutex happening sequence\<close>
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_happ_seq B \<equiv> 
   \<forall>t u a b. (t - u < \<delta> \<and> u - t < \<delta> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
-    \<longrightarrow> ((a \<noteq> b \<longrightarrow> mutex_snap_action a b) 
+    \<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b) 
     \<and> (a = b \<longrightarrow> t = u))"
 
 subsubsection \<open>Valid state sequence\<close>
@@ -228,8 +232,22 @@ definition plan_actions_in_problem::bool where
 definition finite_plan::bool where
 "finite_plan \<equiv> finite (dom \<pi>)"
 
+definition satisfies_duration_bounds::"'action \<Rightarrow> 'time \<Rightarrow> bool" where
+"satisfies_duration_bounds a t \<equiv> 
+  let lb = (case (lower a) of 
+    GT t' \<Rightarrow> t' < t
+  | GE t' \<Rightarrow> t' \<le> t);
+  ub = (case (upper a) of 
+    LT t' \<Rightarrow> t < t'
+  | LE t' \<Rightarrow> t \<le> t')
+  in lb \<and> ub
+"
+
 definition durations_positive::bool where
 "durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 < d"
+
+definition durations_valid::bool where
+"durations_valid \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> satisfies_duration_bounds a d"
 
 definition valid_plan::"bool" where
 "valid_plan \<equiv> \<exists>M. (
@@ -244,6 +262,7 @@ definition valid_plan::"bool" where
     \<and> plan_actions_in_problem
     \<and> finite_plan
     \<and> durations_positive
+    \<and> durations_valid
 )"
 end
 

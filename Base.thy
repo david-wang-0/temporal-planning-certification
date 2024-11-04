@@ -32,8 +32,10 @@ lemma "0 < x \<Longrightarrow> (LEAST n. 0 < n) \<le> x" using Least_le by simp
 lemma ge_least_gt_0: "Least ((<) 0) \<le> x \<Longrightarrow> 0 < x" using least_time_gt_0 by auto
 
 
-lemma GreatestI_ex_time: "\<exists>t. P t \<Longrightarrow> P (Greatest P)" (* Sledgehammer *)
+lemma GreatestI_ex_time: "\<exists>t. P t \<Longrightarrow> P (Greatest P)"
   using least_time_gt_0 local.dense local.not_less_Least by auto
+
+
 end
 
 end
