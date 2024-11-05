@@ -44,7 +44,7 @@ locale temp_planning_problem =
       and wf_acts: "let 
           snap_props = \<lambda>s. pre s \<union> adds s \<union> dels s
         in (\<forall>a \<in> actions. 
-          snap_props (at_start_a) \<subseteq> props
+          snap_props (at_start a) \<subseteq> props
         \<and> snap_props (at_end a) \<subseteq> props
         \<and> over_all a \<subseteq> props)"
       and at_start_inj_on: "inj_on at_start actions"
@@ -164,7 +164,10 @@ definition invs_at::"('proposition, 'time) invariant_sequence \<Rightarrow> 'tim
 
 subsubsection \<open>Non-mutex happening sequence\<close>
 
-
+text \<open>This definition arose from the statement in \<^cite>\<open>Gigante2020\<close>, that every at-start 
+snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
+snap-actions. Moreover, in their definition of a planning problem, the assumption is made that 
+no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at_end(b) and at-start(a) \<noteq> at-end(a).\<close>
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_happ_seq B \<equiv> 
   \<forall>t u a b. (t - u < \<delta> \<and> u - t < \<delta> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
@@ -191,7 +194,7 @@ definition valid_state_sequence::"
     Inv = plan_inv_seq;
     B = plan_happ_seq
   in
-    (\<forall>i. Suc i < length htpl \<longrightarrow> (
+    (\<forall>i. i < length htpl \<longrightarrow> (
       let 
         S = happ_at B (t i);
         pres = \<Union>(pre ` S);
@@ -228,8 +231,6 @@ lemma no_self_overlap_spec:
 definition plan_actions_in_problem::bool where
 "plan_actions_in_problem \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> a \<in> actions"
 
-definition finite_plan::bool where
-"finite_plan \<equiv> finite (dom \<pi>)"
 
 definition satisfies_duration_bounds::"'action \<Rightarrow> 'time \<Rightarrow> bool" where
 "satisfies_duration_bounds a t \<equiv> 
@@ -255,13 +256,17 @@ definition valid_plan::"bool" where
     \<and> (M 0) = init
     \<and> (M (length htpl - 1)) = goal
     \<and> plan_actions_in_problem
-    \<and> finite_plan
     \<and> durations_positive
     \<and> durations_valid"
+
 end
 
 context temporal_plan
 begin           
+
+
+definition finite_plan::bool where
+"finite_plan \<equiv> finite (dom \<pi>)"
 
 lemma a_in_B_iff_t_in_htps: "(\<exists>a. a \<in> happ_at plan_happ_seq t) \<longleftrightarrow> (t \<in> htps)"
 proof
@@ -414,6 +419,11 @@ proof -
   ultimately
   show ?thesis apply - by (rule ex1I, auto)
 qed
+
+lemma in_happ_seqE:
+  assumes in_happ_seq: "(t, snap) \<in> plan_happ_seq"
+  shows "\<exists>t d a. (a, t, d) \<in> ran \<pi> \<and> (at_start a = snap \<or> at_end a = snap)"
+  using assms unfolding plan_happ_seq_def by blast
 
 
 lemma finite_htps: 

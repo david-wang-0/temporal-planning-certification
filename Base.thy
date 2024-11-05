@@ -4,7 +4,7 @@ begin
   
 section \<open>Time\<close>
 
-class time = wellorder + ordered_ab_group_add + one +
+class time = wellorder + ordered_ab_group_add + zero_neq_one +
   assumes dense: "x < y \<Longrightarrow> \<exists>z. x < z \<and> z < y"
   assumes non_trivial: "\<exists> x. x \<noteq> 0"
 begin

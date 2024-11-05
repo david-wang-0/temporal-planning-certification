@@ -105,6 +105,34 @@ inductive_cases[elim!]: "u \<turnstile> CEQ c1 c2 d"
 inductive_cases[elim!]: "u \<turnstile> CGE c1 c2 d"
 inductive_cases[elim!]: "u \<turnstile> CGT c1 c2 d"
 
+
+definition AND_ALL::"('c, 't::time) dconstraint list \<Rightarrow> ('c, 't) dconstraint" where
+"AND_ALL xs \<equiv> foldr AND xs (let c = SOME c. True in CEQ c c 0)"
+
+lemma AND_ALL_iff: "(W \<turnstile> (AND_ALL xs)) \<longleftrightarrow> list_all (\<lambda>x. W \<turnstile> x) xs"
+proof (induction xs)
+  case Nil
+  have "list_all (clock_val W) [] = True" by auto
+  moreover
+  have "W \<turnstile> AND_ALL [] = True" unfolding AND_ALL_def by (auto simp: Let_def)
+  ultimately
+  show ?case by simp
+next
+  case (Cons x xs)
+  have "(list_all (\<lambda>x. W \<turnstile> x) (x#xs)) = ((W \<turnstile> x) \<and> list_all (\<lambda>x. W \<turnstile> x) xs)" using list_all_simps by simp
+  hence "(list_all (\<lambda>x. W \<turnstile> x) (x#xs)) = (W \<turnstile> x \<and> W \<turnstile> AND_ALL xs)" using Cons.IH by simp
+  moreover
+  have "(W \<turnstile> x \<and> W \<turnstile> AND_ALL xs) = (W \<turnstile> AND x (AND_ALL xs))"
+    by (rule iffI; blast; cases rule: clock_val.cases, auto)
+  hence "(W \<turnstile> x \<and> W \<turnstile> AND_ALL xs) = W \<turnstile> AND_ALL (x # xs)" apply (subst AND_ALL_def) apply (subst AND_ALL_def)
+    using foldr_Cons by auto
+  ultimately
+  show ?case by simp
+qed
+
+lemma AND_ALL_dist: "W \<turnstile> AND_ALL xs \<and> W \<turnstile> AND_ALL ys \<longleftrightarrow> W \<turnstile> AND_ALL (xs @ ys)"
+  using AND_ALL_iff list_all_append by blast
+
 fun clock_set :: "('c \<times> 't :: time) list \<Rightarrow> ('c,'t) cval \<Rightarrow> ('c,'t) cval"
 where
   "clock_set [] u = u" |
