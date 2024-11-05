@@ -1386,86 +1386,19 @@ proof -
     and s_snap_corr: "\<forall>n < Suc m. start_snap_sched_corr W (B (time_index l)) (act n)"
     and e_snap_corr: "\<forall>n < m. end_snap_sched_corr W (B (time_index l)) (act n)"
   for W m
-  proof (cases "at_start (act m) \<in> B (time_index l)")
+  proof (cases "at_end (act m) \<in> B (time_index l)")
     case True
     have trans: "(Decision (at_end (act m)), guard_at_end (act m), Unit, [(SchedEndSnap (act m), 1)], Decision (at_start (act (Suc m)))) \<in> trans_of \<T> dm"
       unfolding decision_making_automaton_def decision_making_def trans_of_def using m by auto
     
     have guard_sat: "W \<turnstile> guard_at_end (act m)"
     proof -
-      have m_in_acts: "act m \<in> actions" using m act_img_actions by blast
-      have "W \<turnstile> (EQ (Running (act m)) 0)" 
-      proof -
-        have "act m \<notin> ES (time_index l)" 
-          using not_executing_when_starting[OF True _ no_self_overlap durations_positive plan_actions_in_problem] m_in_acts
-          by blast
-        hence "W (Running (act m)) = 0" using exec_clocks exec_model_def m_in_acts by force
-        thus ?thesis by blast
-      qed
-      moreover
-      have "W \<turnstile> (guard (at_start (act m)))"
-      proof -
-        have "W \<turnstile> sep (at_start (act m))"
-        proof -
-          { fix b
-            assume b: "b \<in> set (interfering_at_start (at_start (act m)))"
-            hence b_in_act: "act b \<in> actions" unfolding interfering_at_start_def using act_img_actions by auto
-            have "b \<in> {n. n < M \<and> (mutex_snap_action (at_start (act m)) (at_start (act n)) \<or> at_start (act m) = at_start (act n))}" 
-              using b unfolding interfering_at_start_def by auto
-            hence "\<delta> \<le> exec_time (at_start (act b)) (time_index l)" using exec_time_and_epsilon[OF nm True _ fpl] by blast
-            hence "W \<turnstile> dconstraint.GE (StartDur (act b)) \<delta>" using start_durs b_in_act by auto
-          }
-          hence "list_all (clock_val W) (start_constraints (at_start (act m)))" 
-            unfolding start_constraints_def
-            by (subst list_all_iff) auto
-          hence "W \<turnstile> AND_ALL (start_constraints (at_start (act m)))" using AND_ALL_iff by blast
-          moreover
-          { fix b
-            assume b: "b \<in> set (interfering_at_end (at_start (act m)))"
-            hence b_in_act: "act b \<in> actions" unfolding interfering_at_end_def using act_img_actions by auto
-            have "b \<in> {n. n < M \<and> (mutex_snap_action (at_start (act m)) (at_end (act n)) \<or> at_start (act m) = at_end (act n))}" 
-              using b unfolding interfering_at_end_def by auto
-            hence "\<delta> \<le> exec_time (at_end (act b)) (time_index l)" using exec_time_and_epsilon[OF nm True _ fpl] by blast
-            hence "W \<turnstile> dconstraint.GE (EndDur (act b)) \<delta>" using end_durs b_in_act by auto
-          }
-          hence "list_all (clock_val W) (end_constraints (at_start (act m)))" 
-            unfolding end_constraints_def
-            by (subst list_all_iff) auto
-          hence "W \<turnstile> AND_ALL (end_constraints (at_start (act m)))" using AND_ALL_iff by blast
-          ultimately
-          show ?thesis unfolding sep_def using AND_ALL_iff list_all_append by blast
-        qed
-        moreover
-        have "W \<turnstile> (pre_constraint (at_start (act m)))"
-        proof -
-          { fix c
-            assume "c \<in> set (pre_clocks (at_start (act m)))"
-            then obtain pr where
-              pr: "pr \<in> set (prop_list (pre (at_start (act m))))"
-              and cpr: "c = PropClock pr" using pre_clocks_def by auto
-            moreover
-            have "finite (prop_numbers (pre (at_start (act m))))" by simp
-            ultimately
-            have pr_in_pre: "pr \<in> pre (at_start (act m))" using set_sorted_list_of_set unfolding prop_list_def by auto
-            hence "pr \<in> MS l" using MS_valid[simplified valid_state_sequence_def] l_len True by (auto simp: Let_def)
-            moreover
-            have "pr \<in> props" using wf_acts pr_in_pre m act_img_actions by fastforce
-            ultimately
-            have "W c = 1" using prop_clocks cpr unfolding prop_model_def by blast
-          }
-          hence "W \<turnstile> AND_ALL (map (\<lambda>c. EQ c 1) (pre_clocks (at_start (act m))))" 
-            unfolding AND_ALL_iff list_all_iff by auto
-          thus ?thesis using pre_constraint_def by simp
-        qed
-        ultimately
-        show "W \<turnstile> guard (at_start (act m))" unfolding guard_def by blast
-      qed
-      ultimately
-      show "W \<turnstile> guard_at_start (act m)" using guard_at_start_def by auto
+      have "W \<turnstile> guard (at_end (act m))" using W_sat_guard[OF True prop_clocks exec_clocks start_durs end_durs stop] .
+      show ?thesis unfolding guard_at_end_def sorry
     qed
     
-    define W' where "W' = clock_set [(SchedStartSnap (act m), 1)] W" 
-    have "\<T> dm \<turnstile> \<langle>Decision (at_start (act m)), W\<rangle> \<rightarrow> \<langle>Decision (at_end (act m)), W'\<rangle>"
+    define W' where "W' = clock_set [(SchedEndSnap (act m), 1)] W" 
+    have "\<T> dm \<turnstile> \<langle>Decision (at_end (act m)), W\<rangle> \<rightarrow> \<langle>Decision (at_start (act (Suc m))), W'\<rangle>"
       apply (rule step_a)
       apply (rule step_a.intros[OF trans])
         apply (rule guard_sat)
@@ -1474,17 +1407,17 @@ proof -
       by (auto simp: stop W'_def)
     moreover
     {
-      have "start_snap_sched_corr W' (B (time_index l)) (act m)" using True unfolding W'_def start_snap_sched_corr_def by simp
-      moreover
-      have "\<forall>n < m. W' (SchedStartSnap (act n)) = W (SchedStartSnap (act n))" using act_inj_on[simplified inj_on_def] m unfolding W'_def by fastforce
-      hence "(\<forall>n < m. start_snap_sched_corr W' (B (time_index l)) (act n))" using s_snap_corr unfolding start_snap_sched_corr_def by auto
-      ultimately
-      have "(\<forall>n < Suc m. start_snap_sched_corr W' (B (time_index l)) (act n))" using less_antisym by blast
+      have "\<forall>n < Suc m. W' (SchedStartSnap (act n)) = W (SchedStartSnap (act n))" using act_inj_on[simplified inj_on_def] m unfolding W'_def by fastforce
+      hence "\<forall>n < Suc m. start_snap_sched_corr W' (B (time_index l)) (act n)"  using s_snap_corr unfolding start_snap_sched_corr_def by auto
     }
     moreover
-    { 
+    {
+      have "end_snap_sched_corr W' (B (time_index l)) (act m)" using True unfolding W'_def end_snap_sched_corr_def by simp
+      moreover
       have "\<forall>n < m. W' (SchedEndSnap (act n)) = W (SchedEndSnap (act n))" using act_inj_on[simplified inj_on_def] m unfolding W'_def by fastforce
       hence "(\<forall>n < m. end_snap_sched_corr W' (B (time_index l)) (act n))" using e_snap_corr unfolding end_snap_sched_corr_def by auto
+      ultimately
+      have "(\<forall>n < Suc m. end_snap_sched_corr W' (B (time_index l)) (act n))" using less_antisym by blast
     }
     moreover
     have "(\<forall>c. \<not> is_snap_dec_clock c \<longrightarrow> W c = W' c)" unfolding W'_def by simp
@@ -1492,26 +1425,26 @@ proof -
     show ?thesis by meson
   next
     case False
-    have trans: "(Decision (at_start (act m)), true_const, Unit, [(SchedStartSnap (act m), 0)], Decision (at_end (act m))) \<in> trans_of \<T> dm"
+    have trans: "(Decision (at_end (act m)), true_const, Unit, [(SchedEndSnap (act m), 0)], Decision (at_start (act (Suc m)))) \<in> trans_of \<T> dm"
       unfolding decision_making_automaton_def decision_making_def trans_of_def using m by auto
-    define W' where "W' = W((SchedStartSnap (act m)) := 0)"
-    have "\<T> dm \<turnstile> \<langle>Decision (at_start (act m)), W\<rangle> \<rightarrow> \<langle>Decision (at_end (act m)), W'\<rangle>"
+    define W' where "W' = W((SchedEndSnap (act m)) := 0)"
+    have "\<T> dm \<turnstile> \<langle>Decision (at_end (act m)), W\<rangle> \<rightarrow> \<langle>Decision (at_start (act (Suc m))), W'\<rangle>"
       apply (rule step_a)
       apply (rule step_a.intros[OF trans])
       by (auto simp: true_const_def inv_of_def decision_making_automaton_def stop W'_def)
     moreover
     {
-      have "start_snap_sched_corr W' (B (time_index l)) (act m)" using False unfolding W'_def start_snap_sched_corr_def by simp
-      moreover
-      have "\<forall>n < m. W' (SchedStartSnap (act n)) = W (SchedStartSnap (act n))" using act_inj_on[simplified inj_on_def] m unfolding W'_def by fastforce
-      hence "(\<forall>n < m. start_snap_sched_corr W' (B (time_index l)) (act n))" using s_snap_corr unfolding start_snap_sched_corr_def by auto
-      ultimately
-      have "(\<forall>n < Suc m. start_snap_sched_corr W' (B (time_index l)) (act n))" using less_antisym by blast
+      have "\<forall>n < Suc m. W' (SchedStartSnap (act n)) = W (SchedStartSnap (act n))" using act_inj_on[simplified inj_on_def] m unfolding W'_def by fastforce
+      hence "\<forall>n < Suc m. start_snap_sched_corr W' (B (time_index l)) (act n)"  using s_snap_corr unfolding start_snap_sched_corr_def by auto
     }
     moreover
-    { 
+    {
+      have "end_snap_sched_corr W' (B (time_index l)) (act m)" using False unfolding W'_def end_snap_sched_corr_def by simp
+      moreover
       have "\<forall>n < m. W' (SchedEndSnap (act n)) = W (SchedEndSnap (act n))" using act_inj_on[simplified inj_on_def] m unfolding W'_def by fastforce
       hence "(\<forall>n < m. end_snap_sched_corr W' (B (time_index l)) (act n))" using e_snap_corr unfolding end_snap_sched_corr_def by auto
+      ultimately
+      have "(\<forall>n < Suc m. end_snap_sched_corr W' (B (time_index l)) (act n))" using less_antisym by blast
     }
     moreover
     have "(\<forall>c. \<not> is_snap_dec_clock c \<longrightarrow> W c = W' c)" unfolding W'_def by simp
@@ -1519,7 +1452,7 @@ proof -
     show ?thesis by meson
   qed
 
-
+  
 qed
 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
