@@ -117,16 +117,18 @@ definition guard::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 't
 definition guard_at_start::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
 "guard_at_start a \<equiv> AND (guard (at_start a)) (EQ (Running a) 0)"
 
-definition guard_at_end::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
-"guard_at_end a \<equiv> 
+definition clock_duration_bounds::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
+"clock_duration_bounds a \<equiv> 
   let l = case (lower a) of 
     (lower_bound.GT t) \<Rightarrow> GT (StartDur a) t
   | (lower_bound.GE t) \<Rightarrow> GE (StartDur a) t;
   u = case (upper a) of 
     (upper_bound.LT t) \<Rightarrow> LT (StartDur a) t
   | (upper_bound.LE t) \<Rightarrow> LE (StartDur a) t
-  in
-AND (AND (guard (at_end a)) (EQ (Running a) 1)) (AND l u)"
+  in (AND l u)"
+
+definition guard_at_end::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
+"guard_at_end a \<equiv> AND (AND (guard (at_end a)) (EQ (Running a) 1)) (clock_duration_bounds a)"
 
 definition decision_making::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition set" where
 "decision_making \<equiv> 
@@ -1217,9 +1219,10 @@ lemma decision_making:
       and fpl: finite_plan
       and no_self_overlap: no_self_overlap
       and durations_positive: durations_positive
+      and durations_valid: durations_valid
       and plan_actions_in_problem: plan_actions_in_problem
   shows "\<exists>W'. \<T> \<turnstile> \<langle>Decision (at_start (act 0)), W\<rangle> \<rightarrow>* \<langle>Decision (at_start (act M)), W'\<rangle> 
-    \<and> snap_exec_sched_corr W (B (time_index l))
+    \<and> snap_exec_sched_corr W' (B (time_index l))
     \<and> (\<forall>c. \<not>(is_snap_dec_clock c) \<longrightarrow> W c = W' c)"
 proof -
   have W_sat_guard: "W \<turnstile> guard snap" 
@@ -1388,13 +1391,25 @@ proof -
   for W m
   proof (cases "at_end (act m) \<in> B (time_index l)")
     case True
+
+    have act_m_in_actions: "act m \<in> actions" using m act_img_actions by blast
+  
     have trans: "(Decision (at_end (act m)), guard_at_end (act m), Unit, [(SchedEndSnap (act m), 1)], Decision (at_start (act (Suc m)))) \<in> trans_of \<T> dm"
       unfolding decision_making_automaton_def decision_making_def trans_of_def using m by auto
     
     have guard_sat: "W \<turnstile> guard_at_end (act m)"
     proof -
       have "W \<turnstile> guard (at_end (act m))" using W_sat_guard[OF True prop_clocks exec_clocks start_durs end_durs stop] .
-      show ?thesis unfolding guard_at_end_def sorry
+      moreover
+      have "satisfies_duration_bounds (act m) (exec_time (at_start (act m)) (time_index l))" using exec_time_sat_dur_const[OF True act_m_in_actions no_self_overlap durations_positive plan_actions_in_problem durations_valid] .
+      hence "satisfies_duration_bounds (act m) (W (StartDur (act m)))" using start_durs act_m_in_actions by simp
+      hence "W \<turnstile> clock_duration_bounds (act m)" unfolding satisfies_duration_bounds_def clock_duration_bounds_def 
+        by (cases "lower (act m)"; cases "upper (act m)", auto simp: Let_def)
+      moreover
+      have "W \<turnstile> EQ (Running (act m)) 1" using executing_when_ending[OF True _ no_self_overlap durations_positive plan_actions_in_problem] exec_clocks
+        unfolding exec_model_def using act_m_in_actions by blast
+      ultimately
+      show "W \<turnstile> guard_at_end (act m)" unfolding guard_at_end_def by fast
     qed
     
     define W' where "W' = clock_set [(SchedEndSnap (act m), 1)] W" 
@@ -1451,8 +1466,134 @@ proof -
     ultimately
     show ?thesis by meson
   qed
-
   
+  have decision_steps: "\<exists>W'. \<T> dm \<turnstile> \<langle>Decision (at_start (act m)), W\<rangle> \<rightarrow>* \<langle>Decision (at_start (act (Suc m))), W'\<rangle>
+          \<and> (\<forall>n < (Suc m). start_snap_sched_corr W' (B (time_index l)) (act n))
+          \<and> (\<forall>n < (Suc m). end_snap_sched_corr W' (B (time_index l)) (act n))
+          \<and> (\<forall>c. \<not>(is_snap_dec_clock c) \<longrightarrow> W c = W' c)" 
+      if prop_clocks: "prop_model W (MS l)"
+      and exec_clocks: "exec_model W (ES (time_index l))"
+      and start_durs: "\<forall>a \<in> actions. W (StartDur a) = exec_time (at_start a) (time_index l)"
+      and end_durs: "\<forall>a \<in> actions. W (EndDur a) = exec_time (at_end a) (time_index l)"
+      and stop: "W Stop = 0"
+      and m: "m < M"
+      and s_snap_corr: "\<forall>n < m. start_snap_sched_corr W (B (time_index l)) (act n)"
+      and e_snap_corr: "\<forall>n < m. end_snap_sched_corr W (B (time_index l)) (act n)"
+    for m W
+  proof -
+  
+    from at_start_step[OF that]
+    obtain W' where
+      W': "\<T> dm \<turnstile> \<langle>Decision (at_start (act m)), W\<rangle> \<rightarrow> \<langle>Decision (at_end (act m)),W'\<rangle>"
+      and s_snap_corr': "\<forall>n<Suc m. start_snap_sched_corr W' (B (time_index l)) (act n)"
+      and e_snap_corr': "\<forall>n<m. end_snap_sched_corr W' (B (time_index l)) (act n)"
+      and dec: "\<forall>c. \<not> is_snap_dec_clock c \<longrightarrow> W c = W' c" by force
+    moreover
+    from prop_clocks exec_clocks start_durs end_durs stop and dec
+    have prop_clocks': "prop_model W' (MS l)" 
+      and exec_clocks': "exec_model W' (ES (time_index l))"
+      and start_durs': "\<forall>a \<in> actions. W' (StartDur a) = exec_time (at_start a) (time_index l)"
+      and end_durs': "\<forall>a \<in> actions. W' (EndDur a) = exec_time (at_end a) (time_index l)"
+      and stop': "W' Stop = 0"
+      unfolding prop_model_def exec_model_def by auto
+    ultimately 
+    obtain W'' where 
+      W'': "\<T> dm \<turnstile> \<langle>Decision (at_end (act m)), W'\<rangle> \<rightarrow> \<langle>Decision (at_start (act (Suc m))), W''\<rangle>
+          \<and> (\<forall>n < (Suc m). start_snap_sched_corr W'' (B (time_index l)) (act n))
+          \<and> (\<forall>n < (Suc m). end_snap_sched_corr W'' (B (time_index l)) (act n))
+          \<and> (\<forall>c. \<not>(is_snap_dec_clock c) \<longrightarrow> W' c = W'' c)" 
+      using m at_end_step by presburger
+    moreover
+    have "\<T> dm \<turnstile> \<langle>Decision (at_start (act m)), W\<rangle> \<rightarrow>* \<langle>Decision (at_start (act (Suc m))), W''\<rangle>"
+      apply (rule steps.step[OF _ steps.step[OF _ steps.refl]])
+      using W' W'' by blast+
+    moreover
+    have "\<forall>c. \<not>(is_snap_dec_clock c) \<longrightarrow> W c = W'' c" using dec W'' by simp
+    ultimately
+    show ?thesis by blast
+  qed
+
+  have decision_steps': "\<exists>W'. \<T> dm \<turnstile> \<langle>Decision (at_start (act m)), W\<rangle> \<rightarrow>* \<langle>Decision (at_start (act (Suc m))), W'\<rangle>
+          \<and> (\<forall>c. \<not>(is_snap_dec_clock c) \<longrightarrow> W c = W' c)
+          \<and> prop_model W' (MS l)
+          \<and> exec_model W' (ES (time_index l))
+          \<and> (\<forall>a \<in> actions. W' (StartDur a) = exec_time (at_start a) (time_index l))
+          \<and> (\<forall>a \<in> actions. W' (EndDur a) = exec_time (at_end a) (time_index l))
+          \<and> (\<forall>n < (Suc m). start_snap_sched_corr W' (B (time_index l)) (act n))
+          \<and> (\<forall>n < (Suc m). end_snap_sched_corr W' (B (time_index l)) (act n))
+          \<and> W' Stop = 0"
+      if prop_clocks: "prop_model W (MS l)"
+      and exec_clocks: "exec_model W (ES (time_index l))"
+      and start_durs: "\<forall>a \<in> actions. W (StartDur a) = exec_time (at_start a) (time_index l)"
+      and end_durs: "\<forall>a \<in> actions. W (EndDur a) = exec_time (at_end a) (time_index l)"
+      and stop: "W Stop = 0"
+      and m: "m < M"
+      and s_snap_corr: "\<forall>n < m. start_snap_sched_corr W (B (time_index l)) (act n)"
+      and e_snap_corr: "\<forall>n < m. end_snap_sched_corr W (B (time_index l)) (act n)"
+    for m W
+    apply (insert decision_steps[OF that])
+    apply (erule exE)
+    subgoal for W'
+      apply (rule exI[where x = W'])
+      using that by (auto simp: prop_model_def exec_model_def)
+    done
+
+  have decision_making_strong: "\<exists>W'. \<T> dm \<turnstile> \<langle>Decision (at_start (act 0)), W\<rangle> \<rightarrow>* \<langle>Decision (at_start (act (Suc m))), W'\<rangle>
+    \<and> (\<forall>c. \<not>(is_snap_dec_clock c) \<longrightarrow> W c = W' c)
+    \<and> prop_model W' (MS l)
+    \<and> exec_model W' (ES (time_index l))
+    \<and> (\<forall>a \<in> actions. W' (StartDur a) = exec_time (at_start a) (time_index l))
+    \<and> (\<forall>a \<in> actions. W' (EndDur a) = exec_time (at_end a) (time_index l))
+    \<and> (\<forall>n < (Suc m). start_snap_sched_corr W' (B (time_index l)) (act n))
+    \<and> (\<forall>n < (Suc m). end_snap_sched_corr W' (B (time_index l)) (act n))
+    \<and> W' Stop = 0" if "m < M" for m
+    using that
+    proof (induction m)
+      case 0
+      from decision_steps'[OF prop_clocks exec_clocks start_durs end_durs stop 0]
+      show ?case by auto
+    next
+      case (Suc m)
+      then obtain W' where
+        W': "\<T> dm \<turnstile> \<langle>Decision (at_start (act 0)), W\<rangle> \<rightarrow>* \<langle>Decision (at_start (act (Suc m))), W'\<rangle>"
+         "(\<forall>c. \<not> is_snap_dec_clock c \<longrightarrow> W c = W' c) \<and>
+         prop_model W' (MS l) \<and>
+         exec_model W' (ES (time_index l)) \<and>
+         (\<forall>a\<in>actions. W' (StartDur a) = exec_time (at_start a) (time_index l)) \<and>
+         (\<forall>a\<in>actions. W' (EndDur a) = exec_time (at_end a) (time_index l)) \<and>
+         (\<forall>n<Suc m. start_snap_sched_corr W' (B (time_index l)) (act n)) \<and>
+         (\<forall>n<Suc m. end_snap_sched_corr W' (B (time_index l)) (act n)) \<and> 
+         W' Stop = 0" by auto
+      with decision_steps' \<open>Suc m < M\<close>
+      obtain W'' where
+        W'': "\<T> dm \<turnstile> \<langle>Decision (at_start (act (Suc m))), W'\<rangle> \<rightarrow>* \<langle>Decision (at_start (act (Suc (Suc m)))), W''\<rangle> \<and>
+         (\<forall>c. \<not> is_snap_dec_clock c \<longrightarrow> W c = W'' c) \<and>
+         prop_model W'' (MS l) \<and>
+         exec_model W'' (ES (time_index l)) \<and>
+         (\<forall>a\<in>actions. W'' (StartDur a) = exec_time (at_start a) (time_index l)) \<and>
+         (\<forall>a\<in>actions. W'' (EndDur a) = exec_time (at_end a) (time_index l)) \<and>
+         (\<forall>n<Suc (Suc m). start_snap_sched_corr W'' (B (time_index l)) (act n)) \<and>
+         (\<forall>n<Suc (Suc m). end_snap_sched_corr W'' (B (time_index l)) (act n)) \<and> 
+         W'' Stop = 0" by presburger
+      from this[THEN conjunct2] steps_trans[OF W'(1) this[THEN conjunct1]] 
+      show ?case by auto
+    qed
+    
+    from decision_making_strong[where m = "M - 1"]
+    obtain W' where
+      W': "\<T> dm \<turnstile> \<langle>Decision (at_start (act 0)), W\<rangle> \<rightarrow>* \<langle>Decision (at_start (act M)), W'\<rangle> \<and>
+       (\<forall>c. \<not> is_snap_dec_clock c \<longrightarrow> W c = W' c) \<and>
+       (\<forall>n< M. start_snap_sched_corr W' (B (time_index l)) (act n)) \<and>
+       (\<forall>n< M. end_snap_sched_corr W' (B (time_index l)) (act n))"
+      using some_actions by auto
+    moreover
+    have lt: "le_ta \<T> dm \<T>" unfolding prob_automaton_def decision_making_automaton_def le_ta_def trans_of_def inv_of_def by auto
+    moreover
+    have "\<forall>a \<in> actions. start_snap_sched_corr W' (B (time_index l)) a" using W' act_pred by simp
+    moreover
+    have "\<forall>a \<in> actions. end_snap_sched_corr W' (B (time_index l)) a" using W' act_pred by simp
+    ultimately
+    show ?thesis unfolding snap_exec_sched_corr_def using ta_superset[OF _ lt] by meson
 qed
 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
