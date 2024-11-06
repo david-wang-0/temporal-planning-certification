@@ -81,6 +81,8 @@ text \<open>Useful lemmas about the numberings\<close>
 lemma act_inj_on: "inj_on act {n. n < card actions}"
   using action_numbering bij_betw_def by blast
 
+lemmas act_inj_on_spec = act_inj_on[simplified inj_on_def, THEN bspec, THEN bspec, simplified mem_Collect_eq, THEN mp, rotated 2]
+
 lemma act_img_actions: "act ` {n. n < card actions} = actions"
   using action_numbering[simplified bij_betw_def] by simp
 
