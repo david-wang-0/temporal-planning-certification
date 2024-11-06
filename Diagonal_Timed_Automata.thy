@@ -204,6 +204,52 @@ lemma steps_twist: "A \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langl
   by (induction rule: steps.induct) auto
 
 
+lemma clock_set_all_cases:
+  assumes "\<forall>v'. (c, v') \<in> set xs \<longrightarrow> v = v'"
+  shows "(clock_set xs W) c = v \<or> (clock_set xs W) c = W c"
+  using assms
+  apply (induction xs) by auto
+
+
+lemma clock_set_certain:
+  assumes "\<forall>v'. (c, v') \<in> set xs \<longrightarrow> v = v'"
+      and "(c, v) \<in> set xs"
+  shows "(clock_set xs W) c = v"
+  using assms
+proof (induction xs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons x xs)
+  then
+  consider "(c, v) \<in> set xs" | "(c, v) = x" by fastforce
+  then show ?case 
+  proof cases
+    case 1
+    obtain a b where 
+      x: "x = (a, b)"
+      by (cases x) auto
+    moreover 
+    consider "(c, v) = x" | "a \<noteq> c" using x Cons by fastforce
+    moreover
+    have "([xs]W) c = v"  
+      apply (rule Cons.IH)
+      using Cons.prems apply simp by (rule 1)
+    ultimately
+    show ?thesis by auto
+  next
+    case 2
+    then show ?thesis by auto
+  qed
+qed
+
+lemma clock_set_none: 
+  assumes "\<not>(\<exists>v. (c, v) \<in> set xs)"
+  shows "(clock_set xs W) c = W c"
+  using assms
+  by (induction xs, auto)
+      
+
 definition le_ta::"('a, 'c, 't::time, 's) ta \<Rightarrow> ('a, 'c, 't, 's) ta \<Rightarrow> bool" where
 "le_ta A B \<equiv> (\<forall>t \<in> trans_of A. t \<in> trans_of B) 
   \<and> (\<forall>v s. v \<turnstile> inv_of A s \<longrightarrow> v \<turnstile> inv_of B s)"

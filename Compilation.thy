@@ -13,7 +13,6 @@ datatype ('proposition, 'action, 'snap_action) location =
   | Decision 'snap_action
   | Execution 'snap_action
 
-
 datatype ('proposition, 'action) clock =
   Delta
   | Stop
@@ -46,6 +45,16 @@ abbreviation "prop_numbers S \<equiv> {n| n pr. n < N \<and> pr \<in> S \<and> (
 
 definition "prop_list S \<equiv> map p (sorted_list_of_set (prop_numbers S))"
 
+lemma set_prop_list: 
+  assumes "P \<subseteq> props"
+  shows "set (prop_list P) = P"
+proof -
+  have "finite (prop_numbers P)" by simp
+  have "\<forall>pr \<in> P. \<exists>n < N. p n = pr" using p_img_props assms by force
+  hence "p ` (prop_numbers P) = P" by auto
+  thus ?thesis unfolding prop_list_def by simp
+qed
+
 text \<open>The transition from the initial location \<open>l\<^sub>I\<close> to the main location \<open>l\<^sub>\<delta>\<close>\<close>
 definition init_pos::"'proposition list" where
 "init_pos \<equiv> prop_list init"
@@ -77,7 +86,8 @@ definition exec_decoding::"(alpha, ('proposition, 'action) clock, 'time, ('propo
 "exec_decoding \<equiv> {(ExecDecoding (act m), CEQ (Running (act m)) Delta 1, Unit, [(Running (act m), 1)], ExecDecoding (act (m + 1))) | m. m < M}
   \<union> {(ExecDecoding (act m), CEQ (Running (act m)) Delta 0, Unit, [(Running (act m), 0)], ExecDecoding (act (m + 1))) | m. m < M}"
 (* To do: We index into (act M) here. Executable when actions are numbered from 0 to M - 1?
-Change the locations to use number parameters?
+Change the locations to use number parameters? Add assumptions p and act
+  are injective on {0..N} (instead of {0..<N}) and {0..M} respectively?
  *)
 
 text \<open>The transition from the execution decoding locations to the decision-making locations\<close>
@@ -146,7 +156,7 @@ definition add_effects::"'snap_action \<Rightarrow> (('proposition, 'action) clo
 "add_effects s \<equiv> map (\<lambda>p. (PropClock p, 1)) (prop_list (adds s))"
 
 definition del_effects::"'snap_action  \<Rightarrow> (('proposition, 'action) clock, 'time) clkassn list" where
-"del_effects s \<equiv> map (\<lambda>p. (PropClock p, 1)) (prop_list ((dels s) - (adds s)))"
+"del_effects s \<equiv> map (\<lambda>p. (PropClock p, 0)) (prop_list ((dels s) - (adds s)))"
 
 definition effects::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) clkassn list" where
 "effects s \<equiv> del_effects s @ add_effects s"
@@ -160,11 +170,11 @@ definition at_end_effects::"'action \<Rightarrow> (('proposition, 'action) clock
 definition execution::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition set" where
 "execution \<equiv> 
   {(Execution (at_start (act m)), EQ (SchedStartSnap (act m)) 1, Unit, at_start_effects (act m), Execution (at_end (act m))) | m. m < M}
-  \<union> {(Execution (at_start (act m)), true_const, Unit, [], Execution (at_end (act m))) | m. m < M}
-  \<union> {(Execution (at_end (act m)), EQ (SchedEndSnap (act m)) 1, Unit, at_end_effects (act m), Execution (at_end (act (Suc m)))) | m. m < M}
-  \<union> {(Execution (at_end (act m)), true_const, Unit, [], Decision (at_start (act (Suc m)))) | m. m < M}"
+  \<union> {(Execution (at_start (act m)), EQ (SchedStartSnap (act m)) 0, Unit, [], Execution (at_end (act m))) | m. m < M}
+  \<union> {(Execution (at_end (act m)), EQ (SchedEndSnap (act m)) 1, Unit, at_end_effects (act m), Execution (at_start (act (Suc m)))) | m. m < M}
+  \<union> {(Execution (at_end (act m)), EQ (SchedEndSnap (act m)) 0, Unit, [], Execution (at_start (act (Suc m)))) | m. m < M}"
 (* To do: again, a non-existent action is being accessed
-The benefit here is that there is no need to change the indexing to {0..<2M} *)
+The benefit here is that there is no need to change the indexing to {0..2M} *)
 
 subsubsection \<open>Over-all conditions\<close>
 abbreviation "action_list \<equiv> map act (sorted_list_of_set {m. m < M})"
@@ -1205,7 +1215,7 @@ fun is_snap_dec_clock::"('proposition, 'action) clock \<Rightarrow> bool" where
 | "is_snap_dec_clock _ = False"
 
 definition decision_making_automaton ("\<T> dm") where
-"decision_making_automaton = (decision_making \<union> {dm_to_exec}, invs)"
+"decision_making_automaton = (decision_making, invs)"
 
 lemma decision_making:
   assumes l_len: "l < length htpl" 
@@ -1594,6 +1604,282 @@ proof -
     have "\<forall>a \<in> actions. end_snap_sched_corr W' (B (time_index l)) a" using W' act_pred by simp
     ultimately
     show ?thesis unfolding snap_exec_sched_corr_def using ta_superset[OF _ lt] by meson
+  qed
+
+
+definition execution_automaton ("\<T> e") where
+"execution_automaton = (execution, invs)"
+
+
+definition conditionally_apply_snap where 
+"conditionally_apply_snap S s Q \<equiv> if (s \<in> S) then (Q - dels s) \<union> adds s else Q"
+
+definition conditionally_apply_action where
+"conditionally_apply_action S a \<equiv> conditionally_apply_snap S (at_end a) o conditionally_apply_snap S (at_start a)"
+
+fun is_execution_invariant_clock::"('proposition, 'action) clock \<Rightarrow> bool" where
+  "is_execution_invariant_clock (SchedStartSnap _) = True"
+| "is_execution_invariant_clock (SchedEndSnap _) = True"
+| "is_execution_invariant_clock Stop = True"
+| "is_execution_invariant_clock Delta = True"
+| "is_execution_invariant_clock _ = False"
+
+lemma execution:
+  assumes l_len: "l < length htpl" 
+      and MS_valid: "valid_state_sequence MS"
+      and prop_clocks: "prop_model W (MS l)"
+      and exec_clocks: "exec_model W (ES (time_index l))"
+      and snap_exec_sched: "snap_exec_sched_corr W (B (time_index l))"
+      and start_durs: "\<forall>a \<in> actions. W (StartDur a) = exec_time (at_start a) (time_index l)"
+      and end_durs: "\<forall>a \<in> actions. W (EndDur a) = exec_time (at_end a) (time_index l)"
+      and stop: "W Stop = 0"
+      and nm: "nm_happ_seq plan_happ_seq"
+      and fpl: finite_plan
+      and no_self_overlap: no_self_overlap
+      and durations_positive: durations_positive
+      and durations_valid: durations_valid
+      and plan_actions_in_problem: plan_actions_in_problem
+  shows "\<exists>W'. \<T> \<turnstile> \<langle>Execution (at_start (act 0)), W\<rangle> \<rightarrow>* \<langle>Execution (at_start (act M)), W'\<rangle> 
+    \<and> prop_model W' (MS (Suc l))
+    \<and> exec_model W' (IES (time_index l))
+    \<and> (\<forall>a \<in> actions. W (StartDur a) = exec_time' (at_start a) (time_index l))
+    \<and> (\<forall>a \<in> actions. W (EndDur a) = exec_time' (at_end a) (time_index l))"
+proof -
+
+  have execution_step: "\<exists>W'. \<T> e\<turnstile> \<langle>Execution (at_start (act m)), W\<rangle> \<rightarrow>* \<langle>Execution (at_start (act (Suc m))), W'\<rangle>
+    \<and> prop_model W' (conditionally_apply_action (B (time_index l)) (act m) Q)
+    \<and> (\<forall>i < Suc m. exec_corr W' (IES (time_index l)) (act i))
+    \<and> (\<forall>i \<ge> Suc m. i < M \<longrightarrow> exec_corr W' (ES (time_index l)) (act i))
+    \<and> (\<forall>i < Suc m. W' (StartDur (act i)) = exec_time' (at_start (act i)) (time_index l))
+    \<and> (\<forall>i < Suc m. W' (EndDur (act i)) = exec_time' (at_end (act i)) (time_index l))
+    \<and> (\<forall>i \<ge> Suc m. i < M \<longrightarrow> W' (StartDur (act i)) = exec_time (at_start (act i)) (time_index l))
+    \<and> (\<forall>i \<ge> Suc m. i < M \<longrightarrow> W' (EndDur (act i)) = exec_time (at_end (act i)) (time_index l))
+    \<and> (\<forall>c. is_execution_invariant_clock c \<longrightarrow> W c = W' c)"
+    if prop_model:      "prop_model W Q"
+      and exec_corr':   "\<forall>i < m. exec_corr W (IES (time_index l)) (act i)"
+      and exec_corr:    "\<forall>i \<ge> m. i < M \<longrightarrow> exec_corr W (ES (time_index l)) (act i)"
+      and start_durs':  "\<forall>i < m. W (StartDur (act i)) = exec_time' (at_start (act i)) (time_index l)"
+      and end_durs':    "\<forall>i < m. W (EndDur (act i)) = exec_time' (at_end (act i)) (time_index l)"
+      and start_durs:   "\<forall>i \<ge> m. i < M \<longrightarrow> W (StartDur (act i)) = exec_time (at_start (act i)) (time_index l)"
+      and end_durs:     "\<forall>i \<ge> m. i < M \<longrightarrow> W (EndDur (act i)) = exec_time (at_end (act i)) (time_index l)"
+      and s_snap_sched_corr: "\<forall>a\<in>actions. start_snap_sched_corr W (B (time_index l)) a"
+      and e_snap_sched_corr: "\<forall>a\<in>actions. end_snap_sched_corr W (B (time_index l)) a"
+      and m:            "m < M"
+      and stop:         "W Stop = 0"
+    for W m Q
+  proof (cases "at_start (act m) \<in> B (time_index l)"; cases "at_end (act m) \<in> B (time_index l)")
+    assume "at_start (act m) \<in> B (time_index l)" "at_end (act m) \<in> B (time_index l)"
+    moreover
+    have "act m \<in> actions" using m act_img_actions by auto
+    ultimately
+    have False using not_executing_when_starting executing_when_ending no_self_overlap durations_positive plan_actions_in_problem by blast
+    thus ?thesis by simp
+  next
+    assume a: "at_start (act m) \<in> B (time_index l)" "at_end (act m) \<notin> B (time_index l)"
+    define W' where "W' = clock_set (at_start_effects (act m)) W"
+
+    have m_in_acts: "act m \<in> actions" using act_img_actions m by blast
+
+    have "prop_model W' (conditionally_apply_action (B (time_index l)) (act m) Q)"
+    proof -
+      have "conditionally_apply_action (B (time_index l)) (act m) Q = (Q - dels (at_start (act m))) \<union> (adds (at_start (act m)))" (is "_ = ?Q'")
+        using a unfolding conditionally_apply_action_def conditionally_apply_snap_def by force
+      moreover
+      have "prop_corr W' ?Q' pr" if pr_in_props: "pr \<in> props" for pr
+      proof (cases "pr \<in> ?Q'")
+        case True
+        have ds_in_props: "(dels (at_start (act m))) - (adds (at_start (act m))) \<subseteq> props" 
+         and as_in_props: "adds (at_start (act m)) \<subseteq> props" using m_in_acts wf_acts by auto
+        from True
+        consider "pr \<in> Q \<and> pr \<notin> dels (at_start (act m))" | "pr \<in> adds (at_start (act m))" by auto
+        then show ?thesis 
+        proof cases
+          case 1
+          with set_prop_list ds_in_props
+          have "pr \<notin> set (prop_list ((dels (at_start (act m))) - (adds (at_start (act m)))))" by blast
+          hence "\<forall>n \<noteq> 1. (PropClock pr, n) \<notin> set (effects (at_start (act m)))" unfolding effects_def add_effects_def del_effects_def by auto
+          hence "\<forall>n. (PropClock pr, n) \<in> set (at_start_effects (act m)) \<longrightarrow> n = 1" unfolding at_start_effects_def by auto
+          moreover
+          have "W (PropClock pr) = 1" using prop_model 1 pr_in_props unfolding prop_model_def by blast
+          ultimately
+          have "W' (PropClock pr) = 1" unfolding W'_def using clock_set_all_cases by metis
+          with 1
+          show ?thesis by simp
+        next
+          case 2
+          with set_prop_list ds_in_props
+          have "pr \<notin> set (prop_list ((dels (at_start (act m))) - (adds (at_start (act m)))))" by simp
+          hence all: "\<forall>n. (PropClock pr, n) \<in> set (at_start_effects (act m)) \<longrightarrow> n = 1" 
+            unfolding at_start_effects_def effects_def add_effects_def del_effects_def by auto
+          moreover
+          from set_prop_list as_in_props 2
+          have "pr \<in> set (prop_list (adds (at_start (act m))))" by blast
+          hence ex: "(PropClock pr, 1) \<in> set (at_start_effects (act m))" 
+            unfolding at_start_effects_def effects_def add_effects_def del_effects_def by auto
+          ultimately
+          show ?thesis 
+            using 2 clock_set_certain[of "PropClock pr" "at_start_effects (act m)" "1"]
+            unfolding W'_def by simp
+        qed
+      next
+        case False
+        hence not_in_adds: "pr \<notin> adds (at_start (act m))" by blast
+        moreover
+        have "adds (at_start (act m)) \<subseteq> props" using m_in_acts wf_acts by auto
+        ultimately
+        have "pr \<notin> set (prop_list (adds (at_start (act m))))" using set_prop_list by simp
+        hence all_0: "\<forall>n. (PropClock pr, n) \<in> set (at_start_effects (act m)) \<longrightarrow> n = 0" 
+          unfolding at_start_effects_def effects_def add_effects_def del_effects_def by fastforce
+        
+        consider "pr \<notin> Q" | "pr \<in> dels (at_start (act m))" using False  by blast
+        thus ?thesis 
+        proof cases
+          case 1
+          with prop_model pr_in_props
+          have "W (PropClock pr) = 0" unfolding prop_model_def by blast
+          with all_0 False
+          show ?thesis using clock_set_all_cases[of "PropClock pr" "at_start_effects (act m)" 0 W] 
+            unfolding W'_def by auto
+        next
+          case 2
+          have "(dels (at_start (act m))) - (adds (at_start (act m))) \<subseteq> props" using m_in_acts wf_acts by auto
+          with 2 not_in_adds
+          have "pr \<in> set (prop_list (dels (at_start (act m)) - (adds (at_start (act m)))))" 
+            using set_prop_list by auto
+          hence "(PropClock pr, 0) \<in> set (at_start_effects (act m))" unfolding at_start_effects_def effects_def del_effects_def by auto
+          with all_0 False
+          show ?thesis using clock_set_certain[of "PropClock pr" "at_start_effects (act m)" 0] 
+            unfolding W'_def by auto
+        qed
+      qed
+      ultimately
+      show ?thesis unfolding prop_model_def by auto
+    qed
+    moreover
+    have "\<forall>i\<ge>Suc m. i < M \<longrightarrow> exec_corr W' (ES (time_index l)) (act i)" 
+     and "\<forall>i<Suc m. exec_corr W' (IES (time_index l)) (act i)" 
+    proof -
+      have r_invs: "W' (Running (act i)) = W (Running (act i))" if "i < m \<or> ((Suc m) \<le> i \<and> i < M)" for i
+      proof -
+        have "act m \<noteq> act i" using act_inj_on_spec[of m i] that m by auto
+        thus ?thesis unfolding W'_def at_start_effects_def effects_def add_effects_def del_effects_def
+          by (auto intro: clock_set_none)
+      qed
+      thus "\<forall>i\<ge>Suc m. i < M \<longrightarrow> exec_corr W' (ES (time_index l)) (act i)" using exec_corr by simp
+      have "W' (Running (act m)) = 1" unfolding W'_def at_start_effects_def effects_def add_effects_def del_effects_def by simp
+      moreover 
+      have "act m \<in> IES (time_index l)" using a m_in_acts unfolding happ_at_def exec_state_sequence'_def by auto
+      ultimately
+      have m_c: "exec_corr W' (IES (time_index l)) (act m)" by simp
+      have "exec_corr W' (IES (time_index l)) (act i)" if "i < Suc m" for i 
+      proof -
+        from that
+        consider "i = m" | "i < m" by linarith
+        thus ?thesis using r_invs exec_corr' m_c
+          by cases auto
+      qed
+      thus "\<forall>i<Suc m. exec_corr W' (IES (time_index l)) (act i)" by blast
+    qed
+    moreover
+    have "\<forall>i<Suc m. W' (StartDur (act i)) = exec_time' (at_start (act i)) (time_index l)"
+     and "\<forall>i<Suc m. W' (EndDur (act i)) = exec_time' (at_end (act i)) (time_index l)"
+    proof -
+      have "W' (StartDur (act i)) = W (StartDur (act i))" if "i < m" for i
+      proof -
+        have "act m \<noteq> act i" using act_inj_on_spec that m by fastforce
+        thus ?thesis unfolding W'_def at_start_effects_def effects_def add_effects_def del_effects_def
+          by (auto intro: clock_set_none)
+      qed
+      moreover
+      have "W' (StartDur (act m)) = exec_time' (at_start (act m)) (time_index l)"
+      proof -
+        have "W' (StartDur (act m)) = 0" unfolding W'_def at_start_effects_def effects_def del_effects_def add_effects_def
+          using clock_set_certain by auto
+        thus ?thesis by (simp add: a(1) a_in_b_last_now exec_time'_def)
+      qed
+      ultimately
+      show "\<forall>i<Suc m. W' (StartDur (act i)) = exec_time' (at_start (act i)) (time_index l)" using start_durs'
+        using less_Suc_eq by presburger
+      have "\<forall>i < Suc m. W' (EndDur (act i)) = W (EndDur (act i))"
+        using that unfolding W'_def at_start_effects_def effects_def add_effects_def del_effects_def 
+        by (auto intro: clock_set_none)
+      moreover 
+      have "W (EndDur (act m)) = exec_time' (at_end (act m)) (time_index l)" using a(1) end_durs 
+        by (simp add: a(2) a_not_in_b_last_unchanged exec_time'_def exec_time_def m)
+      ultimately
+      show "\<forall>i<Suc m. W' (EndDur (act i)) = exec_time' (at_end (act i)) (time_index l)" using end_durs'
+        using less_Suc_eq by presburger
+    qed
+    moreover
+    have "(\<forall>i\<ge>Suc m. i < M \<longrightarrow> W' (StartDur (act i)) = exec_time (at_start (act i)) (time_index l))
+      \<and> (\<forall>i\<ge>Suc m. i < M \<longrightarrow> W' (EndDur (act i)) = exec_time (at_end (act i)) (time_index l))"
+    proof -
+      have "W' (StartDur (act i)) = W (StartDur (act i)) \<and> W' (EndDur (act i)) = W (EndDur (act i))" if "i \<ge> Suc m \<and> i < M" for i
+      proof -
+        have "act i \<noteq> act m" using that m act_inj_on_spec by fastforce
+        thus ?thesis unfolding W'_def at_start_effects_def effects_def add_effects_def del_effects_def 
+        by (auto intro: clock_set_none)
+      qed
+      thus ?thesis using start_durs end_durs by simp
+    qed
+    moreover
+    have W'_invs: "\<forall>c. is_execution_invariant_clock c \<longrightarrow> W c = W' c"
+      apply (rule allI)
+      subgoal for c
+        unfolding W'_def
+        apply (cases c rule: is_snap_dec_clock.cases)
+        subgoal for s 
+          using clock_set_none[of "SchedStartSnap s" "at_start_effects (act m)"]
+          unfolding at_start_effects_def effects_def add_effects_def del_effects_def 
+          by fastforce
+        subgoal for s
+          using clock_set_none[of "SchedEndSnap s" "at_start_effects (act m)"]
+          unfolding at_start_effects_def effects_def add_effects_def del_effects_def 
+          by fastforce
+        subgoal 
+          using clock_set_none[of "Delta" "at_start_effects (act m)"]
+          unfolding at_start_effects_def effects_def add_effects_def del_effects_def 
+          by fastforce
+        subgoal
+          using clock_set_none[of "Stop" "at_start_effects (act m)"]
+          unfolding at_start_effects_def effects_def add_effects_def del_effects_def 
+          by fastforce
+        by auto
+      done
+    moreover
+    have "\<T> e \<turnstile> \<langle>Execution (at_start (act m)), W\<rangle> \<rightarrow>* \<langle>Execution (at_start (act (Suc m))), W'\<rangle>"
+    proof (rule steps.step[OF _ steps.step[OF _ steps.refl]])
+      show "\<T> e \<turnstile> \<langle>Execution (at_start (act m)), W\<rangle> \<rightarrow> \<langle>Execution (at_end (act m)), W'\<rangle>"
+      proof (rule step_a[where a = Unit], rule step_a.intros[where s = "at_start_effects (act m)"])
+        show "\<T> e \<turnstile> Execution (at_start (act m)) \<longrightarrow>\<^bsup>EQ (SchedStartSnap (act m)) 1,Unit,at_start_effects (act m)\<^esup> Execution (at_end (act m))" 
+          unfolding execution_automaton_def trans_of_def execution_def using m by auto
+        have "act m \<in> actions" using m act_img_actions by blast
+        show "W \<turnstile> EQ (SchedStartSnap (act m)) 1" 
+          using s_snap_sched_corr \<open>act m \<in> actions\<close> a(1) unfolding start_snap_sched_corr_def a by blast
+        have "W' Stop = 0" using W'_invs stop by auto
+        thus "W' \<turnstile> inv_of \<T> e (Execution (at_end (act m)))" unfolding inv_of_def execution_automaton_def by auto
+        thus "W' = [at_start_effects (act m)]W" using W'_def by simp
+      qed
+      show "\<T> e \<turnstile> \<langle>Execution (at_end (act m)), W'\<rangle> \<rightarrow> \<langle>Execution (at_start (act (Suc m))),W'\<rangle>"
+      proof (rule step_a[where a = Unit], rule step_a.intros[where g = "EQ (SchedEndSnap (act m)) 0" and s = "[]"])
+        show "\<T> e \<turnstile> Execution (at_end (act m)) \<longrightarrow>\<^bsup>EQ (SchedEndSnap (act m)) 0,Unit,[]\<^esup> Execution (at_start (act (Suc m)))"
+          unfolding execution_automaton_def trans_of_def execution_def using m by auto
+        have "W' (SchedEndSnap (act m)) = 0" using e_snap_sched_corr \<open>act m \<in> actions\<close> a(2) W'_invs unfolding end_snap_sched_corr_def by simp
+        thus "W' \<turnstile> EQ (SchedEndSnap (act m)) 0" by blast
+        have "W' Stop = 0" using W'_invs stop by auto
+        thus "W' \<turnstile> inv_of \<T> e (Execution (at_start (act (Suc m))))" unfolding inv_of_def execution_automaton_def by auto
+        thus "W' = [[]]W'" by simp
+      qed
+    qed
+    ultimately
+    show ?thesis by blast
+  next 
+    assume "at_start (act m) \<notin> B (time_index l)" "at_end (act m) \<in> B (time_index l)"
+    thus ?thesis sorry
+  next 
+    assume "at_start (act m) \<notin> B (time_index l)" "at_end (act m) \<notin> B (time_index l)"
+    thus ?thesis sorry
+  qed
 qed
 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
