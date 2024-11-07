@@ -4,7 +4,7 @@ begin
   
 section \<open>Time\<close>
 
-class time = wellorder + ordered_ab_group_add + zero_neq_one +
+class time = wellorder + ordered_ab_group_add + zero_less_one +
   assumes dense: "x < y \<Longrightarrow> \<exists>z. x < z \<and> z < y"
   assumes non_trivial: "\<exists> x. x \<noteq> 0"
 begin
@@ -35,7 +35,5 @@ lemma ge_least_gt_0: "Least ((<) 0) \<le> x \<Longrightarrow> 0 < x" using least
 lemma GreatestI_ex_time: "\<exists>t. P t \<Longrightarrow> P (Greatest P)"
   using least_time_gt_0 local.dense local.not_less_Least by auto
 
-
 end
-
 end
