@@ -248,6 +248,11 @@ lemma clock_set_none:
   shows "(clock_set xs W) c = W c"
   using assms
   by (induction xs, auto)
+
+lemma clock_set_append_other:
+  assumes "x \<noteq> y"
+  shows "(clock_set ((y, a)#xs) W)x = (clock_set xs W) x"
+  using fun_upd_other assms by simp
       
 
 definition le_ta::"('a, 'c, 't::time, 's) ta \<Rightarrow> ('a, 'c, 't, 's) ta \<Rightarrow> bool" where
