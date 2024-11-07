@@ -73,6 +73,9 @@ lemma mutex_snap_action_symm: "mutex_snap_action a b \<Longrightarrow> mutex_sna
   unfolding mutex_snap_action_def
   by (erule disjE; blast)+
 
+abbreviation snaps::"'action \<Rightarrow> 'snap_action set" where
+"snaps a \<equiv> {at_start a, at_end a}"
+
 definition snap_actions::"'snap_action set" where
 "snap_actions \<equiv> (at_start ` actions) \<union> (at_end ` actions)"
 
@@ -117,15 +120,29 @@ subsubsection \<open>Generalising \<open>\<epsilon>\<close> and \<open>0\<close>
 definition \<delta>::"'time" where
 "\<delta> \<equiv> (if (\<epsilon> = 0) then LEAST n. n > 0 else \<epsilon>)"
 
-lemma "\<epsilon> = 0 \<Longrightarrow> x \<ge> \<delta> \<longleftrightarrow> x > 0"
+lemma delta_0: "\<epsilon> = 0 \<Longrightarrow> x \<ge> \<delta> \<longleftrightarrow> x > 0"
   unfolding \<delta>_def
   apply simp
   apply (rule iffI)
   using Least_le ge_least_gt_0 
   by auto
 
-lemma "\<epsilon> > 0 \<Longrightarrow> x \<ge> \<delta> \<longleftrightarrow> x \<ge> \<epsilon>"
+lemma delta_0': "\<epsilon> = 0 \<Longrightarrow> x < \<delta> \<longleftrightarrow> x \<le> 0"
+  unfolding \<delta>_def
+  apply simp
+  by (meson least_time_gt_0 linorder_le_less_linear not_less_Least order_le_less_trans)
+
+lemma delta_eps: "\<epsilon> > 0 \<Longrightarrow> x \<ge> \<delta> \<longleftrightarrow> x \<ge> \<epsilon>"
   unfolding \<delta>_def by auto
+
+lemma delta_eps': "\<epsilon> > 0 \<Longrightarrow> x < \<delta> \<longleftrightarrow> x < \<epsilon>"
+  unfolding \<delta>_def by auto
+
+lemma epsE: 
+  assumes "\<epsilon> = 0 \<Longrightarrow> thesis"
+      and "\<epsilon> > 0 \<Longrightarrow> thesis"
+    shows thesis using assms eps_range by fastforce
+
 end
 
 
