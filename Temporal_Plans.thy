@@ -54,7 +54,7 @@ locale temp_planning_problem =
       and action_numbering: "bij_betw act {n. n < card actions} actions"
       and some_props:       "card props > 0"
       and some_actions:     "card actions > 0"
-      and eps_range:        "0 \<le> \<epsilon>"
+      and eps_range:        "0 < \<epsilon>"
 begin 
 
 text \<open>Some additional definitions\<close>
@@ -115,34 +115,6 @@ lemma props_pred: fixes P
 lemma p_dom: "n < card props \<Longrightarrow> p n \<in> props" 
   using p_img_props by blast
 
-
-subsubsection \<open>Generalising \<open>\<epsilon>\<close> and \<open>0\<close>-separation plan-validity\<close>
-definition \<delta>::"'time" where
-"\<delta> \<equiv> (if (\<epsilon> = 0) then LEAST n. n > 0 else \<epsilon>)"
-
-lemma delta_0: "\<epsilon> = 0 \<Longrightarrow> x \<ge> \<delta> \<longleftrightarrow> x > 0"
-  unfolding \<delta>_def
-  apply simp
-  apply (rule iffI)
-  using Least_le ge_least_gt_0 
-  by auto
-
-lemma delta_0': "\<epsilon> = 0 \<Longrightarrow> x < \<delta> \<longleftrightarrow> x \<le> 0"
-  unfolding \<delta>_def
-  apply simp
-  by (meson least_time_gt_0 linorder_le_less_linear not_less_Least order_le_less_trans)
-
-lemma delta_eps: "\<epsilon> > 0 \<Longrightarrow> x \<ge> \<delta> \<longleftrightarrow> x \<ge> \<epsilon>"
-  unfolding \<delta>_def by auto
-
-lemma delta_eps': "\<epsilon> > 0 \<Longrightarrow> x < \<delta> \<longleftrightarrow> x < \<epsilon>"
-  unfolding \<delta>_def by auto
-
-lemma epsE: 
-  assumes "\<epsilon> = 0 \<Longrightarrow> thesis"
-      and "\<epsilon> > 0 \<Longrightarrow> thesis"
-    shows thesis using assms eps_range by fastforce
-
 end
 
 
@@ -189,7 +161,7 @@ snap-actions. Moreover, in their definition of a planning problem, the assumptio
 no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at_end(b) and at-start(a) \<noteq> at-end(a).\<close>
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_happ_seq B \<equiv> 
-  \<forall>t u a b. (t - u < \<delta> \<and> u - t < \<delta> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
+  \<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
     \<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b) 
     \<and> (a = b \<longrightarrow> t = u))"
 
@@ -272,8 +244,8 @@ definition valid_plan::"bool" where
 "valid_plan \<equiv> \<exists>M. 
     valid_state_sequence M
     \<and> no_self_overlap
-    \<and> (M 0) = init
-    \<and> (M (length htpl - 1)) = goal
+    \<and> M 0 = init
+    \<and> M (length htpl) = goal
     \<and> plan_actions_in_problem
     \<and> durations_positive
     \<and> durations_valid"
@@ -282,7 +254,6 @@ end
 
 context temporal_plan
 begin           
-
 
 definition finite_plan::bool where
 "finite_plan \<equiv> finite (dom \<pi>)"

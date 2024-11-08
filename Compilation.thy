@@ -55,7 +55,7 @@ proof -
   thus ?thesis unfolding prop_list_def by simp
 qed
 
-text \<open>The transition from the initial location \<open>l\<^sub>I\<close> to the main location \<open>l\<^sub>\<delta>\<close>\<close>
+text \<open>The transition from the initial location \<open>l\<^sub>I\<close> to the main location \<open>l\<^sub>\<epsilon>\<close>\<close>
 definition init_pos::"'proposition list" where
 "init_pos \<equiv> prop_list init"
 
@@ -65,7 +65,7 @@ definition init_asmt::"(('proposition, 'action) clock, 'time) clkassn list" wher
 definition initial_transition::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition" where
 "initial_transition \<equiv> (Init, true_const, Unit, init_asmt, Main)"
 
-text \<open>The transition from the main location \<open>l\<^sub>\<delta>\<close> to the \<open>0\<^sup>t\<^sup>h\<close> location of the location decoding path \<open>s\<^sub>0\<close>.\<close>
+text \<open>The transition from the main location \<open>l\<^sub>\<epsilon>\<close> to the \<open>0\<^sup>t\<^sup>h\<close> location of the location decoding path \<open>s\<^sub>0\<close>.\<close>
 definition main_to_decoding::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition" where
 "main_to_decoding \<equiv> (Main, true_const, Unit, [(Stop, 0)], PropDecoding (p 0))"
 
@@ -102,13 +102,13 @@ definition interfering_at_start::"'snap_action \<Rightarrow> nat list" where
 "interfering_at_start a = sorted_list_of_set {n. n < M \<and> (mutex_snap_action a (at_start (act n)) \<or> a = at_start (act n))}"
 
 definition start_constraints::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
-"start_constraints a = map (\<lambda>b. GE (StartDur (act b)) \<delta>) (interfering_at_start a)"
+"start_constraints a = map (\<lambda>b. GE (StartDur (act b)) \<epsilon>) (interfering_at_start a)"
 
 definition interfering_at_end::"'snap_action \<Rightarrow> nat list" where
 "interfering_at_end a = sorted_list_of_set {n. n < M \<and> (mutex_snap_action a (at_end (act n)) \<or> a = at_end (act n))}"
 
 definition end_constraints::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
-"end_constraints a = map (\<lambda>b. GE (EndDur (act b)) \<delta>) (interfering_at_end a)"
+"end_constraints a = map (\<lambda>b. GE (EndDur (act b)) \<epsilon>) (interfering_at_end a)"
 
 definition sep::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
 "sep a \<equiv> AND_ALL (start_constraints a @ end_constraints a)"
@@ -148,7 +148,7 @@ definition decision_making::"(alpha, ('proposition, 'action) clock, 'time, ('pro
   \<union> {(Decision (at_end (act m)), true_const, Unit, [(SchedEndSnap (act m), 0)], Decision (at_start (act (Suc m)))) | m. m < M}"
 
 definition dm_to_exec::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition" where
-"dm_to_exec \<equiv> (Decision (at_end (act M)), true_const, Unit, [], Execution (at_start (act 0)))"
+"dm_to_exec \<equiv> (Decision (at_start (act M)), true_const, Unit, [], Execution (at_start (act 0)))"
 
 subsubsection \<open>Execution\<close>
 
@@ -189,7 +189,7 @@ definition over_all_conds::"(('proposition, 'action) clock, 'time) dconstraint" 
 "over_all_conds \<equiv> AND_ALL (map action_over_all action_list)"
 
 definition exec_to_main::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition" where
-"exec_to_main \<equiv> (Execution (at_end (act M)), over_all_conds, Unit, [(Delta, 0)], Main)"
+"exec_to_main \<equiv> (Execution (at_start (act M)), over_all_conds, Unit, [(Delta, 0)], Main)"
 
 subsubsection \<open>The goal\<close>
 definition none_running::"(('proposition, 'action) clock, 'time) dconstraint" where
@@ -417,9 +417,9 @@ proof -
       s': "(s', at_end a) \<in> plan_happ_seq" 
       "s \<le> s' \<and> s' < t" by auto
   
-    then obtain \<tau> \<delta> where
-      \<tau>: "(a, \<tau>, \<delta>) \<in> ran \<pi>"
-      "s' = \<tau> + \<delta>"
+    then obtain \<tau> \<epsilon> where
+      \<tau>: "(a, \<tau>, \<epsilon>) \<in> ran \<pi>"
+      "s' = \<tau> + \<epsilon>"
       using at_end_in_happ_seqE assms by blast
 
     hence "(\<tau>, at_start a) \<in> plan_happ_seq" unfolding plan_happ_seq_def by blast
@@ -429,17 +429,17 @@ proof -
     proof cases
       case 1
       with s'(2) s(2) \<tau>(2)
-      have "\<tau> = s \<longrightarrow> \<delta> \<noteq> d" by blast
+      have "\<tau> = s \<longrightarrow> \<epsilon> \<noteq> d" by blast
       with no_self_overlap[THEN no_self_overlap_spec, OF \<tau>(1) s(1)] 1 s'(2) \<tau>(2) 
       show ?thesis by blast
     next
       case 2
-      from \<open>s \<le> s' \<and> s' < t\<close>[simplified \<open>t = s + d\<close> \<open>s' = \<tau> + \<delta>\<close>] 
-        durations_positive[simplified durations_positive_def] \<open>(a, \<tau>, \<delta>) \<in> ran \<pi>\<close>
+      from \<open>s \<le> s' \<and> s' < t\<close>[simplified \<open>t = s + d\<close> \<open>s' = \<tau> + \<epsilon>\<close>] 
+        durations_positive[simplified durations_positive_def] \<open>(a, \<tau>, \<epsilon>) \<in> ran \<pi>\<close>
       have "\<tau> \<le> s + d" by (meson less_add_same_cancel1 order_le_less_trans order_less_imp_le)
       moreover
       from 2 s'(2) s(2) \<tau>(2)
-      have "\<tau> = s \<longrightarrow> \<delta> \<noteq> d" by blast
+      have "\<tau> = s \<longrightarrow> \<epsilon> \<noteq> d" by blast
       ultimately 
       show ?thesis using 2 no_self_overlap[THEN no_self_overlap_spec, OF s(1) \<tau>(1)] by blast
     qed
@@ -479,7 +479,7 @@ qed
 subsubsection \<open>Execution time\<close>
 
 definition pt::"'snap_action \<Rightarrow> ('time \<Rightarrow> 'time \<Rightarrow> bool) \<Rightarrow> 'time \<Rightarrow> 'time" where
-"pt a c t \<equiv> if (\<exists>t'. c t' t \<and> a \<in> B t') then (Greatest (\<lambda>t'. c t' t \<and> a \<in> B t')) else (Least (\<lambda>t'. B t' \<noteq> {}) - \<delta>)"
+"pt a c t \<equiv> if (\<exists>t'. c t' t \<and> a \<in> B t') then (Greatest (\<lambda>t'. c t' t \<and> a \<in> B t')) else (Least (\<lambda>t'. B t' \<noteq> {}) - \<epsilon>)"
 
 abbreviation last_snap_exec::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
 "last_snap_exec a t \<equiv> pt a (<) t"
@@ -587,32 +587,32 @@ lemma exec_time_and_epsilon:
       and s_at_t: "s \<in> B t"
       and mutex: "mutex_snap_action s b \<or> s = b"
       and finite_plan: finite_plan
-    shows "exec_time b t \<ge> \<delta>"
+    shows "exec_time b t \<ge> \<epsilon>"
 proof (cases "\<exists>u < t. b \<in> B u")
   case True
   have b_at_t': "(\<lambda>u. u < t \<and> b \<in> B u) (last_snap_exec b t)" (is "?t < t \<and> b \<in> B ?t")
-    unfolding pt_def using GreatestI_ex_time[OF True] by auto
-  have nm_cond: "t - ?t < \<delta> \<and> ?t - t < \<delta> \<and> s \<in> (B t) \<and> b \<in> (B ?t) 
+    unfolding pt_def sorry
+  have nm_cond: "t - ?t < \<epsilon> \<and> ?t - t < \<epsilon> \<and> s \<in> (B t) \<and> b \<in> (B ?t) 
     \<longrightarrow> ((s \<noteq> b \<longrightarrow> \<not>mutex_snap_action s b) \<and> (s = b \<longrightarrow> t = ?t))" using nm nm_happ_seq_def by blast
   hence "\<not>(s \<noteq> b \<longrightarrow> \<not>mutex_snap_action s b) \<or> \<not>(s = b \<longrightarrow> t = ?t)
-    \<longrightarrow> t - ?t \<ge> \<delta> \<or> ?t - t \<ge> \<delta> \<or> s \<notin> (B t) \<or> b \<notin> (B ?t)" by auto
+    \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon> \<or> s \<notin> (B t) \<or> b \<notin> (B ?t)" by auto
   hence "\<not>(s \<noteq> b \<longrightarrow> \<not>mutex_snap_action s b) \<or> \<not>(s = b \<longrightarrow> t = ?t)
-    \<longrightarrow> t - ?t \<ge> \<delta> \<or> ?t - t \<ge> \<delta>"  using s_at_t b_at_t' by blast
+    \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  using s_at_t b_at_t' by blast
   hence "(s \<noteq> b \<and> mutex_snap_action s b) \<or> (s = b \<and> t \<noteq> ?t)
-    \<longrightarrow> t - ?t \<ge> \<delta> \<or> ?t - t \<ge> \<delta>"  by blast
+    \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  by blast
   moreover
   have "s \<noteq> b \<longrightarrow> mutex_snap_action s b" using mutex by blast
   moreover
   have "t \<noteq> ?t" using b_at_t' by auto
   ultimately
-  consider "t - ?t \<ge> \<delta>" | "?t - t \<ge> \<delta>" by auto
+  consider "t - ?t \<ge> \<epsilon>" | "?t - t \<ge> \<epsilon>" by auto
   note c = this
   
   have "t > ?t" using b_at_t' by blast
   moreover
-  have "\<delta> \<ge> 0" using \<delta>_def eps_range least_time_gt_0 less_le_not_le by fastforce
+  have "\<epsilon> \<ge> 0" using eps_range less_le_not_le by fastforce
   ultimately 
-  have "t - ?t \<ge> \<delta>"  apply (cases rule: c) apply blast using order.trans by fastforce
+  have "t - ?t \<ge> \<epsilon>"  apply (cases rule: c) apply blast using order.trans by fastforce
   thus ?thesis using exec_time_def by auto
 next
   case False
@@ -630,7 +630,7 @@ next
     thus "B (time_index 0) \<noteq> {}" using a_in_B_iff_t_in_htps by auto
   qed
   ultimately
-  have "t - last_snap_exec b t \<ge> \<delta>" using s_at_t False unfolding pt_def by auto
+  have "t - last_snap_exec b t \<ge> \<epsilon>" using s_at_t False unfolding pt_def by auto
   thus ?thesis unfolding exec_time_def by simp
 qed
 
@@ -675,6 +675,24 @@ lemma exec_time_sat_dur_const:
     shows "satisfies_duration_bounds a (exec_time (at_start a) t)"
   using exec_time_and_duration[OF assms(1,2,3,4,5)] \<open>durations_valid\<close>[simplified durations_valid_def]
   by blast
+
+lemma exec_time_at_init:
+  assumes fp: finite_plan
+    and some_happs: "0 < card htps"
+  shows "exec_time b (time_index 0) = \<epsilon>"
+proof -
+  have "\<forall>i < card htps. time_index 0 \<le> time_index i" using time_index_sorted_set by blast
+  hence "\<forall>t \<in> htps. time_index 0 \<le> t" using time_index_img_set[OF fp] by force
+  hence "\<not>(\<exists>s \<in> htps. s < time_index 0)" by auto
+  hence 1: "\<not>(\<exists>s < time_index 0. B s \<noteq> {})" unfolding happ_at_def plan_happ_seq_def htps_def by blast
+  
+  have "time_index 0 \<in> htps" using time_index_img_set[OF fp]  using some_happs by blast
+  hence "B (time_index 0) \<noteq> {}" unfolding happ_at_def plan_happ_seq_def unfolding htps_def by blast
+  with 1
+  have "Least (\<lambda>t'. B t' \<noteq> {}) = time_index 0" by (meson Least_equality not_le_imp_less)
+  with 1
+  show ?thesis unfolding exec_time_def pt_def by (auto simp: Let_def)
+qed 
 
 subsubsection \<open>Restricting snap action sets by an upper limit on the index\<close>
 
@@ -1290,8 +1308,8 @@ proof -
         hence b_in_act: "act b \<in> actions" unfolding interfering_at_start_def using act_img_actions by auto
         have "b \<in> {n. n < M \<and> (mutex_snap_action snap (at_start (act n)) \<or> snap = at_start (act n))}" 
           using b unfolding interfering_at_start_def by auto
-        hence "\<delta> \<le> exec_time (at_start (act b)) (time_index l)" using exec_time_and_epsilon[OF nm snap_in_B _ fpl] by blast
-        hence "W \<turnstile> dconstraint.GE (StartDur (act b)) \<delta>" using start_durs[THEN bspec, OF b_in_act] by auto
+        hence "\<epsilon> \<le> exec_time (at_start (act b)) (time_index l)" using exec_time_and_epsilon[OF nm snap_in_B _ fpl] by blast
+        hence "W \<turnstile> dconstraint.GE (StartDur (act b)) \<epsilon>" using start_durs[THEN bspec, OF b_in_act] by auto
       }
       hence "list_all (clock_val W) (start_constraints snap)" 
         unfolding start_constraints_def
@@ -1303,8 +1321,8 @@ proof -
         hence b_in_act: "act b \<in> actions" unfolding interfering_at_end_def using act_img_actions by auto
         have "b \<in> {n. n < M \<and> (mutex_snap_action snap (at_end (act n)) \<or> snap = at_end (act n))}" 
           using b unfolding interfering_at_end_def by auto
-        hence "\<delta> \<le> exec_time (at_end (act b)) (time_index l)" using exec_time_and_epsilon[OF nm snap_in_B _ fpl] by blast
-        hence "W \<turnstile> dconstraint.GE (EndDur (act b)) \<delta>" using end_durs b_in_act by auto
+        hence "\<epsilon> \<le> exec_time (at_end (act b)) (time_index l)" using exec_time_and_epsilon[OF nm snap_in_B _ fpl] by blast
+        hence "W \<turnstile> dconstraint.GE (EndDur (act b)) \<epsilon>" using end_durs b_in_act by auto
       }
       hence "list_all (clock_val W) (end_constraints snap)" 
         unfolding end_constraints_def
@@ -2450,9 +2468,7 @@ proof -
         apply (rule impI)
         apply (elim conjE)
         using nm[simplified nm_happ_seq_def] unfolding happ_at_def 
-        apply (cases rule: epsE)
-        using delta_0' apply auto[1]
-        using delta_eps' by force
+        using eps_range by force
       done
     moreover
     have "\<forall>a\<in>actions. \<not> (at_start a \<in> B (time_index l) \<and> at_end a \<in> B (time_index l))" using executing_when_ending not_executing_when_starting assms by blast
@@ -2570,7 +2586,7 @@ lemma return_to_main:
   and nso: no_self_overlap
   and dp: durations_positive 
   and fp: finite_plan
-    shows "\<T> \<turnstile> \<langle>Execution (at_end (act M)), W\<rangle> \<rightarrow>* \<langle>Main, W(Delta:=0)\<rangle>"
+    shows "\<T> \<turnstile> \<langle>Execution (at_start (act M)), W\<rangle> \<rightarrow>* \<langle>Main, W(Delta:=0)\<rangle>"
 proof -
   have over_all: "W \<turnstile> action_over_all a" if a_in_actions: "a \<in> actions" for a 
   proof (cases "a \<in> IES (time_index l)")
@@ -2633,8 +2649,8 @@ proof -
       subgoal for p
         apply (drule bspec[where x = p])
          apply assumption
-        apply (erule disjE) 
-        by auto
+        apply (erule disjE) by auto
+        
       done
     thus ?thesis unfolding action_over_all_def AND_ALL_iff list_all_iff
       by simp
@@ -2658,6 +2674,221 @@ proof -
     using sat_conds stop by auto
 qed
 
+term valid_plan
+
+lemma instant_execution_cycle:
+  assumes l_len: "l < length htpl" 
+      and prop_clocks: "prop_model W (MS l)"
+      and exec_clocks: "exec_model W (ES (time_index l))"
+      and start_durs: "\<forall>a \<in> actions. W (StartDur a) + d = exec_time (at_start a) (time_index l) "
+      and end_durs: "\<forall>a \<in> actions. W (EndDur a) + d = exec_time (at_end a) (time_index l)"
+      and time_d: "0 \<le> d"
+      and stop: "W Stop = 0"
+      and delta_clock: "W Delta = 0"
+      and vss: "valid_state_sequence MS"
+      and nso: no_self_overlap
+      and pap: plan_actions_in_problem
+      and dp: durations_positive
+      and dv: durations_valid
+      and nm: "nm_happ_seq plan_happ_seq"
+      and fpl: finite_plan
+  shows "\<exists>W'. \<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>Main, W'\<rangle> 
+    \<and> prop_model W' (MS (Suc l))
+    \<and> exec_model W' (IES (time_index l))
+    \<and> (\<forall>a \<in> actions. W' (StartDur a) = exec_time' (at_start a) (time_index l))
+    \<and> (\<forall>a \<in> actions. W' (EndDur a) = exec_time' (at_end a) (time_index l))
+    \<and> W' Stop = 0
+    \<and> W' Delta = 0"
+proof -                            
+  define W_delta where "W_delta = W \<oplus> d"
+
+
+  have W_delta_trans: "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>\<^bsup>d\<^esup> \<langle>Main,W_delta\<rangle>"
+    unfolding W_delta_def
+    apply (rule step_t.intros)
+    unfolding inv_of_def prob_automaton_def cval_add_def 
+    using time_d stop by auto
+
+  have W_delta_steps: "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>Main,W_delta\<rangle>"
+    using W_delta_trans[THEN step_t, THEN steps_step] .
+  
+  from main_loc_delta_prop_model main_loc_delta_exec_model W_delta_trans delta_clock prop_clocks exec_clocks
+  have W_delta_prop: "delta_prop_model W_delta (MS l)"
+   and W_delta_exec: "delta_exec_model W_delta (ES (time_index l))"
+    by blast+
+
+  have W_delta_other: "\<forall>c. W_delta c = W c + d" 
+    unfolding W_delta_def cval_add_def by simp
+
+  define W_delta_0 where "W_delta_0 = W_delta(Stop:=0)"
+  have main_to_bool: "\<T> \<turnstile> \<langle>Main, W_delta\<rangle> \<rightarrow>* \<langle>PropDecoding (p 0),W_delta_0\<rangle>"
+    unfolding W_delta_0_def
+    apply (rule steps_step)
+    apply (rule step_a)
+    apply (rule step_a.intros)
+    unfolding prob_automaton_def main_to_decoding_def trans_of_def
+       apply auto[1]
+    using W_delta_other stop unfolding true_const_def using time_d apply auto[1]
+    unfolding inv_of_def by auto
+
+  from W_delta_other
+  have W_delta_0_other: "\<forall>c. c \<noteq> Stop \<longrightarrow> W_delta_0 c = W c + d" unfolding W_delta_0_def by simp
+
+  from W_delta_0_def
+  have W_delta_0_stop: "W_delta_0 Stop = 0" by simp
+
+  from W_delta_0_def W_delta_prop W_delta_exec 
+  have W_delta_0_prop: "delta_prop_model W_delta_0 (MS l)"
+   and W_delta_0_exec: "delta_exec_model W_delta_0 (ES (time_index l))" unfolding delta_prop_model_def delta_exec_model_def 
+    by auto
+
+  from W_delta_0_prop W_delta_0_exec W_delta_0_stop 
+  obtain W_decoded where
+    W_decoded_trans: "\<T> \<turnstile> \<langle>PropDecoding (p 0), W_delta_0\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W_decoded\<rangle>"
+    and W_decoded_prop: "prop_model W_decoded (MS l)"
+    and W_decoded_exec: "exec_model W_decoded (ES (time_index l))"
+    and W_decoded_other: "\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W_delta_0 c = W_decoded c"
+    using boolean_state_decoding by blast
+
+  from W_decoded_other W_delta_0_stop
+  have W_decoded_stop: "W_decoded Stop = 0" by simp
+
+  from W_decoded_other W_delta_0_other
+  have W_decoded_other: "\<forall>c. c \<noteq> Stop \<and> \<not>(is_boolean_clock c) \<longrightarrow> W_decoded c = W c + d" by fastforce
+
+  from W_decoded_other start_durs end_durs
+  have W_decoded_start_durs:"\<forall>a \<in> actions. W_decoded (StartDur a) = exec_time (at_start a) (time_index l)"
+   and W_decoded_end_durs: "\<forall>a \<in> actions. W_decoded (EndDur a) = exec_time (at_end a) (time_index l)" 
+    by auto
+
+  have bool_to_dec: "\<T> \<turnstile> \<langle>ExecDecoding (act M), W_decoded\<rangle> \<rightarrow>* \<langle>Decision (at_start (act 0)), W_decoded\<rangle>"
+    apply (rule steps_step)
+    apply (rule step_a)
+    apply (rule step_a.intros)
+    unfolding trans_of_def
+    unfolding prob_automaton_def 
+    unfolding exec_decoding_to_decision_making_def
+       apply auto[1]
+    unfolding true_const_def inv_of_def using W_decoded_stop by auto
+
+  from decision_making[OF l_len vss W_decoded_prop W_decoded_exec 
+      _ _ 
+      W_decoded_stop nm fpl nso dp dv pap] W_decoded_start_durs W_decoded_end_durs
+  obtain W_decided where
+    W_decided_trans: "\<T> \<turnstile> \<langle>Decision (at_start (act 0)), W_decoded\<rangle> \<rightarrow>* \<langle>Decision (at_start (act M)), W_decided\<rangle>" 
+    and W_decided_sched: "snap_exec_sched_corr W_decided (B (time_index l))"
+    and W_decided_other: "\<forall>c. \<not>(is_snap_dec_clock c) \<longrightarrow> W_decoded c = W_decided c"
+    by blast
+
+  from W_decided_other W_decoded_stop
+  have W_decided_stop: "W_decided Stop = 0" by simp
+
+  from W_decided_other W_decoded_start_durs W_decoded_end_durs
+  have W_decided_start_durs: "\<forall>a \<in> actions. W_decided (StartDur a) = exec_time (at_start a) (time_index l)"
+   and W_decided_end_durs: "\<forall>a \<in> actions. W_decided (EndDur a) = exec_time (at_end a) (time_index l)"
+    by auto
+
+  from W_decided_other W_decoded_prop W_decoded_exec
+  have W_decided_prop: "prop_model W_decided (MS l)"
+   and W_decided_exec: "exec_model W_decided (ES (time_index l))" 
+    unfolding prop_model_def exec_model_def by simp+
+
+  have dec_to_exec: "\<T> \<turnstile> \<langle>Decision (at_start (act M)), W_decided\<rangle> \<rightarrow>* \<langle>Execution (at_start (act 0)), W_decided\<rangle>"
+    apply (rule steps_step)
+    apply (rule step_a)
+    apply (rule step_a.intros)
+    unfolding trans_of_def prob_automaton_def dm_to_exec_def apply auto[1]
+    unfolding true_const_def using W_decided_stop unfolding inv_of_def by auto
+
+  from execution l_len vss W_decided_prop W_decided_exec W_decided_sched W_decided_start_durs W_decided_end_durs W_decided_stop
+    nm fpl nso dp dv pap
+  obtain W_e where
+    W_e_trans: "\<T> \<turnstile> \<langle>Execution (at_start (act 0)), W_decided\<rangle> \<rightarrow>* \<langle>Execution (at_start (act M)), W_e\<rangle>"
+    and W_e_prop: "prop_model W_e (MS (Suc l))"
+    and W_e_exec: "exec_model W_e (IES (time_index l))"
+    and W_e_start: "\<forall>a \<in> actions. W_e (StartDur a) = exec_time' (at_start a) (time_index l)"
+    and W_e_end: "\<forall>a \<in> actions. W_e (EndDur a) = exec_time' (at_end a) (time_index l)"
+    and W_e_other: "\<forall>c. is_execution_invariant_clock c \<longrightarrow> W_decided c = W_e c"
+    and W_e_stop: "W_e Stop = 0"
+    by blast
+
+  define W' where "W' = W_e(Delta:=0)"
+  from return_to_main W_e_prop W_e_exec W_e_start W_e_end W_e_stop l_len vss pap nso dp fpl
+  have ret: "\<T> \<turnstile> \<langle>Execution (at_start (act M)), W_e\<rangle> \<rightarrow>* \<langle>Main, W'\<rangle>" unfolding W'_def by blast
+
+  from W_e_prop W_e_exec W_e_start W_e_end W_e_stop
+  have W'_prop: "prop_model W' (MS (Suc l))"
+  and W'_exec: "exec_model W' (IES (time_index l))"
+  and W'_start: "\<forall>a \<in> actions. W' (StartDur a) = exec_time' (at_start a) (time_index l)"
+  and W'_end: "\<forall>a \<in> actions. W' (EndDur a) = exec_time' (at_end a) (time_index l)"
+  and W'_stop: "W' Stop = 0"
+  and W'_delta: "W' Delta = 0" unfolding W'_def 
+    unfolding prop_model_def exec_model_def by auto
+  
+  from W_delta_steps main_to_bool W_decoded_trans bool_to_dec W_decided_trans dec_to_exec W_e_trans ret
+  have W'_trans: "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>Main, W'\<rangle>"
+    apply -
+    apply (rule steps_trans, assumption)
+    apply (rule steps_trans, assumption)
+    apply (rule steps_trans, assumption)
+    apply (rule steps_trans, assumption)
+    apply (rule steps_trans, assumption)
+    apply (rule steps_trans, assumption)
+    apply (rule steps_trans, assumption)
+    apply (rule steps_trans, assumption)
+    by (rule steps.refl)
+
+  from W'_prop W'_exec W'_start W'_end W'_stop W'_delta W'_trans
+  show ?thesis by blast
+qed
+
+fun deltas::"nat \<Rightarrow> 'time" where
+"deltas 0 = \<epsilon>" |
+"deltas (Suc n) = time_index (Suc n) - time_index n"
+
+
+
+lemma multiple_execution_cycles:
+  assumes l_len: "l < length htpl" 
+      and prop_clocks: "prop_model W (MS 0)"
+      and exec_clocks: "exec_model W (ES (time_index 0))"
+      and stop: "W Stop = 0"
+      and delta_clock: "W Delta = 0"
+      and other_clocks: "\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W c = 0"
+      and vss: "valid_state_sequence MS"
+      and nso: no_self_overlap
+      and pap: plan_actions_in_problem
+      and dp: durations_positive
+      and dv: durations_valid
+      and nm: "nm_happ_seq plan_happ_seq"
+      and fpl: finite_plan
+  shows "\<exists>W'. \<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>Main, W'\<rangle> 
+    \<and> prop_model W' (MS (Suc l))
+    \<and> exec_model W' (IES (time_index l))
+    \<and> (\<forall>a \<in> actions. W' (StartDur a) = exec_time' (at_start a) (time_index l))
+    \<and> (\<forall>a \<in> actions. W' (EndDur a) = exec_time' (at_end a) (time_index l))
+    \<and> W' Stop = 0
+    \<and> W' Delta = 0"
+  using l_len prop_clocks exec_clocks stop delta_clock
+proof (induction l)
+  case 0
+  let ?d = "deltas 0"
+  have "0 \<le> ?d" using delta_range by simp
+  have "W (StartDur a) = exec_time (at_start a) (time_index 0) + ?d" if "a \<in> actions" for a
+  proof -
+    have "W (StartDur a) = 0" using other_clocks by auto
+    moreover
+    have "0 < card htps" using htpl_def 0 by simp
+    hence "exec_time (at_start a) (time_index 0) = \<epsilon>" 
+  qed
+    unfolding exec_time_def 
+  then show ?case sorry
+next
+  case (Suc l)
+  then show ?case sorry
+qed
+
+ 
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
 
 lemma automaton_complete: "\<exists>W'. \<T> \<turnstile> \<langle>Init, W\<^sub>0\<rangle> \<rightarrow>* \<langle>Goal, W'\<rangle>"

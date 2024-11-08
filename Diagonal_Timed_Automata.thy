@@ -203,6 +203,7 @@ lemma steps_trans: "A \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langl
 lemma steps_twist: "A \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langle>l', u'\<rangle> \<Longrightarrow> A \<turnstile> \<langle>l', u'\<rangle> \<rightarrow> \<langle>l'', u''\<rangle> \<Longrightarrow> A \<turnstile> \<langle>l, u\<rangle> \<rightarrow>* \<langle>l'', u''\<rangle>"
   by (induction rule: steps.induct) auto
 
+lemmas steps_step = steps.step[OF _ steps.refl]
 
 lemma clock_set_all_cases:
   assumes "\<forall>v'. (c, v') \<in> set xs \<longrightarrow> v = v'"
