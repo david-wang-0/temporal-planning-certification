@@ -193,9 +193,8 @@ definition valid_state_sequence::"
       in
         apply_effects (M i) S = (M (Suc i))
         \<and> invs \<subseteq> (M i)
-        \<and> pres \<subseteq> (M i)
-        \<and> nm_happ_seq B
-    ))
+        \<and> pres \<subseteq> (M i)))
+    \<and> nm_happ_seq B
 )"
 
 text \<open>For the definition of a valid plan\<close>
@@ -245,7 +244,7 @@ definition valid_plan::"bool" where
     valid_state_sequence M
     \<and> no_self_overlap
     \<and> M 0 = init
-    \<and> M (length htpl) = goal
+    \<and> goal \<subseteq> M (length htpl)
     \<and> plan_actions_in_problem
     \<and> durations_positive
     \<and> durations_valid"

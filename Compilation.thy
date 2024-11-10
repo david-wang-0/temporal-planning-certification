@@ -179,6 +179,11 @@ The benefit here is that there is no need to change the indexing to {0..2M} *)
 subsubsection \<open>Over-all conditions\<close>
 abbreviation "action_list \<equiv> map act (sorted_list_of_set {m. m < M})"
 
+
+lemma set_act_list: 
+  shows "set action_list = actions"
+  using act_img_actions by auto
+
 definition over_all_clocks::"'action \<Rightarrow> ('proposition, 'action) clock list" where
 "over_all_clocks a \<equiv> map PropClock (prop_list (over_all a))"
 
@@ -256,6 +261,15 @@ definition exec_state_sequence'::"('time \<times> 'action) set" where
 abbreviation "ES t \<equiv> {a. (t, a) \<in> exec_state_sequence}"
 
 abbreviation "IES t \<equiv> {a. (t, a) \<in> exec_state_sequence'}"
+
+lemma in_ES_iff: "a \<in> ES t \<longleftrightarrow> (\<exists>s. a \<in> actions \<and>  at_start a \<in> B s \<and> s < t 
+                  \<and> \<not>(\<exists>s'. at_end a \<in> B s' \<and> s \<le> s' \<and> s' < t))"
+  unfolding exec_state_sequence_def happ_at_def by blast
+
+
+lemma in_IES_iff: "a \<in> IES t \<longleftrightarrow> (\<exists>s. a \<in> actions \<and>  at_start a \<in> B s \<and> s \<le> t 
+                  \<and> \<not>(\<exists>s'. at_end a \<in> B s' \<and> s \<le> s' \<and> s' \<le> t))"
+  unfolding exec_state_sequence'_def happ_at_def by blast
 
 lemma inc_es_is_next_es:
   assumes "finite_plan"
@@ -362,11 +376,42 @@ proof -
   thus "IES ?te = {}" by blast
 qed
 
-lemma first_ies_empty:
+lemma first_es_empty:
 assumes pap: "plan_actions_in_problem"
       and dnz: "durations_positive"
       and fpl:  "finite_plan"
-  shows "IES (time_index 0) = {}" sorry
+    shows "ES (time_index 0) = {}"
+proof (rule ccontr)
+  assume "ES (time_index 0) \<noteq> {}"
+  then obtain a where
+    a: "a \<in> ES (time_index 0)" by blast
+
+  then obtain t where
+    t: "t < time_index 0"
+    "at_start a \<in> B t" using in_ES_iff by blast
+
+  show False
+  proof (cases "card htps")
+    case 0
+    with time_index_img_set fpl
+    have "htps = {}" by simp
+    with t(2) a_in_B_iff_t_in_htps
+    show ?thesis by simp
+  next
+    case (Suc nat)
+    hence "0 < card htps" by auto
+    from t(2)
+    have "t \<in> htps" using a_in_B_iff_t_in_htps by blast
+    then obtain i where
+      i: "t = time_index i" 
+      "i < card htps" using time_index_img_set fpl by blast
+    have "0 \<le> i" by simp
+    with i(2)
+    have "time_index 0 \<le> time_index i" using time_index_sorted_set  by blast
+    with i(1) t
+    show ?thesis by simp
+  qed
+qed
 
 lemma not_executing_when_starting:
   assumes snap_in_B: "(at_start a) \<in> B t"
@@ -922,7 +967,6 @@ qed
 abbreviation prop_dec_automaton ("\<T> pd") where 
 "prop_dec_automaton \<equiv> (prop_decoding \<union> {prop_decoding_to_exec_decoding}, invs)"
 
-
 abbreviation es_dec_automaton ("\<T> ed") where 
 "es_dec_automaton \<equiv> (exec_decoding, invs)"
 
@@ -1309,6 +1353,34 @@ proof -
   qed
   
   show ?thesis using steps_trans[OF W'(1) W''(1)] W'' pmW'' invW'' by blast
+qed
+
+lemma main_to_dec_end: 
+  assumes pc: "prop_model W Q"
+      and ac: "exec_model W E"
+      and delta: "W Delta = 0"
+      and stop: "W Stop \<ge> 0"
+    shows "\<exists>W'. \<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W'\<rangle> 
+    \<and> prop_model W' Q \<and> exec_model W' E \<and> W' Stop = 0"
+proof -
+  from main_to_prop_decoding[OF pc ac delta stop]
+  obtain W' where
+    W': "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>PropDecoding (p 0), W'\<rangle>" 
+    "delta_prop_model W' Q" 
+    "delta_exec_model W' E" 
+    "W' Stop = 0"
+    by blast
+  with boolean_state_decoding
+  obtain W'' where
+    W'': "\<T> \<turnstile> \<langle>PropDecoding (p 0), W'\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W''\<rangle>"
+    "prop_model W'' Q" 
+    "exec_model W'' E"
+    "\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W' c = W'' c"
+    by blast
+  from this(4) W'(4)
+  have "W'' Stop = 0" by auto
+  with steps_trans[OF W'(1) W''(1)] W''(2,3)
+  show ?thesis by blast
 qed
 
 definition start_snap_sched_corr::"(('proposition, 'action) clock, 'time) cval 
@@ -3004,8 +3076,22 @@ qed
  
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
 
-lemma automaton_complete: "\<exists>W'. \<T> \<turnstile> \<langle>Init, W\<^sub>0\<rangle> \<rightarrow>* \<langle>Goal, W'\<rangle>"
+lemma automaton_complete:
+  assumes vp: valid_plan
+      and fpl: finite_plan
+  shows "\<exists>W'. \<T> \<turnstile> \<langle>Init, W\<^sub>0\<rangle> \<rightarrow>* \<langle>Goal, W'\<rangle>"
 proof - 
+  from vp obtain MS where
+      vss: "valid_state_sequence MS" 
+  and MS: "MS 0 = init" "goal \<subseteq> MS (length htpl)"
+  and nso: no_self_overlap
+  and pap: plan_actions_in_problem
+  and dp: durations_positive
+  and dv: durations_valid
+  and nm: "nm_happ_seq plan_happ_seq"
+    unfolding valid_plan_def valid_state_sequence_def by (auto simp: Let_def)
+    
+
   define W\<^sub>I where "W\<^sub>I = [init_asmt] W\<^sub>0"
 
   have init_0: "\<forall>c. \<not>is_propositional_clock c \<longrightarrow> W\<^sub>I c = 0"
@@ -3020,7 +3106,7 @@ proof -
     thus ?thesis unfolding W\<^sub>0_def by blast
   qed
 
-  have "\<T> \<turnstile> \<langle>Init, W\<^sub>0\<rangle> \<rightarrow>* \<langle>Main, W\<^sub>I\<rangle>"
+  have init_trans: "\<T> \<turnstile> \<langle>Init, W\<^sub>0\<rangle> \<rightarrow>* \<langle>Main, W\<^sub>I\<rangle>"
   proof (rule steps_step, rule step_a, rule step_a.intros)
     show "\<T> \<turnstile> Init \<longrightarrow>\<^bsup>true_const,Unit,init_asmt\<^esup> Main" 
       unfolding trans_of_def prob_automaton_def initial_transition_def by auto
@@ -3031,7 +3117,7 @@ proof -
     show "W\<^sub>I = [init_asmt]W\<^sub>0" using W\<^sub>I_def by blast
   qed
   
-  have "prop_model W\<^sub>I init"
+  have prop_model: "prop_model W\<^sub>I init"
   proof -
     have "prop_corr W\<^sub>I init pr" if "pr \<in> props" for pr
     proof (cases "pr \<in> init")
@@ -3056,7 +3142,115 @@ proof -
     thus ?thesis unfolding prop_model_def by blast
   qed
 
-  have "exec_model W\<^sub>I (ES (time_index 0))" find_theorems name: "local*empty"
+
+  have exec_model: "exec_model W\<^sub>I {}" using init_0 unfolding exec_model_def by auto
+  
+  have "\<exists>W' Q. \<T> \<turnstile> \<langle>Main, W\<^sub>I\<rangle> \<rightarrow>* \<langle>Main, W'\<rangle> 
+  \<and> prop_model W' Q 
+  \<and> goal \<subseteq> Q
+  \<and> exec_model W' {}
+  \<and> W' Stop = 0
+  \<and> W' Delta = 0"
+  proof (cases "length htpl")
+    case 0
+    have "\<T> \<turnstile> \<langle>Main, W\<^sub>I\<rangle> \<rightarrow>* \<langle>Main, W\<^sub>I\<rangle>" using steps.refl by blast
+    moreover
+    have "goal \<subseteq> init" using MS 0 by simp
+    moreover
+    have "W\<^sub>I Stop = 0" "W\<^sub>I Delta = 0" using init_0 by auto
+    ultimately
+    show ?thesis using prop_model exec_model by blast
+  next
+    case (Suc nat)
+    with prop_model
+    have prop_model': "prop_model W\<^sub>I (MS 0)" using MS by blast
+
+    from exec_model first_es_empty pap dp fpl 
+    have exec_model: "exec_model W\<^sub>I (ES (time_index 0))" by simp
+
+    have stop: "W\<^sub>I Stop = 0" using init_0 by simp
+    have delta: "W\<^sub>I Delta = 0" using init_0 by simp
+    have other_clocks: "\<forall>c. \<not>(is_boolean_clock c) \<longrightarrow> W\<^sub>I c = 0"  
+      apply (rule allI) 
+      subgoal for c 
+        apply (cases c) 
+        by (auto simp: init_0)
+      done
+
+    have "length htpl - 1 < length htpl" "Suc (length htpl - 1) = length htpl" using Suc by simp+
+    with prop_model' exec_model stop delta other_clocks vss nso pap dp dv nm fpl
+    obtain W' where
+      W': "\<T> \<turnstile> \<langle>Main, W\<^sub>I\<rangle> \<rightarrow>* \<langle>Main, W'\<rangle>"
+      "prop_model W' (MS (length htpl))"
+      "exec_model W' (IES (time_index (length htpl - 1)))" 
+      "W' Stop = 0"
+      "W' Delta = 0"
+      using multiple_execution_cycles[where l = "length htpl - 1", where W = "W\<^sub>I" and MS = MS] by auto
+    from W'(3) 
+    have em': "exec_model W' {}" using last_ies_empty pap dp fpl by auto
+    with W'(1,2,4,5) MS(2)
+    show ?thesis by blast
+  qed
+ 
+  then obtain W' Q where
+    cycles: "\<T> \<turnstile> \<langle>Main, W\<^sub>I\<rangle> \<rightarrow>* \<langle>Main, W'\<rangle>" 
+    and "prop_model W' Q" 
+        "exec_model W' {}"
+    and gQ: "goal \<subseteq> Q"
+    and "W' Stop = 0" 
+        "W' Delta = 0" by blast
+  
+  then obtain W'' where
+    last_dec_trans: "\<T> \<turnstile> \<langle>Main, W'\<rangle> \<rightarrow>* \<langle>ExecDecoding (act M), W''\<rangle>"
+    and pm_last: "prop_model W'' Q" 
+    and em_last: "exec_model W'' {}" 
+    and stop: "W'' Stop = 0"
+    using main_to_dec_end by force
+
+  have final_trans: "\<T> \<turnstile> \<langle>ExecDecoding (act M), W''\<rangle> \<rightarrow>* \<langle>Goal, W''\<rangle>"
+  proof (rule steps_step, rule step_a, rule step_a.intros)
+    show "\<T> \<turnstile> ExecDecoding (act M) \<longrightarrow>\<^bsup>goal_constraint,Unit,[]\<^esup> Goal"
+      unfolding trans_of_def prob_automaton_def goal_trans_def by auto
+    show "W'' \<turnstile> goal_constraint"
+    proof -
+      have "W'' \<turnstile> none_running"
+      proof -
+        have "W'' (Running a) = 0" if "a \<in> set action_list" for a
+        proof -
+          from that 
+          have "a \<in> actions" using set_act_list by blast
+          thus ?thesis using em_last unfolding exec_model_def by simp
+        qed
+        thus ?thesis unfolding none_running_def AND_ALL_iff list_all_iff by auto
+      qed
+      moreover
+      have "W'' \<turnstile> goal_satisfied" 
+      proof -
+        have "W'' (PropClock pr) = 1" if "pr \<in> set (prop_list goal)" for pr
+        proof -
+          from that
+          have "pr \<in> goal" "pr \<in> props" using set_prop_list wf_goal by auto
+          with gQ
+          have "pr \<in> Q" by blast+
+          with pm_last \<open>pr \<in> props\<close>
+          show "W'' (PropClock pr) = 1" unfolding prop_model_def by auto
+        qed
+        thus ?thesis unfolding goal_satisfied_def AND_ALL_iff list_all_iff by auto
+      qed
+      ultimately
+      show ?thesis unfolding goal_constraint_def by auto
+    qed
+    show "W'' \<turnstile> inv_of \<T> Goal" using stop unfolding inv_of_def prob_automaton_def by auto
+    show "W'' = [Nil]W''" by auto
+  qed
+
+  have "\<T> \<turnstile> \<langle>Init, W\<^sub>0\<rangle> \<rightarrow>* \<langle>Goal, W''\<rangle>" 
+    apply (rule steps_trans[OF init_trans])
+    apply (rule steps_trans[OF cycles])
+    apply (rule steps_trans[OF last_dec_trans])
+    apply (rule steps_trans[OF final_trans])
+    by (rule steps.refl)
+  thus ?thesis by blast
 qed
 end
 
