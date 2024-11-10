@@ -22,5 +22,15 @@ proof -
     then show ?case by blast
   qed
 qed
+
+find_theorems name: "GreatestI"
+
+lemma GreatestI_time:
+  assumes "P k" and minor: "\<And>y. P y \<Longrightarrow> y \<le> k"
+  shows GreatestI_nat: "P (Greatest P)"
+  using assms GreatestI2_order by blast
+
+  
 end
+
 end

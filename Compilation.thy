@@ -362,6 +362,11 @@ proof -
   thus "IES ?te = {}" by blast
 qed
 
+lemma first_ies_empty:
+assumes pap: "plan_actions_in_problem"
+      and dnz: "durations_positive"
+      and fpl:  "finite_plan"
+  shows "IES (time_index 0) = {}" sorry
 
 lemma not_executing_when_starting:
   assumes snap_in_B: "(at_start a) \<in> B t"
@@ -582,16 +587,75 @@ lemma updated_exec_time_and_next:
   using subseq_last_snap_exec[OF assms] exec_time_def exec_time'_def 
   by simp
 
+
 lemma exec_time_and_epsilon:
   assumes nm: "nm_happ_seq plan_happ_seq"
       and s_at_t: "s \<in> B t"
       and mutex: "mutex_snap_action s b \<or> s = b"
-      and finite_plan: finite_plan
+      and fp: finite_plan
     shows "exec_time b t \<ge> \<epsilon>"
 proof (cases "\<exists>u < t. b \<in> B u")
   case True
-  have b_at_t': "(\<lambda>u. u < t \<and> b \<in> B u) (last_snap_exec b t)" (is "?t < t \<and> b \<in> B ?t")
-    unfolding pt_def sorry
+
+  from s_at_t
+  have "t \<in> htps" using a_in_B_iff_t_in_htps by blast
+  then obtain tx where
+    tx: "t = time_index tx"
+    "tx < card htps" using time_index_img_set[OF fp] by force
+  
+  have P_iff: "(\<lambda>t'. t' < t \<and> b \<in> B t') = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> i < tx \<and> b \<in> B (time_index i))" (is "?P = ?P'")
+  proof -
+    have "(\<lambda>t'. t' < t \<and> b \<in> B t') = (\<lambda>t'. t' \<in> htps \<and> t' < t \<and> b \<in> B t')" using a_in_B_iff_t_in_htps by blast
+    also have "... = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> t' < t \<and> b \<in> B (time_index i))" using time_index_img_set[OF fp] by force
+    also have "... = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> i < tx \<and> b \<in> B (time_index i))"
+      unfolding tx(1) 
+      using time_index_strict_sorted_set'[where j = tx] 
+      using time_index_strict_sorted_set[OF _ tx(2)] 
+      by blast
+    finally show ?thesis .
+  qed
+  
+  obtain u where
+    u: "u < t"
+    "b \<in> B u"
+    using True by blast
+  hence "u \<in> htps" using a_in_B_iff_t_in_htps by blast
+  hence "\<exists>i < card htps. i < tx \<and> b \<in> B (time_index i)" (is "Ex ?P2") using P_iff u by meson
+  moreover
+  have P2_int: "\<And>x. ?P2 x \<Longrightarrow> x \<le> tx" using time_index_sorted_set' by auto
+  ultimately
+  have P2: "?P2 (Greatest ?P2)" using GreatestI_ex_nat[where P = ?P2] by blast
+  
+  have P_1: "?P (time_index (Greatest ?P2))" 
+  proof -
+    from P2 time_index_strict_sorted_set[OF _ tx(2)] 
+    show ?thesis unfolding tx(1) by blast
+  qed
+  
+  have P_max: "x \<le> time_index (Greatest ?P2)" if assm: "?P x" for x 
+  proof -
+    from assm P_iff
+    obtain i where
+      i: "?P2 i"
+      "x = time_index i" by metis
+    moreover
+    have "i \<le> Greatest ?P2" using Greatest_le_nat[where P = ?P2] i(1) P2_int by blast
+    moreover
+    have "Greatest ?P2 < card htps" using P2 ..
+    ultimately
+    show "x \<le> time_index (Greatest ?P2)" using time_index_sorted_set by blast
+  qed
+
+  have "?P (Greatest ?P)" 
+    apply (rule GreatestI_time)
+     apply (rule P_1)
+    using P_max by blast
+  moreover
+  have 1: "last_snap_exec b t = (GREATEST t'. t' < t \<and> b \<in> B t')" using True unfolding pt_def by auto
+  ultimately
+  have b_at_t': "(\<lambda>u. u < t \<and> b \<in> B u) (last_snap_exec b t)" (is "?t < t \<and> b \<in> B ?t") by auto
+  
+
   have nm_cond: "t - ?t < \<epsilon> \<and> ?t - t < \<epsilon> \<and> s \<in> (B t) \<and> b \<in> (B ?t) 
     \<longrightarrow> ((s \<noteq> b \<longrightarrow> \<not>mutex_snap_action s b) \<and> (s = b \<longrightarrow> t = ?t))" using nm nm_happ_seq_def by blast
   hence "\<not>(s \<noteq> b \<longrightarrow> \<not>mutex_snap_action s b) \<or> \<not>(s = b \<longrightarrow> t = ?t)
@@ -618,15 +682,15 @@ next
   case False
   have 1: "time_index 0 \<le> u" if "B u \<noteq> {}" for u
   proof -
-    have "u \<in> set htpl" using that a_in_B_iff_t_in_htps set_htpl_eq_htps[OF finite_plan] by auto
+    have "u \<in> set htpl" using that a_in_B_iff_t_in_htps set_htpl_eq_htps[OF fp] by auto
     hence "\<exists>i. time_index i = u \<and> i < length htpl" using time_index_img_list by force
     thus "time_index 0 \<le> u" using time_index_sorted_list by blast
   qed
   moreover
   have "Least (\<lambda>t. B t \<noteq> {}) = (time_index 0)" 
   proof (rule Least_equality[OF _ 1])
-    have "card htps > 0" using a_in_B_iff_t_in_htps s_at_t card_gt_0_iff finite_htps finite_plan by blast
-    hence "time_index 0 \<in> htps" using time_index_img_set[OF finite_plan] by blast
+    have "card htps > 0" using a_in_B_iff_t_in_htps s_at_t card_gt_0_iff finite_htps fp by blast
+    hence "time_index 0 \<in> htps" using time_index_img_set[OF fp] by blast
     thus "B (time_index 0) \<noteq> {}" using a_in_B_iff_t_in_htps by auto
   qed
   ultimately
@@ -2846,7 +2910,7 @@ fun deltas::"nat \<Rightarrow> 'time" where
 "deltas 0 = \<epsilon>" |
 "deltas (Suc n) = time_index (Suc n) - time_index n"
 
-
+find_theorems name: "exec_time*nex"
 
 lemma multiple_execution_cycles:
   assumes l_len: "l < length htpl" 
@@ -2869,30 +2933,131 @@ lemma multiple_execution_cycles:
     \<and> (\<forall>a \<in> actions. W' (EndDur a) = exec_time' (at_end a) (time_index l))
     \<and> W' Stop = 0
     \<and> W' Delta = 0"
-  using l_len prop_clocks exec_clocks stop delta_clock
+  using l_len
 proof (induction l)
   case 0
   let ?d = "deltas 0"
-  have "0 \<le> ?d" using delta_range by simp
-  have "W (StartDur a) = exec_time (at_start a) (time_index 0) + ?d" if "a \<in> actions" for a
+  have sd: "W (StartDur a) + ?d = exec_time (at_start a) (time_index 0)" if "a \<in> actions" for a
   proof -
     have "W (StartDur a) = 0" using other_clocks by auto
     moreover
     have "0 < card htps" using htpl_def 0 by simp
-    hence "exec_time (at_start a) (time_index 0) = \<epsilon>" 
+    hence "exec_time (at_start a) (time_index 0) = \<epsilon>" using exec_time_at_init fpl by blast
+    ultimately
+    show ?thesis by auto
   qed
-    unfolding exec_time_def 
-  then show ?case sorry
+
+  
+   
+  have ed: "W (EndDur a) + ?d = exec_time (at_end a) (time_index 0)" if "a \<in> actions" for a
+  proof -
+    have "W (EndDur a) = 0" using other_clocks by auto
+    moreover
+    have "0 < card htps" using htpl_def 0 by simp
+    hence "exec_time (at_end a) (time_index 0) = \<epsilon>" using exec_time_at_init fpl by blast
+    ultimately
+    show ?thesis by auto
+  qed
+  
+  have td: "0 \<le> ?d" using eps_range by simp
+
+  show ?case 
+    apply (rule instant_execution_cycle)
+    using assms sd ed td by auto
 next
   case (Suc l)
-  then show ?case sorry
+  then obtain W' where
+    t1: "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>Main, W'\<rangle>"
+    and pm: "prop_model W' (MS (Suc l))"
+    and em: "exec_model W' (IES (time_index l))"
+    and sd: "\<forall>a\<in>actions. W' (StartDur a) = exec_time' (at_start a) (time_index l)"
+    and ed: "\<forall>a\<in>actions. W' (EndDur a) = exec_time' (at_end a) (time_index l)" 
+    and stop: "W' Stop = 0"
+    and delta: "W' Delta = 0" by auto
+
+  from Suc.prems em
+  have em': "exec_model W' (ES (time_index (Suc l)))" using inc_es_is_next_es[OF fpl] by auto
+
+  from Suc.prems sd ed
+  have sd': "\<forall>a\<in>actions. W' (StartDur a) + deltas (Suc l) = exec_time (at_start a) (time_index (Suc l))"
+     and ed': "\<forall>a \<in> actions. W' (EndDur a) + deltas (Suc l) = exec_time (at_end a) (time_index (Suc l))"
+    using updated_exec_time_and_next[OF fpl] by simp+
+
+  have deltas: "0 \<le> deltas (Suc l)" using Suc.prems time_index_sorted_list by simp
+    
+  from instant_execution_cycle[where W = W' and MS = MS and l = "Suc l" and d = "deltas (Suc l)"]
+    pm em' sd' ed' deltas stop delta vss nso pap dp dv nm fpl Suc.prems
+  obtain W'' where
+    t2: "\<T> \<turnstile> \<langle>Main, W'\<rangle> \<rightarrow>* \<langle>Main, W''\<rangle>"
+    and pm: "prop_model W'' (MS (Suc (Suc l)))"
+    and em: "exec_model W'' (IES (time_index (Suc l)))"
+    and sd: "\<forall>a\<in>actions. W'' (StartDur a) = exec_time' (at_start a) (time_index (Suc l))"
+    and ed: "\<forall>a\<in>actions. W'' (EndDur a) = exec_time' (at_end a) (time_index (Suc l))" 
+    and stop: "W'' Stop = 0"
+    and delta: "W'' Delta = 0" by blast
+  moreover
+  have "\<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>Main, W''\<rangle>" using steps_trans[OF t1 t2] .
+  ultimately
+  show ?case by auto
 qed
 
  
 definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
 
 lemma automaton_complete: "\<exists>W'. \<T> \<turnstile> \<langle>Init, W\<^sub>0\<rangle> \<rightarrow>* \<langle>Goal, W'\<rangle>"
-  sorry               
+proof - 
+  define W\<^sub>I where "W\<^sub>I = [init_asmt] W\<^sub>0"
+
+  have init_0: "\<forall>c. \<not>is_propositional_clock c \<longrightarrow> W\<^sub>I c = 0"
+  proof - 
+    have 1: "\<not>(\<exists>v. (c, v) \<in> set init_asmt)" if "\<not>is_propositional_clock c" for c
+      using that apply (cases c)
+      unfolding init_asmt_def by auto
+
+    have "W\<^sub>I c = W\<^sub>0 c" if "\<not>is_propositional_clock c" for c
+      using 1[OF that, THEN clock_set_none, where W = W\<^sub>0]
+      unfolding W\<^sub>0_def W\<^sub>I_def by simp
+    thus ?thesis unfolding W\<^sub>0_def by blast
+  qed
+
+  have "\<T> \<turnstile> \<langle>Init, W\<^sub>0\<rangle> \<rightarrow>* \<langle>Main, W\<^sub>I\<rangle>"
+  proof (rule steps_step, rule step_a, rule step_a.intros)
+    show "\<T> \<turnstile> Init \<longrightarrow>\<^bsup>true_const,Unit,init_asmt\<^esup> Main" 
+      unfolding trans_of_def prob_automaton_def initial_transition_def by auto
+
+    show "W\<^sub>0 \<turnstile> true_const" unfolding true_const_def unfolding W\<^sub>0_def by blast
+
+    thus "W\<^sub>I \<turnstile> inv_of \<T> Main" unfolding inv_of_def prob_automaton_def using init_0 by auto
+    show "W\<^sub>I = [init_asmt]W\<^sub>0" using W\<^sub>I_def by blast
+  qed
+  
+  have "prop_model W\<^sub>I init"
+  proof -
+    have "prop_corr W\<^sub>I init pr" if "pr \<in> props" for pr
+    proof (cases "pr \<in> init")
+      case True
+      have "pr \<in> set (prop_list init)" using set_prop_list[OF wf_init] True by blast
+      hence 1: "(PropClock pr, 1) \<in> set init_asmt" unfolding init_asmt_def init_pos_def by simp
+      
+      have 2: "\<forall>v. (PropClock pr, v) \<in> set init_asmt \<longrightarrow> 1 = v" unfolding init_asmt_def by auto
+      from clock_set_certain[OF 2 1]
+      have "W\<^sub>I (PropClock pr) = 1" unfolding W\<^sub>I_def by blast
+      with True
+      show ?thesis by simp
+    next
+      case False
+      have "pr \<notin>set (prop_list init)" using set_prop_list[OF wf_init] False by blast
+      hence "\<not> (\<exists>v. (PropClock pr, v) \<in> set init_asmt)" unfolding init_asmt_def init_pos_def by auto
+      from clock_set_none[OF this] 
+      have "W\<^sub>I (PropClock pr) = 0" unfolding W\<^sub>I_def W\<^sub>0_def by simp
+      with False
+      show ?thesis by simp
+    qed
+    thus ?thesis unfolding prop_model_def by blast
+  qed
+
+  have "exec_model W\<^sub>I (ES (time_index 0))" find_theorems name: "local*empty"
+qed
 end
 
 end

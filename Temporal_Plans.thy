@@ -475,6 +475,13 @@ lemma time_index_img_set:
   shows "time_index ` {n. n < card htps} = htps" 
   using time_index_bij_betw_set[OF assms] unfolding bij_betw_def by blast
 
+
+find_theorems name: "key*list*of*set"
+
+thm strict_sorted_list_of_set
+
+find_theorems name: "sorted*nth"
+
 lemmas time_index_strict_sorted_list = strict_sorted_list_of_set[of htps, simplified htpl_def[symmetric], THEN sorted_wrt_nth_less]
 
 lemma time_index_strict_mono_on_list: 
@@ -484,12 +491,40 @@ lemma time_index_strict_mono_on_list:
 
 lemmas time_index_sorted_list = sorted_list_of_set(2)[of htps, simplified htpl_def[symmetric], THEN sorted_nth_mono]
 
+
+lemma time_index_strict_sorted_list':
+  assumes i: "i < length htpl"
+      and ti: "time_index i < time_index j"
+    shows "i < j"
+proof (rule ccontr)
+  assume "\<not> i < j"
+  hence "j \<le> i" by simp
+  hence "time_index j \<le> time_index i" using i time_index_sorted_list by simp
+  thus False using ti by simp
+qed
+
+lemma time_index_sorted_list':
+  assumes i: "i < length htpl"
+      and ti: "time_index i \<le> time_index j"
+    shows "i \<le> j"
+proof (rule ccontr)
+  assume "\<not> i \<le> j"
+  hence "j < i" by simp
+  hence "time_index j < time_index i" using i time_index_strict_sorted_list by simp
+  thus False using ti by simp
+qed
+
 lemma time_index_mono_on_list:
   "mono_on {n. n < length htpl} time_index" 
   using time_index_sorted_list unfolding monotone_on_def by auto
 
 lemmas time_index_strict_sorted_set = time_index_strict_sorted_list[simplified card_htps_len_htpl[symmetric]]
 lemmas time_index_sorted_set = time_index_sorted_list[simplified card_htps_len_htpl[symmetric]]
+lemmas time_index_strict_sorted_set' = time_index_strict_sorted_list'[simplified card_htps_len_htpl[symmetric]]
+lemmas time_index_sorted_set' = time_index_sorted_list'[simplified card_htps_len_htpl[symmetric]]
+
+lemmas time_index_sorted = time_index_sorted_list time_index_sorted_set time_index_strict_sorted_list time_index_strict_sorted_set
+  time_index_sorted_list' time_index_sorted_set' time_index_strict_sorted_list' time_index_strict_sorted_set'
 
 lemma no_non_indexed_time_points: 
   assumes a: "(Suc l) < length htpl"
