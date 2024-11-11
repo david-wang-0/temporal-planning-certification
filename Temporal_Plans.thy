@@ -20,12 +20,12 @@ type_synonym ('p) state_sequence = "nat \<Rightarrow> ('p state)"
 text \<open>Invariants\<close>
 type_synonym ('p, 't) invariant_sequence = "('t \<times> 'p set) set"
 
-text \<open>An indexed sequence/array (or set)\<close>
-type_synonym ('v) indexing = "nat \<Rightarrow> 'v"
+
+find_theorems name: "set*def"
 
 locale temp_planning_problem = 
-  fixes props::   "'proposition set"
-    and actions:: "'action set"
+  fixes props::   "('proposition::linorder) set"
+    and actions:: "('action::linorder) set"
     and init::    "'proposition set"
     and goal::    "'proposition set"
     and at_start::"'action  \<Rightarrow> 'snap_action"
@@ -36,8 +36,6 @@ locale temp_planning_problem =
     and pre::     "'snap_action \<Rightarrow> 'proposition set"
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
-    and p::       "'proposition indexing"
-    and act::     "'action indexing"
     and \<epsilon>::       "'time"
   assumes wf_init:  "init \<subseteq> props" 
       and wf_goal:  "goal \<subseteq> props"
@@ -49,11 +47,11 @@ locale temp_planning_problem =
         \<and> over_all a \<subseteq> props)"
       and at_start_inj_on: "inj_on at_start actions"
       and at_end_inj_on:   "inj_on at_end actions"
-      and snaps_disj:   "(at_start ` actions) \<inter> (at_end ` actions) = {}"
-      and prop_numbering:   "bij_betw p {n. n < card props} props"
-      and action_numbering: "bij_betw act {n. n < card actions} actions"
+      and snaps_disj:       "(at_start ` actions) \<inter> (at_end ` actions) = {}"
       and some_props:       "card props > 0"
       and some_actions:     "card actions > 0"
+      and finite_props:     "finite props"
+      and finite_actions:   "finite actions"
       and eps_range:        "0 < \<epsilon>"
 begin 
 
@@ -81,13 +79,25 @@ definition snap_actions::"'snap_action set" where
 
 text \<open>Useful lemmas about the numberings\<close>
 
+definition "act \<equiv> (!) (sorted_list_of_set actions)"
+
+definition "p \<equiv> (!) (sorted_list_of_set props)"
+
+lemma act_bij_betw: "bij_betw act {n. n < card actions} actions"
+  unfolding act_def
+proof (rule bij_betw_nth)
+  show "distinct (sorted_list_of_set actions)" by simp
+  show "{n. n < card actions} = {..<length (sorted_list_of_set actions)}" by auto
+  show "actions = set (sorted_list_of_set actions)" using finite_actions by simp
+qed
+
 lemma act_inj_on: "inj_on act {n. n < card actions}"
-  using action_numbering bij_betw_def by blast
+  using act_bij_betw unfolding bij_betw_def by blast
 
 lemmas act_inj_on_spec = act_inj_on[simplified inj_on_def, THEN bspec, THEN bspec, simplified mem_Collect_eq, THEN mp, rotated 2]
 
 lemma act_img_actions: "act ` {n. n < card actions} = actions"
-  using action_numbering[simplified bij_betw_def] by simp
+  using act_bij_betw unfolding bij_betw_def by blast
 
 lemma a_in_act_iff: "a \<in> actions \<longleftrightarrow> (\<exists>i < card actions. act i = a)"
   using act_img_actions by force
@@ -99,11 +109,19 @@ lemma act_pred: fixes P
 lemma act_dom: "m < card actions \<Longrightarrow> act m \<in> actions" 
   using act_img_actions by blast
 
+lemma p_bij_betw: "bij_betw p {n. n < card props} props"
+  unfolding p_def
+proof (rule bij_betw_nth)
+  show "distinct (sorted_list_of_set props)" by simp
+  show "{n. n < card props} = {..<length (sorted_list_of_set props)}" by auto
+  show "props = set (sorted_list_of_set props)" using finite_props by auto
+qed
 lemma p_inj_on: "inj_on p {n. n < card props}"
-  using prop_numbering bij_betw_def by blast
+  using p_bij_betw unfolding bij_betw_def by blast
 
 lemma p_img_props: "p ` {n. n < card props} = props"
-  using prop_numbering[simplified bij_betw_def] by simp
+  using p_bij_betw unfolding bij_betw_def by blast
+
 
 lemma p_in_props_iff: "pr \<in> props \<longleftrightarrow> (\<exists>i < card props. p i = pr)"
   using p_img_props by force
@@ -119,11 +137,13 @@ end
 
 
 locale temporal_plan = temp_planning_problem _ _ _ _ _ _ _ _ upper pre
-  for upper::   "'action  \<Rightarrow> ('time::time) upper_bound" (* these are redefined to maintain type parameters *)
-  and pre::     "'snap_action \<Rightarrow> 'proposition set" +
+  for upper::   "('action::linorder)  \<Rightarrow> ('time::time) upper_bound" (* these are redefined to maintain type parameters *)
+  and pre::     "'snap_action \<Rightarrow> ('proposition::linorder) set" +
 fixes \<pi>::       "'i \<rightharpoonup> ('action \<times> 'time \<times> 'time)"
 begin
-  
+
+(* TODO: I doubt this can be instantiated with an existentially quantified \<pi> *)
+
 text \<open>Happening Time Points\<close>
 definition htps::"'time set" where
 "htps \<equiv> {t |a t d. (a, t, d) \<in> ran \<pi>} \<union> {t + d |a t d. (a, t, d) \<in> ran \<pi>}"
@@ -165,17 +185,13 @@ definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" w
     \<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b) 
     \<and> (a = b \<longrightarrow> t = u))"
 
+definition zero_sep_nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
+"zero_sep_nm_happ_seq B \<equiv> 
+  \<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b 
+  \<longrightarrow> \<not>mutex_snap_action a b"
+
 subsubsection \<open>Valid state sequence\<close>
 
-definition complete_sequence::"'t set \<Rightarrow> 't indexing \<Rightarrow> bool" where
-"complete_sequence T t \<equiv> (\<forall>i. (i < card T) \<longrightarrow> (t i) \<in> T) 
-  \<and> (\<forall>s \<in> T. \<exists>i. i < card T \<and> s = t i)"
-
-definition unique_increasing_sequence::"('t :: linorder) set \<Rightarrow> 't indexing \<Rightarrow> bool" where
-"unique_increasing_sequence T t \<equiv>
-    complete_sequence T t
-  \<and> (\<forall>i j. i < j \<and> j < card T \<longrightarrow> (t i) < (t j))"
-  
 definition valid_state_sequence::"
   'proposition state_sequence 
 \<Rightarrow> bool" where
@@ -194,7 +210,6 @@ definition valid_state_sequence::"
         apply_effects (M i) S = (M (Suc i))
         \<and> invs \<subseteq> (M i)
         \<and> pres \<subseteq> (M i)))
-    \<and> nm_happ_seq B
 )"
 
 text \<open>For the definition of a valid plan\<close>
@@ -247,7 +262,19 @@ definition valid_plan::"bool" where
     \<and> goal \<subseteq> M (length htpl)
     \<and> plan_actions_in_problem
     \<and> durations_positive
-    \<and> durations_valid"
+    \<and> durations_valid
+    \<and> nm_happ_seq plan_happ_seq"
+
+definition valid_plan_z_sep where
+"valid_plan_z_sep \<equiv> \<exists>M. 
+    valid_state_sequence M
+    \<and> no_self_overlap
+    \<and> M 0 = init
+    \<and> goal \<subseteq> M (length htpl)
+    \<and> plan_actions_in_problem
+    \<and> durations_positive
+    \<and> durations_valid
+    \<and> zero_sep_nm_happ_seq plan_happ_seq"
 
 end
 

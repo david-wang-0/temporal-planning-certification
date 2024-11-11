@@ -1,5 +1,8 @@
 theory Temporal_Plan_Instantiation
-  imports Base Temporal_Plans
+  imports Base 
+    Temporal_Plans 
+    Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics 
+    Containers.Containers
 begin
 
 type_synonym 'p snap_action = "'p set \<times> 'p set \<times> 'p set"
@@ -171,4 +174,17 @@ definition valid_plan::"('p, 't::time) tpp \<Rightarrow> ('p, 't) plan \<Rightar
     \<and> (M 0) = init P
     \<and> (M (card B - 1)) = goal P
 )"
+
+
+definition lenlex :: "('a \<times> 'a) set => ('a list \<times> 'a list) set" where
+"lenlex r = inv_image (less_than <*lex*> lex r) (\<lambda>xs. (length xs, xs))"
+        \<comment> \<open>Compares lists by their length and then lexicographically\<close>
+
+
+print_derives
+
+derive (linorder) "char"
+
+
+
 end 
