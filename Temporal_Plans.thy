@@ -67,9 +67,9 @@ definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightar
   (adds b \<inter> dels a) \<noteq> {}
 )"
 
-lemma mutex_snap_action_symm: "mutex_snap_action a b \<Longrightarrow> mutex_snap_action b a" 
+lemma mutex_snap_action_symm: "mutex_snap_action a b \<longleftrightarrow> mutex_snap_action b a" 
   unfolding mutex_snap_action_def
-  by (erule disjE; blast)+
+  by (rule iffI) (erule disjE; blast)+
 
 abbreviation snaps::"'action \<Rightarrow> 'snap_action set" where
 "snaps a \<equiv> {at_start a, at_end a}"
@@ -132,6 +132,7 @@ lemma props_pred: fixes P
 
 lemma p_dom: "n < card props \<Longrightarrow> p n \<in> props" 
   using p_img_props by blast
+
 
 end
 
@@ -249,7 +250,7 @@ definition satisfies_duration_bounds::"'action \<Rightarrow> 'time \<Rightarrow>
 "
 
 definition durations_positive::bool where
-"durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 < d"
+"durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 \<le> d"
 
 definition durations_valid::bool where
 "durations_valid \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> satisfies_duration_bounds a d"
