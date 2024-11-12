@@ -175,16 +175,4 @@ definition valid_plan::"('p, 't::time) tpp \<Rightarrow> ('p, 't) plan \<Rightar
     \<and> (M (card B - 1)) = goal P
 )"
 
-
-definition lenlex :: "('a \<times> 'a) set => ('a list \<times> 'a list) set" where
-"lenlex r = inv_image (less_than <*lex*> lex r) (\<lambda>xs. (length xs, xs))"
-        \<comment> \<open>Compares lists by their length and then lexicographically\<close>
-
-
-print_derives
-
-derive (linorder) "char"
-
-
-
 end 

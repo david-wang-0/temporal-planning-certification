@@ -311,6 +311,7 @@ qed
 
 lemma last_ies_empty:
   assumes pap: "plan_actions_in_problem"
+      and dnz: "durations_positive"
       and fpl:  "finite_plan"
   shows "IES (time_index (length htpl - 1)) = {}" (is "IES ?te = {}")
 proof -   
@@ -345,7 +346,7 @@ proof -
       d: "(a, s, d) \<in> ran \<pi>"
       "(s + d, at_end a) \<in> plan_happ_seq" using plan_happ_seq_def by blast
     with s(4) assms(2)[simplified durations_positive_def]
-    have "s + d \<ge> ?te" by fastforce
+    have "s + d > ?te" by fastforce
     
     have "t \<le> ?te" if "t \<in> set htpl" for t
     proof -

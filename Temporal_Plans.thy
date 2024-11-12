@@ -52,7 +52,7 @@ locale temp_planning_problem =
       and some_actions:     "card actions > 0"
       and finite_props:     "finite props"
       and finite_actions:   "finite actions"
-      and eps_range:        "0 < \<epsilon>"
+      and eps_range:        "0 \<le> \<epsilon>"
 begin 
 
 text \<open>Some additional definitions\<close>
@@ -133,6 +133,11 @@ lemma props_pred: fixes P
 lemma p_dom: "n < card props \<Longrightarrow> p n \<in> props" 
   using p_img_props by blast
 
+lemma eps_cases: 
+  assumes "\<epsilon> = 0 \<Longrightarrow> thesis"
+      and "0 \<le> \<epsilon> \<Longrightarrow> thesis"
+    shows "thesis"
+  using assms eps_range by blast
 
 end
 
@@ -182,14 +187,27 @@ snap-actions. Moreover, in their definition of a planning problem, the assumptio
 no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at_end(b) and at-start(a) \<noteq> at-end(a).\<close>
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_happ_seq B \<equiv> 
-  \<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
+  (\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
     \<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b) 
-    \<and> (a = b \<longrightarrow> t = u))"
+    \<and> (a = b \<longrightarrow> t = u)))
+  \<and> (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)"
 
-definition zero_sep_nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
-"zero_sep_nm_happ_seq B \<equiv> 
-  \<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b 
-  \<longrightarrow> \<not>mutex_snap_action a b"
+lemma eps_zero_imp_zero_sep: 
+  assumes "\<epsilon> = 0"
+  shows "nm_happ_seq B = (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)" 
+  using assms unfolding nm_happ_seq_def by fastforce
+
+lemma eps_gt_zero_imp_eps_sep:
+  assumes "0 < \<epsilon>"
+  shows "nm_happ_seq B = (\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
+    \<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b) \<and> (a = b \<longrightarrow> t = u)))"
+proof -
+  from assms
+  have "(\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
+    \<longrightarrow> (a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)) \<Longrightarrow> (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)"
+    by force
+  thus ?thesis unfolding nm_happ_seq_def using assms by blast
+qed
 
 subsubsection \<open>Valid state sequence\<close>
 
@@ -265,17 +283,6 @@ definition valid_plan::"bool" where
     \<and> durations_positive
     \<and> durations_valid
     \<and> nm_happ_seq plan_happ_seq"
-
-definition valid_plan_z_sep where
-"valid_plan_z_sep \<equiv> \<exists>M. 
-    valid_state_sequence M
-    \<and> no_self_overlap
-    \<and> M 0 = init
-    \<and> goal \<subseteq> M (length htpl)
-    \<and> plan_actions_in_problem
-    \<and> durations_positive
-    \<and> durations_valid
-    \<and> zero_sep_nm_happ_seq plan_happ_seq"
 
 end
 
