@@ -333,7 +333,9 @@ next
   moreover
   have "distinct (map fst (map (\<lambda>(PredDecl n ts) \<Rightarrow> (n, ts)) (predicates D)))" 
   proof (subst distinct_map; rule conjI)
-    have distinct_preds: "distinct (predicates D)" using wf_domain unfolding wf_domain_def using distinct_mapI by blast
+
+    have distinct_names: "distinct (map pred (predicates D))" using wf_domain unfolding wf_domain_def by blast
+    hence distinct_preds: "distinct (predicates D)" using distinct_mapI by blast
     
     show "distinct (map (case_predicate_decl Pair) (predicates D))" 
     proof (subst distinct_map; rule conjI)
@@ -367,26 +369,27 @@ next
         "y = (ny, vy)" by (auto split: predicate_decl.splits)
       
       from xy px py
-      have "ny = nx" by simp
-
-      have "vx = vy" using wf_domain[simplified wf_domain_def] 
-      with wf_domain px py
-      show "x = y" using distinct_preds  sorry
- 
+      have n_eq: "ny = nx" by simp
+      moreover
+      have "vx = vy" 
+      proof (rule ccontr)
+        assume "vx \<noteq> vy"
+        with px(2-3) py(2-3) n_eq
+        have "\<exists>n vs vs'. PredDecl n vs \<in> set (predicates D) \<and> PredDecl n vs' \<in> set (predicates D) \<and> vs \<noteq> vs'" by blast
+        hence "\<exists>p p'. p \<in> set (predicates D) \<and> p' \<in> set (predicates D) \<and> pred p = pred p' \<and> p \<noteq> p'" by fastforce
+        moreover
+        have "\<forall>p p'. p \<in> set (predicates D) \<and> p' \<in> set (predicates D) \<and> pred p = pred p' \<longrightarrow> p = p'" 
+          using distinct_map_eq[OF distinct_names] by blast
+        ultimately
+        show False by blast
+      qed
+      ultimately
+      show "x = y" using px py by blast
     qed
   qed
   ultimately
   show "sig n = Some ts" unfolding sig_def by (auto intro: map_of_is_SomeI)
 qed
-  subgoal
-  apply (subst (asm) sig_def)
-   apply (drule map_of_SomeD)
-    by (auto split: predicate_decl.splits) 
-  subgoal
-  apply (subst sig_def)
-  apply (rule map_of_is_SomeI)
-  using wf_domain[simplified wf_domain_def, THEN conjunct2, THEN conjunct1]
-  find_theorems intro
   
     
 lemma wf_inst_with_objs_of_type:
