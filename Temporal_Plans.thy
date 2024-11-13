@@ -23,7 +23,7 @@ type_synonym ('p, 't) invariant_sequence = "('t \<times> 'p set) set"
 
 find_theorems name: "set*def"
 
-locale temp_planning_problem = 
+locale temp_planning_problem =
   fixes props::   "('proposition::linorder) set"
     and actions:: "('action::linorder) set"
     and init::    "'proposition set"
@@ -32,7 +32,7 @@ locale temp_planning_problem =
     and at_end::  "'action  \<Rightarrow> 'snap_action"
     and over_all::"'action  \<Rightarrow> 'proposition set"
     and lower::   "'action  \<Rightarrow> ('time::time) lower_bound"
-    and upper::   "'action  \<Rightarrow> 'time upper_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
     and pre::     "'snap_action \<Rightarrow> 'proposition set"
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"

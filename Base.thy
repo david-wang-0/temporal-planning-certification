@@ -1,7 +1,7 @@
 theory Base
-  imports Main
+  imports Main Containers.Containers
 begin
-  
+
 section \<open>Time\<close>
 
 find_theorems name: "zero_le"
@@ -32,5 +32,35 @@ lemma GreatestI_time:
 
   
 end
+
+lemma list_all2_twist: "list_all2 P xs ys \<longleftrightarrow> list_all2 (\<lambda>y x. P x y) ys xs" for xs ys P
+    apply (subst list_all2_iff)+
+    apply (rule iffI; rule conjI; simp; drule conjunct2)
+     apply (rule ballI)
+    subgoal for x
+      apply (induction x)
+      subgoal for a b
+        apply (drule bspec[where x = "(b, a)"])
+        apply (subst in_set_zip)
+         apply (subst (asm) in_set_zip)
+         apply auto
+        done
+      done
+     apply (rule ballI)
+    subgoal for x
+      apply (induction x)
+      subgoal for a b
+        apply (drule bspec[where x = "(b, a)"])
+        apply (subst in_set_zip)
+         apply (subst (asm) in_set_zip)
+         apply auto
+        done
+      done
+    done
+
+lemma distinct_inj_map: "distinct xs \<Longrightarrow> inj f \<Longrightarrow> distinct (map f xs)"
+  apply (induction xs)
+  unfolding inj_def
+  by auto
 
 end
