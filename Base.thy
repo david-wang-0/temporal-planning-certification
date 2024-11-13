@@ -58,6 +58,11 @@ lemma list_all2_twist: "list_all2 P xs ys \<longleftrightarrow> list_all2 (\<lam
       done
     done
 
+lemma distinct_inj_on_map: "distinct xs \<Longrightarrow> inj_on f (set xs) \<Longrightarrow> distinct (map f xs)"
+  apply (induction xs)
+  unfolding inj_on_def 
+  by auto
+                            
 lemma distinct_inj_map: "distinct xs \<Longrightarrow> inj f \<Longrightarrow> distinct (map f xs)"
   apply (induction xs)
   unfolding inj_def
