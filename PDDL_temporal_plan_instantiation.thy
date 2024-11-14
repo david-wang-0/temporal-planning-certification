@@ -10,7 +10,7 @@ type_synonym pr = "object atom formula"
 type_synonym suff_cond = "pr list"
 
 text \<open>Note, that this is not the type we will use as @{typ \<open>'snap_action\<close>}}, because we would
-have to implement \<open>at_start\<close> as @{term \<open>fst\<close>}, which would cause it violate injectivity.\<close>
+have to implement \<open>at_start\<close> as @{term \<open>fst\<close>}, which would make it violate injectivity.\<close>
 type_synonym snap = "suff_cond \<times> object ast_effect"
 
 type_synonym dc = "duration_op \<times> rat"
@@ -18,7 +18,7 @@ type_synonym dc = "duration_op \<times> rat"
 text \<open>This is the actual type of action\<close>
 type_synonym action = "(string \<times> snap \<times> snap \<times> snap \<times> dc option)"
 
-text \<open>This is the actual type we will use to instantiate the locale.\<close>
+text \<open>This is the actual @{typ \<open>'snap_action\<close>}} we will use to instantiate the locale.\<close>
 type_synonym snap_action = "temporal_annotation \<times> action"
 
 
@@ -36,8 +36,8 @@ derive linorder predicate func object atom "object atom formula" prod list ast_e
 instantiation rat :: time
 begin
 instance apply standard
-  using dense_order_class.dense apply auto[1]
-  using zero_neq_one[symmetric] by blast
+  apply (rule dense_order_class.dense, assumption)
+  using zero_neq_one[symmetric] by (rule exI)
 end
 
 context wf_ast_problem
@@ -279,16 +279,6 @@ next
   thus "obj \<in> objs" unfolding tos_def by simp
 qed
 
-fun effect_props::"object ast_effect \<Rightarrow> object atom formula set" where
-"effect_props (Effect xs ys) = set xs \<union> set ys"
-
-definition "effect_preds f \<equiv> \<Union> (atoms ` (effect_props f))"
-
-abbreviation "form_preds \<equiv> atoms"
-
-fun ga_preds::"ground_action \<Rightarrow> object atom set" where
-"ga_preds (Ground_Action pre eff) = form_preds pre \<union> effect_preds eff"
-
 lemma typed_args_correct: "(tys, args) \<in> ltos \<longleftrightarrow> list_all2 is_obj_of_type args tys"
 proof (rule iffI) 
   assume "(tys, args) \<in> ltos"
@@ -390,8 +380,8 @@ next
   ultimately
   show "sig n = Some ts" unfolding sig_def by (auto intro: map_of_is_SomeI)
 qed
-  
-    
+
+
 lemma wf_inst_with_objs_of_type:
   fixes n params d cond eff
   defines "a \<equiv> Durative_Action_Schema n params d cond eff"  
@@ -407,17 +397,37 @@ proof -
   show ?thesis using wf_inst_durative_action_schema assms(1) by blast
 qed
 
-lemma "wf_pred_atom objT (n, vs) \<longleftrightarrow> predAtm n vs \<in> preds"
+lemma wf_pred_atom_iff: "wf_pred_atom objT (n, vs) \<longleftrightarrow> predAtm n vs \<in> preds"
   apply (rule iffI)
-  subgoal
-    apply (subst (asm) wf_pred_atom.simps)
-    apply (subst preds_def)
-    apply (auto split: option.splits)
+  subgoal by (auto split: option.splits simp: preds_def sig_iff typed_args_correct[simplified is_obj_of_type_alt])
+  subgoal 
+    apply (simp add: preds_def)
+    apply (erule exE)
     subgoal for ts
-      unfolding sig_def 
+      apply (erule conjE)
+      apply (subst (asm) sig_iff[symmetric])
+      apply (subst (asm) typed_args_correct)
+      apply (subst (asm) is_obj_of_type_alt)
+      by auto
+    done
+  done
 
-lemma "wf_fmla_atom objT f \<longleftrightarrow> f \<in> props"
-  sorry
+lemma wf_fmla_atom_in_propositions: "wf_fmla_atom objT f \<Longrightarrow> f \<in> propositions"
+  apply (cases f)
+  subgoal for x
+    apply (cases x)
+    using wf_pred_atom_iff unfolding propositions_def by auto
+  by auto
+
+fun effect_props::"object ast_effect \<Rightarrow> object atom formula set" where
+"effect_props (Effect xs ys) = set xs \<union> set ys"
+
+definition "effect_preds f \<equiv> \<Union> (atoms ` (effect_props f))"
+
+abbreviation "form_preds \<equiv> atoms"
+
+fun ga_preds::"ground_action \<Rightarrow> object atom set" where
+"ga_preds (Ground_Action pre eff) = form_preds pre \<union> effect_preds eff"
 
 
 lemma 
@@ -432,9 +442,7 @@ lemma
 lemma 
   assumes "(n, s, i, e, c) \<in> pddl_durative_actions" 
   shows"ga_preds s \<subseteq> preds \<and> ga_preds i \<subseteq> preds \<and> ga_preds e \<subseteq> preds"
-proof (intro conjI)
-  
-qed
+  sorry
 
 end
 
@@ -445,7 +453,6 @@ sublocale temp_planning_problem props acts initial_state goal_imp at_start_imp a
 proof 
   show "initial_state \<subseteq> props"
   proof -
-    
     from wf_problem
     have "\<forall>f \<in> set (init P). wf_fmla_atom objT f \<or> wf_func_assign f" unfolding wf_problem_def by simp
     moreover
@@ -457,66 +464,7 @@ proof
       done
     ultimately
     have "\<forall>p \<in> I. wf_fmla_atom objT p" unfolding I_def by auto
-    moreover
-    have 1: "sig a = Some ts \<Longrightarrow> PredDecl a ts \<in> set (predicates D)" for a ts
-      apply (subst (asm) sig_def)
-      apply (drule map_of_SomeD)
-      by (auto split: predicate_decl.splits) 
-  
-    have "is_of_type objT obj ty \<Longrightarrow> obj \<in> objs" for obj ty
-      unfolding objs_def objT_def constT_def is_of_type_def 
-      apply (erule case_optionE)
-       apply simp
-      subgoal for vT
-        apply (subst (asm) map_of_append[symmetric])
-        apply (drule map_of_SomeD)
-        by auto
-      done
-    hence 2: "is_of_type objT obj ty \<Longrightarrow> obj \<in> objs \<and> is_of_type objT obj ty " for obj ty
-      by simp
-    have 3: "\<forall>f. wf_fmla_atom objT f \<longrightarrow> f \<in> props"
-      apply (rule allI; rule impI)
-      subgoal for f
-        apply (induction f)
-        subgoal for x
-          apply (induction x)
-          subgoal for a vs
-            unfolding props_def propositions_def preds_def
-            apply (subst (asm) wf_fmla_atom.simps)
-            apply (subst (asm) wf_pred_atom.simps)
-            apply (erule case_optionE)
-             apply auto[1]
-            subgoal for ts
-              apply (rule UnI1, rule UnI1, rule UnI1, rule UnI2)
-              unfolding ltos_def tos_def 
-              apply (subst is_obj_of_type_alt) 
-              apply (rule imageI)
-              apply (drule 1)
-              apply (drule list_all2_mono[OF _ 2])
-               apply assumption
-              apply simp
-              apply (rule exI[where x = ts])
-              apply auto
-              apply (subst list_all2_iff)
-              apply (subst (asm) list_all2_iff)
-              apply (rule conjI)
-               apply simp
-              apply (rule ballI)
-              subgoal for x
-                apply (induction x)
-                subgoal for x y
-                  apply (drule conjunct2)
-                  apply (drule bspec[where x = "(y, x)"])
-                   apply (subst in_set_zip)
-                   apply (subst (asm) in_set_zip)
-                  by auto
-                done
-              done
-            done
-          by auto
-        by auto
-      done
-    ultimately
+    with wf_fmla_atom_in_propositions
     show ?thesis unfolding initial_state_def props_def initial_state'_def propositions_def by blast
   qed
   show "goal_imp \<subseteq> props" unfolding goal_imp_def props_def by simp
@@ -539,21 +487,24 @@ proof
           "(n, s', inv', e', c) \<in> pddl_actions" 
           unfolding prop_actions_def by blast
         show ?thesis 
-        proof (intro conjI)
-          from 1
-          
-        qed
+          sorry
       next
         case 2
         show ?thesis 
-        proof (intro conjI)
-
-        qed
+          sorry
       qed
     qed
     thus ?thesis by auto
   qed
-qed
+  show "inj_on at_start_imp acts"
+ "inj_on at_end_imp acts"
+ "at_start_imp ` acts \<inter> at_end_imp ` acts = {}"
+ "0 < card props"
+ "0 < card acts"
+ "finite props"
+ "finite acts"
+ "0 \<le> 0" sorry
+qed 
 end
 
 end
