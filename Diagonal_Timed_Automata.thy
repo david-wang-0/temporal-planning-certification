@@ -14,11 +14,11 @@ datatype ('c, 't :: time) dconstraint =
   EQ 'c 't |
   GT 'c 't |
   GE 'c 't |
-  CLT 'c 'c 't |
-  CLE 'c 'c 't |
-  CEQ 'c 'c 't |
-  CGT 'c 'c 't |
-  CGE 'c 'c 't
+  DLT 'c 'c 't |
+  DLE 'c 'c 't |
+  DEQ 'c 'c 't |
+  DGT 'c 'c 't |
+  DGE 'c 'c 't
 
 section \<open>Syntactic Definition\<close>
 
@@ -58,11 +58,11 @@ where
   "collect_clks (EQ c _) = {c}" |
   "collect_clks (GE c _) = {c}" |
   "collect_clks (GT c _) = {c}" |
-  "collect_clks (CLT c d _) = {c, d}" |
-  "collect_clks (CLE c d _) = {c, d}" |
-  "collect_clks (CEQ c d _) = {c, d}" |
-  "collect_clks (CGE c d _) = {c, d}" |
-  "collect_clks (CGT c d _) = {c, d}"
+  "collect_clks (DLT c d _) = {c, d}" |
+  "collect_clks (DLE c d _) = {c, d}" |
+  "collect_clks (DEQ c d _) = {c, d}" |
+  "collect_clks (DGE c d _) = {c, d}" |
+  "collect_clks (DGT c d _) = {c, d}"
 
 (* Clocks which are assigned in transitions *)
 definition collect_clkvt :: "('a, 'c, 't::time, 's) transition set \<Rightarrow> 'c set"
@@ -85,11 +85,11 @@ where
   "\<lbrakk>u c = d\<rbrakk> \<Longrightarrow> u \<turnstile> EQ c d" |
   "\<lbrakk>u c \<ge> d\<rbrakk> \<Longrightarrow> u \<turnstile> GE c d" |
   "\<lbrakk>u c > d\<rbrakk> \<Longrightarrow> u \<turnstile> GT c d" |
-  "\<lbrakk>u c1 < u c2 + d\<rbrakk> \<Longrightarrow> u \<turnstile> CLT c1 c2 d" |
-  "\<lbrakk>u c1 \<le> u c2 + d\<rbrakk> \<Longrightarrow> u \<turnstile> CLE c1 c2 d" |
-  "\<lbrakk>u c1 = u c2 + d\<rbrakk> \<Longrightarrow> u \<turnstile> CEQ c1 c2 d" |
-  "\<lbrakk>u c1 \<ge> u c2 + d\<rbrakk> \<Longrightarrow> u \<turnstile> CGE c1 c2 d" |
-  "\<lbrakk>u c1 > u c2 + d\<rbrakk> \<Longrightarrow> u \<turnstile> CGT c1 c2 d" 
+  "\<lbrakk>u c1 < u c2 + d\<rbrakk> \<Longrightarrow> u \<turnstile> DLT c1 c2 d" |
+  "\<lbrakk>u c1 \<le> u c2 + d\<rbrakk> \<Longrightarrow> u \<turnstile> DLE c1 c2 d" |
+  "\<lbrakk>u c1 = u c2 + d\<rbrakk> \<Longrightarrow> u \<turnstile> DEQ c1 c2 d" |
+  "\<lbrakk>u c1 \<ge> u c2 + d\<rbrakk> \<Longrightarrow> u \<turnstile> DGE c1 c2 d" |
+  "\<lbrakk>u c1 > u c2 + d\<rbrakk> \<Longrightarrow> u \<turnstile> DGT c1 c2 d" 
 
 declare clock_val.intros[intro]
 
@@ -99,15 +99,15 @@ inductive_cases[elim!]: "u \<turnstile> LE c d"
 inductive_cases[elim!]: "u \<turnstile> EQ c d"
 inductive_cases[elim!]: "u \<turnstile> GE c d"
 inductive_cases[elim!]: "u \<turnstile> GT c d"
-inductive_cases[elim!]: "u \<turnstile> CLT c1 c2 d"
-inductive_cases[elim!]: "u \<turnstile> CLE c1 c2 d"
-inductive_cases[elim!]: "u \<turnstile> CEQ c1 c2 d"
-inductive_cases[elim!]: "u \<turnstile> CGE c1 c2 d"
-inductive_cases[elim!]: "u \<turnstile> CGT c1 c2 d"
+inductive_cases[elim!]: "u \<turnstile> DLT c1 c2 d"
+inductive_cases[elim!]: "u \<turnstile> DLE c1 c2 d"
+inductive_cases[elim!]: "u \<turnstile> DEQ c1 c2 d"
+inductive_cases[elim!]: "u \<turnstile> DGE c1 c2 d"
+inductive_cases[elim!]: "u \<turnstile> DGT c1 c2 d"
 
 
 definition AND_ALL::"('c, 't::time) dconstraint list \<Rightarrow> ('c, 't) dconstraint" where
-"AND_ALL xs \<equiv> foldr AND xs (let c = SOME c. True in CEQ c c 0)"
+"AND_ALL xs \<equiv> foldr AND xs (let c = SOME c. True in DEQ c c 0)"
 
 lemma AND_ALL_iff: "(W \<turnstile> (AND_ALL xs)) \<longleftrightarrow> list_all (\<lambda>x. W \<turnstile> x) xs"
 proof (induction xs)

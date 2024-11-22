@@ -4,8 +4,6 @@ begin
 
 section \<open>Time\<close>
 
-find_theorems name: "zero_le"
-
 class time = linordered_ab_group_add + zero_less_one +
   assumes dense: "x < y \<Longrightarrow> \<exists>z. x < z \<and> z < y"
   assumes non_trivial: "\<exists> x. x \<noteq> 0"

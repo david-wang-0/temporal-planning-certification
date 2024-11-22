@@ -20,8 +20,9 @@ type_synonym ('p) state_sequence = "nat \<Rightarrow> ('p state)"
 text \<open>Invariants\<close>
 type_synonym ('p, 't) invariant_sequence = "('t \<times> 'p set) set"
 
-
-find_theorems name: "set*def"
+text \<open>Temporal plans could be multi-sets, lists or just the range of a partial function. 
+It is only necessary that the entries are not unique. I chose a partial function.\<close>
+type_synonym ('i, 'a, 't) temp_plan = "'i \<rightharpoonup> ('a \<times> 't \<times> 't)"
 
 locale temp_planning_problem =
   fixes props::   "('proposition::linorder) set"
@@ -139,16 +140,12 @@ lemma eps_cases:
     shows "thesis"
   using assms eps_range by blast
 
-end
 
-
-locale temporal_plan = temp_planning_problem _ _ _ _ _ _ _ _ upper pre
-  for upper::   "('action::linorder)  \<Rightarrow> ('time::time) upper_bound" (* these are redefined to maintain type parameters *)
-  and pre::     "'snap_action \<Rightarrow> ('proposition::linorder) set" +
-fixes \<pi>::       "'i \<rightharpoonup> ('action \<times> 'time \<times> 'time)"
+subsection \<open>Temporal plans\<close>
+context
+fixes \<pi>:: "('i, 'action, 'time) temp_plan"
 begin
 
-(* TODO: I doubt this can be instantiated with an existentially quantified \<pi> *)
 
 text \<open>Happening Time Points\<close>
 definition htps::"'time set" where
@@ -262,13 +259,14 @@ definition satisfies_duration_bounds::"'action \<Rightarrow> 'time \<Rightarrow>
     GT t' \<Rightarrow> t' < t
   | GE t' \<Rightarrow> t' \<le> t);
   ub = (case (upper a) of 
-    LT t' \<Rightarrow> t < t'
-  | LE t' \<Rightarrow> t \<le> t')
+    Some (LT t') \<Rightarrow> t < t'
+  | Some (LE t') \<Rightarrow> t \<le> t'
+  | None \<Rightarrow> True)
   in lb \<and> ub
 "
 
 definition durations_positive::bool where
-"durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 \<le> d"
+"durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 < d"
 
 definition durations_valid::bool where
 "durations_valid \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> satisfies_duration_bounds a d"
@@ -284,10 +282,6 @@ definition valid_plan::"bool" where
     \<and> durations_valid
     \<and> nm_happ_seq plan_happ_seq"
 
-end
-
-context temporal_plan
-begin           
 
 definition finite_plan::bool where
 "finite_plan \<equiv> finite (dom \<pi>)"
@@ -434,9 +428,9 @@ proof -
       next
         case 2
         with \<open>durations_positive\<close>[simplified durations_positive_def] td_in_ran td_t'd'
-        have "t \<le> t' + d'" by (metis less_add_same_cancel1 order_less_imp_le)
+        have "t \<le> t' + d'" by (metis add.commute less_add_same_cancel2 order_less_le)
         with False ij 2
-        show ?thesis using \<open>no_self_overlap\<close>[simplified no_self_overlap_def] by force
+        show ?thesis using \<open>no_self_overlap\<close>[simplified no_self_overlap_def] by force 
       qed
     qed
   qed
@@ -587,7 +581,7 @@ lemma no_actions_between_indexed_timepoints:
   using no_non_indexed_time_points[OF assms(2)] 
     a_in_B_iff_t_in_htps finite_htps[OF assms(1)] htpl_def by auto
 
-
+end
 end
 
 end
