@@ -96,21 +96,41 @@ subsubsection \<open>Decision-making\<close>
 
 text \<open>Interfering snap-actions\<close>
 
+text \<open>In order to capture \<open>0\<close>-separation, we need to check that that all snap actions numbered
+lower than \<open>n\<close>, do not interfere. For at-end snap-actions we also need to include the at-start 
+snap action with the same numbering.\<close> (* TODO *)
+
 definition interfering_at_start::"'snap_action \<Rightarrow> nat list" where
 "interfering_at_start a = sorted_list_of_set {n. n < M \<and> (mutex_snap_action a (at_start (act n)) \<or> a = at_start (act n))}"
+(* 
+definition n_int_at_start::"nat \<Rightarrow> nat list" where
+"n_int_at_start a = sorted_list_of_set {n. n < M \<and> (mutex_snap_action a (at_start (act n)) \<or> a = at_start (act n))}"
 
+ *)
 definition start_constraints::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
 "start_constraints a = map (\<lambda>b. GE (StartDur (act b)) \<epsilon>) (interfering_at_start a)"
-
+(* 
+definition n_start_constraints::"nat \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
+"n_start_constraints a = map (\<lambda>b. GE (StartDur (act b)) \<epsilon>) (interfering_at_start a)"
+ *)
 definition interfering_at_end::"'snap_action \<Rightarrow> nat list" where
 "interfering_at_end a = sorted_list_of_set {n. n < M \<and> (mutex_snap_action a (at_end (act n)) \<or> a = at_end (act n))}"
 
 definition end_constraints::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
 "end_constraints a = map (\<lambda>b. GE (EndDur (act b)) \<epsilon>) (interfering_at_end a)"
+(* 
+definition n_end_constraints::"nat \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
+"n_end_constraints a = map (\<lambda>b. AND (GE (StartDur (act b)) \<epsilon>) (GT (SchedStartSnap (act b)) 0)) (interfering_at_start a)"
+                 *)
+definition instant_start_constraints::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
+"instant_start_constraints a = map (\<lambda>b. DGE (SchedStartSnap (act b)) Delta \<epsilon>) (interfering_at_start a)"
 
 definition sep::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
 "sep a \<equiv> AND_ALL (start_constraints a @ end_constraints a)"
-
+(* 
+definition n_sep_s::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
+"n_sep_s \<equiv> AND_ALL (start_constraints n @ end_constraints a)"
+ *)
 text \<open>The clock constraints for the precondition\<close>
 definition pre_clocks::"'snap_action \<Rightarrow> ('proposition, 'action) clock list" where
 "pre_clocks a \<equiv> map PropClock (prop_list (pre a))"
@@ -122,7 +142,16 @@ text \<open>The guard constraints\<close>
 definition guard::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
 "guard a \<equiv> AND (sep a) (pre_constraint a)"
 
+definition n_guard_s::"nat \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
+"n_guard_s n \<equiv> AND (sep n) (pre_constraint a)"
+
+definition n_guard_e::"nat \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
+"n_guard_e n \<equiv> AND (sep n) (pre_constraint a)"
+
 definition guard_at_start::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
+"guard_at_start a \<equiv> AND (guard (at_start a)) (EQ (Running a) 0)"
+
+definition guard_at_start_snap::"nat \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
 "guard_at_start a \<equiv> AND (guard (at_start a)) (EQ (Running a) 0)"
 
 definition clock_duration_bounds::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where

@@ -140,7 +140,6 @@ lemma eps_cases:
     shows "thesis"
   using assms eps_range by blast
 
-
 subsection \<open>Temporal plans\<close>
 context
 fixes \<pi>:: "('i, 'action, 'time) temp_plan"
@@ -174,7 +173,6 @@ definition plan_inv_seq::"('proposition, 'time) invariant_sequence" where
 
 definition invs_at::"('proposition, 'time) invariant_sequence \<Rightarrow> 'time \<Rightarrow> 'proposition set" where
 "invs_at Inv t \<equiv> \<Union>{p | p. (t, p) \<in> Inv}"
-
 
 subsubsection \<open>Non-mutex happening sequence\<close>
 
