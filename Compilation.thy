@@ -142,17 +142,18 @@ text \<open>The guard constraints\<close>
 definition guard::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
 "guard a \<equiv> AND (sep a) (pre_constraint a)"
 
+(* 
 definition n_guard_s::"nat \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
 "n_guard_s n \<equiv> AND (sep n) (pre_constraint a)"
 
 definition n_guard_e::"nat \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
-"n_guard_e n \<equiv> AND (sep n) (pre_constraint a)"
+"n_guard_e n \<equiv> AND (sep n) (pre_constraint a)" *)
 
 definition guard_at_start::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
 "guard_at_start a \<equiv> AND (guard (at_start a)) (EQ (Running a) 0)"
-
+(* 
 definition guard_at_start_snap::"nat \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
-"guard_at_start a \<equiv> AND (guard (at_start a)) (EQ (Running a) 0)"
+"guard_at_start a \<equiv> AND (guard (at_start a)) (EQ (Running a) 0)" *)
 
 definition clock_duration_bounds::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
 "clock_duration_bounds a \<equiv> 
@@ -305,9 +306,6 @@ abbreviation delta_exec_corr::"(('proposition, 'action) clock, 'time) cval \<Rig
 
 definition delta_exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
 "delta_exec_model W E \<equiv> \<forall>a \<in> actions. delta_exec_corr W E a"
-
-definition partial_exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
-"partial_exec_model W E \<equiv> \<forall>m < M. (W (Running (act m)) = 1 \<longleftrightarrow> (act m) \<in> E) \<and> (W (Running (act m)) = 0 \<longleftrightarrow> (act m) \<notin> E)"
 
 definition exec_state_sequence::"('time \<times> 'action) set" where
 "exec_state_sequence \<equiv> {(t, a) |s t a. a \<in> actions \<and> (s, at_start a) \<in> happ_seq \<and> s < t 
@@ -592,7 +590,9 @@ qed
 subsubsection \<open>Execution time\<close>
 
 definition pt::"'snap_action \<Rightarrow> ('time \<Rightarrow> 'time \<Rightarrow> bool) \<Rightarrow> 'time \<Rightarrow> 'time" where
-"pt a c t \<equiv> if (\<exists>t'. c t' t \<and> a \<in> B t') then (Greatest (\<lambda>t'. c t' t \<and> a \<in> B t')) else (Least (\<lambda>t'. B t' \<noteq> {}) - \<epsilon>)"
+"pt a c t \<equiv> if (\<exists>t'. c t' t \<and> a \<in> B t') 
+  then (Greatest (\<lambda>t'. c t' t \<and> a \<in> B t')) 
+  else (Least (\<lambda>t'. B t' \<noteq> {}) - (\<epsilon> + 1))"
 
 abbreviation last_snap_exec::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
 "last_snap_exec a t \<equiv> pt a (<) t"
@@ -641,7 +641,7 @@ lemma a_in_b_exec_time'_0: "a \<in> B t \<Longrightarrow> exec_time' a t = 0"
   using a_in_b_last_now unfolding exec_time'_def by simp
 
 lemma subseq_last_snap_exec:
-  assumes fpl: fp_\<pi>
+  assumes fp: fp_\<pi>
       and llen: "(Suc l) < length timepoint_list" 
 shows "last_snap_exec a (ti(Suc l)) = last_snap_exec' a (ti l)"
 proof -
@@ -793,15 +793,25 @@ next
     hence "\<exists>i. ti i = u \<and> i < length timepoint_list" using time_index_img_list by force
     thus "ti 0 \<le> u" using time_index_sorted_list by blast
   qed
-  moreover
-  have "Least (\<lambda>t. B t \<noteq> {}) = (ti 0)" 
+  with s_at_t
+  have 2: "ti 0 \<le> t" by auto
+  
+  have 3: "Least (\<lambda>t. B t \<noteq> {}) = (ti 0)" 
   proof (rule Least_equality[OF _ 1])
     have "card timepoint_set > 0" using a_in_B_iff_t_in_htps s_at_t card_gt_0_iff finite_htps fp by blast
     hence "ti 0 \<in> timepoint_set" using time_index_img_set[OF fp] by blast
     thus "B (ti 0) \<noteq> {}" using a_in_B_iff_t_in_htps by auto
   qed
-  ultimately
-  have "t - last_snap_exec b t \<ge> \<epsilon>" using s_at_t False unfolding pt_def by auto
+
+  have "last_snap_exec b t = (LEAST t'. B t' \<noteq> {}) - (\<epsilon> + 1)" using False unfolding pt_def by argo
+  from this[simplified 3]
+  have "last_snap_exec b t = ti 0 - (\<epsilon> + 1)" .
+  hence 4: "t - last_snap_exec b t = \<epsilon> + 1 + t - ti 0" by auto
+  with 2
+  have "0 < 1 + t - ti 0" by (simp add: add_strict_increasing)
+  with 4
+  have "\<epsilon> < t - last_snap_exec b t" unfolding 4
+    by auto
   thus ?thesis unfolding exec_time_def by simp
 qed
 
@@ -850,7 +860,7 @@ lemma exec_time_sat_dur_const:
 lemma exec_time_at_init:
   assumes fp: "fp_\<pi>"
     and some_happs: "0 < card timepoint_set"
-  shows "exec_time b (ti 0) = \<epsilon>"
+  shows "exec_time b (ti 0) = \<epsilon> + 1"
 proof -
   have "\<forall>i < card timepoint_set. ti 0 \<le> ti i" using time_index_sorted_set by blast
   hence "\<forall>t \<in> timepoint_set. ti 0 \<le> t" using time_index_img_set[OF fp] by force
@@ -904,9 +914,6 @@ qed
 abbreviation B_lim::"'time \<Rightarrow> nat \<Rightarrow> 'snap_action set" where
 "B_lim t m \<equiv> limited_snap_action_set (B t) m"
 
-definition partial_exec_time_update::"'snap_action \<Rightarrow> 'time \<Rightarrow> nat \<Rightarrow> 'time" where
-"partial_exec_time_update a t m \<equiv> if (a \<in> B_lim t m) then 0 else exec_time a t"
-
 lemma B_lim_M_eq_B:
   assumes "pap_\<pi>"
   shows "B_lim t M = B t" 
@@ -921,13 +928,6 @@ proof (rule limit_M_eq_orig)
     then show "x \<in> snap_actions" unfolding snap_actions_def by blast
   qed
 qed
-
-lemma exec_time_full_upd_eq_exec_time': 
-  assumes "pap_\<pi>"
-  shows "partial_exec_time_update a t M = exec_time' a t"
-  using partial_exec_time_update_def exec_time_def exec_time'_def 
-    a_not_in_b_last_unchanged a_in_b_last_now B_lim_M_eq_B[OF assms(1)]
-  by simp 
 
 subsection \<open>Simulated execution of a single snap-action\<close>
 
@@ -3046,7 +3046,7 @@ proof -
 qed
 
 fun deltas::"nat \<Rightarrow> 'time" where
-"deltas 0 = \<epsilon>" |
+"deltas 0 = \<epsilon> + 1" |
 "deltas (Suc n) = ti (Suc n) - ti n"
 
 find_theorems name: "exec_time*nex"
@@ -3081,7 +3081,7 @@ proof (induction l)
     have "W (StartDur a) = 0" using other_clocks by auto
     moreover
     have "0 < card timepoint_set" unfolding card_htps_len_htpl using 0 .
-    hence "exec_time (at_start a) (ti 0) = \<epsilon>" using exec_time_at_init fpl by blast
+    hence "exec_time (at_start a) (ti 0) = \<epsilon> + 1" using exec_time_at_init fpl by blast
     ultimately
     show ?thesis by auto
   qed
@@ -3093,7 +3093,7 @@ proof (induction l)
     have "W (EndDur a) = 0" using other_clocks by auto
     moreover
     have "0 < card timepoint_set" unfolding card_htps_len_htpl using 0 by simp
-    hence "exec_time (at_end a) (ti 0) = \<epsilon>" using exec_time_at_init fpl by blast
+    hence "exec_time (at_end a) (ti 0) = \<epsilon> + 1" using exec_time_at_init fpl by blast
     ultimately
     show ?thesis by auto
   qed
