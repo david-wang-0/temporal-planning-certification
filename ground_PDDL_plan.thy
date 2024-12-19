@@ -76,7 +76,7 @@ fixes \<pi>::"(nat, pr action, rat) temp_plan"
 begin
 
 definition htps::"rat set" where
-"htps \<equiv> {t |a t d. (a, t, d) \<in> set \<pi>} \<union> {t + d |a t d. (a, t, d) \<in> set \<pi>}"
+"htps \<equiv> {t |a t d. (a, t, d) \<in> ran \<pi>} \<union> {t + d |a t d. (a, t, d) \<in> ran \<pi>}"
 
 definition htpl::"rat list" where
 "htpl = sorted_list_of_set htps"
@@ -88,8 +88,8 @@ text \<open>Happening Sequences\<close>
 
 definition plan_happ_seq::"(rat \<times> pr snap) set" where
 "plan_happ_seq \<equiv> 
-    {(t, s_snap a) | a t d. (a, t, d) \<in> set \<pi>} 
-  \<union> {(t + d, e_snap a) | a t d. (a, t, d) \<in> set \<pi>}"
+    {(t, s_snap a) | a t d. (a, t, d) \<in> ran \<pi>} 
+  \<union> {(t + d, e_snap a) | a t d. (a, t, d) \<in> ran \<pi>}"
 
 definition happ_at::"(rat \<times> pr snap) set \<Rightarrow> rat \<Rightarrow> pr snap set" where
 "happ_at B t \<equiv> {s. (t, s) \<in> B}"
@@ -97,7 +97,7 @@ definition happ_at::"(rat \<times> pr snap) set \<Rightarrow> rat \<Rightarrow> 
 text \<open>Invariants\<close>
 definition plan_inv_seq::"(pr, rat) invariant_sequence" where
 "plan_inv_seq \<equiv>
-  {(t', set (oc a)) | a t d t'. (a, t, d) \<in> set \<pi> \<and> (t < t' \<and> t' \<le> t + d)}"
+  {(t', set (oc a)) | a t d t'. (a, t, d) \<in> ran \<pi> \<and> (t < t' \<and> t' \<le> t + d)}"
 
 definition invs_at::"(pr, rat) invariant_sequence \<Rightarrow> rat \<Rightarrow> pr set" where
 "invs_at Inv t \<equiv> \<Union>{p | p. (t, p) \<in> Inv}"
@@ -137,12 +137,12 @@ definition valid_state_sequence::"pr state_sequence \<Rightarrow> bool" where
 
 
 definition no_self_overlap::"bool" where
-"no_self_overlap \<equiv> \<not>(\<exists>a t d u e.
-    (a, t, d) \<in> set \<pi>
-  \<and> (a, u, e) \<in> set \<pi>
-  \<and> (u \<noteq> t \<or> d \<noteq> e)
-  \<and> t \<le> u \<and> u \<le> t + d)
-  \<and> distinct \<pi>"
+"no_self_overlap \<equiv> \<not>(\<exists>i j a t d u e. i \<noteq> j
+  \<and> i \<in> dom \<pi>
+  \<and> j \<in> dom \<pi>
+  \<and> Some (a, t, d) = \<pi> i
+  \<and> Some (a, u, e) = \<pi> j
+  \<and> t \<le> u \<and> u \<le> t + d)"
 
 definition satisfies_duration_bounds::"pr action \<Rightarrow> rat \<Rightarrow> bool" where
 "satisfies_duration_bounds a t \<equiv> (
@@ -153,10 +153,10 @@ definition satisfies_duration_bounds::"pr action \<Rightarrow> rat \<Rightarrow>
   | None \<Rightarrow> True)"
 
 definition durations_positive::bool where
-"durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> set \<pi> \<longrightarrow> 0 < d"
+"durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 < d"
 
 definition durations_valid::bool where
-"durations_valid \<equiv> \<forall>a t d. (a, t, d) \<in> set \<pi> \<longrightarrow> satisfies_duration_bounds a d"
+"durations_valid \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> satisfies_duration_bounds a d"
 
 definition valid_plan::"pr set \<Rightarrow> pr set \<Rightarrow> rat \<Rightarrow> bool" where
 "valid_plan initial_state goal_cond \<epsilon> \<equiv> \<exists>M. 
