@@ -21,9 +21,11 @@ text \<open>Invariants\<close>
 type_synonym ('p, 't) invariant_sequence = "('t \<times> 'p set) set"
 
 text \<open>Temporal plans could be multi-sets, lists or just the range of a partial function. 
-It is only necessary that the entries are not unique. I chose a partial function.\<close>
+It is only necessary that the entries do not have to be unique, because unique entries are a 
+consequence of prohibiting self-overlap. I chose a partial function.\<close>
 type_synonym ('i, 'a, 't) temp_plan = "'i \<rightharpoonup> ('a \<times> 't \<times> 't)"
 
+text \<open>This is an abstraction over a temporal planning problem\<close>
 locale temp_planning_problem =
   fixes props::   "('proposition::linorder) set"
     and actions:: "('action::linorder) set"
@@ -32,7 +34,7 @@ locale temp_planning_problem =
     and at_start::"'action  \<Rightarrow> 'snap_action"
     and at_end::  "'action  \<Rightarrow> 'snap_action"
     and over_all::"'action  \<Rightarrow> 'proposition set"
-    and lower::   "'action  \<Rightarrow> ('time::time) lower_bound"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
     and upper::   "'action  \<rightharpoonup> 'time upper_bound"
     and pre::     "'snap_action \<Rightarrow> 'proposition set"
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
@@ -123,7 +125,6 @@ lemma p_inj_on: "inj_on p {n. n < card props}"
 lemma p_img_props: "p ` {n. n < card props} = props"
   using p_bij_betw unfolding bij_betw_def by blast
 
-
 lemma p_in_props_iff: "pr \<in> props \<longleftrightarrow> (\<exists>i < card props. p i = pr)"
   using p_img_props by force
 
@@ -206,9 +207,7 @@ qed
 
 subsubsection \<open>Valid state sequence\<close>
 
-definition valid_state_sequence::"
-  'proposition state_sequence 
-\<Rightarrow> bool" where
+definition valid_state_sequence::"'proposition state_sequence \<Rightarrow> bool" where
 "valid_state_sequence M \<equiv> (
   let 
     t = time_index;
@@ -254,8 +253,9 @@ definition plan_actions_in_problem::bool where
 definition satisfies_duration_bounds::"'action \<Rightarrow> 'time \<Rightarrow> bool" where
 "satisfies_duration_bounds a t \<equiv> 
   let lb = (case (lower a) of 
-    GT t' \<Rightarrow> t' < t
-  | GE t' \<Rightarrow> t' \<le> t);
+    Some (GT t') \<Rightarrow> t' < t
+  | Some (GE t') \<Rightarrow> t' \<le> t
+  | None \<Rightarrow> True);
   ub = (case (upper a) of 
     Some (LT t') \<Rightarrow> t < t'
   | Some (LE t') \<Rightarrow> t \<le> t'
@@ -517,7 +517,6 @@ lemma time_index_strict_mono_on_list:
 
 lemmas time_index_sorted_list = sorted_list_of_set(2)[of htps, simplified htpl_def[symmetric], THEN sorted_nth_mono]
 
-
 lemma time_index_strict_sorted_list':
   assumes i: "i < length htpl"
       and ti: "time_index i < time_index j"
@@ -563,11 +562,10 @@ proof (rule notI)
     "time_index l < time_index l'"
     "time_index l' < time_index (Suc l)"
     by (metis in_set_conv_nth)
-  hence "l' < (Suc l)"
-    by (metis not_less_iff_gr_or_eq time_index_strict_sorted_list)
+  
+  have "l' < (Suc l)" using l'(1, 3) time_index_strict_sorted_list' by simp
   moreover
-  have "l < l'" using l'
-    by (metis Suc_lessD linorder_neqE_nat order_less_asym' a time_index_strict_sorted_list)
+  have "l < l'" using l'(2) time_index_strict_sorted_list' a by simp
   ultimately
   show "False" by simp
 qed

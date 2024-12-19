@@ -158,8 +158,9 @@ definition guard_at_start_snap::"nat \<Rightarrow> (('proposition, 'action) cloc
 definition clock_duration_bounds::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
 "clock_duration_bounds a \<equiv> 
   let l = case (lower a) of 
-    (lower_bound.GT t) \<Rightarrow> GT (StartDur a) t
-  | (lower_bound.GE t) \<Rightarrow> GE (StartDur a) t;
+    Some (lower_bound.GT t) \<Rightarrow> GT (StartDur a) t
+  | Some (lower_bound.GE t) \<Rightarrow> GE (StartDur a) t
+  | None \<Rightarrow> true_const;
   u = case (upper a) of 
     Some (upper_bound.LT t) \<Rightarrow> LT (StartDur a) t
   | Some (upper_bound.LE t) \<Rightarrow> LE (StartDur a) t
@@ -706,18 +707,18 @@ proof (cases "\<exists>u < t. b \<in> B u")
 
   from s_at_t
   have "t \<in> timepoint_set" using a_in_B_iff_t_in_htps by blast
-  then obtain tx where
-    tx: "t = ti tx"
-    "tx < card timepoint_set" using time_index_img_set[OF fp] by force
+  then obtain j where
+    j: "t = ti j"
+    "j < card timepoint_set" using time_index_img_set[OF fp] by force
   
-  have P_iff: "(\<lambda>t'. t' < t \<and> b \<in> B t') = (\<lambda>t'. \<exists>i < card timepoint_set. ti i = t' \<and> i < tx \<and> b \<in> B (ti i))" (is "?P = ?P'")
+  have P_iff: "(\<lambda>t'. t' < t \<and> b \<in> B t') = (\<lambda>t'. \<exists>i < card timepoint_set. ti i = t' \<and> i < j \<and> b \<in> B (ti i))" (is "?P = ?P'")
   proof -
     have "(\<lambda>t'. t' < t \<and> b \<in> B t') = (\<lambda>t'. t' \<in> timepoint_set \<and> t' < t \<and> b \<in> B t')" using a_in_B_iff_t_in_htps by blast
     also have "... = (\<lambda>t'. \<exists>i < card timepoint_set. ti i = t' \<and> t' < t \<and> b \<in> B (ti i))" using time_index_img_set[OF fp] by force
-    also have "... = (\<lambda>t'. \<exists>i < card timepoint_set. ti i = t' \<and> i < tx \<and> b \<in> B (ti i))"
-      unfolding tx(1) 
-      using time_index_strict_sorted_set'[where j = tx] 
-      using time_index_strict_sorted_set[OF _ tx(2)] 
+    also have "... = (\<lambda>t'. \<exists>i < card timepoint_set. ti i = t' \<and> i < j \<and> b \<in> B (ti i))"
+      unfolding j(1) 
+      using time_index_strict_sorted_set'[where j = j] 
+      using time_index_strict_sorted_set[OF _ j(2)] 
       by blast
     finally show ?thesis .
   qed
@@ -727,16 +728,16 @@ proof (cases "\<exists>u < t. b \<in> B u")
     "b \<in> B u"
     using True by blast
   hence "u \<in> timepoint_set" using a_in_B_iff_t_in_htps by blast
-  hence "\<exists>i < card timepoint_set. i < tx \<and> b \<in> B (ti i)" (is "Ex ?P2") using P_iff u by meson
+  hence "\<exists>i < card timepoint_set. i < j \<and> b \<in> B (ti i)" (is "Ex ?P2") using P_iff u by meson
   moreover
-  have P2_int: "\<And>x. ?P2 x \<Longrightarrow> x \<le> tx" using time_index_sorted_set' by auto
+  have P2_int: "\<And>x. ?P2 x \<Longrightarrow> x \<le> j" using time_index_sorted_set' by auto
   ultimately
   have P2: "?P2 (Greatest ?P2)" using GreatestI_ex_nat[where P = ?P2] by blast
-  
+
   have P_1: "?P (ti(Greatest ?P2))" 
   proof -
-    from P2 time_index_strict_sorted_set[OF _ tx(2)] 
-    show ?thesis unfolding tx(1) by blast
+    from P2 time_index_strict_sorted_set[OF _ j(2)] 
+    show ?thesis unfolding j(1) by blast
   qed
   
   have P_max: "x \<le> ti (Greatest ?P2)" if assm: "?P x" for x 
@@ -1473,18 +1474,8 @@ lemma duration_bound_lemma:
   assumes "W \<turnstile> true_const"
   assumes "satisfies_duration_bounds a (W (StartDur a))"
   shows "W \<turnstile> clock_duration_bounds a"
-proof (cases "upper a")
-  case None
-  then show ?thesis 
-    using assms satisfies_duration_bounds_def clock_duration_bounds_def assms(1)
-    by (cases "lower a"; auto)
-next
-  case (Some lim)
-  then show ?thesis 
-    using assms satisfies_duration_bounds_def clock_duration_bounds_def 
-    apply (cases "lower a"; cases lim)
-    by auto
-qed
+  using assms satisfies_duration_bounds_def clock_duration_bounds_def
+  by (cases "upper a"; cases "lower a", auto split: lower_bound.split_asm upper_bound.split_asm)
 
 definition decision_making_automaton ("\<T> dm") where
 "decision_making_automaton = (decision_making, invs)"
@@ -2884,8 +2875,6 @@ proof -
     using sat_conds stop by auto
 qed
 
-term valid_plan
-
 lemma instant_execution_cycle:
   assumes l_len: "l < length timepoint_list" 
       and prop_clocks: "prop_model W (MS l)"
@@ -3049,7 +3038,6 @@ fun deltas::"nat \<Rightarrow> 'time" where
 "deltas 0 = \<epsilon> + 1" |
 "deltas (Suc n) = ti (Suc n) - ti n"
 
-find_theorems name: "exec_time*nex"
 
 lemma multiple_execution_cycles:
   assumes l_len: "l < length timepoint_list" 
@@ -3319,5 +3307,4 @@ proof -
 qed
 end
 end
-
 end

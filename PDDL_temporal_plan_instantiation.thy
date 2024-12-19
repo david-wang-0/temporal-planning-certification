@@ -4,7 +4,7 @@ theory PDDL_temporal_plan_instantiation
     Containers.Containers
 begin
 
-text \<open>This is the type of propositions, we will use to instantiate the locale\<close>
+text \<open>This is the type of propositions\<close>
 type_synonym pr = "object atom formula"
 
 type_synonym suff_cond = "pr list"
@@ -506,5 +506,6 @@ proof
  "0 \<le> 0" sorry
 qed 
 end
+
 
 end

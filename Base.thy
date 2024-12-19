@@ -21,20 +21,19 @@ proof -
   qed
 qed
 
-find_theorems name: "GreatestI"
-
 lemma GreatestI_time:
   assumes "P k" and minor: "\<And>y. P y \<Longrightarrow> y \<le> k"
-  shows GreatestI_nat: "P (Greatest P)"
+  shows "P (Greatest P)"
   using assms GreatestI2_order by blast
 
   
 end
 
 lemma list_all2_twist: "list_all2 P xs ys \<longleftrightarrow> list_all2 (\<lambda>y x. P x y) ys xs" for xs ys P
-    apply (subst list_all2_iff)+
-    apply (rule iffI; rule conjI; simp; drule conjunct2)
-     apply (rule ballI)
+  apply (subst list_all2_iff)+
+  apply (rule iffI; rule conjI; simp)
+   apply (drule conjunct2)
+   apply (rule ballI)
     subgoal for x
       apply (induction x)
       subgoal for a b
@@ -44,7 +43,8 @@ lemma list_all2_twist: "list_all2 P xs ys \<longleftrightarrow> list_all2 (\<lam
          apply auto
         done
       done
-     apply (rule ballI)
+    apply (drule conjunct2)
+    apply (rule ballI)
     subgoal for x
       apply (induction x)
       subgoal for a b
