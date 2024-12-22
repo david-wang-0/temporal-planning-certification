@@ -43,6 +43,8 @@ abbreviation "prop_numbers S \<equiv> {n| n pr. n < N \<and> pr \<in> S \<and> (
 
 definition "prop_list S \<equiv> map p (sorted_list_of_set (prop_numbers S))"
 
+abbreviation "msa \<equiv> mutex_snap_action pre adds dels"
+
 lemma set_prop_list: 
   assumes "P \<subseteq> props"
   shows "set (prop_list P) = P"
@@ -101,10 +103,10 @@ lower than \<open>n\<close>, do not interfere. For at-end snap-actions we also n
 snap action with the same numbering.\<close> (* TODO *)
 
 definition interfering_at_start::"'snap_action \<Rightarrow> nat list" where
-"interfering_at_start a = sorted_list_of_set {n. n < M \<and> (mutex_snap_action a (at_start (act n)) \<or> a = at_start (act n))}"
+"interfering_at_start a = sorted_list_of_set {n. n < M \<and> (msa a (at_start (act n)) \<or> a = at_start (act n))}"
 (* 
 definition n_int_at_start::"nat \<Rightarrow> nat list" where
-"n_int_at_start a = sorted_list_of_set {n. n < M \<and> (mutex_snap_action a (at_start (act n)) \<or> a = at_start (act n))}"
+"n_int_at_start a = sorted_list_of_set {n. n < M \<and> (msa a (at_start (act n)) \<or> a = at_start (act n))}"
 
  *)
 definition start_constraints::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
@@ -114,7 +116,7 @@ definition n_start_constraints::"nat \<Rightarrow> (('proposition, 'action) cloc
 "n_start_constraints a = map (\<lambda>b. GE (StartDur (act b)) \<epsilon>) (interfering_at_start a)"
  *)
 definition interfering_at_end::"'snap_action \<Rightarrow> nat list" where
-"interfering_at_end a = sorted_list_of_set {n. n < M \<and> (mutex_snap_action a (at_end (act n)) \<or> a = at_end (act n))}"
+"interfering_at_end a = sorted_list_of_set {n. n < M \<and> (msa a (at_end (act n)) \<or> a = at_end (act n))}"
 
 definition end_constraints::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
 "end_constraints a = map (\<lambda>b. GE (EndDur (act b)) \<epsilon>) (interfering_at_end a)"
@@ -251,36 +253,41 @@ context
   fixes \<pi>::"('i, 'action, 'time) temp_plan"
 begin
 
-abbreviation "happ_seq \<equiv> plan_happ_seq _ \<pi>"
+abbreviation "happ_seq \<equiv> plan_happ_seq \<pi> at_start at_end"
 
-abbreviation "finite_\<pi> \<equiv> finite_plan _ \<pi>"
+abbreviation "finite_\<pi> \<equiv> finite_plan \<pi>"
 
 abbreviation "B" where "B \<equiv> happ_at happ_seq"
 
-abbreviation "timepoint_list \<equiv> htpl _ \<pi>"
+abbreviation "timepoint_list \<equiv> htpl \<pi>"
 
-abbreviation "timepoint_set \<equiv> htps _ \<pi>"
+abbreviation "timepoint_set \<equiv> htps \<pi>"
 
-abbreviation "ti \<equiv> time_index _ \<pi>"
+abbreviation "ti \<equiv> time_index \<pi>"
 
 abbreviation "pap_\<pi> \<equiv> plan_actions_in_problem _ \<pi>"
 
-abbreviation "dp_\<pi> \<equiv> durations_positive _ \<pi>"
+abbreviation "dp_\<pi> \<equiv> durations_positive \<pi>"
 
-abbreviation "fp_\<pi> \<equiv> finite_plan _ \<pi>"
+abbreviation "fp_\<pi> \<equiv> finite_plan \<pi>"
 
-abbreviation "nso_\<pi> \<equiv> no_self_overlap _ \<pi>"
+abbreviation "nso_\<pi> \<equiv> no_self_overlap \<pi>"
 
-abbreviation "dv_\<pi> \<equiv> durations_valid _ \<pi>"
+abbreviation "dv_\<pi> \<equiv> durations_valid \<pi> lower upper"
 
-abbreviation "vss \<equiv> valid_state_sequence _ \<pi>"
+abbreviation "vss \<equiv> valid_state_sequence \<pi> at_start at_end over_all pre adds dels"
 
-abbreviation "\<pi>_inv_seq \<equiv> plan_inv_seq _ \<pi>"
+abbreviation "\<pi>_inv_seq \<equiv> plan_inv_seq \<pi> over_all"
 
 abbreviation "Inv \<equiv> invs_at \<pi>_inv_seq"
 
-abbreviation "vp_\<pi> \<equiv> valid_plan _ \<pi>"
+abbreviation "vp_\<pi> \<equiv> valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon>"
 
+abbreviation "nm \<equiv> nm_happ_seq pre adds dels \<epsilon>"
+
+abbreviation "sat_dur_bounds \<equiv> satisfies_duration_bounds lower upper"
+
+abbreviation "app_effs \<equiv> apply_effects adds dels"
 
 subsection \<open>Definitions that connect the plan to the automaton\<close>
 subsubsection \<open>Proposition and execution state\<close>
@@ -394,9 +401,8 @@ proof -
     have "\<exists>d. (a, s, d) \<in> ran \<pi>"
     proof cases
       case 1
-      hence "\<exists>a' t d. (s, at_start a) = (t, at_start a') \<and> (a', t, d) \<in> ran \<pi>" by simp
-      with assms(1)[simplified plan_actions_in_problem_def]
-      show ?thesis by (metis Pair_inject at_start_inj_on inj_on_contraD s(1))
+      hence "\<exists>a' t d. (s, at_start a) = (t, at_start a') \<and> (a', t, d) \<in> ran \<pi>" by blast
+      thus ?thesis using at_start_inj_on[simplified inj_on_def] \<open>a \<in> actions\<close> pap[simplified plan_actions_in_problem_def] by blast
     next
       case 2
       hence "\<exists>a' t d. (s, at_start a) = (t + d, at_end a') \<and> (a', t, d) \<in> ran \<pi>" by auto
@@ -406,7 +412,7 @@ proof -
     qed
     then obtain d where
       d: "(a, s, d) \<in> ran \<pi>"
-      "(s + d, at_end a) \<in> happ_seq" using plan_happ_seq_def by blast
+      "(s + d, at_end a) \<in> happ_seq" using plan_happ_seq_def by fast
     with s(4) assms(2)[simplified durations_positive_def]
     have "s + d > ?te" by fastforce
     
@@ -458,12 +464,12 @@ proof (rule ccontr)
     with time_index_img_set fpl
     have "timepoint_set = {}" by fastforce
     with t(2) a_in_B_iff_t_in_htps
-    show ?thesis by blast
+    show ?thesis by fast
   next
     case (Suc nat)
     hence "0 < card timepoint_set" by auto
     from t(2)
-    have "t \<in> timepoint_set" using a_in_B_iff_t_in_htps by blast
+    have "t \<in> timepoint_set" using a_in_B_iff_t_in_htps by fast
     then obtain i where
       i: "t = ti i" 
       "i < card timepoint_set" using time_index_img_set fpl by blast
@@ -697,23 +703,23 @@ lemma updated_exec_time_and_next:
 
 
 lemma exec_time_and_epsilon:
-  assumes nm: "nm_happ_seq happ_seq"
+  assumes nm: "nm happ_seq"
       and s_at_t: "s \<in> B t"
-      and mutex: "mutex_snap_action s b \<or> s = b"
+      and mutex: "msa s b \<or> s = b"
       and fp: "fp_\<pi>"
     shows "exec_time b t \<ge> \<epsilon>"
 proof (cases "\<exists>u < t. b \<in> B u")
   case True
 
   from s_at_t
-  have "t \<in> timepoint_set" using a_in_B_iff_t_in_htps by blast
+  have "t \<in> timepoint_set" using a_in_B_iff_t_in_htps by fast
   then obtain j where
     j: "t = ti j"
     "j < card timepoint_set" using time_index_img_set[OF fp] by force
   
   have P_iff: "(\<lambda>t'. t' < t \<and> b \<in> B t') = (\<lambda>t'. \<exists>i < card timepoint_set. ti i = t' \<and> i < j \<and> b \<in> B (ti i))" (is "?P = ?P'")
   proof -
-    have "(\<lambda>t'. t' < t \<and> b \<in> B t') = (\<lambda>t'. t' \<in> timepoint_set \<and> t' < t \<and> b \<in> B t')" using a_in_B_iff_t_in_htps by blast
+    have "(\<lambda>t'. t' < t \<and> b \<in> B t') = (\<lambda>t'. t' \<in> timepoint_set \<and> t' < t \<and> b \<in> B t')" using a_in_B_iff_t_in_htps by fast
     also have "... = (\<lambda>t'. \<exists>i < card timepoint_set. ti i = t' \<and> t' < t \<and> b \<in> B (ti i))" using time_index_img_set[OF fp] by force
     also have "... = (\<lambda>t'. \<exists>i < card timepoint_set. ti i = t' \<and> i < j \<and> b \<in> B (ti i))"
       unfolding j(1) 
@@ -727,7 +733,7 @@ proof (cases "\<exists>u < t. b \<in> B u")
     u: "u < t"
     "b \<in> B u"
     using True by blast
-  hence "u \<in> timepoint_set" using a_in_B_iff_t_in_htps by blast
+  hence "u \<in> timepoint_set" using a_in_B_iff_t_in_htps by fast
   hence "\<exists>i < card timepoint_set. i < j \<and> b \<in> B (ti i)" (is "Ex ?P2") using P_iff u by meson
   moreover
   have P2_int: "\<And>x. ?P2 x \<Longrightarrow> x \<le> j" using time_index_sorted_set' by auto
@@ -765,15 +771,15 @@ proof (cases "\<exists>u < t. b \<in> B u")
   
 
   have nm_cond: "t - ?t < \<epsilon> \<and> ?t - t < \<epsilon> \<and> s \<in> (B t) \<and> b \<in> (B ?t) 
-    \<longrightarrow> ((s \<noteq> b \<longrightarrow> \<not>mutex_snap_action s b) \<and> (s = b \<longrightarrow> t = ?t))" using nm nm_happ_seq_def by blast
-  hence "\<not>(s \<noteq> b \<longrightarrow> \<not>mutex_snap_action s b) \<or> \<not>(s = b \<longrightarrow> t = ?t)
+    \<longrightarrow> ((s \<noteq> b \<longrightarrow> \<not>msa s b) \<and> (s = b \<longrightarrow> t = ?t))" using nm nm_happ_seq_def by fast
+  hence "\<not>(s \<noteq> b \<longrightarrow> \<not>msa s b) \<or> \<not>(s = b \<longrightarrow> t = ?t)
     \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon> \<or> s \<notin> (B t) \<or> b \<notin> (B ?t)" by auto
-  hence "\<not>(s \<noteq> b \<longrightarrow> \<not>mutex_snap_action s b) \<or> \<not>(s = b \<longrightarrow> t = ?t)
+  hence "\<not>(s \<noteq> b \<longrightarrow> \<not>msa s b) \<or> \<not>(s = b \<longrightarrow> t = ?t)
     \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  using s_at_t b_at_t' by blast
-  hence "(s \<noteq> b \<and> mutex_snap_action s b) \<or> (s = b \<and> t \<noteq> ?t)
+  hence "(s \<noteq> b \<and> msa s b) \<or> (s = b \<and> t \<noteq> ?t)
     \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  by blast
   moreover
-  have "s \<noteq> b \<longrightarrow> mutex_snap_action s b" using mutex by blast
+  have "s \<noteq> b \<longrightarrow> msa s b" using mutex by blast
   moreover
   have "t \<noteq> ?t" using b_at_t' by auto
   ultimately
@@ -790,7 +796,7 @@ next
   case False
   have 1: "ti 0 \<le> u" if "B u \<noteq> {}" for u
   proof -
-    have "u \<in> set timepoint_list" using that a_in_B_iff_t_in_htps set_htpl_eq_htps[OF fp] by auto
+    have "u \<in> set timepoint_list" using that a_in_B_iff_t_in_htps set_htpl_eq_htps[OF fp] by fast
     hence "\<exists>i. ti i = u \<and> i < length timepoint_list" using time_index_img_list by force
     thus "ti 0 \<le> u" using time_index_sorted_list by blast
   qed
@@ -799,9 +805,9 @@ next
   
   have 3: "Least (\<lambda>t. B t \<noteq> {}) = (ti 0)" 
   proof (rule Least_equality[OF _ 1])
-    have "card timepoint_set > 0" using a_in_B_iff_t_in_htps s_at_t card_gt_0_iff finite_htps fp by blast
+    have "card timepoint_set > 0" using a_in_B_iff_t_in_htps s_at_t card_gt_0_iff finite_htps fp by fast
     hence "ti 0 \<in> timepoint_set" using time_index_img_set[OF fp] by blast
-    thus "B (ti 0) \<noteq> {}" using a_in_B_iff_t_in_htps by auto
+    thus "B (ti 0) \<noteq> {}" using a_in_B_iff_t_in_htps by fast
   qed
 
   have "last_snap_exec b t = (LEAST t'. B t' \<noteq> {}) - (\<epsilon> + 1)" using False unfolding pt_def by argo
@@ -854,7 +860,7 @@ lemma exec_time_sat_dur_const:
       and "dp_\<pi>"
       and "pap_\<pi>"
       and "dv_\<pi>"
-    shows "satisfies_duration_bounds a (exec_time (at_start a) t)"
+    shows "sat_dur_bounds a (exec_time (at_start a) t)"
   using exec_time_and_duration[OF assms(1,2,3,4,5)] \<open>dv_\<pi>\<close>[simplified durations_valid_def]
   by blast
 
@@ -1470,12 +1476,25 @@ fun is_snap_dec_clock::"('proposition, 'action) clock \<Rightarrow> bool" where
 | "is_snap_dec_clock (SchedEndSnap _) = True"
 | "is_snap_dec_clock _ = False"
 
+find_theorems name: "upper_bound*split"
+
 lemma duration_bound_lemma:
   assumes "W \<turnstile> true_const"
-  assumes "satisfies_duration_bounds a (W (StartDur a))"
+  assumes "sat_dur_bounds a (W (StartDur a))"
   shows "W \<turnstile> clock_duration_bounds a"
-  using assms satisfies_duration_bounds_def clock_duration_bounds_def
-  by (cases "upper a"; cases "lower a", auto split: lower_bound.split_asm upper_bound.split_asm)
+  apply (cases "upper a"; cases "lower a")
+  subgoal using assms unfolding satisfies_duration_bounds_def clock_duration_bounds_def (* by (auto split: lower_bound.split_asm upper_bound.split_asm) *)
+    by auto
+  subgoal for x
+    apply (cases x)
+    using assms unfolding satisfies_duration_bounds_def clock_duration_bounds_def by auto
+  subgoal for x
+    apply (cases x)
+    using assms unfolding satisfies_duration_bounds_def clock_duration_bounds_def by auto
+  subgoal for x y
+    apply (cases x; cases y)
+    using assms unfolding satisfies_duration_bounds_def clock_duration_bounds_def by auto
+  done
 
 definition decision_making_automaton ("\<T> dm") where
 "decision_making_automaton = (decision_making, invs)"
@@ -1488,7 +1507,7 @@ lemma decision_making:
       and start_durs: "\<forall>a \<in> actions. W (StartDur a) = exec_time (at_start a) (ti l)"
       and end_durs: "\<forall>a \<in> actions. W (EndDur a) = exec_time (at_end a) (ti l)"
       and stop: "W Stop = 0"
-      and nm: "nm_happ_seq happ_seq"
+      and nm: "nm happ_seq"
       and fpl: "fp_\<pi>"
       and nso: "nso_\<pi>"
       and dp: "dp_\<pi>"
@@ -1511,7 +1530,7 @@ proof -
       { fix b
         assume b: "b \<in> set (interfering_at_start snap)"
         hence b_in_act: "act b \<in> actions" unfolding interfering_at_start_def using act_img_actions by auto
-        have "b \<in> {n. n < M \<and> (mutex_snap_action snap (at_start (act n)) \<or> snap = at_start (act n))}" 
+        have "b \<in> {n. n < M \<and> (msa snap (at_start (act n)) \<or> snap = at_start (act n))}" 
           using b unfolding interfering_at_start_def by auto
         hence "\<epsilon> \<le> exec_time (at_start (act b)) (ti l)" using exec_time_and_epsilon[OF nm snap_in_B _ fpl] by blast
         hence "W \<turnstile> dconstraint.GE (StartDur (act b)) \<epsilon>" using start_durs[THEN bspec, OF b_in_act] by auto
@@ -1524,7 +1543,7 @@ proof -
       { fix b
         assume b: "b \<in> set (interfering_at_end snap)"
         hence b_in_act: "act b \<in> actions" unfolding interfering_at_end_def using act_img_actions by auto
-        have "b \<in> {n. n < M \<and> (mutex_snap_action snap (at_end (act n)) \<or> snap = at_end (act n))}" 
+        have "b \<in> {n. n < M \<and> (msa snap (at_end (act n)) \<or> snap = at_end (act n))}" 
           using b unfolding interfering_at_end_def by auto
         hence "\<epsilon> \<le> exec_time (at_end (act b)) (ti l)" using exec_time_and_epsilon[OF nm snap_in_B _ fpl] by blast
         hence "W \<turnstile> dconstraint.GE (EndDur (act b)) \<epsilon>" using end_durs b_in_act by auto
@@ -1551,8 +1570,8 @@ proof -
         hence "pr \<in> MS l" using MS_valid[simplified valid_state_sequence_def] l_len snap_in_B by (auto simp: Let_def)
         moreover
         have "\<exists>a \<in> actions. snap = at_start a \<or> snap = at_end a" using snap_in_B[simplified happ_at_def]  in_happ_seqE
-          pap[simplified plan_actions_in_problem_def] by blast
-        hence "pr \<in> props" using wf_acts pr_in_pre act_img_actions by auto
+          pap[simplified plan_actions_in_problem_def] by fast
+        hence "pr \<in> props" using wf_acts pr_in_pre act_img_actions unfolding wf_act_def by auto
         ultimately
         have "W c = 1" using prop_clocks cpr unfolding prop_model_def by blast
       }
@@ -1676,8 +1695,8 @@ proof -
     proof -
       have "W \<turnstile> guard (at_end (act m))" using W_sat_guard[OF True prop_clocks exec_clocks start_durs end_durs stop] .
       moreover
-      have "satisfies_duration_bounds (act m) (exec_time (at_start (act m)) (ti l))" using exec_time_sat_dur_const[OF True act_m_in_actions nso dp pap dv] .
-      hence "satisfies_duration_bounds (act m) (W (StartDur (act m)))" using start_durs act_m_in_actions by simp
+      have "sat_dur_bounds (act m) (exec_time (at_start (act m)) (ti l))" using exec_time_sat_dur_const[OF True act_m_in_actions nso dp pap dv] .
+      hence "sat_dur_bounds (act m) (W (StartDur (act m)))" using start_durs act_m_in_actions by simp
       hence "W \<turnstile> clock_duration_bounds (act m)" using duration_bound_lemma W_tc by auto
       moreover
       have "W \<turnstile> EQ (Running (act m)) 1" using executing_when_ending[OF True _ nso dp pap] exec_clocks
@@ -1896,7 +1915,7 @@ proof -
   proof (cases "pr \<in> ?Q'")
     case True
     have ds_in_props: "(dels snap) - (adds snap) \<subseteq> props" 
-     and as_in_props: "adds snap \<subseteq> props" using wf_acts snap_in_problem snap_actions_def by auto
+     and as_in_props: "adds snap \<subseteq> props" using wf_acts snap_in_problem snap_actions_def unfolding wf_act_def by auto
     from True
     consider "pr \<in> Q \<and> pr \<notin> dels snap" | "pr \<in> adds snap" by auto
     then show ?thesis 
@@ -1931,7 +1950,7 @@ proof -
     case False
     hence not_in_adds: "pr \<notin> adds snap" by blast
     moreover
-    have "adds snap \<subseteq> props" using wf_acts snap_in_problem snap_actions_def by auto
+    have "adds snap \<subseteq> props" using wf_acts snap_in_problem snap_actions_def unfolding wf_act_def by auto
     ultimately
     have "pr \<notin> set (prop_list (adds snap))" using set_prop_list by simp
     hence all_0: "\<forall>n. (PropClock pr, n) \<in> set (effects snap) \<longrightarrow> n = 0" 
@@ -1947,7 +1966,7 @@ proof -
       show ?thesis using clock_set_all_cases[of "PropClock pr" "effects snap" 0 W] by auto
     next
       case 2
-      have "(dels snap) - (adds snap) \<subseteq> props" using wf_acts snap_in_problem snap_actions_def by auto
+      have "(dels snap) - (adds snap) \<subseteq> props" using wf_acts snap_in_problem snap_actions_def wf_act_def by auto
       with 2 not_in_adds
       have "pr \<in> set (prop_list (dels snap - (adds snap)))" 
         using set_prop_list by auto
@@ -1960,11 +1979,11 @@ proof -
 qed
 
 lemma conditional_application_is_application:
-  assumes "\<forall>a b. a \<in> S \<and> b \<in> S \<and> a \<noteq> b \<longrightarrow> \<not>(mutex_snap_action a b)"
+  assumes "\<forall>a b. a \<in> S \<and> b \<in> S \<and> a \<noteq> b \<longrightarrow> \<not>(msa a b)"
       and "S \<subseteq> snap_actions"
       and "m \<le> M"
       and "\<forall>a \<in> actions. \<not>(at_start a \<in> S \<and> at_end a \<in> S)"
-  shows "foldl (\<lambda>p i. conditionally_apply_action S (act i) p) Q [0..<m] = apply_effects Q (limited_snap_action_set S m)"
+  shows "foldl (\<lambda>p i. conditionally_apply_action S (act i) p) Q [0..<m] = app_effs Q (limited_snap_action_set S m)"
   using assms
 proof (induction m)
   case 0
@@ -1982,13 +2001,13 @@ next
     have "adds b \<inter> dels s = {}" if "b \<in> limited_snap_action_set S m" for b
       proof -
         from Suc
-        have "\<forall>a b. a \<in> S \<and> b \<in> S \<and> a \<noteq> b \<longrightarrow> \<not> mutex_snap_action a b " by blast
+        have "\<forall>a b. a \<in> S \<and> b \<in> S \<and> a \<noteq> b \<longrightarrow> \<not> msa a b " by blast
         moreover
         have "b \<in> S" using limited_snap_action_subset that by blast
         moreover
         have "s \<noteq> b" using diff that by blast
         ultimately
-        have "\<not> mutex_snap_action s b" using diff s_in_S by auto
+        have "\<not> msa s b" using diff s_in_S by auto
         thus ?thesis unfolding mutex_snap_action_def by auto
       qed
       thus ?thesis by blast
@@ -2069,8 +2088,8 @@ next
     have "foldl (\<lambda>p i. conditionally_apply_action S (act i) p) Q [0..<Suc m] 
       = conditionally_apply_snap S (at_start (act m)) (foldl (\<lambda>p i. conditionally_apply_action S (act i) p) Q [0..<m])"
       using a conditionally_apply_snap_def conditionally_apply_action_def by auto
-    also have "...  = conditionally_apply_snap S (at_start (act m)) (apply_effects Q (limited_snap_action_set S m))" using Suc by simp
-    also have  "... = ((apply_effects Q (limited_snap_action_set S m)) - dels (at_start (act m))) \<union> adds (at_start (act m))"
+    also have "...  = conditionally_apply_snap S (at_start (act m)) (app_effs Q (limited_snap_action_set S m))" using Suc by simp
+    also have  "... = ((app_effs Q (limited_snap_action_set S m)) - dels (at_start (act m))) \<union> adds (at_start (act m))"
       unfolding conditionally_apply_snap_def using a by simp
     also have "... = (Q - \<Union> (dels ` (limited_snap_action_set S m))) \<union> \<Union> (adds ` (limited_snap_action_set S m)) - dels (at_start (act m)) \<union> adds (at_start (act m))" unfolding apply_effects_def by blast
     also have "... = (Q - \<Union> (dels ` (limited_snap_action_set S m)) - dels (at_start (act m))) \<union> \<Union> (adds ` (limited_snap_action_set S m)) \<union> adds (at_start (act m))" using inter[OF a(1) diff] by blast
@@ -2124,8 +2143,8 @@ next
     have "foldl (\<lambda>p i. conditionally_apply_action S (act i) p) Q [0..<Suc m] 
       = conditionally_apply_snap S (at_end (act m)) (foldl (\<lambda>p i. conditionally_apply_action S (act i) p) Q [0..<m])"
       using a conditionally_apply_snap_def conditionally_apply_action_def by auto
-    also have "...  = conditionally_apply_snap S (at_end (act m)) (apply_effects Q (limited_snap_action_set S m))" using Suc by simp
-    also have  "... = ((apply_effects Q (limited_snap_action_set S m)) - dels (at_end (act m))) \<union> adds (at_end (act m))"
+    also have "...  = conditionally_apply_snap S (at_end (act m)) (app_effs Q (limited_snap_action_set S m))" using Suc by simp
+    also have  "... = ((app_effs Q (limited_snap_action_set S m)) - dels (at_end (act m))) \<union> adds (at_end (act m))"
       unfolding conditionally_apply_snap_def using a by simp
     also have "... = (Q - \<Union> (dels ` (limited_snap_action_set S m))) \<union> \<Union> (adds ` (limited_snap_action_set S m)) - dels (at_end (act m)) \<union> adds (at_end (act m))" unfolding apply_effects_def by blast
     also have "... = (Q - \<Union> (dels ` (limited_snap_action_set S m)) - dels (at_end (act m))) \<union> \<Union> (adds ` (limited_snap_action_set S m)) \<union> adds (at_end (act m))" using inter[OF a(2) diff] by blast
@@ -2166,7 +2185,7 @@ lemma execution:
       and start_durs: "\<forall>a \<in> actions. W (StartDur a) = exec_time (at_start a) (ti l)"
       and end_durs: "\<forall>a \<in> actions. W (EndDur a) = exec_time (at_end a) (ti l)"
       and stop: "W Stop = 0"
-      and nm: "nm_happ_seq happ_seq"
+      and nm: "nm happ_seq"
       and fpl: "fp_\<pi>"
       and nso: "nso_\<pi>"
       and dp: "dp_\<pi>"
@@ -2665,7 +2684,7 @@ proof -
 
     have "(B (ti l)) \<subseteq> snap_actions" unfolding happ_at_def plan_happ_seq_def snap_actions_def using pap unfolding plan_actions_in_problem_def by auto
     moreover
-    have "\<forall>a b. a \<in> B (ti l) \<and> b \<in> B (ti l) \<and> a \<noteq> b \<longrightarrow> \<not> mutex_snap_action a b"
+    have "\<forall>a b. a \<in> B (ti l) \<and> b \<in> B (ti l) \<and> a \<noteq> b \<longrightarrow> \<not> msa a b"
       apply (intro allI)
       subgoal for a b
         apply (rule impI)
@@ -2676,9 +2695,9 @@ proof -
     moreover
     have "\<forall>a\<in>actions. \<not> (at_start a \<in> B (ti l) \<and> at_end a \<in> B (ti l))" using executing_when_ending not_executing_when_starting assms by blast
     ultimately
-    have "prop_model W' (apply_effects (MS l) (B_lim (ti l) M))"
+    have "prop_model W' (app_effs (MS l) (B_lim (ti l) M))"
       using conditional_application_is_application[where m = M] W'(2) by simp
-    hence "prop_model W' (apply_effects (MS l) (B(ti l)))" using B_lim_M_eq_B pap by auto
+    hence "prop_model W' (app_effs (MS l) (B(ti l)))" using B_lim_M_eq_B pap by auto
     hence pm: "prop_model W' (MS (Suc l))" using MS_valid unfolding valid_state_sequence_def using l_len by (auto simp: Let_def)
     
     have "le_ta \<T> e \<T>" unfolding le_ta_def prob_automaton_def execution_automaton_def trans_of_def inv_of_def by simp
@@ -2802,7 +2821,7 @@ proof -
         pr: "pr \<in> set (prop_list (over_all a))"
          "p = PropClock pr" by auto
       
-      have oap: "over_all a \<subseteq> props" using wf_acts \<open>a \<in> actions\<close> by auto
+      have oap: "over_all a \<subseteq> props" using wf_acts \<open>a \<in> actions\<close> wf_act_def by auto
       hence "set (prop_list (over_all a)) = over_all a" using set_prop_list by auto
       with pr
       have pr_in_a_invs: "pr \<in> over_all a" by simp
@@ -2820,7 +2839,7 @@ proof -
       have "pr \<in> MS (Suc l)" by blast 
       moreover
       from pr_in_a_invs a_in_actions
-      have "pr \<in> props" using wf_acts by auto
+      have "pr \<in> props" using wf_acts wf_act_def by auto
       ultimately
       have "W (PropClock pr) = 1" using prop_model unfolding prop_model_def by simp
       thus ?thesis using pr by simp
@@ -2837,7 +2856,7 @@ proof -
     moreover
     from prop_model
     have prop_cases: "\<forall>p \<in> props. W (PropClock p) = 0 \<or> W (PropClock p) = 1" unfolding prop_model_def by blast
-    have oap: "over_all a \<subseteq> props" using wf_acts that by auto
+    have oap: "over_all a \<subseteq> props" using wf_acts that wf_act_def by auto
     hence "set (prop_list (over_all a)) = over_all a" using set_prop_list by auto
     with oap prop_cases
     have "\<forall>p \<in> set (prop_list (over_all a)). W (PropClock p) = 0 \<or> W (PropClock p) = 1" by blast
@@ -2889,7 +2908,7 @@ lemma instant_execution_cycle:
       and pap: "pap_\<pi>"
       and dp: "dp_\<pi>"
       and dv: "dv_\<pi>"
-      and nm: "nm_happ_seq happ_seq"
+      and nm: "nm happ_seq"
       and fpl: "fp_\<pi>"
   shows "\<exists>W'. \<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>Main, W'\<rangle> 
     \<and> prop_model W' (MS (Suc l))
@@ -3051,7 +3070,7 @@ lemma multiple_execution_cycles:
       and pap: "pap_\<pi>"
       and dp: "dp_\<pi>"
       and dv: "dv_\<pi>"
-      and nm: "nm_happ_seq happ_seq"
+      and nm: "nm happ_seq"
       and fpl: "fp_\<pi>"
   shows "\<exists>W'. \<T> \<turnstile> \<langle>Main, W\<rangle> \<rightarrow>* \<langle>Main, W'\<rangle> 
     \<and> prop_model W' (MS (Suc l))
@@ -3134,16 +3153,16 @@ definition "W\<^sub>0 \<equiv> \<lambda>c. 0"
 lemma automaton_complete:
   assumes vp: "vp_\<pi>"
       and fpl: "fp_\<pi>"
+      and dp: "dp_\<pi>"
+      and pap: "pap_\<pi>"
+      and nso: "nso_\<pi>"
   shows "\<exists>W'. \<T> \<turnstile> \<langle>Init, W\<^sub>0\<rangle> \<rightarrow>* \<langle>Goal, W'\<rangle>"
 proof - 
   from vp obtain MS where
       vss: "vss MS" 
   and MS: "MS 0 = init" "goal \<subseteq> MS (length timepoint_list)"
-  and nso: "nso_\<pi>"
-  and pap: "pap_\<pi>"
-  and dp: "dp_\<pi>"
   and dv: "dv_\<pi>"
-  and nm: "nm_happ_seq happ_seq"
+  and nm: "nm happ_seq"
     unfolding valid_plan_def valid_state_sequence_def by (auto simp: Let_def)
     
 

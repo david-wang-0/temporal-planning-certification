@@ -339,9 +339,7 @@ lemma "i < length htpl
 
 end
 
-text \<open>By making the planning domain finite, it becomes possible to reduce it to a timed automaton
-with a finite number of states.\<close>
-locale temp_planning_problem =
+locale basic_temp_planning_problem =
   fixes props::   "('proposition::linorder) set"
     and actions:: "('action::linorder) set"
     and init::    "'proposition set"
@@ -355,16 +353,202 @@ locale temp_planning_problem =
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
     and \<epsilon>::       "'time"
-  assumes wf_init:  "init \<subseteq> props" 
-      and wf_goal:  "goal \<subseteq> props"
-      and at_start_inj_on: "inj_on at_start actions"
-      and at_end_inj_on:   "inj_on at_end actions"
-      and snaps_disj:       "(at_start ` actions) \<inter> (at_end ` actions) = {}"
-      and some_props:       "card props > 0"
+  assumes some_props:       "card props > 0"
       and some_actions:     "card actions > 0"
       and finite_props:     "finite props"
       and finite_actions:   "finite actions"
       and eps_range:        "0 \<le> \<epsilon>"
+begin
+
+
+text \<open>This is a property of plan actions\<close>
+definition wf_act where
+"wf_act a \<equiv> let snap_props = \<lambda>s. pre s \<union> adds s \<union> dels s
+  in (
+    snap_props (at_start a) \<subseteq> props
+  \<and> snap_props (at_end a) \<subseteq> props
+  \<and> over_all a \<subseteq> props)" 
+
+
+(* For the compilation, all plan actions need to be in the problem. Moreover, all actions in the 
+  problem need to only refer to propositions. Therefore, plan-actions in problem, implies wf-acts *)
+
+(* If a plan exists where all actions only refer to the propositions, then a plan exists, where
+  all actions only modify the propositions. Also the initial state  *)
+
+
+(* 
+  context 
+    fixes \<pi>::"('i, 'action, 'time) temp_plan"
+  begin
+    
+definition wf_acts where
+"wf_acts \<equiv> (\<forall>(a, t, d) \<in> ran \<pi>. wf_act a)"
+
+    (* PDDL plans must not modify equalities, but can use them in preconditions. *)
+    definition act_mod_props where
+      "act_mod_props a \<equiv> (
+        let snap_effs = (\<lambda>s. adds s \<union> dels s)
+        in snap_effs (at_start a) \<subseteq> props \<and> snap_effs (at_end a) \<subseteq> props
+       )"
+  
+    definition plan_acts_mod_props where
+      "plan_acts_mod_props = (\<forall>(a, t, d) \<in> ran \<pi>. act_mod_props a)"
+
+    definition act_prec_ran where
+      "act_prec_ran a \<equiv> (
+        over_all a \<subseteq> props \<union> init
+      \<and> pre (at_start a) \<subseteq> props \<union> init
+      \<and> pre (at_end a) \<subseteq> props \<union> init
+      )"
+
+    definition plan_acts_prec_ranges where
+      "plan_acts_prec_ranges \<equiv> (\<forall>(a, t, d) \<in> ran \<pi>. act_prec_ran a)"
+
+    definition restr_props_in_state_seq::"'proposition state_sequence \<Rightarrow> 'proposition state_sequence" where
+      "restr_props_in_state_seq M i \<equiv> (M i \<inter> props)"
+    
+    context 
+      assumes prec_rans: plan_acts_prec_ranges
+          and prop_upds: plan_acts_mod_props
+    begin
+      lemma over_all_imp_eq: "(\<lambda>t. invs_at (plan_inv_seq \<pi> over_all) t \<inter> props) = invs_at (plan_inv_seq \<pi> over_all_imp)"
+        by (rule ext; auto simp: plan_inv_seq_def over_all_imp_def invs_at_def)
+
+      lemma happ_seq_imp_eq_adds: "adds ` (happ_at (plan_happ_seq \<pi> at_start at_end) t) = add_imp ` (happ_at (plan_happ_seq \<pi> AtStart AtEnd) t)"
+      proof (rule equalityI; rule subsetI)
+        fix x
+        assume "x \<in> adds ` happ_at (plan_happ_seq \<pi> at_start at_end) t"
+        then 
+        consider "x \<in> adds ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}" | 
+                 "x \<in> adds ` {at_end a |a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" unfolding happ_at_def plan_happ_seq_def by fast
+        thus "x \<in> add_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
+        proof cases
+          assume "x \<in> adds ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}"
+          hence "x \<in> add_imp ` {AtStart a|a d. (a, t, d) \<in> ran \<pi>}" unfolding add_imp_def by force
+          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
+        next
+          assume "x \<in> adds ` {at_end a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" 
+          hence "x \<in> add_imp ` {AtEnd a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" unfolding add_imp_def by force
+          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
+        qed
+      next
+        fix x
+        assume "x \<in> add_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
+        thus "x \<in> adds ` happ_at (plan_happ_seq \<pi> at_start at_end) t" unfolding add_imp_def happ_at_def plan_happ_seq_def by force
+      qed
+
+    lemma happ_seq_imp_eq_dels: "dels ` (happ_at (plan_happ_seq \<pi> at_start at_end) t) = 
+      del_imp ` (happ_at (plan_happ_seq \<pi> AtStart AtEnd) t)"
+      proof (rule equalityI; rule subsetI)
+        fix x
+        assume "x \<in> dels ` happ_at (plan_happ_seq \<pi> at_start at_end) t"
+        then 
+        consider "x \<in> dels ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}" | 
+                 "x \<in> dels ` {at_end a |a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" 
+          unfolding happ_at_def plan_happ_seq_def by fast
+        thus "x \<in> del_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
+        proof cases
+          assume "x \<in> dels ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}"
+          hence "x \<in> del_imp ` {AtStart a|a d. (a, t, d) \<in> ran \<pi>}" unfolding del_imp_def by force
+          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
+        next
+          assume "x \<in> dels ` {at_end a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" 
+          hence "x \<in> del_imp ` {AtEnd a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" unfolding del_imp_def by force
+          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
+        qed
+      next
+        fix x
+        assume "x \<in> del_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
+        thus "x \<in> dels ` happ_at (plan_happ_seq \<pi> at_start at_end) t" unfolding del_imp_def happ_at_def plan_happ_seq_def by force
+      qed
+
+      lemma happ_seq_imp_eq_pres: "(\<lambda>x. pre x \<inter> props) ` (happ_at (plan_happ_seq \<pi> at_start at_end) t)
+        = pre_imp ` (happ_at (plan_happ_seq \<pi> AtStart AtEnd) t)"
+      proof (rule equalityI; rule subsetI)
+        fix x
+        assume "x \<in> (\<lambda>x. pre x \<inter> props) ` happ_at (plan_happ_seq \<pi> at_start at_end) t"
+        then 
+        consider "x \<in> (\<lambda>x. pre x \<inter> props) ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}" | 
+                 "x \<in> (\<lambda>x. pre x \<inter> props) ` {at_end a |a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" unfolding happ_at_def plan_happ_seq_def by fast
+        thus "x \<in> pre_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
+        proof cases
+          assume "x \<in> (\<lambda>x. pre x \<inter> props) ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}"
+          hence "x \<in> pre_imp ` {AtStart a|a d. (a, t, d) \<in> ran \<pi>}" unfolding pre_imp_def by force
+          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
+        next
+          assume "x \<in> (\<lambda>x. pre x \<inter> props) ` {at_end a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" 
+          hence "x \<in> pre_imp ` {AtEnd a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" unfolding pre_imp_def by force
+          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
+        qed
+      next
+        fix x
+        assume "x \<in> pre_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
+        thus "x \<in> (\<lambda>x. pre x \<inter> props) ` happ_at (plan_happ_seq \<pi> at_start at_end) t" 
+          unfolding pre_imp_def happ_at_def plan_happ_seq_def by force
+      qed
+
+      lemma happ_seq_imp_inv_eqs: "invs_at (plan_inv_seq \<pi> over_all) t \<inter> props
+        = invs_at (plan_inv_seq \<pi> over_all_imp) t"
+         unfolding invs_at_def plan_inv_seq_def over_all_imp_def 
+         by (rule equalityI; rule subsetI) auto
+    
+      (* First prove that a valid plan where the actions are restricted to modify the propositions
+         in the set,  *)
+  
+      lemma valid_state_seq_eq: "valid_state_sequence \<pi> at_start at_end over_all pre adds dels M =
+        valid_state_sequence \<pi> AtStart AtEnd over_all_imp pre_imp add_imp del_imp (restr_props_in_state_seq M)"
+        unfolding valid_state_sequence_def
+      proof -
+        define B where "B = happ_at (plan_happ_seq \<pi> at_start at_end)"
+        define B' where "B' = happ_at (plan_happ_seq \<pi> AtStart AtEnd)"
+        define ti where "ti = time_index \<pi>"
+
+        have "\<forall>t i. apply_effects adds dels (M i) (B t) = M (Suc i) \<longleftrightarrow> 
+          apply_effects add_imp del_imp (restr_props_in_state_seq M i) (B' t) = restr_props_in_state_seq M (Suc i)"
+        proof (intro allI; rule iffI)
+          fix t i
+          assume a: "apply_effects adds dels (M i) (B t) = M (Suc i)"
+          from prop_upds[simplified plan_acts_mod_props_def, simplified act_mod_props_def] in_happ_seqE
+          have "\<forall>s \<in> happ_at (plan_happ_seq \<pi> at_start at_end) t. adds s \<subseteq> props \<and> dels s \<subseteq> props" 
+            unfolding happ_at_def by fastforce
+          hence "apply_effects adds dels (restr_props_in_state_seq M i) (B t) = restr_props_in_state_seq M (Suc i)"
+            using a unfolding apply_effects_def B_def restr_props_in_state_seq_def by auto
+          thus "apply_effects add_imp del_imp (restr_props_in_state_seq M i) (B' t) = restr_props_in_state_seq M (Suc i)"
+            sorry
+        qed
+      qed
+
+      lemma plan_with_eq_is_plan_without_eq: "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon>
+              \<equiv> valid_plan \<pi> init_imp goal_imp AtStart AtEnd over_all_imp lower upper pre_imp add_imp del_imp \<epsilon>"
+        sorry
+end
+  end *)
+end
+
+text \<open>By making the planning domain finite, it becomes possible to reduce it to a timed automaton
+with a finite number of states.\<close>
+locale temp_planning_problem = basic_temp_planning_problem props actions init goal at_start at_end over_all lower upper pre adds dels \<epsilon>
+  for props::   "('proposition::linorder) set"
+    and actions:: "('action::linorder) set"
+    and init::    "'proposition set"
+    and goal::    "'proposition set"
+    and at_start::"'action  \<Rightarrow> 'snap_action"
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and \<epsilon>::       "'time" +
+  assumes wf_init:  "init \<subseteq> props" 
+      and wf_goal:  "goal \<subseteq> props"
+      and wf_acts:  "\<forall>a \<in> actions. wf_act a"
+      and at_start_inj_on: "inj_on at_start actions"
+      and at_end_inj_on:   "inj_on at_end actions"
+      and snaps_disj:      "(at_start ` actions) \<inter> (at_end ` actions) = {}"
+      and eps_range:       "0 \<le> \<epsilon>"
 begin 
 
 abbreviation snaps::"'action \<Rightarrow> 'snap_action set" where
@@ -579,18 +763,6 @@ proof -
   ultimately
   show ?thesis apply - by (rule ex1I, auto)
 qed
-
-text \<open>This is a property of plan actions\<close>
-definition wf_act where
-"wf_act a \<equiv> let snap_props = \<lambda>s. pre s \<union> adds s \<union> dels s
-  in (
-    snap_props (at_start a) \<subseteq> props
-  \<and> snap_props (at_end a) \<subseteq> props
-  \<and> over_all a \<subseteq> props)" 
-
-definition wf_acts where
-"wf_acts \<equiv> (\<forall>(a, t, d) \<in> ran \<pi>. wf_act a)"
-
 end
 end
 
@@ -598,9 +770,43 @@ datatype (act: 'a) snap_action =
   AtStart 'a |
   AtEnd 'a
 
-locale finite_domain_planning =
-  fixes props::   "('proposition::linorder) set"
-    and acts::    "('action::linorder) set"
+(* Locale a: Planning without the injectivity of at_start and at_end 
+     Locale b = a: Planning with the injectivity
+   Locale c = a: Sublocale b. 
+  This is necessary for the arguments about active actions
+  *)
+
+(*
+  The timed automaton construction needs a set of propositions and actions, which are both
+  finite. The plan actions need to be subsets of the actions in the locale. The locale actions need
+  to only refer to propositions in the set.
+*)
+
+(*
+  - Finite vs infinite plans. Assumptions on plans are irrelevant
+  - Equality and inequality: Encodable as non-fluent propositions.
+  - Non-fluent propositions: 
+    - If actions in a plan do not modify these, then it is possible to remove them from the initial
+      state, goal state and the actions' preconditions, thereby obtaining the actions which only refer
+      to a certain set of propositions.
+    - The goal state must include a subset of the non-fluents of the initial state.
+    - 
+
+  - Technically, if the set of fluent propositions is finite, the set of actions must be finite. Ignore this.
+  - The set of actions is better restricted to a finite set.
+  - Assume we have two locales which restrict plan actions to A and A' where A' is the set of actions with
+      preconditions only in P.
+  - Plan actions in problem. 
+
+  - It is better to leave the equivalence proofs for the existence of plans inside the locales.
+*)
+
+(* This is what we will instantiate PDDL with. A valid plan here is a valid plan, in the basic domain,
+which is a valid plan in the domain used for the compilation *)
+locale finite_domain_planning = 
+  basic_temp_planning_problem props actions init goal at_start at_end over_all lower upper pre adds dels \<epsilon>
+    for props::   "('proposition::linorder) set"
+    and actions::    "('action::linorder) set"
     and init::    "'proposition set"
     and goal::    "'proposition set"
     and at_start::"'action  \<Rightarrow> 'snap_action"
@@ -612,11 +818,6 @@ locale finite_domain_planning =
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
     and \<epsilon>::       "'time"
-  assumes some_props:       "card props > 0"
-      and some_actions:     "card acts > 0"
-      and finite_props:     "finite props"
-      and finite_actions:   "finite acts"
-      and eps_range:        "0 \<le> \<epsilon>"
 begin
 
   definition "init_imp = init \<inter> props"
@@ -638,159 +839,12 @@ begin
   definition over_all_imp::"'action \<Rightarrow> 'proposition set" where
   "over_all_imp = (\<inter>) props o over_all"
 
-  sublocale temp_planning_problem props acts init_imp goal_imp AtStart AtEnd over_all_imp lower upper pre_imp add_imp del_imp \<epsilon>
+  sublocale temp_planning_problem props actions init_imp goal_imp AtStart AtEnd over_all_imp lower upper pre_imp add_imp del_imp \<epsilon>
   proof
     show "init_imp \<subseteq> props" "goal_imp \<subseteq> props" unfolding init_imp_def goal_imp_def by simp+
-    show "inj_on AtStart acts" "inj_on AtEnd acts" unfolding inj_on_def by blast+
-    show "AtStart ` acts \<inter> AtEnd ` acts = {}" by blast
-    show "0 < card props" by (rule some_props)
-    show "0 < card acts" by (rule some_actions)
-    show "finite props" by (rule finite_props)
-    show "finite acts" by (rule finite_actions)
+    show "inj_on AtStart actions" "inj_on AtEnd actions" unfolding inj_on_def by blast+
+    show "AtStart ` actions \<inter> AtEnd ` actions = {}" by blast
     show "0 \<le> \<epsilon>" by (rule eps_range)
   qed 
-
-  context 
-    fixes \<pi>::"('i, 'action, 'time) temp_plan"
-  begin
-    (* PDDL plans must not modify equalities, but can use them in preconditions. *)
-    definition act_mod_props where
-      "act_mod_props a \<equiv> (
-        let snap_effs = (\<lambda>s. adds s \<union> dels s)
-        in snap_effs (at_start a) \<subseteq> props \<and> snap_effs (at_end a) \<subseteq> props
-       )"
-  
-    definition plan_acts_mod_props where
-      "plan_acts_mod_props = (\<forall>(a, t, d) \<in> ran \<pi>. act_mod_props a)"
-
-    definition act_prec_ran where
-      "act_prec_ran a \<equiv> (
-        over_all a \<subseteq> props \<union> init
-      \<and> pre (at_start a) \<subseteq> props \<union> init
-      \<and> pre (at_end a) \<subseteq> props \<union> init
-      )"
-
-    definition plan_acts_prec_ranges where
-      "plan_acts_prec_ranges \<equiv> (\<forall>(a, t, d) \<in> ran \<pi>. act_prec_ran a)"
-
-    definition restr_props_in_state_seq::"'proposition state_sequence \<Rightarrow> 'proposition state_sequence" where
-      "restr_props_in_state_seq M i \<equiv> (M i \<inter> props)"
-    
-    context 
-      assumes prec_rans: plan_acts_prec_ranges
-          and prop_upds: plan_acts_mod_props
-    begin
-      lemma over_all_imp_eq: "(\<lambda>t. invs_at (plan_inv_seq \<pi> over_all) t \<inter> props) = invs_at (plan_inv_seq \<pi> over_all_imp)"
-        by (rule ext; auto simp: plan_inv_seq_def over_all_imp_def invs_at_def)
-
-      lemma happ_seq_imp_eq_adds: "adds ` (happ_at (plan_happ_seq \<pi> at_start at_end) t) = add_imp ` (happ_at (plan_happ_seq \<pi> AtStart AtEnd) t)"
-      proof (rule equalityI; rule subsetI)
-        fix x
-        assume "x \<in> adds ` happ_at (plan_happ_seq \<pi> at_start at_end) t"
-        then 
-        consider "x \<in> adds ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}" | 
-                 "x \<in> adds ` {at_end a |a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" unfolding happ_at_def plan_happ_seq_def by fast
-        thus "x \<in> add_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
-        proof cases
-          assume "x \<in> adds ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}"
-          hence "x \<in> add_imp ` {AtStart a|a d. (a, t, d) \<in> ran \<pi>}" unfolding add_imp_def by force
-          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
-        next
-          assume "x \<in> adds ` {at_end a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" 
-          hence "x \<in> add_imp ` {AtEnd a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" unfolding add_imp_def by force
-          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
-        qed
-      next
-        fix x
-        assume "x \<in> add_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
-        thus "x \<in> adds ` happ_at (plan_happ_seq \<pi> at_start at_end) t" unfolding add_imp_def happ_at_def plan_happ_seq_def by force
-      qed
-
-    lemma happ_seq_imp_eq_dels: "dels ` (happ_at (plan_happ_seq \<pi> at_start at_end) t) = 
-      del_imp ` (happ_at (plan_happ_seq \<pi> AtStart AtEnd) t)"
-      proof (rule equalityI; rule subsetI)
-        fix x
-        assume "x \<in> dels ` happ_at (plan_happ_seq \<pi> at_start at_end) t"
-        then 
-        consider "x \<in> dels ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}" | 
-                 "x \<in> dels ` {at_end a |a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" 
-          unfolding happ_at_def plan_happ_seq_def by fast
-        thus "x \<in> del_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
-        proof cases
-          assume "x \<in> dels ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}"
-          hence "x \<in> del_imp ` {AtStart a|a d. (a, t, d) \<in> ran \<pi>}" unfolding del_imp_def by force
-          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
-        next
-          assume "x \<in> dels ` {at_end a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" 
-          hence "x \<in> del_imp ` {AtEnd a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" unfolding del_imp_def by force
-          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
-        qed
-      next
-        fix x
-        assume "x \<in> del_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
-        thus "x \<in> dels ` happ_at (plan_happ_seq \<pi> at_start at_end) t" unfolding del_imp_def happ_at_def plan_happ_seq_def by force
-      qed
-
-      lemma happ_seq_imp_eq_pres: "(\<lambda>x. pre x \<inter> props) ` (happ_at (plan_happ_seq \<pi> at_start at_end) t)
-        = pre_imp ` (happ_at (plan_happ_seq \<pi> AtStart AtEnd) t)"
-      proof (rule equalityI; rule subsetI)
-        fix x
-        assume "x \<in> (\<lambda>x. pre x \<inter> props) ` happ_at (plan_happ_seq \<pi> at_start at_end) t"
-        then 
-        consider "x \<in> (\<lambda>x. pre x \<inter> props) ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}" | 
-                 "x \<in> (\<lambda>x. pre x \<inter> props) ` {at_end a |a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" unfolding happ_at_def plan_happ_seq_def by fast
-        thus "x \<in> pre_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
-        proof cases
-          assume "x \<in> (\<lambda>x. pre x \<inter> props) ` {at_start a |a d. (a, t, d) \<in> ran \<pi>}"
-          hence "x \<in> pre_imp ` {AtStart a|a d. (a, t, d) \<in> ran \<pi>}" unfolding pre_imp_def by force
-          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
-        next
-          assume "x \<in> (\<lambda>x. pre x \<inter> props) ` {at_end a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" 
-          hence "x \<in> pre_imp ` {AtEnd a|a t' d. t' + d = t \<and> (a, t', d) \<in> ran \<pi>}" unfolding pre_imp_def by force
-          thus ?thesis unfolding happ_at_def plan_happ_seq_def by blast
-        qed
-      next
-        fix x
-        assume "x \<in> pre_imp ` happ_at (plan_happ_seq \<pi> AtStart AtEnd) t"
-        thus "x \<in> (\<lambda>x. pre x \<inter> props) ` happ_at (plan_happ_seq \<pi> at_start at_end) t" 
-          unfolding pre_imp_def happ_at_def plan_happ_seq_def by force
-      qed
-
-       lemma happ_seq_imp_inv_eqs: "invs_at (plan_inv_seq \<pi> over_all) t \<inter> props
-        = invs_at (plan_inv_seq \<pi> over_all_imp) t"
-         unfolding invs_at_def plan_inv_seq_def over_all_imp_def 
-         by (rule equalityI; rule subsetI) auto
-      
-
-      lemma valid_state_seq_eq: "valid_state_sequence \<pi> at_start at_end over_all pre adds dels M =
-        valid_state_sequence \<pi> AtStart AtEnd over_all_imp pre_imp add_imp del_imp (restr_props_in_state_seq M)"
-        
-        unfolding valid_state_sequence_def
-      proof -
-        define B where "B = happ_at (plan_happ_seq \<pi> at_start at_end)"
-        define B' where "B' = happ_at (plan_happ_seq \<pi> AtStart AtEnd)"
-        define ti where "ti = time_index \<pi>"
-
-        have "\<forall>t i. apply_effects adds dels (M i) (B t) = M (Suc i) \<longleftrightarrow> 
-          apply_effects add_imp del_imp (restr_props_in_state_seq M i) (B' t) = restr_props_in_state_seq M (Suc i)"
-        proof (intro allI; rule iffI)
-          fix t i
-          assume a: "apply_effects adds dels (M i) (B t) = M (Suc i)"
-          from prop_upds[simplified plan_acts_mod_props_def, simplified act_mod_props_def] in_happ_seqE
-          have "\<forall>s \<in> happ_at (plan_happ_seq \<pi> at_start at_end) t. adds s \<subseteq> props \<and> dels s \<subseteq> props" 
-            unfolding happ_at_def by fastforce
-          hence "apply_effects adds dels (restr_props_in_state_seq M i) (B t) = restr_props_in_state_seq M (Suc i)"
-            using a unfolding apply_effects_def B_def restr_props_in_state_seq_def by auto
-          thus "apply_effects add_imp del_imp (restr_props_in_state_seq M i) (B' t) = restr_props_in_state_seq M (Suc i)"
-            using 
-        qed
-      qed
-
-      lemma plan_with_eq_is_plan_without_eq: "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon>
-              \<equiv> valid_plan \<pi> init_imp goal_imp AtStart AtEnd over_all_imp lower upper pre_imp add_imp del_imp \<epsilon>"
-        sorry
-    end
-
-  end
 end
 end
