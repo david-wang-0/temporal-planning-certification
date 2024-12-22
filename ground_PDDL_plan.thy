@@ -60,37 +60,35 @@ thus all states can be infinite in size.\<close>
 
 locale ground_PDDL_planning =
   fixes props::   "('proposition::linorder) set"
-    and acts::    "('action::linorder) set"
+    and actions:: "('proposition, rat) action set"
     and init::    "'proposition set"
     and goal::    "'proposition set"
-    and at_start::"'action  \<Rightarrow> 'snap_action"
-    and at_end::  "'action  \<Rightarrow> 'snap_action"
-    and over_all::"'action  \<Rightarrow> 'proposition set"
-    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
-    and pre::     "'snap_action \<Rightarrow> 'proposition set"
-    and adds::    "'snap_action \<Rightarrow> 'proposition set"
-    and dels::    "'snap_action \<Rightarrow> 'proposition set"
-    and \<epsilon>::       "'time"
   assumes some_props:       "card props > 0"
-      and some_actions:     "card acts > 0"
+      and some_actions:     "card actions > 0"
       and finite_props:     "finite props"
-      and finite_actions:   "finite acts"
+      and finite_actions:   "finite actions"
 begin
 
 
-  definition lower_imp::"'pr action \<rightharpoonup> 'time lower_bound" where
+  definition lower_imp::"('proposition, rat) action \<rightharpoonup> rat lower_bound" where
   "lower_imp a \<equiv> (case d_const a of 
     (Some (duration_op.EQ, n)) \<Rightarrow> Some (lower_bound.GE n)
   | (Some (duration_op.GEQ, n)) \<Rightarrow> Some (lower_bound.GE n)
   | (Some (duration_op.LEQ, n)) \<Rightarrow> None
   | None \<Rightarrow> None)"
   
-  definition upper_imp::"'pr action \<rightharpoonup> 'time upper_bound" where
+  definition upper_imp::"('proposition, rat) action \<rightharpoonup> rat upper_bound" where
   "upper_imp a \<equiv> (case d_const a of 
     (Some (duration_op.EQ, n)) \<Rightarrow> Some (upper_bound.LE n)
   | (Some (duration_op.GEQ, n)) \<Rightarrow> None
   | (Some (duration_op.LEQ, n)) \<Rightarrow> Some (upper_bound.LE n)
   | None \<Rightarrow> None)"
+                              
+sublocale basic_temp_planning_problem props actions init goal s_snap e_snap "set o oc" 
+  lower_imp upper_imp "set o pre" "set o adds" "set o dels" 0
+  apply standard
+  using some_props some_actions finite_props finite_actions by auto
+
+
 end
 end
