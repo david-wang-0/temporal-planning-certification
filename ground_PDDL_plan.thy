@@ -67,6 +67,7 @@ locale ground_PDDL_planning =
       and some_actions:     "card actions > 0"
       and finite_props:     "finite props"
       and finite_actions:   "finite actions"
+      and wf_actions: "True" (* The actions only modify fluent propositions *)
 begin
 
 
@@ -88,6 +89,8 @@ sublocale basic_temp_planning_problem props actions init goal s_snap e_snap "set
   lower_imp upper_imp "set o pre" "set o adds" "set o dels" 0
   apply standard
   using some_props some_actions finite_props finite_actions by auto
+
+(* Every plan action only modifies fluents. Therefore, we can remove constants from the domain and actions *)
 
 
 end
