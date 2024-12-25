@@ -472,15 +472,31 @@ lemma mod_fluents:
   shows "((A \<union> E) - B) \<union> C = D \<union> E"
   using assms by blast
 
-
-lemma const_state_seq_equiv:
-  assumes cvp: "const_valid_plan \<pi> fluents at_start at_end adds dels" 
+context
+  fixes over_all::"'act \<Rightarrow> 'prop set" 
+    and over_all'
+    and pre::"'snap \<Rightarrow> 'prop set"
+    and pre' 
+    and fluents::"'prop set"
+    and at_start::"'act \<Rightarrow> 'snap"
+    and at_end adds dels 
+    and \<pi>::"('i, 'act, 'time::time) temp_plan"
+  assumes cvp: "const_valid_plan \<pi> fluents at_start at_end adds dels"
       and over_all'_def: "over_all' = (\<lambda>a. over_all a \<inter> fluents)"
       and pre'_def: "pre' = (\<lambda>s. pre s \<inter> fluents)"
-  shows "(\<exists>MS. valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS )
-  \<longleftrightarrow> (\<exists>MS. valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS 
+begin
+
+lemma cvp_state_seq_consts: 
+  assumes "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS"
+  shows "\<forall>i \<le> length (htpl \<pi>). MS i - fluents = plan_consts \<pi> fluents at_start at_end over_all pre adds dels" 
+  using assms cvp unfolding valid_state_sequence_def plan_consts_def const_valid_plan_def sorry
+
+lemma cvp_state_seq:
+  assumes MS'_p: "\<forall>i \<le> length (htpl \<pi>). MS' i = MS i \<inter> fluents"
+      and vss: "(valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS)"
+    shows "(valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS' 
     \<and> fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels
-    \<and> fluent_state_seq \<pi> fluents MS)"
+    \<and> fluent_state_seq \<pi> fluents MS')"
 proof -
 
   let ?B = "plan_happ_seq \<pi> at_start at_end"
@@ -491,130 +507,212 @@ proof -
 
   from cvp cv_plan_imp_cv_hs
   have cv_hs: "\<forall>t. (\<forall>h \<in> happ_at ?B t. snap_mod_fluents fluents adds dels h)" unfolding const_valid_happ_seq_def by blast
-  
-  show "(\<exists>MS. valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS )
-  \<longleftrightarrow> (\<exists>MS. valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS 
-    \<and> fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels
-    \<and> fluent_state_seq \<pi> fluents MS)"
-  proof (rule iffI; elim exE)
-    fix MS
-    assume "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS"
-    from this[simplified valid_state_sequence_def]
-    have app_eff: "apply_effects adds dels (MS i) (happ_at ?B (?t i)) = MS (Suc i)"
-         and invs: "invs_at ?Inv (?t i) \<subseteq> MS i"
-         and pres: "\<Union> (pre ` happ_at ?B (?t i)) \<subseteq> MS i"
-         if "i < length (htpl \<pi>)" for i using that by (auto simp: Let_def)
 
-    have "fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels" unfolding fluent_plan_def act_ref_fluents_def 
-      using assms unfolding const_valid_plan_def act_mod_fluents_def by simp
-    moreover
-    have "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'"
-         "fluent_state_seq \<pi> fluents MS'" 
-        if MS'_p: "\<forall>i \<le> length (htpl \<pi>). MS' i = MS i \<inter> fluents" for MS'
+  from vss[simplified valid_state_sequence_def]
+  have app_eff: "apply_effects adds dels (MS i) (happ_at ?B (?t i)) = MS (Suc i)"
+       and invs: "invs_at ?Inv (?t i) \<subseteq> MS i"
+       and pres: "\<Union> (pre ` happ_at ?B (?t i)) \<subseteq> MS i"
+       if "i < length (htpl \<pi>)" for i using that by (auto simp: Let_def)
+
+  have "fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels" unfolding fluent_plan_def act_ref_fluents_def 
+    using cvp over_all'_def pre'_def unfolding const_valid_plan_def act_mod_fluents_def by fast
+  moreover
+  have "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'"
+       "fluent_state_seq \<pi> fluents MS'" 
+  proof -
+    show "fluent_state_seq \<pi> fluents MS'" using MS'_p unfolding fluent_state_seq_def by simp
+    have "apply_effects adds dels (MS' i) (happ_at ?B (?t i)) = MS' (Suc i)" (is "apply_effects adds dels (MS' i) ?S = MS' (Suc i)")
+       and "invs_at ?Inv' (?t i) \<subseteq> MS' i"
+       and "\<Union> (pre' ` happ_at ?B (?t i)) \<subseteq> MS' i"
+       if i_ran: "i < length (htpl \<pi>)" for i
     proof -
-      show "fluent_state_seq \<pi> fluents MS'" using that unfolding fluent_state_seq_def by simp
-      have "apply_effects adds dels (MS' i) (happ_at ?B (?t i)) = MS' (Suc i)" (is "apply_effects adds dels (MS' i) ?S = MS' (Suc i)")
-         and "invs_at ?Inv' (?t i) \<subseteq> MS' i"
-         and "\<Union> (pre' ` happ_at ?B (?t i)) \<subseteq> MS' i"
-         if i_ran: "i < length (htpl \<pi>)" for i
+      show "apply_effects adds dels (MS' i) ?S = MS' (Suc i)" 
       proof -
-        show "apply_effects adds dels (MS' i) ?S = MS' (Suc i)" 
-        proof -
-          have "\<Union>(adds ` ?S) \<subseteq> fluents" 
-               "\<Union>(dels ` ?S) \<subseteq> fluents" using i_ran cv_hs unfolding fluent_state_seq_def by auto
-          hence "\<forall>s\<in>happ_at (plan_happ_seq \<pi> at_start at_end) (time_index \<pi> i). snap_mod_fluents fluents adds dels s" by blast
-          thus "apply_effects adds dels (MS' i) ?S = MS' (Suc i)" using app_fluent_valid_snaps[OF _ app_eff[OF that]] using MS'_p that by simp
-        qed
-        show "invs_at ?Inv' (?t i) \<subseteq> MS' i" 
-        proof -
-          have "invs_at (plan_inv_seq \<pi> over_all') (time_index \<pi> i) = invs_at (plan_inv_seq \<pi> over_all) (time_index \<pi> i) \<inter> fluents" 
-            unfolding over_all'_def invs_at_def plan_inv_seq_def by blast
-          thus "invs_at ?Inv' (?t i) \<subseteq> MS' i" using invs MS'_p i_ran by auto
-        qed
-        show "\<Union> (pre' ` ?S) \<subseteq> MS' i" 
-        proof -
-          have "\<Union> (pre ` ?S) \<inter> fluents =  \<Union> (pre' ` ?S)" unfolding happ_at_def plan_happ_seq_def pre'_def by auto
-          thus "\<Union> (pre' ` ?S) \<subseteq> MS' i" using pres MS'_p i_ran by auto
-        qed
+        have "\<Union>(adds ` ?S) \<subseteq> fluents" 
+             "\<Union>(dels ` ?S) \<subseteq> fluents" using i_ran cv_hs unfolding fluent_state_seq_def by auto
+        hence "\<forall>s\<in>happ_at (plan_happ_seq \<pi> at_start at_end) (time_index \<pi> i). snap_mod_fluents fluents adds dels s" by blast
+        thus "apply_effects adds dels (MS' i) ?S = MS' (Suc i)" using app_fluent_valid_snaps[OF _ app_eff[OF that]] using MS'_p that by simp
       qed
-      thus "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'" unfolding valid_state_sequence_def by (auto simp: Let_def)
-    qed
-    ultimately
-    show "\<exists>MS. valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS \<and>
-               fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels \<and> 
-               fluent_state_seq \<pi> fluents MS" by (auto intro: exI[where x = "\<lambda>i. (MS i \<inter> fluents)"])
-  next
-    fix MS
-    assume "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS \<and>
-            fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels \<and> 
-            fluent_state_seq \<pi> fluents MS"
-    from this[simplified valid_state_sequence_def]
-    have app_eff: "apply_effects adds dels (MS i) (happ_at ?B (?t i)) = MS (Suc i)"
-         and invs: "invs_at ?Inv' (?t i) \<subseteq> MS i"
-         and pres: "\<Union> (pre' ` happ_at ?B (?t i)) \<subseteq> MS i"
-         if "i < length (htpl \<pi>)" for i using that by (auto simp: Let_def)
-
-    have pc: "plan_consts \<pi> fluents at_start at_end over_all pre adds dels = 
-  \<Union> ((\<lambda>a. pre (at_start a) \<union> pre (at_end a) \<union> over_all a) ` {a|a t d. (a, t, d) \<in> ran \<pi>}) - fluents" (is "?pc = ?pc'")
-      using cv_plan_consts assms(1) by fastforce
-
-    have "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS'"
-        if MS'_p: "\<forall>i \<le> length (htpl \<pi>). MS' i = MS i \<union> plan_consts \<pi> fluents at_start at_end over_all pre adds dels"  for MS'
-    proof -
-      have "apply_effects adds dels (MS' i) (happ_at ?B (?t i)) = MS' (Suc i)" (is "apply_effects adds dels (MS' i) ?S = MS' (Suc i)")
-         and "invs_at ?Inv (?t i) \<subseteq> MS' i"
-         and "\<Union> (pre ` happ_at ?B (?t i)) \<subseteq> MS' i"
-         if i_ran: "i < length (htpl \<pi>)" for i
+      show "invs_at ?Inv' (?t i) \<subseteq> MS' i" 
       proof -
-        show "apply_effects adds dels (MS' i) ?S = MS' (Suc i)" 
-        proof -
-          have "\<Union>(adds ` ?S) \<subseteq> fluents" (is "?as \<subseteq> fluents")
-               "\<Union>(dels ` ?S) \<subseteq> fluents" (is "?ds \<subseteq> fluents") using i_ran cv_hs unfolding fluent_state_seq_def by auto
-          hence "?as \<inter> ?pc = {}"
-                "?ds \<inter> ?pc = {}" using pc by auto
-          moreover
-          from app_eff i_ran
-          have "(MS i - ?ds) \<union> ?as = MS (Suc i)" unfolding apply_effects_def by simp
-          ultimately
-          have "(MS i \<union> ?pc) - ?ds \<union> ?as = MS (Suc i) \<union> ?pc" by auto
-          thus "apply_effects adds dels (MS' i) ?S = MS' (Suc i)" unfolding apply_effects_def using MS'_p i_ran by auto
-        qed
-        show "invs_at ?Inv (?t i) \<subseteq> MS' i" 
-        proof -
-          have "invs_at ?Inv (?t i) \<subseteq> invs_at ?Inv' (?t i) \<union> ?pc" 
-            unfolding invs_at_def plan_inv_seq_def pc over_all'_def by auto
-          hence "invs_at ?Inv (?t i) \<subseteq> MS i \<union> ?pc" using invs i_ran by auto
-          thus "invs_at ?Inv (?t i) \<subseteq> MS' i" using MS'_p i_ran by auto
-        qed
-        show "\<Union> (pre ` ?S) \<subseteq> MS' i" 
-        proof -
-          from pres i_ran
-          have "\<Union> (pre' ` ?S) \<subseteq> MS i" by simp
-          hence "\<Union> (pre ` ?S) \<inter> fluents \<subseteq> MS i" unfolding pre'_def by simp
-          moreover
-          from assms(1)[simplified cv_plan_cv_happ_seq, THEN cv_happ_seq_consts]
-          have "\<Union> (pre ` ?S) - fluents \<subseteq> happ_seq_consts \<pi> fluents at_start at_end pre adds dels - fluents" unfolding happ_at_def by auto
-          hence "\<Union> (pre ` ?S) - fluents \<subseteq> ?pc" using plan_and_happ_seq_consts by fast
-          ultimately
-          have "\<Union> (pre ` ?S) \<subseteq> MS i \<union> ?pc" by blast
-          thus "\<Union> (pre ` ?S) \<subseteq> MS' i" using MS'_p i_ran by auto
-        qed
+        have "invs_at (plan_inv_seq \<pi> over_all') (time_index \<pi> i) = invs_at (plan_inv_seq \<pi> over_all) (time_index \<pi> i) \<inter> fluents" 
+          unfolding invs_at_def plan_inv_seq_def over_all'_def by auto
+        thus "invs_at ?Inv' (?t i) \<subseteq> MS' i" using invs MS'_p i_ran by auto
       qed
-      thus "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS'" unfolding valid_state_sequence_def by (auto simp: Let_def)
+      show "\<Union> (pre' ` ?S) \<subseteq> MS' i" 
+      proof -
+        have "\<Union> (pre ` ?S) \<inter> fluents =  \<Union> (pre' ` ?S)" unfolding happ_at_def plan_happ_seq_def pre'_def by auto
+        thus "\<Union> (pre' ` ?S) \<subseteq> MS' i" using pres MS'_p i_ran by auto
+      qed
     qed
-    thus "\<exists>MS. valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS" 
-      using exI[where x = "\<lambda>i. MS i \<union> plan_consts \<pi> fluents at_start at_end over_all pre adds dels"]
-      by simp
+    thus "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'" unfolding valid_state_sequence_def by (auto simp: Let_def)
   qed
+  ultimately
+  show "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS' \<and>
+  fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels \<and> fluent_state_seq \<pi> fluents MS'" by (auto intro: exI[where x = "\<lambda>i. (MS i \<inter> fluents)"])
+qed
+
+lemma cvp_state_seq':
+  assumes MS'_p: "\<forall>i \<le> length (htpl \<pi>). MS i = MS' i \<union> plan_consts \<pi> fluents at_start at_end over_all pre adds dels" 
+    and vss: "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'"
+  shows "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS"
+proof -
+
+  let ?B = "plan_happ_seq \<pi> at_start at_end"
+  let ?t = "time_index \<pi>"
+
+  let ?Inv = "plan_inv_seq \<pi> over_all"
+  let ?Inv' = "plan_inv_seq \<pi> over_all'"
+
+
+  from cvp cv_plan_imp_cv_hs
+  have cv_hs: "\<forall>t. (\<forall>h \<in> happ_at ?B t. snap_mod_fluents fluents adds dels h)" unfolding const_valid_happ_seq_def by blast
+
+  from vss[simplified valid_state_sequence_def]
+  have app_eff: "apply_effects adds dels (MS' i) (happ_at ?B (?t i)) = MS' (Suc i)"
+       and invs: "invs_at ?Inv' (?t i) \<subseteq> MS' i"
+       and pres: "\<Union> (pre' ` happ_at ?B (?t i)) \<subseteq> MS' i"
+       if "i < length (htpl \<pi>)" for i using that by (auto simp: Let_def)
+
+  have pc: "plan_consts \<pi> fluents at_start at_end over_all pre adds dels = 
+    \<Union> ((\<lambda>a. pre (at_start a) \<union> pre (at_end a) \<union> over_all a) ` {a|a t d. (a, t, d) \<in> ran \<pi>}) - fluents" (is "?pc = ?pc'")
+    using cv_plan_consts cvp by fastforce
+  have "apply_effects adds dels (MS i) (happ_at ?B (?t i)) = MS (Suc i)" (is "apply_effects adds dels (MS i) ?S = MS (Suc i)")
+     and "invs_at ?Inv (?t i) \<subseteq> MS i"
+     and "\<Union> (pre ` happ_at ?B (?t i)) \<subseteq> MS i"
+     if i_ran: "i < length (htpl \<pi>)" for i
+  proof -
+    show "apply_effects adds dels (MS i) ?S = MS (Suc i)" 
+    proof -
+      have "\<Union>(adds ` ?S) \<subseteq> fluents" (is "?as \<subseteq> fluents")
+           "\<Union>(dels ` ?S) \<subseteq> fluents" (is "?ds \<subseteq> fluents") using i_ran cv_hs unfolding fluent_state_seq_def by auto
+      hence "?as \<inter> ?pc = {}"
+            "?ds \<inter> ?pc = {}" using pc by auto
+      moreover
+      from app_eff i_ran
+      have "(MS' i - ?ds) \<union> ?as = MS' (Suc i)" unfolding apply_effects_def by simp
+      ultimately
+      have "(MS' i \<union> ?pc) - ?ds \<union> ?as = MS' (Suc i) \<union> ?pc" by auto
+      thus "apply_effects adds dels (MS i) ?S = MS (Suc i)" unfolding apply_effects_def using MS'_p i_ran by auto
+    qed
+    show "invs_at ?Inv (?t i) \<subseteq> MS i" 
+    proof -
+      have "invs_at ?Inv (?t i) \<subseteq> invs_at ?Inv' (?t i) \<union> ?pc" 
+        unfolding invs_at_def plan_inv_seq_def pc over_all'_def by auto
+      hence "invs_at ?Inv (?t i) \<subseteq> MS' i \<union> ?pc" using invs i_ran by auto
+      thus "invs_at ?Inv (?t i) \<subseteq> MS i" using MS'_p i_ran by auto
+    qed
+    show "\<Union> (pre ` ?S) \<subseteq> MS i" 
+    proof -
+      from pres i_ran
+      have "\<Union> (pre' ` ?S) \<subseteq> MS' i" by simp
+      hence "\<Union> (pre ` ?S) \<inter> fluents \<subseteq> MS' i" unfolding pre'_def by simp
+      moreover
+      from cvp[simplified cv_plan_cv_happ_seq, THEN cv_happ_seq_consts]
+      have "\<Union> (pre ` ?S) - fluents \<subseteq> happ_seq_consts \<pi> fluents at_start at_end pre adds dels - fluents" unfolding happ_at_def by auto
+      hence "\<Union> (pre ` ?S) - fluents \<subseteq> ?pc" using plan_and_happ_seq_consts by fast
+      ultimately
+      have "\<Union> (pre ` ?S) \<subseteq> MS' i \<union> ?pc" by blast
+      thus "\<Union> (pre ` ?S) \<subseteq> MS i" using MS'_p i_ran by auto
+    qed
+  qed
+  thus "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS" unfolding valid_state_sequence_def by (auto simp: Let_def)
+
 qed
 
 
-lemma const_plan_equiv: 
-  "(\<exists>pre over_all. valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
-     \<and> const_valid_plan \<pi> fluents at_start at_end adds dels) \<longleftrightarrow>
-   (\<exists>pre over_all. valid_plan \<pi> (fluent_state fluents init) (fluent_state fluents goal) at_start at_end over_all lower upper pre adds dels \<epsilon> 
-        \<and> fluent_plan \<pi> fluents at_start at_end over_all pre adds dels)" sorry
 
+lemma cvp_nm_happ_seq_equiv: "nm_happ_seq pre adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end) \<longleftrightarrow> nm_happ_seq pre' adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end)"
+proof -
+  from cvp
+  have "const_valid_happ_seq \<pi> fluents at_start at_end adds dels" using cv_plan_cv_happ_seq by blast
+  from this[simplified const_valid_happ_seq_def]
+  have "\<forall>s t a b. a \<in> happ_at (plan_happ_seq \<pi> at_start at_end) s \<and> b \<in> happ_at (plan_happ_seq \<pi> at_start at_end) t
+    \<longrightarrow> (mutex_snap_action pre adds dels a b \<longleftrightarrow> mutex_snap_action pre' adds dels a b)" unfolding mutex_snap_action_def 
+    apply -
+    apply (intro allI; rule impI; rule iffI; erule conjE)
+     apply (elim disjE)
+    subgoal for s t a b
+      apply (frule spec, drule bspec[where x = a], assumption)
+      apply (drule spec, drule bspec[where x = b], assumption)
+      unfolding pre'_def by auto
+    subgoal for s t a b
+      apply (frule spec, drule bspec[where x = a], assumption)
+      apply (drule spec, drule bspec[where x = b], assumption)
+      unfolding pre'_def by auto
+    subgoal for s t a b
+      apply (frule spec, drule bspec[where x = a], assumption)
+      apply (drule spec, drule bspec[where x = b], assumption)
+      unfolding pre'_def by auto
+    subgoal for s t a b
+      apply (frule spec, drule bspec[where x = a], assumption)
+      apply (drule spec, drule bspec[where x = b], assumption)
+      unfolding pre'_def by auto
+    subgoal for s t a b
+      apply (frule spec, drule bspec[where x = a], assumption)
+      apply (drule spec, drule bspec[where x = b], assumption)
+      unfolding pre'_def by auto
+    done
+  thus ?thesis unfolding nm_happ_seq_def by blast
+qed
+
+
+lemma const_plan_equiv: "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> \<longleftrightarrow>
+   valid_plan \<pi> (fluent_state fluents init) (fluent_state fluents goal) at_start at_end over_all' lower upper pre' adds dels \<epsilon>" 
+  unfolding valid_plan_def
+proof
+  assume "\<exists>M. valid_state_sequence \<pi> at_start at_end over_all pre adds dels M \<and>
+        M 0 = init \<and>
+        goal \<subseteq> M (length (htpl \<pi>)) \<and>
+        durations_ge_0 \<pi> \<and> durations_valid \<pi> lower upper \<and> 
+        nm_happ_seq pre adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end)"
+  then obtain MS where
+    vss: "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS"
+    and init: "MS 0 = init"
+    and goal: "goal \<subseteq> MS (length (htpl \<pi>))"
+    and dur: "durations_ge_0 \<pi> \<and> durations_valid \<pi> lower upper"
+    and nm: "nm_happ_seq pre adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end)" by blast
+
+  define MS' where "MS' = (\<lambda>i. if (i \<le> length (htpl \<pi>)) then MS i \<inter> fluents else undefined)"  
+  hence "\<forall>i \<le> length (htpl \<pi>). MS' i = MS i \<inter> fluents" by auto
+  with vss 
+  have vss': "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'" 
+    and fss': "fluent_state_seq \<pi> fluents MS'" 
+    and fp: "fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels"
+    using cvp_state_seq by auto
+
+  from MS'_def goal
+  have goal': "goal \<inter> fluents \<subseteq> MS' (length (htpl \<pi>))" by auto
+
+  from MS'_def init
+  have init': "init \<inter> fluents = MS' 0" by simp
+
+  show "\<exists>M. valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels M \<and>
+      M 0 = fluent_state fluents init \<and>
+      fluent_state fluents goal \<subseteq> M (length (htpl \<pi>)) \<and>
+      durations_ge_0 \<pi> \<and> durations_valid \<pi> lower upper \<and> nm_happ_seq pre' adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end)"
+    using vss' cvp_nm_happ_seq_equiv dur nm init' goal' unfolding fluent_state_def by blast
+next
+  assume "\<exists>M. valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels M \<and>
+        M 0 = fluent_state fluents init \<and>
+        fluent_state fluents goal \<subseteq> M (length (htpl \<pi>)) \<and>
+        durations_ge_0 \<pi> \<and> durations_valid \<pi> lower upper \<and> 
+        nm_happ_seq pre' adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end)"
+  then obtain MS' where
+    vss': "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'"
+    and init': "MS' 0 = init \<inter> fluents"
+    and goal': "goal \<inter> fluents \<subseteq> MS' (length (htpl \<pi>))"
+    and dur: "durations_ge_0 \<pi> \<and> durations_valid \<pi> lower upper"
+    and nm': "nm_happ_seq pre' adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end)" 
+    unfolding fluent_state_def by auto
+
+  define MS where "MS \<equiv> \<lambda>i. if (i \<le> length (htpl \<pi>)) then MS' i \<union> plan_consts \<pi> fluents at_start at_end over_all pre adds dels else undefined"
+  with vss'
+  have vss: "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS" by (auto intro: cvp_state_seq')
+
+  have "MS 0 = init \<inter> fluents \<union> plan_consts \<pi> fluents at_start at_end over_all pre adds dels" using MS_def init' by simp
+
+end
 text \<open>Another thing we need to prove is the relationship between at_start, at_end, pre, adds, and dels.\<close>
 
 locale basic_temp_planning_problem =
