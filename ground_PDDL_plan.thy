@@ -1,6 +1,6 @@
 theory ground_PDDL_plan
 imports Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics
-    Compilation
+    Compilation                    
     Containers.Containers
 begin
 
@@ -58,6 +58,7 @@ possible to derive the formulation of planning used for the compilation to timed
 The the representations of the state is not necessarily finite, because the initial and final, and 
 thus all states can be infinite in size.\<close>
 
+
 locale ground_PDDL_planning =
   fixes props::   "('proposition::linorder) set"
     and actions:: "('proposition, rat) action set"
@@ -67,9 +68,8 @@ locale ground_PDDL_planning =
       and some_actions:     "card actions > 0"
       and finite_props:     "finite props"
       and finite_actions:   "finite actions"
-      and wf_actions: "True" (* The actions only modify fluent propositions *)
 begin
-
+                              
 
   definition lower_imp::"('proposition, rat) action \<rightharpoonup> rat lower_bound" where
   "lower_imp a \<equiv> (case d_const a of 
@@ -84,13 +84,12 @@ begin
   | (Some (duration_op.GEQ, n)) \<Rightarrow> None
   | (Some (duration_op.LEQ, n)) \<Rightarrow> Some (upper_bound.LE n)
   | None \<Rightarrow> None)"
-                              
+
 sublocale basic_temp_planning_problem props actions init goal s_snap e_snap "set o oc" 
   lower_imp upper_imp "set o pre" "set o adds" "set o dels" 0
   apply standard
   using some_props some_actions finite_props finite_actions by auto
 
-(* Every plan action only modifies fluents. Therefore, we can remove constants from the domain and actions *)
 
 
 end
