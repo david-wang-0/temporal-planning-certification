@@ -336,6 +336,17 @@ lemmas time_index_sorted = time_index_sorted_list time_index_sorted_set time_ind
   time_index_sorted_list' time_index_sorted_set' time_index_strict_sorted_list' time_index_strict_sorted_set'
 
 
+lemma time_indexI_htps:
+  assumes finite_plan
+      and "t \<in> htps"
+    shows "\<exists>i < card htps. time_index i = t"
+  using time_index_img_set assms by force
+
+lemma time_indexI_htpl:    
+  assumes "t \<in> set (htpl)"
+    shows "\<exists>i < length htpl. time_index i = t"
+  using time_index_img_list assms by force
+
 lemma no_actions_between_indexed_timepoints: 
   assumes "finite_plan"
     "(Suc l) < length htpl"
@@ -344,12 +355,6 @@ lemma no_actions_between_indexed_timepoints:
     a_in_B_iff_t_in_htps finite_htps[OF assms(1)] 
   unfolding htpl_def by auto
 
-
-lemma "i < length htpl 
-  \<Longrightarrow> snap \<in> happ_at plan_happ_seq (time_index i) 
-  \<Longrightarrow> \<exists>t d a. (a, t, d) \<in> ran \<pi> \<and> (at_start a = snap \<or> at_end a = snap)"
-  apply (rule in_happ_seqE)
-  unfolding happ_at_def by blast
 
 lemma empty_acts_if_empty_htpl: 
   assumes len: "length htpl = 0"
@@ -454,6 +459,8 @@ definition plan_consts where
 definition happ_seq_consts where
 "happ_seq_consts \<equiv> \<Union>(snap_consts ` {s|t s. (t, s) \<in> plan_happ_seq})"
 
+lemma happ_seq_consts_const: "happ_seq_consts \<inter> fluents = {}" unfolding happ_seq_consts_def by auto
+
 definition domain_consts where
 "domain_consts \<equiv> plan_consts \<union> (goal - fluents) \<union> (init - fluents)"
 
@@ -509,13 +516,125 @@ proof -
   thus ?thesis unfolding plan_consts_def htps_def by simp
 qed
 
-(* if you have a valid plan, the constants are necessarily constant *)
+lemma invs_elim:
+  assumes "x \<in> \<Union>(over_all ` {a| a. (a, t, d) \<in> ran \<pi>})"
+      and dp: durations_positive
+  shows "x \<in> invs_at plan_inv_seq (t + d)"
+proof -
+  from assms 
+  obtain a where
+    "x \<in> over_all a"
+    "(a, t, d) \<in> ran \<pi>" by blast
+  hence "x \<in> invs_at plan_inv_seq (t + d)" unfolding invs_at_def plan_inv_seq_def using dp unfolding durations_positive_def by fastforce
+  thus ?thesis by blast
+qed
+
+
+lemma in_happ_seq_pre_consts_in_init:
+  assumes fp: finite_plan
+      and vss: "valid_state_sequence MS"
+      and cvp: const_valid_plan
+      and dp: durations_positive
+      and x_in_pre: "x \<in> \<Union>(pre ` happ_at plan_happ_seq (time_index i)) \<union> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>})"
+      and i_ran: "i < length htpl"
+      and x_not_fluent: "x \<notin> fluents"
+    shows "x \<in> MS 0"
+  using assms
+proof (cases "length htpl")
+  case 0
+  have htps: "htps = {}" using set_htpl_eq_htps fp 0 by auto
+  hence "happ_at plan_happ_seq (time_index i) = {}" using a_in_B_iff_t_in_htps by simp
+  hence "x \<notin> \<Union>(pre ` happ_at plan_happ_seq (time_index i))" by blast
+  moreover
+  have "ran \<pi> = {}" using htps unfolding htps_def by auto
+  ultimately
+  show ?thesis using x_in_pre by blast
+next
+  case (Suc nat)
+  have ind: "x \<in> MS 0" if "x \<in> MS i" "i < length htpl" "x \<notin> fluents" for x i
+    using that
+  proof (induction i arbitrary: x)
+    case 0
+    with Suc vss
+    show ?case unfolding Let_def valid_state_sequence_def by auto
+  next
+    case (Suc i)
+    hence "x \<in> apply_effects (MS i) (happ_at plan_happ_seq (time_index i))" using vss Suc unfolding valid_state_sequence_def Let_def by auto
+    moreover
+    from cvp[THEN cv_plan_imp_cv_hs]
+    have "\<Union>(adds ` (happ_at plan_happ_seq (time_index i))) \<subseteq> fluents" 
+         "\<Union>(dels ` (happ_at plan_happ_seq (time_index i))) \<subseteq> fluents" unfolding const_valid_happ_seq_def by blast+
+    hence "x \<notin> \<Union>(adds ` (happ_at plan_happ_seq (time_index i))) \<union> \<Union>(dels ` (happ_at plan_happ_seq (time_index i)))" using \<open>x \<notin> fluents\<close> by blast
+    ultimately
+    have "x \<in> MS i" unfolding apply_effects_def by blast
+    with Suc
+    show ?case by simp
+  qed
+  consider "x \<in> \<Union>(pre ` happ_at plan_happ_seq (time_index i))" | "x \<in> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>})" using x_in_pre by blast
+  hence "\<exists>i < length htpl. x \<in> MS i"
+  proof cases
+    case 1
+    then show ?thesis using vss unfolding valid_state_sequence_def Let_def using i_ran by blast
+  next
+    case 2
+    with invs_elim[OF _ dp]  
+    obtain t where
+      t: "t \<in> htps"
+      "x \<in> invs_at plan_inv_seq t" unfolding htps_def by blast
+    then obtain i where
+      i: "t = time_index i"
+         "i < length htpl" using time_index_img_list fp set_htpl_eq_htps by blast
+    show ?thesis using i t vss unfolding valid_state_sequence_def Let_def by blast
+  qed
+  thus ?thesis using x_not_fluent ind by blast
+qed
 
 lemma valid_plan_consts:
   assumes fp: finite_plan
       and vp: valid_plan
+      and cvp: const_valid_plan
+      and dp: durations_positive
     shows "plan_consts \<subseteq> init - fluents"
-  sorry
+proof -
+  from vp[simplified valid_plan_def]
+  obtain MS where
+    vss: "valid_state_sequence MS"
+    and init: "MS 0 = init" 
+    and goal: "goal \<subseteq> MS (length htpl)"
+    by blast
+  have "plan_consts = (happ_seq_consts \<union> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>})) - fluents" using plan_and_happ_seq_consts by blast
+  hence "plan_consts = happ_seq_consts \<union> (\<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>}) - fluents)" using happ_seq_consts_const by auto
+  moreover
+  have "x \<in> init - fluents" if "x \<in> happ_seq_consts" for x
+  proof -
+    from that 
+    have "x \<in> \<Union>(snap_consts ` {h|t h. (t, h) \<in> plan_happ_seq})" unfolding happ_seq_consts_def by simp
+    with cvp 
+    have x: "x \<in> \<Union>(pre ` {h|t h. (t, h) \<in> plan_happ_seq}) - fluents" using cv_plan_imp_cv_hs act_mod_fluents_def const_valid_happ_seq_def happ_at_def by fast
+    then obtain t where
+      t: "x \<in>  \<Union>(pre ` happ_at plan_happ_seq t)" unfolding happ_at_def by auto
+    then obtain i where
+      i: "i < length htpl"
+         "time_index i = t" using a_in_B_iff_t_in_htps finite_htps_is_set_htpl[OF finite_htps[OF fp]] time_indexI_htpl by blast
+    hence "\<exists>i < length htpl. x \<in> \<Union>(pre ` happ_at plan_happ_seq (time_index i))" using t by blast
+    hence "x \<in> MS 0" using in_happ_seq_pre_consts_in_init[OF fp vss cvp] x dp by blast
+    with x init
+    show ?thesis by blast
+  qed
+  moreover
+  have "x \<in> init - fluents" if "x \<in> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>}) - fluents" for x
+  proof -
+    from that 
+    have x: "x \<in> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>})"
+         "x \<notin> fluents" by blast+
+    hence "\<exists>t. t \<in> htps" unfolding htps_def by blast
+    hence "0 < length htpl" using finite_htps_is_set_htpl finite_htps fp by auto
+    hence "x \<in> MS 0" using in_happ_seq_pre_consts_in_init[OF fp vss cvp dp, where x = x] x by auto
+    thus "x \<in> init - fluents" using x init by blast
+  qed
+  ultimately
+  show ?thesis by blast
+qed
 
 lemma valid_plan_goal:
   assumes valid_plan
@@ -724,7 +843,7 @@ qed
 
 lemma const_plan_equiv: 
   assumes "finite_plan \<pi>"
-      and "goal - fluents \<subseteq> init - fluents"
+      and "goal - fluents \<subseteq> init - fluents" (* remove these assumptions? *)
       and "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents"
     shows "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> \<longleftrightarrow>
        valid_plan \<pi> (fluent_state fluents init) (fluent_state fluents goal) at_start at_end over_all' lower upper pre' adds dels \<epsilon>" 
