@@ -21,6 +21,11 @@ type_synonym 'p state_sequence = "nat \<Rightarrow> ('p state)"
 text \<open>Invariants\<close>
 type_synonym ('p, 't) invariant_sequence = "('t \<times> 'p set) set"
 
+datatype (action: 'a) snap_action = 
+  AtStart 'a |
+  AtEnd 'a
+
+
 text \<open>Temporal plans could be multi-sets, lists or just the range of a partial function. 
 It is only necessary that the entries do not have to be unique, because unique entries are a 
 consequence of prohibiting self-overlap. I chose a partial function.\<close>
@@ -40,14 +45,6 @@ context
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
     and \<epsilon>::       "'time"
 begin
-text \<open>We want to define a plan in an abstract manner. This needs to be more abstract.\<close>
-definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" where
-"mutex_snap_action a b = (
-  (pre a) \<inter> ((adds b) \<union> (dels b)) \<noteq> {} \<or>
-  ((adds a) \<inter> (dels b)) \<noteq> {} \<or>
-  (pre b) \<inter> ((adds a) \<union> (dels a)) \<noteq> {} \<or>
-  (adds b) \<inter> (dels a) \<noteq> {}
-)"
 
 definition apply_effects::"'proposition set \<Rightarrow> 'snap_action set \<Rightarrow> 'proposition set" where
 "apply_effects M S \<equiv> (M - \<Union>(dels ` S)) \<union> \<Union>(adds ` S)"
@@ -65,31 +62,44 @@ text \<open>Happening Sequences\<close>
 
 definition plan_happ_seq::"('time \<times> 'snap_action) set" where
 "plan_happ_seq \<equiv> 
-    {(t, at_start a) | a t d. (a, t, d) \<in> ran \<pi>} 
+    {(t, at_start a) | a t d. (a, t, d) \<in> ran \<pi>}
   \<union> {(t + d, at_end a) | a t d. (a, t, d) \<in> ran \<pi>}"
 
-definition happ_at::"('time \<times> 'snap_action) set \<Rightarrow> 'time \<Rightarrow> 'snap_action set" where
+abbreviation happ_at::"('time \<times> 'snap_action) set \<Rightarrow> 'time \<Rightarrow> 'snap_action set" where
 "happ_at B t \<equiv> {s. (t, s) \<in> B}"
 
 lemma a_in_B_iff_t_in_htps: "(\<exists>a. a \<in> happ_at plan_happ_seq t) \<longleftrightarrow> (t \<in> htps)"
 proof
   assume "\<exists>a. a \<in> happ_at plan_happ_seq t"
   then obtain a where
-    "(t, a) \<in> plan_happ_seq" unfolding happ_at_def plan_happ_seq_def by fast
+    "(t, a) \<in> plan_happ_seq" unfolding  plan_happ_seq_def by fast
   thus "t \<in> htps" unfolding plan_happ_seq_def htps_def by blast
 next
   assume "t \<in> htps"
   then obtain a where
     "(t, a) \<in> plan_happ_seq" unfolding plan_happ_seq_def htps_def by force
-  thus "\<exists>a. a \<in> happ_at plan_happ_seq t" unfolding happ_at_def by blast
+  thus "\<exists>a. a \<in> happ_at plan_happ_seq t" by blast
 qed
 
 text \<open>If something is in the happening sequence, then there must be an action in the plan.\<close>
-lemma in_happ_seqE:
-  assumes in_happ_seq: "(t, snap) \<in> plan_happ_seq"
-  shows "\<exists>t d a. (a, t, d) \<in> ran \<pi> \<and> (at_start a = snap \<or> at_end a = snap)"
+lemma in_happ_seqE':
+  assumes in_happ_seq: "(time, snap) \<in> plan_happ_seq"
+  shows "\<exists>a t d. (a, t, d) \<in> ran \<pi> \<and> (at_start a = snap \<and> time = t \<or> at_end a = snap \<and> time = t + d)"
   using assms unfolding plan_happ_seq_def by blast
 
+lemma in_happ_seqE:
+  assumes "(time, snap) \<in> plan_happ_seq"
+    and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> at_start a = snap \<Longrightarrow> time = t \<Longrightarrow> thesis"
+    and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> at_end a = snap \<Longrightarrow> time = t + d \<Longrightarrow> thesis"
+  shows thesis
+  using in_happ_seqE' assms by blast
+
+lemma in_happ_seqE_act:
+  assumes in_happ_seq: "(time, snap) \<in> plan_happ_seq"
+  shows "\<exists>a t d. (a, t, d) \<in> ran \<pi> \<and> (at_start a = snap \<or> at_end a = snap)"
+  using assms unfolding plan_happ_seq_def by blast
+  
+    
 text \<open>Invariants\<close>
 definition plan_inv_seq::"('proposition, 'time) invariant_sequence" where
 "plan_inv_seq \<equiv>
@@ -104,12 +114,46 @@ text \<open>This definition arose from the statement in \<^cite>\<open>Gigante20
 snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
 snap-actions. Moreover, in their definition of a planning problem, the assumption is made that 
 no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at_end(b) and at-start(a) \<noteq> at-end(a).\<close>
+
+text \<open>We want to define a plan in an abstract manner. This needs to be more abstract.\<close>
+definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" where
+"mutex_snap_action a b = (
+  (pre a) \<inter> ((adds b) \<union> (dels b)) \<noteq> {} \<or>
+  ((adds a) \<inter> (dels b)) \<noteq> {} \<or>
+  (pre b) \<inter> ((adds a) \<union> (dels a)) \<noteq> {} \<or>
+  (adds b) \<inter> (dels a) \<noteq> {}
+)"
+
+text \<open>Snap-actions not interfering means that they prevent moving targets. Therefore \<close>
+
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_happ_seq B \<equiv> 
-  (\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
+  (\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u)
     \<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b) 
     \<and> (a = b \<longrightarrow> t = u)))
   \<and> (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)"
+
+
+definition snap_action_seq::"('time \<times> 'action snap_action) set" where
+"snap_action_seq \<equiv>                                       
+    {(t, AtStart a) | a t d. (a, t, d) \<in> ran \<pi>}
+  \<union> {(t + d, AtEnd a) | a t d. (a, t, d) \<in> ran \<pi>}"
+
+abbreviation snap_at::"('time \<times> 'action snap_action) set \<Rightarrow> 'time \<Rightarrow> 'action snap_action set" where
+"snap_at B t \<equiv> {s. (t, s) \<in> B}"
+
+text \<open>This is the most general formulation of actions not interfering. This considers the tuples in the range 
+of the plan to be actions. The contents may be the same (duplicate action/self-overlap), unless this is explicitly
+prohibited. Therefore, the mutual exclusivity of actions refer to the index for equivalence of 
+actions.\<close>
+definition mutex_valid_plan::bool where
+"mutex_valid_plan \<equiv> \<forall>i j a ta da b tb db sa sb t u. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db)
+\<and> (sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da)
+\<and> (sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db)
+\<and> t - u < \<epsilon> 
+\<and> u - t < \<epsilon> 
+\<longrightarrow> \<not>mutex_snap_action sa sb
+"
 
 lemma eps_zero_imp_zero_sep: 
   assumes "\<epsilon> = 0"
@@ -168,6 +212,12 @@ definition durations_ge_0::bool where
 definition durations_valid::bool where
 "durations_valid \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> satisfies_duration_bounds a d"
 
+thm List.linorder_class.sorted_list_of_set.fold_insort_key.infinite
+(* The validity of infinite plans is ill-defined. *)
+
+definition finite_plan::bool where
+"finite_plan \<equiv> finite (dom \<pi>)"
+
 definition valid_plan::"bool" where
 "valid_plan \<equiv> \<exists>M. 
     valid_state_sequence M
@@ -175,13 +225,9 @@ definition valid_plan::"bool" where
     \<and> goal \<subseteq> M (length htpl)
     \<and> durations_ge_0
     \<and> durations_valid
-    \<and> nm_happ_seq plan_happ_seq"
+    \<and> mutex_valid_plan
+    \<and> finite_plan"
 
-thm List.linorder_class.sorted_list_of_set.fold_insort_key.infinite
-(* The validity of infinite plans is ill-defined. *)
-
-definition finite_plan::bool where
-"finite_plan \<equiv> finite (dom \<pi>)"
 
 definition durations_positive::bool where
 "durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 < d"
@@ -411,7 +457,7 @@ definition const_valid_happ_seq where
 "const_valid_happ_seq \<equiv> \<forall>t. (\<forall>h \<in> happ_at plan_happ_seq t. snap_mod_fluents h)"
 
 lemma cv_plan_imp_cv_hs: "const_valid_plan \<Longrightarrow> const_valid_happ_seq"
-  unfolding const_valid_plan_def act_mod_fluents_def happ_at_def plan_happ_seq_def const_valid_happ_seq_def
+  unfolding const_valid_plan_def act_mod_fluents_def  plan_happ_seq_def const_valid_happ_seq_def
   by blast
 
 definition const_valid_domain where
@@ -487,17 +533,17 @@ lemma plan_and_happ_seq_consts:
   subgoal for x
     unfolding plan_happ_seq_def by fast
   subgoal for x
-    using in_happ_seqE by fast
+    using in_happ_seqE_act by fast
   done
 
 lemma cv_plan_cv_happ_seq:
-  "const_valid_plan = const_valid_happ_seq" unfolding const_valid_plan_def const_valid_happ_seq_def happ_at_def
+  "const_valid_plan = const_valid_happ_seq" unfolding const_valid_plan_def const_valid_happ_seq_def 
   plan_happ_seq_def act_mod_fluents_def by fast
 
 lemma cv_happ_seq_consts:
   assumes "const_valid_happ_seq"
   shows "happ_seq_consts = \<Union>(pre ` {s|t s. (t, s) \<in> plan_happ_seq}) - fluents"
-  using assms unfolding const_valid_happ_seq_def happ_at_def happ_seq_consts_def 
+  using assms unfolding const_valid_happ_seq_def  happ_seq_consts_def 
   by blast
 
 lemma plan_consts_not_fluent:
@@ -627,9 +673,9 @@ proof -
   from x 
   have "x \<in> \<Union>(snap_consts ` {h|t h. (t, h) \<in> plan_happ_seq})" unfolding happ_seq_consts_def by simp
   with cvp 
-  have x: "x \<in> \<Union>(pre ` {h|t h. (t, h) \<in> plan_happ_seq}) - fluents" using cv_plan_imp_cv_hs act_mod_fluents_def const_valid_happ_seq_def happ_at_def by fast
+  have x: "x \<in> \<Union>(pre ` {h|t h. (t, h) \<in> plan_happ_seq}) - fluents" using cv_plan_imp_cv_hs act_mod_fluents_def const_valid_happ_seq_def  by fast
   then obtain t where
-    t: "x \<in>  \<Union>(pre ` happ_at plan_happ_seq t)" unfolding happ_at_def by auto
+    t: "x \<in>  \<Union>(pre ` happ_at plan_happ_seq t)" by auto
   then obtain i where
     i: "i < length htpl"
        "time_index i = t" using a_in_B_iff_t_in_htps finite_htps_is_set_htpl[OF finite_htps[OF fp]] time_indexI_htpl by blast
@@ -786,7 +832,7 @@ proof -
       qed
       show "\<Union> (pre' ` ?S) \<subseteq> MS' i" 
       proof -
-        have "\<Union> (pre ` ?S) \<inter> fluents =  \<Union> (pre' ` ?S)" unfolding happ_at_def plan_happ_seq_def pre'_def by auto
+        have "\<Union> (pre ` ?S) \<inter> fluents =  \<Union> (pre' ` ?S)" unfolding  plan_happ_seq_def pre'_def by auto
         thus "\<Union> (pre' ` ?S) \<subseteq> MS' i" using pres MS'_p i_ran by auto
       qed
     qed
@@ -862,7 +908,7 @@ proof -
       hence "\<Union> (pre ` ?S) \<inter> fluents \<subseteq> MS' i" unfolding pre'_def by simp
       moreover
       from cvp[simplified cv_plan_cv_happ_seq, THEN cv_happ_seq_consts]
-      have "\<Union> (pre ` ?S) - fluents \<subseteq> happ_seq_consts \<pi> fluents at_start at_end pre adds dels - fluents" unfolding happ_at_def by auto
+      have "\<Union> (pre ` ?S) - fluents \<subseteq> happ_seq_consts \<pi> fluents at_start at_end pre adds dels - fluents" by auto
       hence "\<Union> (pre ` ?S) - fluents \<subseteq> ?dc" using plan_and_happ_seq_consts unfolding domain_consts_def by fast
       ultimately
       have "\<Union> (pre ` ?S) \<subseteq> MS' i \<union> ?dc" by blast
@@ -1026,18 +1072,94 @@ context
     "\<forall>(a, t, d) \<in> ran \<pi>. dels (at_end a) = dels' (at_end' a)"
 begin
 
-lemma valid_state_seq_equiv_if_snaps_functionally_equiv:
-  "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS
-  \<longleftrightarrow> valid_state_sequence \<pi> at_start' at_end' over_all pre' adds' dels' MS"
-proof -
-  
+
+lemma f_transfer_1: 
+  assumes "\<forall>(a, t, d) \<in> ran \<pi>. f (at_start a) = f' (at_start' a)"
+      and "\<forall>(a, t, d) \<in> ran \<pi>. f (at_end a) = f' (at_end' a)"
+    shows "\<Union>(f ` (happ_at (plan_happ_seq \<pi> at_start at_end) t)) \<subseteq> \<Union>(f' ` (happ_at (plan_happ_seq \<pi> at_start' at_end') t))"
+proof (rule subsetI)
+  fix x
+  assume "x \<in> \<Union> (f ` happ_at (plan_happ_seq \<pi> at_start at_end) t)"
+  then obtain h where
+    x: "x \<in> f h"
+    and x_happ: "(t, h) \<in> plan_happ_seq \<pi> at_start at_end" by blast
+  have "\<exists>h. x \<in> f' h \<and> h \<in> happ_at (plan_happ_seq \<pi> at_start' at_end') t" 
+    apply (cases rule: in_happ_seqE[OF x_happ])
+    using assms x unfolding  plan_happ_seq_def by blast+
+  thus "x \<in> \<Union> (f' ` happ_at (plan_happ_seq \<pi> at_start' at_end') t)" by blast
 qed
+
+lemma f_transfer_2:
+  assumes "\<forall>(a, t, d) \<in> ran \<pi>. f (at_start a) = f' (at_start' a)"
+      and "\<forall>(a, t, d) \<in> ran \<pi>. f (at_end a) = f' (at_end' a)"
+    shows "\<Union>(f' ` (happ_at (plan_happ_seq \<pi> at_start' at_end') t)) \<subseteq> \<Union>(f ` (happ_at (plan_happ_seq \<pi> at_start at_end) t))"
+proof (rule subsetI)
+  fix x
+  assume "x \<in> \<Union> (f' ` happ_at (plan_happ_seq \<pi> at_start' at_end') t)"
+  then obtain h where
+    x: "x \<in> f' h"
+    and x_happ: "(t, h) \<in> plan_happ_seq \<pi> at_start' at_end'" by blast
+  have "\<exists>h. x \<in> f h \<and> h \<in> happ_at (plan_happ_seq \<pi> at_start at_end) t" 
+    apply (cases rule: in_happ_seqE[OF x_happ])
+    using assms x unfolding  plan_happ_seq_def by blast+
+  thus "x \<in> \<Union> (f ` happ_at (plan_happ_seq \<pi> at_start at_end) t)" by blast
+qed
+
+lemma f_transfer:
+  assumes "\<forall>(a, t, d) \<in> ran \<pi>. f (at_start a) = f' (at_start' a)"
+      and "\<forall>(a, t, d) \<in> ran \<pi>. f (at_end a) = f' (at_end' a)"
+    shows "\<Union>(f ` (happ_at (plan_happ_seq \<pi> at_start at_end) t)) = \<Union>(f' ` (happ_at (plan_happ_seq \<pi> at_start' at_end') t))"
+  using f_transfer_1[OF assms] f_transfer_2[OF assms] by fastforce
+
+lemmas pre_transfer = f_transfer[OF start_snap_replacement(1) end_snap_replacement(1)]
+lemmas adds_transfer = f_transfer[OF start_snap_replacement(2) end_snap_replacement(2)]
+lemmas dels_transfer = f_transfer[OF start_snap_replacement(3) end_snap_replacement(3)]
+
+lemma valid_state_seq_equiv_if_snaps_functionally_equiv:
+  "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS \<longleftrightarrow> valid_state_sequence \<pi> at_start' at_end' over_all pre' adds' dels' MS"
+  unfolding valid_state_sequence_def  using adds_transfer dels_transfer pre_transfer unfolding Let_def apply_effects_def by simp
+
+lemma in_happ_seq_trans_1:  
+  assumes "h \<in> happ_at (plan_happ_seq \<pi> at_start at_end) time" 
+    shows "\<exists>h' \<in> happ_at (plan_happ_seq \<pi> at_start' at_end') time. pre h = pre' h' \<and> adds h = adds' h' \<and> dels h = dels' h'"
+  apply (rule in_happ_seqE[OF assms[simplified ]])
+  unfolding  plan_happ_seq_def using start_snap_replacement apply blast
+  using end_snap_replacement by fastforce
+
+lemma in_happ_seqE1:
+  assumes "h \<in> happ_at (plan_happ_seq \<pi> at_start at_end) time" 
+      and "\<And>h'. h' \<in> happ_at (plan_happ_seq \<pi> at_start' at_end') time \<Longrightarrow> pre h = pre' h' \<Longrightarrow> adds h = adds' h' \<Longrightarrow> dels h = dels' h' \<Longrightarrow> thesis"
+    shows thesis
+  using in_happ_seq_trans_1 assms by blast
+
+lemma in_happ_seq_trans_2:  
+  assumes "h \<in> happ_at (plan_happ_seq \<pi> at_start' at_end') time" 
+    shows "\<exists>h' \<in> happ_at (plan_happ_seq \<pi> at_start at_end) time. pre h' = pre' h \<and> adds h' = adds' h \<and> dels h' = dels' h"
+  apply (rule in_happ_seqE[OF assms[simplified ]])
+  unfolding  plan_happ_seq_def using start_snap_replacement apply blast
+  using end_snap_replacement by fastforce
+
+lemma in_happ_seqE2:  
+  assumes "h \<in> happ_at (plan_happ_seq \<pi> at_start' at_end') time" 
+      and "\<And>h'. h' \<in> happ_at (plan_happ_seq \<pi> at_start at_end) time \<Longrightarrow> pre h' = pre' h \<Longrightarrow> adds h' = adds' h \<Longrightarrow> dels h' = dels' h \<Longrightarrow> thesis"
+    shows thesis
+  using assms in_happ_seq_trans_2 by blast
+  
+context
+  assumes at_start_inj: "inj_on at_start {a| a t d. (a, t, d) \<in> ran \<pi>}"
+      and at_end_inj: "inj_on at_end {a| a t d. (a, t, d) \<in> ran \<pi>}"
+      and snaps_disj: "at_start ` {a| a t d. (a, t, d) \<in> ran \<pi>} \<inter> at_end ` {a| a t d. (a, t, d) \<in> ran \<pi>} = {}"
+begin
+lemma nm_happ_seq_equiv_if_snaps_functionally_equiv: 
+  "nm_happ_seq pre adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end) \<longleftrightarrow> nm_happ_seq pre' adds' dels' \<epsilon> (plan_happ_seq \<pi> at_start' at_end')"
+  sorry
 
 lemma valid_plan_equiv_if_snaps_functionally_equiv:
   "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
   \<longleftrightarrow> valid_plan \<pi> init goal at_start' at_end' over_all lower upper pre' adds' dels' \<epsilon>"
-  apply (rule iffI)
-  subgoal unfolding valid_plan_def
+  sorry
+
+end 
 end
 
 locale temp_planning_problem =
@@ -1158,11 +1280,6 @@ finite_temp_planning_problem init goal at_start at_end over_all lower upper pre 
 assumes at_start_inj_on: "inj_on at_start actions"
     and at_end_inj_on:   "inj_on at_end actions"
     and snaps_disj:      "(at_start ` actions) \<inter> (at_end ` actions) = {}"
-
-
-datatype (act: 'a) snap_action = 
-  AtStart 'a |
-  AtEnd 'a
 
 locale finite_temp_planning_problem' = 
   finite_temp_planning_problem init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions 
