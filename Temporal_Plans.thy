@@ -529,6 +529,45 @@ proof -
   thus ?thesis by blast
 qed
 
+lemma state_seq_consts_ind:
+  assumes vss: "valid_state_sequence MS"
+      and cvp: const_valid_plan
+      and len: "0 < length htpl"
+      and x_not_fluent: "x \<notin> fluents"
+      and i_ran: "i < length htpl"
+      and x_in_MS: "x \<in> MS (Suc i)"
+    shows "x \<in> MS i"
+proof -
+  from x_in_MS
+  have "x \<in> apply_effects (MS i) (happ_at plan_happ_seq (time_index i))" using vss i_ran unfolding valid_state_sequence_def Let_def by blast
+  moreover
+  from cvp[THEN cv_plan_imp_cv_hs]
+  have "\<Union>(adds ` (happ_at plan_happ_seq (time_index i))) \<subseteq> fluents" 
+       "\<Union>(dels ` (happ_at plan_happ_seq (time_index i))) \<subseteq> fluents" unfolding const_valid_happ_seq_def by blast+
+  hence "x \<notin> \<Union>(adds ` (happ_at plan_happ_seq (time_index i))) \<union> \<Union>(dels ` (happ_at plan_happ_seq (time_index i)))" using \<open>x \<notin> fluents\<close> by blast
+  ultimately
+  show "x \<in> MS i" unfolding apply_effects_def by blast
+qed
+
+lemma in_state_seq_consts_in_init:
+  assumes vss: "valid_state_sequence MS"
+      and cvp: const_valid_plan
+      and len: "0 < length htpl"
+      and x_not_fluent: "x \<notin> fluents"
+      and i_ran: "i < length htpl"
+      and x_in_MS: "x \<in> MS i"
+    shows "x \<in> MS 0"
+  using i_ran x_in_MS
+proof (induction i)
+  case 0
+  then show ?case by blast
+next
+  case (Suc i)
+  with state_seq_consts_ind x_not_fluent vss cvp
+  have "x \<in> MS i" by fastforce
+  with Suc
+  show ?case by auto
+qed
 
 lemma in_happ_seq_pre_consts_in_init:
   assumes fp: finite_plan
@@ -551,25 +590,6 @@ proof (cases "length htpl")
   show ?thesis using x_in_pre by blast
 next
   case (Suc nat)
-  have ind: "x \<in> MS 0" if "x \<in> MS i" "i < length htpl" "x \<notin> fluents" for x i
-    using that
-  proof (induction i arbitrary: x)
-    case 0
-    with Suc vss
-    show ?case unfolding Let_def valid_state_sequence_def by auto
-  next
-    case (Suc i)
-    hence "x \<in> apply_effects (MS i) (happ_at plan_happ_seq (time_index i))" using vss Suc unfolding valid_state_sequence_def Let_def by auto
-    moreover
-    from cvp[THEN cv_plan_imp_cv_hs]
-    have "\<Union>(adds ` (happ_at plan_happ_seq (time_index i))) \<subseteq> fluents" 
-         "\<Union>(dels ` (happ_at plan_happ_seq (time_index i))) \<subseteq> fluents" unfolding const_valid_happ_seq_def by blast+
-    hence "x \<notin> \<Union>(adds ` (happ_at plan_happ_seq (time_index i))) \<union> \<Union>(dels ` (happ_at plan_happ_seq (time_index i)))" using \<open>x \<notin> fluents\<close> by blast
-    ultimately
-    have "x \<in> MS i" unfolding apply_effects_def by blast
-    with Suc
-    show ?case by simp
-  qed
   consider "x \<in> \<Union>(pre ` happ_at plan_happ_seq (time_index i))" | "x \<in> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>})" using x_in_pre by blast
   hence "\<exists>i < length htpl. x \<in> MS i"
   proof cases
@@ -586,9 +606,64 @@ next
          "i < length htpl" using time_index_img_list fp set_htpl_eq_htps by blast
     show ?thesis using i t vss unfolding valid_state_sequence_def Let_def by blast
   qed
-  thus ?thesis using x_not_fluent ind by blast
+  thus ?thesis using x_not_fluent in_state_seq_consts_in_init[OF vss cvp] by fastforce
 qed
 
+
+lemma valid_plan_happ_seq_consts_const:
+  assumes fp: finite_plan
+      and vp: valid_plan
+      and cvp: const_valid_plan
+      and dp: durations_positive
+      and x: "x \<in> happ_seq_consts"
+    shows "x \<in> init - fluents"
+proof -
+  from vp[simplified valid_plan_def]
+  obtain MS where
+    vss: "valid_state_sequence MS"
+    and init: "MS 0 = init" 
+    and goal: "goal \<subseteq> MS (length htpl)"
+    by blast
+  from x 
+  have "x \<in> \<Union>(snap_consts ` {h|t h. (t, h) \<in> plan_happ_seq})" unfolding happ_seq_consts_def by simp
+  with cvp 
+  have x: "x \<in> \<Union>(pre ` {h|t h. (t, h) \<in> plan_happ_seq}) - fluents" using cv_plan_imp_cv_hs act_mod_fluents_def const_valid_happ_seq_def happ_at_def by fast
+  then obtain t where
+    t: "x \<in>  \<Union>(pre ` happ_at plan_happ_seq t)" unfolding happ_at_def by auto
+  then obtain i where
+    i: "i < length htpl"
+       "time_index i = t" using a_in_B_iff_t_in_htps finite_htps_is_set_htpl[OF finite_htps[OF fp]] time_indexI_htpl by blast
+  hence "\<exists>i < length htpl. x \<in> \<Union>(pre ` happ_at plan_happ_seq (time_index i))" using t by blast
+  hence "x \<in> MS 0" using in_happ_seq_pre_consts_in_init[OF fp vss cvp] x dp by blast
+  with x init
+  show ?thesis by blast
+qed
+
+lemma valid_plan_const_invs_const:
+  assumes fp: finite_plan
+      and vp: valid_plan
+      and cvp: const_valid_plan
+      and dp: durations_positive
+      and x: "x \<in> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>}) - fluents"
+    shows "x \<in> init - fluents"
+proof -
+  from vp[simplified valid_plan_def]
+  obtain MS where
+    vss: "valid_state_sequence MS"
+    and init: "MS 0 = init" 
+    and goal: "goal \<subseteq> MS (length htpl)"
+    by blast
+  from x 
+  have x: "x \<in> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>})"
+       "x \<notin> fluents" by blast+
+  hence "\<exists>t. t \<in> htps" unfolding htps_def by blast
+  hence "0 < length htpl" using finite_htps_is_set_htpl finite_htps fp by auto
+  hence "x \<in> MS 0" using in_happ_seq_pre_consts_in_init[OF fp vss cvp dp, where x = x] x by auto
+  thus "x \<in> init - fluents" using x init by blast
+qed
+
+
+text \<open>The constants in a valid plan are constant\<close>
 lemma valid_plan_consts:
   assumes fp: finite_plan
       and vp: valid_plan
@@ -604,42 +679,36 @@ proof -
     by blast
   have "plan_consts = (happ_seq_consts \<union> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>})) - fluents" using plan_and_happ_seq_consts by blast
   hence "plan_consts = happ_seq_consts \<union> (\<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>}) - fluents)" using happ_seq_consts_const by auto
-  moreover
-  have "x \<in> init - fluents" if "x \<in> happ_seq_consts" for x
-  proof -
-    from that 
-    have "x \<in> \<Union>(snap_consts ` {h|t h. (t, h) \<in> plan_happ_seq})" unfolding happ_seq_consts_def by simp
-    with cvp 
-    have x: "x \<in> \<Union>(pre ` {h|t h. (t, h) \<in> plan_happ_seq}) - fluents" using cv_plan_imp_cv_hs act_mod_fluents_def const_valid_happ_seq_def happ_at_def by fast
-    then obtain t where
-      t: "x \<in>  \<Union>(pre ` happ_at plan_happ_seq t)" unfolding happ_at_def by auto
-    then obtain i where
-      i: "i < length htpl"
-         "time_index i = t" using a_in_B_iff_t_in_htps finite_htps_is_set_htpl[OF finite_htps[OF fp]] time_indexI_htpl by blast
-    hence "\<exists>i < length htpl. x \<in> \<Union>(pre ` happ_at plan_happ_seq (time_index i))" using t by blast
-    hence "x \<in> MS 0" using in_happ_seq_pre_consts_in_init[OF fp vss cvp] x dp by blast
-    with x init
-    show ?thesis by blast
-  qed
-  moreover
-  have "x \<in> init - fluents" if "x \<in> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>}) - fluents" for x
-  proof -
-    from that 
-    have x: "x \<in> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>})"
-         "x \<notin> fluents" by blast+
-    hence "\<exists>t. t \<in> htps" unfolding htps_def by blast
-    hence "0 < length htpl" using finite_htps_is_set_htpl finite_htps fp by auto
-    hence "x \<in> MS 0" using in_happ_seq_pre_consts_in_init[OF fp vss cvp dp, where x = x] x by auto
-    thus "x \<in> init - fluents" using x init by blast
-  qed
-  ultimately
-  show ?thesis by blast
+  thus ?thesis using valid_plan_happ_seq_consts_const valid_plan_const_invs_const assms by blast
 qed
 
+text \<open>The constants in the goal of a valid plan must be present in the initial state.\<close>
 lemma valid_plan_goal:
-  assumes valid_plan
+  assumes fp: finite_plan
+      and vp: valid_plan
+      and cvp: const_valid_plan
+      and dp: durations_positive
   shows "goal - fluents \<subseteq> init - fluents"
-  sorry
+proof -
+  from vp[simplified valid_plan_def]
+  obtain MS where
+    vss: "local.valid_state_sequence MS" 
+    and init: "MS 0 = init" 
+    and goal: "goal \<subseteq> MS (length htpl)" 
+    by blast
+  show ?thesis 
+  proof (cases "length htpl")
+    case 0
+    then show ?thesis using init goal by auto
+  next
+    case (Suc nat)
+    hence "MS (length htpl - 1) - fluents \<subseteq> init - fluents" using in_state_seq_consts_in_init[OF vss cvp] init by auto
+    moreover
+    have "MS (length htpl) - fluents \<subseteq> MS (length htpl - 1) - fluents" using state_seq_consts_ind vss cvp Suc by auto
+    ultimately
+    show ?thesis using goal by blast
+  qed
+qed
 end
 
 text \<open>
@@ -840,10 +909,12 @@ proof -
   thus ?thesis unfolding nm_happ_seq_def by blast
 qed
 
-
+text \<open>An attempt was made to remove these assumptions by proving that constants in a plan are
+      indeed constant. However, this only works for the direction of the proof that does not 
+      need it.\<close>
 lemma const_plan_equiv: 
   assumes "finite_plan \<pi>"
-      and "goal - fluents \<subseteq> init - fluents" (* remove these assumptions? *)
+      and "goal - fluents \<subseteq> init - fluents"
       and "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents"
     shows "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> \<longleftrightarrow>
        valid_plan \<pi> (fluent_state fluents init) (fluent_state fluents goal) at_start at_end over_all' lower upper pre' adds dels \<epsilon>" 
@@ -923,7 +994,6 @@ next
     show ?thesis using init_goal MS_def any dur nm'[simplified cvp_nm_happ_seq_equiv[symmetric]] by auto
   next
     case (Suc nat)
-    (* prove that the constants in the plan are maintained *)
     have init: "init = MS 0" unfolding MS_def domain_consts_def using assms Suc using init' by auto
     moreover
     have goal: "goal \<subseteq> MS (length (htpl \<pi>))" unfolding MS_def using goal' unfolding domain_consts_def by auto
@@ -934,8 +1004,41 @@ qed
 end
 text \<open>Another thing we need to prove is the relationship between at_start, at_end, pre, adds, and dels. To do.\<close>
 
-(* this planning problem can be easily derived from one with an infinite domain, by just removing the
-infinite set of constants *)
+context 
+  fixes \<pi>::"('i, 'action, 'time::time) temp_plan"
+    and at_start::"'action  \<Rightarrow> 'snap_action"
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and at_start'::"'action \<Rightarrow> 'snap_action_1"
+    and at_end'::  "'action  \<Rightarrow> 'snap_action_1"
+    and pre'::     "'snap_action_1 \<Rightarrow> 'proposition set"
+    and adds'::    "'snap_action_1 \<Rightarrow> 'proposition set"
+    and dels'::    "'snap_action_1 \<Rightarrow> 'proposition set"
+  assumes start_snap_replacement: 
+    "\<forall>(a, t, d) \<in> ran \<pi>. pre (at_start a) = pre' (at_start' a)"
+    "\<forall>(a, t, d) \<in> ran \<pi>. adds (at_start a) = adds' (at_start' a)"
+    "\<forall>(a, t, d) \<in> ran \<pi>. dels (at_start a) = dels' (at_start' a)"
+    and end_snap_replacement:
+    "\<forall>(a, t, d) \<in> ran \<pi>. pre (at_end a) = pre' (at_end' a)"
+    "\<forall>(a, t, d) \<in> ran \<pi>. adds (at_end a) = adds' (at_end' a)"
+    "\<forall>(a, t, d) \<in> ran \<pi>. dels (at_end a) = dels' (at_end' a)"
+begin
+
+lemma valid_state_seq_equiv_if_snaps_functionally_equiv:
+  "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS
+  \<longleftrightarrow> valid_state_sequence \<pi> at_start' at_end' over_all pre' adds' dels' MS"
+proof -
+  
+qed
+
+lemma valid_plan_equiv_if_snaps_functionally_equiv:
+  "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
+  \<longleftrightarrow> valid_plan \<pi> init goal at_start' at_end' over_all lower upper pre' adds' dels' \<epsilon>"
+  apply (rule iffI)
+  subgoal unfolding valid_plan_def
+end
 
 locale temp_planning_problem =
   fixes init::    "'proposition set"
@@ -1023,30 +1126,18 @@ context
   fixes \<pi>::"('i, 'action, 'time) temp_plan"
   assumes plan_actions_in_problem: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
 begin
-lemma valid_plan_in_finite_props:
+  lemma valid_plan_in_finite_props:
   assumes "finite_plan \<pi>"
-  shows
-  "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
-\<longleftrightarrow> valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>"
-proof (rule const_plan_equiv[simplified fluent_state_def])
-  show "const_valid_plan \<pi> fluents at_start at_end adds dels" using plan_actions_in_problem finite_fluent_domain const_valid_plan_def const_valid_domain_def by fast
-
-  show "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents" 
-  proof -
-    have "x \<in> init - fluents" if "x \<in> plan_consts \<pi> fluents at_start at_end over_all pre adds dels" for x
-    proof -
-      from that
-      have "x \<in> \<Union>(act_consts fluents at_start at_end over_all pre adds dels ` actions)" using plan_actions_in_problem unfolding plan_consts_def by auto
-      then obtain a where
-        x_a: "x \<in> act_consts fluents at_start at_end over_all pre adds dels a"
-        and a: "a \<in> actions" by blast
-      from x_a
-      have "x \<notin> fluents" by blast
-      
-    qed
-  qed
-qed
+      and "goal - fluents \<subseteq> init - fluents"
+      and "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents"
+    shows
+    "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
+  \<longleftrightarrow> valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>"
+  proof (rule const_plan_equiv[simplified fluent_state_def])
+    show "const_valid_plan \<pi> fluents at_start at_end adds dels" using plan_actions_in_problem finite_fluent_domain const_valid_plan_def const_valid_domain_def by fast
+  qed (auto simp: assms)
 end
+
 end
 
 locale unique_snaps_temp_planning_problem = 
@@ -1139,7 +1230,7 @@ sublocale finite_props_temp_planning_problem init' goal' AtStart AtEnd over_all'
 
 lemma valid_plan_alt:
   assumes "const_valid_domain \<pi> at_start at_end adds dels actions"
-  shows "True"
+  shows "True" sorry
 end
 
 locale ta_temp_planning = 
