@@ -108,12 +108,7 @@ definition plan_inv_seq::"('proposition, 'time) invariant_sequence" where
 definition invs_at::"('proposition, 'time) invariant_sequence \<Rightarrow> 'time \<Rightarrow> 'proposition set" where
 "invs_at Inv t \<equiv> \<Union>{p | p. (t, p) \<in> Inv}"
 
-subsubsection \<open>Non-mutex happening sequence\<close>
-
-text \<open>This definition arose from the statement in \<^cite>\<open>Gigante2020\<close>, that every at-start 
-snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
-snap-actions. Moreover, in their definition of a planning problem, the assumption is made that 
-no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at_end(b) and at-start(a) \<noteq> at-end(a).\<close>
+subsubsection \<open>Mutual exclusivity\<close>
 
 text \<open>We want to define a plan in an abstract manner. This needs to be more abstract.\<close>
 definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" where
@@ -134,27 +129,6 @@ definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" w
   \<and> (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)"
 
 
-definition snap_action_seq::"('time \<times> 'action snap_action) set" where
-"snap_action_seq \<equiv>                                       
-    {(t, AtStart a) | a t d. (a, t, d) \<in> ran \<pi>}
-  \<union> {(t + d, AtEnd a) | a t d. (a, t, d) \<in> ran \<pi>}"
-
-abbreviation snap_at::"('time \<times> 'action snap_action) set \<Rightarrow> 'time \<Rightarrow> 'action snap_action set" where
-"snap_at B t \<equiv> {s. (t, s) \<in> B}"
-
-text \<open>This is the most general formulation of actions not interfering. This considers the tuples in the range 
-of the plan to be actions. The contents may be the same (duplicate action/self-overlap), unless this is explicitly
-prohibited. Therefore, the mutual exclusivity of actions refer to the index for equivalence of 
-actions.\<close>
-definition mutex_valid_plan::bool where
-"mutex_valid_plan \<equiv> \<forall>i j a ta da b tb db sa sb t u. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db)
-\<and> (sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da)
-\<and> (sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db)
-\<and> t - u < \<epsilon> 
-\<and> u - t < \<epsilon> 
-\<longrightarrow> \<not>mutex_snap_action sa sb
-"
-
 lemma eps_zero_imp_zero_sep: 
   assumes "\<epsilon> = 0"
   shows "nm_happ_seq B = (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)" 
@@ -171,6 +145,49 @@ proof -
     by force
   thus ?thesis unfolding nm_happ_seq_def using assms by blast
 qed
+
+text \<open>This is the most general formulation of actions not interfering. This considers the tuples in the range 
+of the plan to be actions. The contents may be the same (duplicate action/self-overlap), unless this is explicitly
+prohibited. Therefore, the mutual exclusivity of actions refers to the index for equivalence of 
+actions. We also need to check the case that the same action has a duration of 0.
+
+\<close>
+definition mutex_valid_plan::bool where
+"mutex_valid_plan \<equiv> (\<forall>i j a ta da b tb db sa sb t u. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j 
+\<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db)
+\<and> (sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da)
+\<and> (sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db)
+\<and> (t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u)
+\<longrightarrow> \<not>mutex_snap_action sa sb)
+\<and> (\<forall>(a, t, d) \<in> ran \<pi>. d = 0 \<longrightarrow> \<not>mutex_snap_action (at_start a) (at_end a))
+"
+
+definition mutex_sched where
+"mutex_sched a ta da b tb db \<equiv> \<forall>sa t sb u. 
+  (sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da)
+\<and> (sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db)
+\<and> (t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u)
+\<longrightarrow> \<not>mutex_snap_action sa sb"
+
+definition mutex_valid_plan_alt::bool where
+"mutex_valid_plan_alt \<equiv> (\<forall>i j a ta da b tb db. 
+  i \<in> dom \<pi> 
+\<and> j \<in> dom \<pi> 
+\<and> i \<noteq> j 
+\<and> \<pi> i = Some (a, ta, da) 
+\<and> \<pi> j = Some (b, tb, db) 
+\<longrightarrow> mutex_sched a ta da b tb db)
+\<and> (\<forall>(a, t, d) \<in> ran \<pi>. d = 0 \<longrightarrow> \<not>mutex_snap_action (at_start a) (at_end a))"
+
+lemma mutex_valid_plan_eq: "mutex_valid_plan \<longleftrightarrow> mutex_valid_plan_alt"
+  unfolding mutex_valid_plan_def mutex_valid_plan_alt_def mutex_sched_def 
+  apply (rule iffI; intro conjI)
+  by blast+
+
+text \<open>This definition arose from the statement in \<^cite>\<open>Gigante2020\<close>, that every at-start 
+snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
+snap-actions. Moreover, in their definition of a planning problem, the assumption is made that 
+no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at_end(b) and at-start(a) \<noteq> at-end(a).\<close>
 
 subsubsection \<open>Valid state sequence\<close>
 
@@ -228,7 +245,6 @@ definition valid_plan::"bool" where
     \<and> mutex_valid_plan
     \<and> finite_plan"
 
-
 definition durations_positive::bool where
 "durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 < d"
 
@@ -249,6 +265,149 @@ lemma no_self_overlap_spec:
     "\<not>(t \<le> u \<and> u \<le> t + d)"
   using assms 
   unfolding no_self_overlap_def ran_def by force
+
+
+text \<open>A plan without self-overlap has a simpler definition of non-interference\<close>
+definition mutex_valid_plan_inj::bool where
+"mutex_valid_plan_inj \<equiv> (\<forall>a ta da b tb db. (a, ta, da) \<in> ran \<pi> \<and> (b, tb, db) \<in> ran \<pi>
+\<and> (a, ta, da) \<noteq> (b, tb, db)
+\<longrightarrow> mutex_sched a ta da b tb db)
+\<and> (\<forall>(a, t, d) \<in> ran \<pi>. d = 0 \<longrightarrow> \<not>mutex_snap_action (at_start a) (at_end a))"
+
+
+lemma inj_mutex_def:
+  assumes inj: "inj_on \<pi> (dom \<pi>)" (* this should be injectivity of the plan map *)
+  shows "mutex_valid_plan = mutex_valid_plan_inj"
+proof -
+  { fix i j
+    assume "i \<in> dom \<pi>" "j \<in> dom \<pi>" "i \<noteq> j"
+    hence "\<pi> i \<noteq> \<pi> j" using inj unfolding inj_on_def by blast
+  } note domD = this
+  have ran_dom_P_trans: "i \<in> dom \<pi> \<Longrightarrow> j \<in> dom \<pi> \<Longrightarrow> i \<noteq> j \<Longrightarrow> \<pi> i = Some (a, ta, da) \<Longrightarrow> \<pi> j = Some (b, tb, db) \<Longrightarrow> P a ta da b tb db" 
+    if "\<And>a ta da b tb db. (a, ta, da) \<in> ran \<pi> \<Longrightarrow> (b, tb, db) \<in> ran \<pi> \<Longrightarrow> (a, ta, da) \<noteq> (b, tb, db) \<Longrightarrow> P a ta da b tb db" 
+    for i j a ta da b tb db P
+      apply (drule domD, assumption+)
+      apply (frule subst[where P = "\<lambda>x. x \<noteq> \<pi> j"], assumption)
+      apply (frule subst[where P = "\<lambda>x. Some (a, ta, da) \<noteq> x" and s = "\<pi> j"], assumption)
+      apply (drule ranI[of \<pi>])+
+    using that by blast
+  
+  have "mutex_valid_plan" if "mutex_valid_plan_inj"
+    using ran_dom_P_trans[where P = mutex_sched] that 
+    unfolding mutex_valid_plan_eq mutex_valid_plan_alt_def mutex_valid_plan_inj_def
+    apply -
+    apply (rule conjI)
+     apply (drule conjunct1)
+    by blast+
+  moreover
+  
+  { fix x y 
+    assume "x \<in> ran \<pi>" "y \<in> ran \<pi>"  
+    moreover
+    assume "x \<noteq> y"
+    ultimately
+    have "\<forall>i j. \<pi> i = Some x \<and> \<pi> j = Some y \<longrightarrow> (i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j)" 
+         "\<forall>i j. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> \<pi> i = Some x \<and> \<pi> j = Some y \<longrightarrow> i \<noteq> j" by auto
+  } note domI = this
+  have dom_ran_P_trans:  "P a ta da b tb db" 
+      if sg: "\<And>i j. i \<in> dom \<pi> \<Longrightarrow> j \<in> dom \<pi> \<Longrightarrow> i \<noteq> j \<Longrightarrow> \<pi> i = Some (a, ta, da) \<Longrightarrow> \<pi> j = Some (b, tb, db) \<Longrightarrow> P a ta da b tb db" 
+      and as: "(a, ta, da) \<in> ran \<pi>" "(b, tb, db) \<in> ran \<pi>" "(a, ta, da) \<noteq> (b, tb, db)"
+    for a ta da b tb db P
+  proof -
+    from as obtain i j where
+      pi: "\<pi> i = Some (a, ta, da)"
+      "\<pi> j = Some (b, tb, db)"
+      unfolding ran_def by blast
+    with domI as
+    have ij: "i \<noteq> j" "i \<in> dom \<pi>" "j \<in> dom \<pi>" by presburger+
+    with sg pi
+    show ?thesis by blast
+  qed
+  
+  have "mutex_valid_plan_inj" if "mutex_valid_plan" using that 
+    unfolding mutex_valid_plan_eq mutex_valid_plan_alt_def mutex_valid_plan_inj_def
+    using dom_ran_P_trans[where P = mutex_sched] by auto
+  ultimately
+  show ?thesis by blast
+qed
+
+lemma nso_imp_inj:
+  assumes nso: no_self_overlap
+      and dg0: durations_ge_0
+  shows "inj_on \<pi> (dom \<pi>)"
+proof -
+{ fix i j
+    assume i: "i \<in> dom \<pi>" and j: "j \<in> dom \<pi>"
+    assume ij: "i \<noteq> j"
+    obtain a ta da b tb db where
+      pi: "\<pi> i = Some (a, ta, da)"
+      "\<pi> j = Some (b, tb, db)"
+      using i j by auto
+    hence ij_ran: "(a, ta, da) \<in> ran \<pi>"
+          "(b, tb, db) \<in> ran \<pi>" 
+      by (auto intro: ranI)
+    { assume "a = b"
+      hence ab: "\<not>(ta \<le> tb \<and> tb \<le> ta + da)"
+        and ba: "\<not>(tb \<le> ta \<and> ta \<le> tb + db)" using pi i j ij nso[simplified no_self_overlap_def] 
+        by metis+
+      consider "tb < ta" | "ta + da < tb" using ab by fastforce
+      note lt_case1 = this
+      consider "ta < tb" | "tb + db < ta" using ba by fastforce
+      note lt_case2 = this
+      have "ta \<noteq> tb"
+        apply (cases rule: lt_case1; cases rule: lt_case2)
+        using dg0[simplified durations_ge_0_def] ij_ran by force+
+      }
+    with pi
+    have "\<pi> i \<noteq> \<pi> j" by auto
+  } 
+  thus ?thesis unfolding inj_on_def by blast
+qed
+
+
+definition annotated_action_seq::"('time \<times> 'action snap_action) set" where
+"annotated_action_seq \<equiv>                                       
+    {(t, AtStart a) | a t d. (a, t, d) \<in> ran \<pi>}
+  \<union> {(t + d, AtEnd a) | a t d. (a, t, d) \<in> ran \<pi>}"
+
+abbreviation snap_at::"('time \<times> 'action snap_action) set \<Rightarrow> 'time \<Rightarrow> 'action snap_action set" where
+"snap_at B t \<equiv> {s. (t, s) \<in> B}"
+
+fun app_snap::"('snap_action \<Rightarrow> 'proposition set) \<Rightarrow> 'action snap_action \<Rightarrow> 'proposition set" where
+"app_snap f (AtStart a) = f (at_start a)" |
+"app_snap f (AtEnd a) = f (at_end a)"
+
+definition pre_imp::"'action snap_action \<Rightarrow> 'proposition set" where
+"pre_imp = app_snap pre"
+
+definition add_imp::"'action snap_action \<Rightarrow> 'proposition set" where
+"add_imp = app_snap adds"
+
+definition del_imp::"'action snap_action \<Rightarrow> 'proposition set" where
+"del_imp = app_snap dels"
+
+definition mutex_annotated_action where
+"mutex_annotated_action a b = (
+  (pre_imp a) \<inter> ((add_imp b) \<union> (del_imp b)) \<noteq> {} \<or>
+  ((add_imp a) \<inter> (del_imp b)) \<noteq> {} \<or>
+  (pre_imp b) \<inter> ((add_imp a) \<union> (del_imp a)) \<noteq> {} \<or>
+  (add_imp b) \<inter> (del_imp a) \<noteq> {}
+)"
+
+definition nm_anno_act_seq where
+"nm_anno_act_seq B \<equiv> (\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> (t, a) \<in> B \<and> (u, b) \<in> B)
+    \<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_annotated_action a b) 
+    \<and> (a = b \<longrightarrow> t = u)))
+  \<and> (\<forall>t a b. (t, a) \<in> B \<and> (t, b) \<in> B \<and> a \<noteq> b \<longrightarrow> \<not>mutex_annotated_action a b)"
+
+lemma "mutex_valid_plan \<longleftrightarrow> nm_anno_act_seq annotated_action_seq"
+proof 
+  assume mutex_valid_plan
+  show "nm_anno_act_seq annotated_action_seq" sorry
+next
+  assume "nm_anno_act_seq annotated_action_seq"
+  show mutex_valid_plan sorry
+qed 
 
 text \<open>Basic facts about the indexing of timepoints\<close>
 lemma time_index_bij_betw_list: "bij_betw time_index {n. n < length htpl} (set htpl)"
@@ -1297,18 +1456,6 @@ locale finite_temp_planning_problem' =
     and props:: "'proposition set"
     and actions:: "'action set"
 begin
-  fun app_snap::"('snap_action \<Rightarrow> 'proposition set) \<Rightarrow> 'action snap_action \<Rightarrow> 'proposition set" where
-  "app_snap f (AtStart a) = f (at_start a)" |
-  "app_snap f (AtEnd a) = f (at_end a)"
-  
-  definition pre_imp::"'action snap_action \<Rightarrow> 'proposition set" where
-  "pre_imp = app_snap pre"
-  
-  definition add_imp::"'action snap_action \<Rightarrow> 'proposition set" where
-  "add_imp = app_snap adds"
-  
-  definition del_imp::"'action snap_action \<Rightarrow> 'proposition set" where
-  "del_imp = app_snap dels"
 
   sublocale unique_snaps_temp_planning_problem init goal AtStart AtEnd over_all lower upper pre_imp add_imp del_imp \<epsilon> props actions 
   proof
