@@ -44,6 +44,7 @@ context
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
     and \<epsilon>::       "'time"
+  assumes eps_ran: "0 \<le> \<epsilon>"
 begin
 
 definition apply_effects::"'proposition set \<Rightarrow> 'snap_action set \<Rightarrow> 'proposition set" where
@@ -159,14 +160,14 @@ definition mutex_valid_plan::bool where
 \<and> (sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db)
 \<and> (t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u)
 \<longrightarrow> \<not>mutex_snap_action sa sb)
-\<and> (\<forall>(a, t, d) \<in> ran \<pi>. d = 0 \<longrightarrow> \<not>mutex_snap_action (at_start a) (at_end a))
+\<and> (\<forall>(a, t, d) \<in> ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not>mutex_snap_action (at_start a) (at_end a))
 "
 
 definition mutex_sched where
 "mutex_sched a ta da b tb db \<equiv> \<forall>sa t sb u. 
   (sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da)
 \<and> (sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db)
-\<and> (t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u)
+\<and> (t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u \<or> t = u)
 \<longrightarrow> \<not>mutex_snap_action sa sb"
 
 definition mutex_valid_plan_alt::bool where
@@ -177,7 +178,7 @@ definition mutex_valid_plan_alt::bool where
 \<and> \<pi> i = Some (a, ta, da) 
 \<and> \<pi> j = Some (b, tb, db) 
 \<longrightarrow> mutex_sched a ta da b tb db)
-\<and> (\<forall>(a, t, d) \<in> ran \<pi>. d = 0 \<longrightarrow> \<not>mutex_snap_action (at_start a) (at_end a))"
+\<and> (\<forall>(a, t, d) \<in> ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not>mutex_snap_action (at_start a) (at_end a))"
 
 lemma mutex_valid_plan_eq: "mutex_valid_plan \<longleftrightarrow> mutex_valid_plan_alt"
   unfolding mutex_valid_plan_def mutex_valid_plan_alt_def mutex_sched_def 
@@ -266,17 +267,41 @@ lemma no_self_overlap_spec:
   using assms 
   unfolding no_self_overlap_def ran_def by force
 
+lemma no_self_overlap_ran:
+  assumes no_self_overlap
+    "(a, t, d) \<in> ran \<pi>"
+    "(a, u, e) \<in> ran \<pi>"
+    "t \<noteq> u \<or> d \<noteq> e"
+  shows
+    "(t > u \<or> u > t + d)"
+  using no_self_overlap_spec[OF assms] by fastforce
+
+lemma nso_dur_spec:
+  assumes nso: no_self_overlap
+    and dg0: durations_ge_0
+    and a: "(a, t, d) \<in> ran \<pi>"
+    "(a, u, e) \<in> ran \<pi>"
+    "t \<noteq> u \<or> d \<noteq> e"
+  shows "u + e < t \<or> t + d < u"
+proof -
+  from no_self_overlap_ran[OF nso a(1) a(2)] no_self_overlap_ran[OF nso a(2) a(1)] a
+  have "u < t \<or> t + d < u" "t < u \<or> u + e < t" by blast+
+  thus ?thesis by auto
+qed
+
 
 text \<open>A plan without self-overlap has a simpler definition of non-interference\<close>
 definition mutex_valid_plan_inj::bool where
-"mutex_valid_plan_inj \<equiv> (\<forall>a ta da b tb db. (a, ta, da) \<in> ran \<pi> \<and> (b, tb, db) \<in> ran \<pi>
-\<and> (a, ta, da) \<noteq> (b, tb, db)
-\<longrightarrow> mutex_sched a ta da b tb db)
-\<and> (\<forall>(a, t, d) \<in> ran \<pi>. d = 0 \<longrightarrow> \<not>mutex_snap_action (at_start a) (at_end a))"
-
+"mutex_valid_plan_inj \<equiv> 
+  (\<forall>a ta da b tb db. 
+      (a, ta, da) \<in> ran \<pi> 
+    \<and> (b, tb, db) \<in> ran \<pi>
+    \<and> (a, ta, da) \<noteq> (b, tb, db)
+  \<longrightarrow> mutex_sched a ta da b tb db)
+\<and> (\<forall>(a, t, d) \<in> ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not>mutex_snap_action (at_start a) (at_end a))"
 
 lemma inj_mutex_def:
-  assumes inj: "inj_on \<pi> (dom \<pi>)" (* this should be injectivity of the plan map *)
+  assumes inj: "inj_on \<pi> (dom \<pi>)"
   shows "mutex_valid_plan = mutex_valid_plan_inj"
 proof -
   { fix i j
@@ -394,19 +419,257 @@ definition mutex_annotated_action where
   (add_imp b) \<inter> (del_imp a) \<noteq> {}
 )"
 
+
 definition nm_anno_act_seq where
-"nm_anno_act_seq B \<equiv> (\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> (t, a) \<in> B \<and> (u, b) \<in> B)
-    \<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_annotated_action a b) 
-    \<and> (a = b \<longrightarrow> t = u)))
+"nm_anno_act_seq \<equiv> let B = annotated_action_seq in 
+  (\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> (t, a) \<in> B \<and> (u, b) \<in> B) 
+\<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_annotated_action a b)))
   \<and> (\<forall>t a b. (t, a) \<in> B \<and> (t, b) \<in> B \<and> a \<noteq> b \<longrightarrow> \<not>mutex_annotated_action a b)"
 
-lemma "mutex_valid_plan \<longleftrightarrow> nm_anno_act_seq annotated_action_seq"
-proof 
-  assume mutex_valid_plan
-  show "nm_anno_act_seq annotated_action_seq" sorry
-next
-  assume "nm_anno_act_seq annotated_action_seq"
-  show mutex_valid_plan sorry
+lemma anno_trans: "pre (at_start a) = pre_imp (AtStart a)"
+      "pre (at_end a) = pre_imp (AtEnd a)" 
+      "adds (at_start a) = add_imp (AtStart a)"
+      "adds (at_end a) = add_imp (AtEnd a)" 
+      "dels (at_start a) = del_imp (AtStart a)"
+      "dels (at_end a) = del_imp (AtEnd a)" 
+  unfolding pre_imp_def add_imp_def del_imp_def by simp+
+
+
+lemma mutex_trans:
+  "mutex_snap_action (at_start a) (at_start b) \<longleftrightarrow> mutex_annotated_action (AtStart a) (AtStart b)"
+  "mutex_snap_action (at_start a) (at_end b) \<longleftrightarrow> mutex_annotated_action (AtStart a) (AtEnd b)"
+  "mutex_snap_action (at_end a) (at_start b) \<longleftrightarrow> mutex_annotated_action (AtEnd a) (AtStart b)"
+  "mutex_snap_action (at_end a) (at_end b) \<longleftrightarrow> mutex_annotated_action (AtEnd a) (AtEnd b)" 
+  unfolding mutex_snap_action_def mutex_annotated_action_def anno_trans[symmetric] by blast+
+  
+
+lemma
+  assumes nso: no_self_overlap
+      and dg0: local.durations_ge_0
+  shows "mutex_valid_plan \<longleftrightarrow> nm_anno_act_seq"
+proof -
+  have "mutex_valid_plan_inj \<longleftrightarrow> nm_anno_act_seq"
+  proof
+    assume mvp: mutex_valid_plan_inj
+    have "\<not>mutex_annotated_action a b"
+      if ne: "a \<noteq> b" and tu: "t - u < \<epsilon> \<and> u - t < \<epsilon>" 
+      and a: "(t, a) \<in> annotated_action_seq" 
+      and b: "(u, b) \<in> annotated_action_seq" for a b t u
+    proof -
+      consider aa ab where "a = AtStart aa" "b = AtStart ab"
+        | aa ab where "a = AtStart aa" "b = AtEnd ab"
+        | aa ab where "a = AtEnd aa" "b = AtStart ab"
+        | aa ab where "a = AtEnd aa" "b = AtEnd ab" 
+        by (cases a; cases b; blast)
+      thus "\<not>mutex_annotated_action a b" 
+      proof cases
+        case 1
+        with a b
+        obtain da db where
+          ta: "(aa, t, da) \<in> ran \<pi>" 
+          and tb: "(ab, u, db) \<in> ran \<pi>" unfolding annotated_action_seq_def by blast 
+        have "aa \<noteq> ab" using ne 1 by blast
+        hence "mutex_sched aa t da ab u db" using ta tb mvp unfolding mutex_valid_plan_inj_def by blast
+        from this[simplified mutex_sched_def] tu
+        have "\<not>mutex_snap_action (at_start aa) (at_start ab)" by blast
+        thus ?thesis unfolding mutex_snap_action_def mutex_annotated_action_def anno_trans 1 .
+      next
+        case 2
+        with a b
+        obtain da tb db where
+          ta: "(aa, t, da) \<in> ran \<pi>" 
+          and tb: "(ab, tb, db) \<in> ran \<pi>" "tb + db = u"
+          unfolding annotated_action_seq_def by blast
+        
+        hence da: "0 \<le> da" and db: "0 \<le> db" using dg0 unfolding durations_ge_0_def by blast+
+        show ?thesis
+        proof (cases "(aa, t, da) = (ab, tb, db)")
+          case True
+          hence "da < \<epsilon>" using tb(2) tu by auto
+          hence "\<not>mutex_snap_action (at_start aa) (at_end ab)" 
+            using True ta mvp unfolding mutex_valid_plan_inj_def by auto
+          thus ?thesis using 2 mutex_snap_action_def mutex_annotated_action_def anno_trans by simp
+        next
+          case False
+          hence "local.mutex_sched aa t da ab tb db" using mvp[simplified mutex_valid_plan_inj_def] ta tb by simp
+          hence "\<not>mutex_snap_action (at_start aa) (at_end ab)" unfolding mutex_sched_def using tu tb(2) by blast
+          then show ?thesis using 2 mutex_snap_action_def mutex_annotated_action_def anno_trans by simp
+        qed
+      next
+        case 3
+        with a b
+        obtain ta da db where
+          ta: "(aa, ta, da) \<in> ran \<pi>" "ta + da = t"
+          and tb: "(ab, u, db) \<in> ran \<pi>" 
+          unfolding annotated_action_seq_def by fast
+        
+        show ?thesis
+        proof (cases "(aa, ta, da) = (ab, u, db)")
+          case True
+          hence "da < \<epsilon>" using ta(2) tu by auto
+          hence "\<not>mutex_snap_action (at_start aa) (at_end aa)" 
+            using True ta mvp unfolding mutex_valid_plan_inj_def by auto
+          hence "\<not>mutex_snap_action (at_end aa) (at_start ab)"
+            using True unfolding mutex_snap_action_def by auto
+          thus ?thesis using 3 mutex_snap_action_def mutex_annotated_action_def anno_trans by simp
+        next
+          case False
+          hence "local.mutex_sched aa ta da ab u db" using mvp[simplified mutex_valid_plan_inj_def] ta tb by simp
+          hence "\<not>mutex_snap_action (at_end aa) (at_start ab)" unfolding mutex_sched_def using tu ta(2) by blast
+          then show ?thesis using 3 mutex_snap_action_def mutex_annotated_action_def anno_trans by simp
+        qed
+      next
+        case 4
+        with a b
+        obtain ta tb da db where
+          ta: "(aa, ta, da) \<in> ran \<pi>" "t = ta + da"
+          and tb: "(ab, tb, db) \<in> ran \<pi>" "u = tb + db" unfolding annotated_action_seq_def by blast 
+        have "aa \<noteq> ab" using ne 4 by blast
+        hence "mutex_sched aa ta da ab tb db" using ta tb mvp unfolding mutex_valid_plan_inj_def by blast
+        hence "\<not>mutex_snap_action (at_end aa) (at_end ab)" unfolding mutex_sched_def using tu ta(2) tb(2) by blast
+        thus ?thesis unfolding mutex_snap_action_def mutex_annotated_action_def anno_trans 4 by blast
+      qed
+    qed
+    moreover
+    have "\<not>mutex_annotated_action a b" 
+      if a: "(t, a) \<in> annotated_action_seq" 
+      and b: "(t, b) \<in> annotated_action_seq" 
+      and ne: "a \<noteq> b" for t a b
+    proof -
+      consider aa ab where "a = AtStart aa" "b = AtStart ab"
+        | aa ab where "a = AtStart aa" "b = AtEnd ab"
+        | aa ab where "a = AtEnd aa" "b = AtStart ab"
+        | aa ab where "a = AtEnd aa" "b = AtEnd ab" 
+        by (cases a; cases b; blast)
+      thus "\<not>mutex_annotated_action a b" 
+      proof cases
+        case 1
+        with a b
+        obtain da db where
+          ta: "(aa, t, da) \<in> ran \<pi>" 
+          and tb: "(ab, t, db) \<in> ran \<pi>" unfolding annotated_action_seq_def by blast 
+        hence "mutex_sched aa t da ab t db" using 1 mvp ne unfolding mutex_valid_plan_inj_def by blast
+        from this[simplified mutex_sched_def] 
+        have "\<not>mutex_snap_action (at_start aa) (at_start ab)" by blast
+        thus ?thesis unfolding mutex_snap_action_def mutex_annotated_action_def anno_trans 1 by simp
+      next
+        case 2
+        with a b
+        obtain da tb db where
+          ta: "(aa, t, da) \<in> ran \<pi>" 
+          and tb: "(ab, tb, db) \<in> ran \<pi>" "tb + db = t"
+          unfolding annotated_action_seq_def by blast
+        
+        hence da: "0 \<le> da" and db: "0 \<le> db" using dg0 unfolding durations_ge_0_def by blast+
+        show ?thesis
+        proof (cases "(aa, t, da) = (ab, tb, db)")
+          case True
+          hence "da = 0" using tb(2) by simp
+          hence "\<not>mutex_snap_action (at_start aa) (at_end ab)" 
+            using True ta mvp unfolding mutex_valid_plan_inj_def by auto
+          thus ?thesis using 2 mutex_snap_action_def mutex_annotated_action_def anno_trans by simp
+        next
+          case False
+          hence "local.mutex_sched aa t da ab tb db" using mvp[simplified mutex_valid_plan_inj_def] ta tb by simp
+          hence "\<not>mutex_snap_action (at_start aa) (at_end ab)" unfolding mutex_sched_def using tb(2) by blast
+          then show ?thesis using 2 mutex_snap_action_def mutex_annotated_action_def anno_trans by simp
+        qed
+      next
+        case 3
+        with a b
+        obtain ta da db where
+          ta: "(aa, ta, da) \<in> ran \<pi>" "ta + da = t"
+          and tb: "(ab, t, db) \<in> ran \<pi>" 
+          unfolding annotated_action_seq_def by fast
+        
+        show ?thesis
+        proof (cases "(aa, ta, da) = (ab, t, db)")
+          case True
+          hence "da = 0" using ta(2) by auto
+          hence "\<not>mutex_snap_action (at_start aa) (at_end aa)" 
+            using True ta mvp unfolding mutex_valid_plan_inj_def by auto
+          hence "\<not>mutex_snap_action (at_end aa) (at_start ab)"
+            using True unfolding mutex_snap_action_def by auto
+          thus ?thesis using 3 mutex_snap_action_def mutex_annotated_action_def anno_trans by simp
+        next
+          case False
+          hence "local.mutex_sched aa ta da ab t db" using mvp[simplified mutex_valid_plan_inj_def] ta tb by simp
+          hence "\<not>mutex_snap_action (at_end aa) (at_start ab)" unfolding mutex_sched_def using ta(2) by blast
+          then show ?thesis using 3 mutex_snap_action_def mutex_annotated_action_def anno_trans by simp
+        qed
+      next
+        case 4
+        with a b
+        obtain ta tb da db where
+          ta: "(aa, ta, da) \<in> ran \<pi>" "t = ta + da"
+          and tb: "(ab, tb, db) \<in> ran \<pi>" "t = tb + db" unfolding annotated_action_seq_def by blast 
+        have "aa \<noteq> ab" using ne 4 by blast
+        hence "mutex_sched aa ta da ab tb db" using ta tb mvp unfolding mutex_valid_plan_inj_def by blast
+        hence "\<not>mutex_snap_action (at_end aa) (at_end ab)" unfolding mutex_sched_def using ta(2) tb(2) by blast
+        thus ?thesis unfolding mutex_snap_action_def mutex_annotated_action_def anno_trans 4 by blast
+      qed
+    qed
+    ultimately
+    show "nm_anno_act_seq" unfolding nm_anno_act_seq_def by (auto simp: Let_def)
+  next
+    assume naas: "nm_anno_act_seq"
+    have "mutex_sched a ta da b tb db"
+      if a: "(a, ta, da) \<in> ran \<pi>"
+      and b: "(b, tb, db) \<in> ran \<pi>"
+      and ne: "(a, ta, da) \<noteq> (b, tb, db)"
+    for a ta da b tb db
+    proof -
+      
+      from a b
+      have aas: "(ta, AtStart a) \<in> annotated_action_seq" 
+           "(tb, AtStart b) \<in> annotated_action_seq"
+           "(ta + da, AtEnd a) \<in> annotated_action_seq" 
+           "(tb + db, AtEnd b) \<in> annotated_action_seq" 
+        unfolding annotated_action_seq_def by blast+
+
+
+      have "\<not>mutex_snap_action sa sb" 
+        if sa:  "sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da"
+        and sb: "sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db"
+        and tu: "t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u" for t u sa sb
+      proof -
+        { assume "ta - tb < \<epsilon> \<and> tb - ta < \<epsilon> \<or> ta = tb"
+          then consider "ta - tb < \<epsilon> \<and> tb - ta < \<epsilon>" | "ta = tb" by blast
+          hence "\<not>mutex_annotated_action (AtStart a) (AtStart b)" 
+          proof cases
+            case 1
+            thus ?thesis
+            proof (cases "a = b")
+              case True
+              hence "ta + da < tb \<or> tb + db < ta" using ne nso_dur_spec nso dg0 a b by blast
+
+              show ?thesis sorry
+            next
+              case False
+              thus ?thesis using 1 aas(1,2) naas[simplified nm_anno_act_seq_def] by (auto simp: Let_def)
+            qed
+              
+          next
+            case 2
+            then show ?thesis sorry
+          qed
+          hence "\<not>mutex_snap_action (at_start a) (at_end b)" using mutex_trans by simp
+        } moreover
+        { assume "ta - (tb + db) < \<epsilon> \<and> (tb + db) - ta < \<epsilon> \<or> ta = (tb + db)"
+          have "\<not>mutex_snap_action (at_start a) (at_end b)" sorry
+        } moreover
+        { assume "(ta + da) - tb < \<epsilon> \<and> tb - (ta + da) < \<epsilon> \<or> (ta + da) = tb"
+          have "\<not>mutex_snap_action (at_end a) (at_start b)" sorry
+        } moreover
+        { assume "(ta + da) - (tb + db) < \<epsilon> \<and> (tb + db) - (ta + da) < \<epsilon> \<or> (ta + da) = (tb + db)"
+          have "\<not>mutex_snap_action (at_end a) (at_end b)" sorry
+        } ultimately
+        show ?thesis using sa sb tu by fast
+      qed
+    qed
+    show mutex_valid_plan_inj sorry
+  qed
+  thus ?thesis using assms nso_imp_inj inj_mutex_def by blast
 qed 
 
 text \<open>Basic facts about the indexing of timepoints\<close>
@@ -962,7 +1225,7 @@ proof -
   have app_eff: "apply_effects adds dels (MS i) (happ_at ?B (?t i)) = MS (Suc i)"
        and invs: "invs_at ?Inv (?t i) \<subseteq> MS i"
        and pres: "\<Union> (pre ` happ_at ?B (?t i)) \<subseteq> MS i"
-       if "i < length (htpl \<pi>)" for i using that by (auto simp: Let_def)
+       if "i < length (htpl \<pi>)" for i using that apply (auto simp: Let_def)
 
   have "fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels" unfolding fluent_plan_def act_ref_fluents_def 
     using cvp over_all'_def pre'_def unfolding const_valid_plan_def act_mod_fluents_def by fast
@@ -1729,5 +1992,4 @@ proof -
 qed
 end
 end
-
 end
