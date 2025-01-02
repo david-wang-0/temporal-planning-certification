@@ -44,7 +44,6 @@ context
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
     and \<epsilon>::       "'time"
-  assumes eps_ran: "0 \<le> \<epsilon>"
 begin
 
 definition apply_effects::"'proposition set \<Rightarrow> 'snap_action set \<Rightarrow> 'proposition set" where
@@ -124,9 +123,8 @@ text \<open>Snap-actions not interfering means that they prevent moving targets.
 
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_happ_seq B \<equiv> 
-  (\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u)
-    \<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b) 
-    \<and> (a = b \<longrightarrow> t = u)))
+  (\<forall>t u a b. t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u
+    \<and> (a \<noteq> b \<or> t \<noteq> u) \<longrightarrow> \<not>mutex_snap_action a b)
   \<and> (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)"
 
 
@@ -137,8 +135,8 @@ lemma eps_zero_imp_zero_sep:
 
 lemma eps_gt_zero_imp_eps_sep:
   assumes "0 < \<epsilon>"
-  shows "nm_happ_seq B = (\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
-    \<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b) \<and> (a = b \<longrightarrow> t = u)))"
+  shows "nm_happ_seq B = (\<forall>t u a b. t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u
+    \<and> (a \<noteq> b \<or> t \<noteq> u) \<longrightarrow> \<not>mutex_snap_action a b)"
 proof -
   from assms
   have "(\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
@@ -512,7 +510,8 @@ lemma mutex_trans:
 lemma
   assumes nso: no_self_overlap
       and dg0: local.durations_ge_0
-  shows "mutex_valid_plan \<longleftrightarrow> nm_anno_act_seq"
+      and eps_ran: "0 \<le> \<epsilon>"
+    shows "mutex_valid_plan \<longleftrightarrow> nm_anno_act_seq"
 proof -
   have "mutex_valid_plan_inj \<longleftrightarrow> nm_anno_act_seq"
   proof
@@ -811,6 +810,7 @@ proof -
   qed
   thus ?thesis using assms nso_imp_inj inj_mutex_def by blast
 qed 
+
 
 text \<open>Basic facts about the indexing of timepoints\<close>
 lemma time_index_bij_betw_list: "bij_betw time_index {n. n < length htpl} (set htpl)"
@@ -1357,17 +1357,17 @@ proof -
 
   let ?Inv = "plan_inv_seq \<pi> over_all"
   let ?Inv' = "plan_inv_seq \<pi> over_all'"
-
+  
   from cvp cv_plan_imp_cv_hs
   have cv_hs: "\<forall>t. (\<forall>h \<in> happ_at ?B t. snap_mod_fluents fluents adds dels h)" unfolding const_valid_happ_seq_def by blast
 
-  from vss[simplified valid_state_sequence_def]
   have app_eff: "apply_effects adds dels (MS i) (happ_at ?B (?t i)) = MS (Suc i)"
        and invs: "invs_at ?Inv (?t i) \<subseteq> MS i"
        and pres: "\<Union> (pre ` happ_at ?B (?t i)) \<subseteq> MS i"
-       if "i < length (htpl \<pi>)" for i using that apply (auto simp: Let_def)
+       if "i < length (htpl \<pi>)" for i using that vss unfolding valid_state_sequence_def by (auto simp: Let_def)
 
-  have "fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels" unfolding fluent_plan_def act_ref_fluents_def 
+    have "fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels" 
+      unfolding fluent_plan_def act_ref_fluents_def 
     using cvp over_all'_def pre'_def unfolding const_valid_plan_def act_mod_fluents_def by fast
   moreover
   have "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'"
@@ -1478,9 +1478,7 @@ proof -
     qed
   qed
   thus "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS" unfolding valid_state_sequence_def by (auto simp: Let_def)
-
 qed
-
 
 
 lemma cvp_nm_happ_seq_equiv: "nm_happ_seq pre adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end) \<longleftrightarrow> nm_happ_seq pre' adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end)"
@@ -1517,17 +1515,21 @@ proof -
   thus ?thesis unfolding nm_happ_seq_def by blast
 qed
 
+
 text \<open>An attempt was made to remove these assumptions by proving that constants in a plan are
       indeed constant. However, this only works for the direction of the proof that does not 
       need it.\<close>
+
+(* To do: mutex condition *)
+
 lemma const_plan_equiv: 
   assumes "finite_plan \<pi>"
       and "goal - fluents \<subseteq> init - fluents"
       and "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents"
     shows "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> \<longleftrightarrow>
        valid_plan \<pi> (fluent_state fluents init) (fluent_state fluents goal) at_start at_end over_all' lower upper pre' adds dels \<epsilon>" 
-  unfolding valid_plan_def
-proof
+  unfolding valid_plan_def sorry
+(* proof
   assume "\<exists>M. valid_state_sequence \<pi> at_start at_end over_all pre adds dels M \<and>
         M 0 = init \<and>
         goal \<subseteq> M (length (htpl \<pi>)) \<and>
@@ -1608,7 +1610,7 @@ next
     ultimately
     show ?thesis using nm'[simplified cvp_nm_happ_seq_equiv[symmetric]] dur vss by auto
   qed
-qed
+qed *)
 end
 text \<open>Another thing we need to prove is the relationship between at_start, at_end, pre, adds, and dels. To do.\<close>
 
