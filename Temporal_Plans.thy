@@ -154,7 +154,8 @@ actions. We also need to check the case that the same action has a duration of 0
 
 \<close>
 definition mutex_valid_plan::bool where
-"mutex_valid_plan \<equiv> (\<forall>i j a ta da b tb db sa sb t u. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j 
+"mutex_valid_plan \<equiv> (\<forall>i j a ta da b tb db sa sb t u. 
+i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j 
 \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db)
 \<and> (sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da)
 \<and> (sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db)
@@ -167,7 +168,7 @@ definition mutex_sched where
 "mutex_sched a ta da b tb db \<equiv> \<forall>sa t sb u. 
   (sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da)
 \<and> (sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db)
-\<and> (t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u \<or> t = u)
+\<and> (t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u)
 \<longrightarrow> \<not>mutex_snap_action sa sb"
 
 definition mutex_valid_plan_alt::bool where
@@ -276,7 +277,8 @@ lemma no_self_overlap_ran:
     "(t > u \<or> u > t + d)"
   using no_self_overlap_spec[OF assms] by fastforce
 
-lemma nso_dur_spec:
+
+lemma nso_double_act_spec:
   assumes nso: no_self_overlap
     and dg0: durations_ge_0
     and a: "(a, t, d) \<in> ran \<pi>"
@@ -289,6 +291,68 @@ proof -
   thus ?thesis by auto
 qed
 
+lemma nso_no_double_sched:
+  assumes nso: no_self_overlap
+    and dg0: durations_ge_0
+    and a: "(a, t, d) \<in> ran \<pi>"
+    "(a, t, e) \<in> ran \<pi>"
+  shows "d = e"
+proof -
+  from nso_double_act_spec[OF assms]
+  have "d \<noteq> e \<Longrightarrow> t + e < t \<or> t + d < t" by blast
+  with dg0[simplified durations_ge_0_def] a
+  show ?thesis by force
+qed
+
+lemma nso_no_double_start:
+  assumes nso: no_self_overlap
+    and dg0: durations_ge_0
+    and a: "(a, t, d) \<in> ran \<pi>"
+           "(b, t, e) \<in> ran \<pi>"
+    and "(a, t, d) \<noteq> (b, t, e)"
+  shows "a \<noteq> b"
+  using assms nso_no_double_sched by blast
+
+lemma nso_start_end:
+  assumes nso: no_self_overlap
+    and dg0: durations_ge_0
+    and a: "(a, t, d) \<in> ran \<pi>"
+           "(b, s, e) \<in> ran \<pi>"
+           "(a, t, d) \<noteq> (b, s, e)"
+           "t = s + e"
+  shows "a \<noteq> b"
+proof 
+  assume e: "a = b"
+  hence "t \<noteq> s \<or> d \<noteq> e" using a by blast
+  hence "t + d < s" using nso_double_act_spec[OF nso dg0 a(1) a(2)[simplified e[symmetric]]] a(4) by blast
+  moreover
+  have "0 \<le> e" "0 \<le> d" using dg0[simplified durations_ge_0_def] a(1,2) by auto
+  ultimately
+  show False using \<open>t = s + e\<close>
+    apply (cases "e \<le> 0") 
+    subgoal by auto 
+    using linorder_not_less by fastforce
+qed
+
+lemma nso_ends:
+  assumes nso: no_self_overlap
+    and dg0: durations_ge_0
+    and a: "(a, t, d) \<in> ran \<pi>"
+           "(b, s, e) \<in> ran \<pi>"
+           "(a, t, d) \<noteq> (b, s, e)"
+           "t + d = s + e"
+  shows "a \<noteq> b"
+proof 
+  assume e: "a = b"
+  have ed: "0 \<le> e" "0 \<le> d" using dg0[simplified durations_ge_0_def] a(1,2) by auto
+  moreover
+  have "t \<noteq> s \<or> d \<noteq> e" using a e by blast
+  then consider "s + e < t" | "t + d < s" 
+    using nso_double_act_spec[OF nso dg0 a(1) a(2)[simplified e[symmetric]]] a(4) by blast
+  hence "s + e < t + d \<or> t + d < s + e" apply (cases) using ed 
+    by (simp add: add.commute add_strict_increasing2)+
+  thus False using \<open>t + d = s + e\<close> by simp
+qed
 
 text \<open>A plan without self-overlap has a simpler definition of non-interference\<close>
 definition mutex_valid_plan_inj::bool where
@@ -422,16 +486,18 @@ definition mutex_annotated_action where
 
 definition nm_anno_act_seq where
 "nm_anno_act_seq \<equiv> let B = annotated_action_seq in 
-  (\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> (t, a) \<in> B \<and> (u, b) \<in> B) 
-\<longrightarrow> ((a \<noteq> b \<longrightarrow> \<not>mutex_annotated_action a b)))
+  (\<forall>t u a b. t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> (t, a) \<in> B \<and> (u, b) \<in> B
+    \<and> (a \<noteq> b \<or> t \<noteq> u) 
+  \<longrightarrow> \<not>mutex_annotated_action a b)
   \<and> (\<forall>t a b. (t, a) \<in> B \<and> (t, b) \<in> B \<and> a \<noteq> b \<longrightarrow> \<not>mutex_annotated_action a b)"
 
-lemma anno_trans: "pre (at_start a) = pre_imp (AtStart a)"
-      "pre (at_end a) = pre_imp (AtEnd a)" 
-      "adds (at_start a) = add_imp (AtStart a)"
-      "adds (at_end a) = add_imp (AtEnd a)" 
-      "dels (at_start a) = del_imp (AtStart a)"
-      "dels (at_end a) = del_imp (AtEnd a)" 
+lemma anno_trans: 
+  "pre (at_start a) = pre_imp (AtStart a)"
+  "pre (at_end a) = pre_imp (AtEnd a)"
+  "adds (at_start a) = add_imp (AtStart a)"
+  "adds (at_end a) = add_imp (AtEnd a)"
+  "dels (at_start a) = del_imp (AtStart a)"
+  "dels (at_end a) = del_imp (AtEnd a)"
   unfolding pre_imp_def add_imp_def del_imp_def by simp+
 
 
@@ -452,7 +518,7 @@ proof -
   proof
     assume mvp: mutex_valid_plan_inj
     have "\<not>mutex_annotated_action a b"
-      if ne: "a \<noteq> b" and tu: "t - u < \<epsilon> \<and> u - t < \<epsilon>" 
+      if ne: "a \<noteq> b \<or> t \<noteq> u" and tu: "t - u < \<epsilon> \<and> u - t < \<epsilon>" 
       and a: "(t, a) \<in> annotated_action_seq" 
       and b: "(u, b) \<in> annotated_action_seq" for a b t u
     proof -
@@ -468,7 +534,7 @@ proof -
         obtain da db where
           ta: "(aa, t, da) \<in> ran \<pi>" 
           and tb: "(ab, u, db) \<in> ran \<pi>" unfolding annotated_action_seq_def by blast 
-        have "aa \<noteq> ab" using ne 1 by blast
+        have "(aa, t, da) \<noteq> (ab, u, db)" using ne 1 by blast
         hence "mutex_sched aa t da ab u db" using ta tb mvp unfolding mutex_valid_plan_inj_def by blast
         from this[simplified mutex_sched_def] tu
         have "\<not>mutex_snap_action (at_start aa) (at_start ab)" by blast
@@ -524,7 +590,7 @@ proof -
         obtain ta tb da db where
           ta: "(aa, ta, da) \<in> ran \<pi>" "t = ta + da"
           and tb: "(ab, tb, db) \<in> ran \<pi>" "u = tb + db" unfolding annotated_action_seq_def by blast 
-        have "aa \<noteq> ab" using ne 4 by blast
+        hence "(aa, ta, da) \<noteq> (ab, tb, db)" using ne 4 by blast
         hence "mutex_sched aa ta da ab tb db" using ta tb mvp unfolding mutex_valid_plan_inj_def by blast
         hence "\<not>mutex_snap_action (at_end aa) (at_end ab)" unfolding mutex_sched_def using tu ta(2) tb(2) by blast
         thus ?thesis unfolding mutex_snap_action_def mutex_annotated_action_def anno_trans 4 by blast
@@ -628,6 +694,8 @@ proof -
         unfolding annotated_action_seq_def by blast+
 
 
+      have dadb: "0 \<le> da \<and> 0 \<le> db" using dg0 a b unfolding durations_ge_0_def by blast
+    
       have "\<not>mutex_snap_action sa sb" 
         if sa:  "sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da"
         and sb: "sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db"
@@ -638,36 +706,108 @@ proof -
           hence "\<not>mutex_annotated_action (AtStart a) (AtStart b)" 
           proof cases
             case 1
-            thus ?thesis
+            have "a \<noteq> b \<or> ta \<noteq> tb"
             proof (cases "a = b")
               case True
-              hence "ta + da < tb \<or> tb + db < ta" using ne nso_dur_spec nso dg0 a b by blast
-
-              show ?thesis sorry
-            next
-              case False
-              thus ?thesis using 1 aas(1,2) naas[simplified nm_anno_act_seq_def] by (auto simp: Let_def)
-            qed
-              
+              hence "ta + da < tb \<or> tb + db < ta" using ne nso_double_act_spec nso dg0 a b by blast
+              thus "a \<noteq> b \<or> ta \<noteq> tb" using dadb by auto
+            qed simp
+            thus ?thesis using 1 aas naas[simplified nm_anno_act_seq_def] by (auto simp: Let_def)
           next
             case 2
-            then show ?thesis sorry
+            with nso_no_double_start nso dg0 a b ne
+            have "a \<noteq> b" by blast
+            thus ?thesis using 2 aas naas[simplified nm_anno_act_seq_def] by (auto simp: Let_def)
           qed
-          hence "\<not>mutex_snap_action (at_start a) (at_end b)" using mutex_trans by simp
+          hence "\<not>mutex_snap_action (at_start a) (at_start b)" using mutex_trans by simp
         } moreover
         { assume "ta - (tb + db) < \<epsilon> \<and> (tb + db) - ta < \<epsilon> \<or> ta = (tb + db)"
-          have "\<not>mutex_snap_action (at_start a) (at_end b)" sorry
+          then consider "ta - (tb + db) < \<epsilon> \<and> (tb + db) - ta < \<epsilon>" | "ta = tb + db " by blast
+          hence "\<not>mutex_annotated_action (AtStart a) (AtEnd b)" 
+          proof cases
+            case 1
+            thus ?thesis using aas naas[simplified nm_anno_act_seq_def] by (auto simp: Let_def)
+          next
+            case 2
+            with  nso dg0 a b ne
+            have "a \<noteq> b" using nso_start_end by blast
+            thus ?thesis using 2 aas naas[simplified nm_anno_act_seq_def] by (auto simp: Let_def)
+          qed
+          hence "\<not>mutex_snap_action (at_start a) (at_end b)" using mutex_trans by blast
         } moreover
         { assume "(ta + da) - tb < \<epsilon> \<and> tb - (ta + da) < \<epsilon> \<or> (ta + da) = tb"
-          have "\<not>mutex_snap_action (at_end a) (at_start b)" sorry
+          then consider "(ta + da) - tb < \<epsilon> \<and> tb - (ta + da) < \<epsilon>" | "tb = (ta + da)" by blast
+          hence "\<not>mutex_annotated_action (AtEnd a) (AtStart b)" 
+          proof cases
+            case 1
+            thus ?thesis using 1 aas naas[simplified nm_anno_act_seq_def] by (auto simp: Let_def)
+          next
+            case 2
+            with  nso dg0 a b ne
+            have "a \<noteq> b" using nso_start_end by metis
+            thus ?thesis using 2 aas naas[simplified nm_anno_act_seq_def] by (auto simp: Let_def)
+          qed
+          hence "\<not>mutex_snap_action (at_end a) (at_start b)" using mutex_trans by blast
         } moreover
         { assume "(ta + da) - (tb + db) < \<epsilon> \<and> (tb + db) - (ta + da) < \<epsilon> \<or> (ta + da) = (tb + db)"
-          have "\<not>mutex_snap_action (at_end a) (at_end b)" sorry
+          then consider "(ta + da) - (tb + db) < \<epsilon> \<and> (tb + db) - (ta + da) < \<epsilon>" | "(tb + db) = (ta + da)" by argo
+          hence "\<not>mutex_annotated_action (AtEnd a) (AtEnd b)" 
+          proof cases
+            case 1
+            have "a \<noteq> b \<or> (ta + da) \<noteq> (tb + db)"
+            proof (cases "a = b")
+              case True
+              hence "ta + da < tb \<or> tb + db < ta" using ne nso_double_act_spec nso dg0 a b by blast
+              then consider "ta + da < tb" | "tb + db < ta" by auto
+              hence "ta + da < tb + db \<or> tb + db < ta + da" 
+                apply (cases) using dadb 
+                by (metis add_less_same_cancel1 leD linorder_cases)+
+              thus "a \<noteq> b \<or> (ta + da) \<noteq> (tb + db)" using dadb by auto
+            qed simp
+            thus ?thesis using 1 aas naas[simplified nm_anno_act_seq_def] by (auto simp: Let_def)
+          next
+            case 2
+            with  nso dg0 a b ne
+            have "a \<noteq> b" using nso_ends by metis
+            thus ?thesis using 2 aas naas[simplified nm_anno_act_seq_def] by (auto simp: Let_def)
+          qed
+          hence "\<not>mutex_snap_action (at_end a) (at_end b)" using mutex_trans by blast
         } ultimately
         show ?thesis using sa sb tu by fast
       qed
+      thus ?thesis unfolding mutex_sched_def by blast
     qed
-    show mutex_valid_plan_inj sorry
+    moreover
+    have "\<not>mutex_snap_action (at_start a) (at_end a)" 
+      if "(a, t, d)\<in>ran \<pi>" "d = 0 \<or> d < \<epsilon>" for a t d
+    proof -
+      from that
+      have as: "(t, AtStart a) \<in> annotated_action_seq"
+           "(t + d, AtEnd a) \<in> annotated_action_seq" 
+        unfolding annotated_action_seq_def by auto
+      from that
+      consider "d = 0" | "d < \<epsilon>" by blast
+      hence "\<not>mutex_annotated_action (AtStart a) (AtEnd a)"
+      proof cases
+        case 1
+        with as 
+        have "AtStart a \<noteq> AtEnd a" "(t, AtStart a) \<in> annotated_action_seq" "(t, AtEnd a) \<in> annotated_action_seq" by auto
+        thus ?thesis using naas unfolding nm_anno_act_seq_def by (auto simp: Let_def)
+      next
+        case 2  
+        moreover
+        have "0 \<le> d" using that dg0 unfolding durations_ge_0_def by blast
+        hence 1: "t - (t + d) < \<epsilon> \<and> (t + d) - t < \<epsilon>" using 2 
+          by (metis add_cancel_right_right add_diff_cancel_left' add_strict_increasing2 diff_less_eq eps_ran less_add_same_cancel1 nless_le)
+        from naas[simplified nm_anno_act_seq_def]
+        have "\<And>t u a b. t - u < \<epsilon> \<and> u - t < \<epsilon> \<Longrightarrow> (t, a) \<in> local.annotated_action_seq \<and> (u, b) \<in> local.annotated_action_seq \<and> (a = b \<longrightarrow> t \<noteq> u) \<longrightarrow> \<not> local.mutex_annotated_action a b" by (auto simp: Let_def)
+        from this[OF 1]
+        show ?thesis using as by blast
+      qed
+      thus ?thesis using mutex_trans by blast
+    qed
+    ultimately
+    show mutex_valid_plan_inj unfolding mutex_valid_plan_inj_def by blast
   qed
   thus ?thesis using assms nso_imp_inj inj_mutex_def by blast
 qed 
