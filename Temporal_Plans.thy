@@ -46,6 +46,11 @@ context
     and \<epsilon>::       "'time"
 begin
 
+text \<open>Don't know where to put this. Useful\<close>
+definition plan_actions_in_problem where
+"plan_actions_in_problem actions \<equiv> \<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
+
+
 definition apply_effects::"'proposition set \<Rightarrow> 'snap_action set \<Rightarrow> 'proposition set" where
 "apply_effects M S \<equiv> (M - \<Union>(dels ` S)) \<union> \<Union>(adds ` S)"
 
@@ -119,32 +124,6 @@ definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightar
   (adds b) \<inter> (dels a) \<noteq> {}
 )"
 
-text \<open>Snap-actions not interfering means that they prevent moving targets. Therefore \<close>
-
-definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
-"nm_happ_seq B \<equiv> 
-  (\<forall>t u a b. t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u
-    \<and> (a \<noteq> b \<or> t \<noteq> u) \<longrightarrow> \<not>mutex_snap_action a b)
-  \<and> (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)"
-
-
-lemma eps_zero_imp_zero_sep: 
-  assumes "\<epsilon> = 0"
-  shows "nm_happ_seq B = (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)" 
-  using assms unfolding nm_happ_seq_def by fastforce
-
-lemma eps_gt_zero_imp_eps_sep:
-  assumes "0 < \<epsilon>"
-  shows "nm_happ_seq B = (\<forall>t u a b. t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u
-    \<and> (a \<noteq> b \<or> t \<noteq> u) \<longrightarrow> \<not>mutex_snap_action a b)"
-proof -
-  from assms
-  have "(\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
-    \<longrightarrow> (a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)) \<Longrightarrow> (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)"
-    by force
-  thus ?thesis unfolding nm_happ_seq_def using assms by blast
-qed
-
 text \<open>This is the most general formulation of actions not interfering. This considers the tuples in the range 
 of the plan to be actions. The contents may be the same (duplicate action/self-overlap), unless this is explicitly
 prohibited. Therefore, the mutual exclusivity of actions refers to the index for equivalence of 
@@ -183,6 +162,7 @@ lemma mutex_valid_plan_eq: "mutex_valid_plan \<longleftrightarrow> mutex_valid_p
   unfolding mutex_valid_plan_def mutex_valid_plan_alt_def mutex_sched_def 
   apply (rule iffI; intro conjI)
   by blast+
+
 
 text \<open>This definition arose from the statement in \<^cite>\<open>Gigante2020\<close>, that every at-start 
 snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
@@ -352,6 +332,8 @@ proof
   thus False using \<open>t + d = s + e\<close> by simp
 qed
 
+subsection \<open>Equivalent Notions of Mutual Exclusivity\<close>
+
 text \<open>A plan without self-overlap has a simpler definition of non-interference\<close>
 definition mutex_valid_plan_inj::bool where
 "mutex_valid_plan_inj \<equiv> 
@@ -507,7 +489,7 @@ lemma mutex_trans:
   unfolding mutex_snap_action_def mutex_annotated_action_def anno_trans[symmetric] by blast+
   
 
-lemma
+lemma nso_mutex_cond:
   assumes nso: no_self_overlap
       and dg0: local.durations_ge_0
       and eps_ran: "0 \<le> \<epsilon>"
@@ -812,6 +794,412 @@ proof -
 qed 
 
 
+subsubsection \<open>Non-Interference w.r.t the Happening Sequence\<close>
+
+definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
+"nm_happ_seq B \<equiv> 
+  (\<forall>t u a b. t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u
+    \<and> (a \<noteq> b \<or> t \<noteq> u) \<longrightarrow> \<not>mutex_snap_action a b)
+  \<and> (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)"
+
+lemma eps_zero_imp_zero_sep: 
+  assumes "\<epsilon> = 0"
+  shows "nm_happ_seq B = (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)" 
+  using assms unfolding nm_happ_seq_def by fastforce
+
+lemma eps_gt_zero_imp_eps_sep:
+  assumes "0 < \<epsilon>"
+  shows "nm_happ_seq B = (\<forall>t u a b. t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u
+    \<and> (a \<noteq> b \<or> t \<noteq> u) \<longrightarrow> \<not>mutex_snap_action a b)"
+proof -
+  from assms
+  have "(\<forall>t u a b. (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u) 
+    \<longrightarrow> (a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)) \<Longrightarrow> (\<forall>t a b. a \<in> happ_at B t \<and> b \<in> happ_at B t \<and> a \<noteq> b \<longrightarrow> \<not>mutex_snap_action a b)"
+    by force
+  thus ?thesis unfolding nm_happ_seq_def using assms by blast
+qed
+
+abbreviation "plan_actions \<equiv> {a| a t d. (a, t, d) \<in> ran \<pi>}"
+
+context
+  assumes at_start_inj: "inj_on at_start plan_actions"
+      and at_end_inj: "inj_on at_end plan_actions"
+      and snaps_disj: "at_start ` plan_actions \<inter> at_end ` plan_actions = {}"
+begin
+  
+  lemma at_start_in_happ_seqE: 
+    assumes in_happ_seq: "(s, at_start a) \<in> plan_happ_seq"
+        and a_in_actions: "a \<in> plan_actions"
+        and nso: no_self_overlap
+        and dg0: durations_ge_0
+    shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t"
+  proof (rule ex_ex1I)
+    from in_happ_seq in_happ_seqE'
+    have "\<exists>(a', t, d) \<in> ran \<pi>. (at_start a' = at_start a \<and> s = t \<or> at_end a' = at_start a \<and> s = t + d)"
+      by blast
+    with snaps_disj a_in_actions
+    have "\<exists>(a', t, d) \<in> ran \<pi>. at_start a' = at_start a \<and> s = t" by fast
+    moreover
+    have "\<forall>(a', t, d) \<in> ran \<pi>. at_start a = at_start a' \<longrightarrow> a = a'" 
+      using at_start_inj a_in_actions unfolding inj_on_def by blast
+    ultimately
+    show "\<exists>x. case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t" by auto
+  next
+    have "t = t' \<and> d = d'" 
+         if "(a, t, d) \<in> ran \<pi> \<and> s = t" 
+        and "(a, t', d') \<in> ran \<pi> \<and> s = t'" for t d t' d'
+      using that nso dg0 nso_no_double_start by blast
+    thus "\<And>x y. case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t \<Longrightarrow> case y of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t \<Longrightarrow> x = y" by blast
+  qed
+
+  lemma at_end_in_happ_seqE:
+    assumes in_happ_seq: "(s, at_end a) \<in> plan_happ_seq"
+        and a_in_actions: "a \<in> plan_actions"
+        and nso: "no_self_overlap"
+        and dp: "durations_positive"
+      shows "\<exists>!(t,d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"
+  proof -
+    define pair where "pair = (SOME (t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d)"
+    from in_happ_seq[simplified plan_happ_seq_def]
+    consider "(s, at_end a) \<in> {(t, at_start a)|a t d. (a, t, d) \<in> ran \<pi>}" 
+        | "(s, at_end a) \<in>  {(t + d, at_end a) |a t d. (a, t, d) \<in> ran \<pi>}"
+        by blast
+      then
+    have some_in_ran: "(a, pair) \<in> ran \<pi> 
+      \<and> s = fst pair + snd pair"
+    proof cases
+      case 1
+      with a_in_actions
+      have "\<exists>a' d. (s, at_end a) = (s, at_start a') \<and> (a', s, d) \<in> ran \<pi> \<and> a' \<in> plan_actions" by blast
+      with snaps_disj 1 a_in_actions
+      show ?thesis by blast
+    next
+      case 2
+      with a_in_actions
+      have "\<exists>a' t d. (s, at_end a) = (t + d, at_end a') \<and>(a', t, d) \<in> ran \<pi> \<and> a' \<in> plan_actions" by blast
+      with at_end_inj[simplified inj_on_def] a_in_actions
+      have "\<exists>t d. (a, t, d) \<in> ran \<pi> \<and> s = t + d" by blast
+      thus ?thesis using some_eq_ex[where P = "\<lambda>(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"] pair_def by auto
+    qed
+    moreover
+    have "p = pair" if td_def: "p = (t, d)" and td_in_ran: "(a, t, d) \<in> ran \<pi>" and td_eq_s: "t + d = s" for t d p
+    proof -
+      obtain t' d' where
+        t'd'_def: "pair = (t', d')" by fastforce
+      with some_in_ran
+      have t'd'_in_ran: "(a, t', d') \<in> ran \<pi>"
+        and t'd'_eq_s: "s = t' + d'" by simp+
+        
+      with td_in_ran
+      obtain i j where
+        ij: "\<pi> i = Some (a, t, d)"
+        "\<pi> j = Some (a, t', d')" unfolding ran_def by blast
+      
+  
+      from td_eq_s t'd'_eq_s
+      have td_t'd': "t + d = t' + d'" by simp
+      show "p = pair"
+      proof (cases "i = j")
+        case True
+        then show ?thesis using pair_def ij t'd'_def td_def by simp
+      next
+        case False
+        consider "t \<le> t'" | "t' \<le> t" by fastforce
+        thus ?thesis 
+        proof cases
+          case 1
+          with dp[simplified durations_positive_def] t'd'_in_ran td_t'd'
+          have "t' \<le> t + d" by force
+          with False ij 1
+          show ?thesis using nso[simplified no_self_overlap_def] by force
+        next
+          case 2
+          with dp[simplified durations_positive_def] td_in_ran td_t'd'
+          have "t \<le> t' + d'" by (metis add.commute less_add_same_cancel2 order_less_le)
+          with False ij 2
+          show ?thesis using nso[simplified no_self_overlap_def] by force 
+        qed
+      qed
+    qed
+    ultimately
+    show ?thesis apply - by (rule ex1I, auto)
+  qed
+
+
+  lemma nso_mutex_happ_seq:
+    assumes nso: no_self_overlap
+        and dg0: local.durations_ge_0
+        and eps_ran: "0 \<le> \<epsilon>"
+      shows "nm_anno_act_seq \<longleftrightarrow> nm_happ_seq plan_happ_seq"
+  proof 
+    assume a: "nm_anno_act_seq"
+    have "\<not>local.mutex_snap_action h i" 
+        if ta: "(t, h) \<in> plan_happ_seq" 
+        and tb: "(t, i) \<in> plan_happ_seq" 
+        and ne: "h \<noteq> i" for h i t
+    proof -
+      consider 
+          a d b e where 
+          "(a, t, d) \<in> ran \<pi>" "at_start a = h" 
+          "(b, t, e) \<in> ran \<pi>" "at_start b = i"
+        | a d b u e where 
+          "(a, t, d) \<in> ran \<pi>" "at_start a = h" 
+          "(b, u, e) \<in> ran \<pi>" "at_end b = i" "t = u + e"
+        | a t' d b e where 
+          "(a, t', d) \<in> ran \<pi>" "at_end a = h" "t = t' + d" 
+          "(b, t, e) \<in> ran \<pi>" "at_start b = i"
+        | a t' d b u e where 
+          "(a, t', d) \<in> ran \<pi>" "at_end a = h" "t = t' + d" 
+          "(b, u, e) \<in> ran \<pi>" "at_end b = i" "t = u + e" 
+        apply (cases rule: in_happ_seqE[OF ta]; cases rule: in_happ_seqE[OF tb])
+        by (blast, blast, blast, force)
+      thus ?thesis
+      proof cases
+        case 1
+        have "a \<noteq> b" using ne at_start_inj 1 by auto
+        hence "AtStart a \<noteq> AtStart b" by simp
+        moreover
+        have "(t, AtStart a) \<in> annotated_action_seq" using 1 unfolding annotated_action_seq_def by auto
+        moreover
+        have "(t, AtStart b) \<in> annotated_action_seq" using 1 unfolding annotated_action_seq_def by auto
+        ultimately
+        have "\<not>mutex_annotated_action (AtStart a) (AtStart b)"using a unfolding nm_anno_act_seq_def by (auto simp: Let_def)
+        thus ?thesis using 1 mutex_trans by auto
+      next
+        case 2
+        have "(t, AtStart a) \<in> annotated_action_seq" using 2 unfolding annotated_action_seq_def by auto
+        moreover
+        have "(t, AtEnd b) \<in> annotated_action_seq" using 2 unfolding annotated_action_seq_def by auto
+        ultimately
+        have "\<not>mutex_annotated_action (AtStart a) (AtEnd b)"using a unfolding nm_anno_act_seq_def by (auto simp: Let_def)
+        thus ?thesis using 2 mutex_trans by auto
+      next
+        case 3
+        have "(t, AtEnd a) \<in> annotated_action_seq" using 3 unfolding annotated_action_seq_def by auto
+        moreover
+        have "(t, AtStart b) \<in> annotated_action_seq" using 3 unfolding annotated_action_seq_def by auto
+        ultimately
+        have "\<not>mutex_annotated_action (AtEnd a) (AtStart b)"using a unfolding nm_anno_act_seq_def by (auto simp: Let_def)
+        thus ?thesis using 3 mutex_trans by auto
+      next
+        case 4
+        have "a \<noteq> b" using ne at_start_inj 4 by auto
+        hence "AtEnd a \<noteq> AtEnd b" by simp
+        moreover
+        have "(t, AtEnd a) \<in> annotated_action_seq" using 4 unfolding annotated_action_seq_def by auto
+        moreover
+        have "(t, AtEnd b) \<in> annotated_action_seq" using 4 unfolding annotated_action_seq_def by blast
+        ultimately
+        have "\<not>mutex_annotated_action (AtEnd a) (AtEnd b)" using a unfolding nm_anno_act_seq_def by (auto simp: Let_def)
+        thus ?thesis using 4 mutex_trans by auto
+      qed
+    qed
+    moreover
+    have "\<not>local.mutex_snap_action h i"
+      if tu: "t - u < \<epsilon> \<and> u - t < \<epsilon>" 
+      and ta: "(t, h) \<in> plan_happ_seq" 
+      and tb:"(u, i) \<in> plan_happ_seq" 
+      and ne: "h \<noteq> i \<or> t \<noteq> u" for h i t u
+    proof -
+      consider 
+          a d b e where 
+          "(a, t, d) \<in> ran \<pi>" "at_start a = h" 
+          "(b, u, e) \<in> ran \<pi>" "at_start b = i"
+        | a d b u' e where 
+          "(a, t, d) \<in> ran \<pi>" "at_start a = h" 
+          "(b, u', e) \<in> ran \<pi>" "at_end b = i" "u = u' + e"
+        | a t' d b e where 
+          "(a, t', d) \<in> ran \<pi>" "at_end a = h" "t = t' + d" 
+          "(b, u, e) \<in> ran \<pi>" "at_start b = i"
+        | a t' d b u' e where 
+          "(a, t', d) \<in> ran \<pi>" "at_end a = h" "t = t' + d" 
+          "(b, u', e) \<in> ran \<pi>" "at_end b = i" "u = u' + e" 
+        apply (cases rule: in_happ_seqE[OF ta]; cases rule: in_happ_seqE[OF tb])
+        by (blast, blast, blast, force)
+      thus ?thesis
+      proof cases
+        case 1
+        have "a \<noteq> b \<or> t \<noteq> u" using ne 1 by auto
+        hence "AtStart a \<noteq> AtStart b \<or> t \<noteq> u" by simp
+        moreover
+        have "(t, AtStart a) \<in> annotated_action_seq" using 1 unfolding annotated_action_seq_def by auto
+        moreover
+        have "(u, AtStart b) \<in> annotated_action_seq" using 1 unfolding annotated_action_seq_def by auto
+        ultimately
+        have "\<not>mutex_annotated_action (AtStart a) (AtStart b)" using a tu unfolding nm_anno_act_seq_def by (auto simp: Let_def)
+        thus ?thesis using 1 mutex_trans by auto
+      next
+        case 2
+        have "(t, AtStart a) \<in> annotated_action_seq" using 2 unfolding annotated_action_seq_def by auto
+        moreover
+        have "(u, AtEnd b) \<in> annotated_action_seq" using 2 unfolding annotated_action_seq_def by auto
+        ultimately
+        have "\<not>mutex_annotated_action (AtStart a) (AtEnd b)"using a tu unfolding nm_anno_act_seq_def by (auto simp: Let_def)
+        thus ?thesis using 2 mutex_trans by auto
+      next
+        case 3
+        have "(t, AtEnd a) \<in> annotated_action_seq" using 3 unfolding annotated_action_seq_def by auto
+        moreover
+        have "(u, AtStart b) \<in> annotated_action_seq" using 3 unfolding annotated_action_seq_def by auto
+        ultimately
+        have "\<not>mutex_annotated_action (AtEnd a) (AtStart b)" using a tu unfolding nm_anno_act_seq_def by (auto simp: Let_def)
+        thus ?thesis using 3 mutex_trans by auto
+      next
+        case 4
+        have "a \<noteq> b \<or> t \<noteq> u" using ne 4 by auto
+        hence "AtEnd a \<noteq> AtEnd b \<or> t \<noteq> u" by simp
+        moreover
+        have "(t, AtEnd a) \<in> annotated_action_seq" using 4 unfolding annotated_action_seq_def by auto
+        moreover
+        have "(u, AtEnd b) \<in> annotated_action_seq" using 4 unfolding annotated_action_seq_def by blast
+        ultimately
+        have "\<not>mutex_annotated_action (AtEnd a) (AtEnd b)" using a tu unfolding nm_anno_act_seq_def by (auto simp: Let_def)
+        thus ?thesis using 4 mutex_trans by auto
+      qed
+    qed
+    ultimately
+    show "nm_happ_seq plan_happ_seq" unfolding nm_happ_seq_def by blast
+  next
+    assume a: "nm_happ_seq plan_happ_seq"
+    have "\<not>mutex_annotated_action h i" if 
+      tu: "t - u < \<epsilon> \<and> u - t < \<epsilon>" 
+      and th: "(t, h) \<in> annotated_action_seq" 
+      and ti: "(u, i) \<in> annotated_action_seq" 
+      and ne: "h \<noteq> i \<or> t \<noteq> u" for h i t u
+    proof -
+      consider 
+          a d b e where 
+          "(a, t, d) \<in> ran \<pi>" "AtStart a = h" 
+          "(b, u, e) \<in> ran \<pi>" "AtStart b = i"
+        | a d b u' e where 
+          "(a, t, d) \<in> ran \<pi>" "AtStart a = h" 
+          "(b, u', e) \<in> ran \<pi>" "AtEnd b = i" "u = u' + e"
+        | a t' d b e where 
+          "(a, t', d) \<in> ran \<pi>" "AtEnd a = h" "t = t' + d" 
+          "(b, u, e) \<in> ran \<pi>" "AtStart b = i"
+        | a t' d b u' e where 
+          "(a, t', d) \<in> ran \<pi>" "AtEnd a = h" "t = t' + d" 
+          "(b, u', e) \<in> ran \<pi>" "AtEnd b = i" "u = u' + e" 
+        using th ti unfolding annotated_action_seq_def by blast
+      thus ?thesis
+      proof cases
+        case 1
+        have "a \<noteq> b \<or> t \<noteq> u" using ne 1 by auto
+        hence "at_start a \<noteq> at_start b \<or> t \<noteq> u" using at_start_inj 1 unfolding inj_on_def by blast
+        moreover
+        have "(t, at_start a) \<in> plan_happ_seq" using 1 unfolding plan_happ_seq_def by auto
+        moreover
+        have "(u, at_start b) \<in> plan_happ_seq" using 1 unfolding plan_happ_seq_def by auto
+        ultimately
+        have "\<not>mutex_snap_action (at_start a) (at_start b)" using a tu unfolding nm_happ_seq_def by (auto simp: Let_def)
+        thus ?thesis using 1 mutex_trans by auto
+      next
+        case 2
+        have "(t, at_start a) \<in> plan_happ_seq" using 2 unfolding plan_happ_seq_def by blast 
+        moreover
+        have "(u, at_end b) \<in> plan_happ_seq" using 2 unfolding plan_happ_seq_def by blast
+        moreover
+        have "at_start a \<noteq> at_end b" using 2 snaps_disj by auto
+        ultimately
+        have "\<not>mutex_snap_action (at_start a) (at_end b)" using a tu unfolding nm_happ_seq_def by (auto simp: Let_def)
+        thus ?thesis using 2 mutex_trans by auto
+      next
+        case 3
+        have "(t, at_end a) \<in> plan_happ_seq" using 3 unfolding plan_happ_seq_def by blast 
+        moreover
+        have "(u, at_start b) \<in> plan_happ_seq" using 3 unfolding plan_happ_seq_def by blast
+        moreover
+        have "at_end a \<noteq> at_start b" using 3 snaps_disj by auto
+        ultimately
+        have "\<not>mutex_snap_action (at_end a) (at_start b)" using a tu unfolding nm_happ_seq_def by (auto simp: Let_def)
+        thus ?thesis using 3 mutex_trans by auto
+      next
+        case 4
+        have "a \<noteq> b \<or> t \<noteq> u" using ne 4 by auto
+        hence "at_end a \<noteq> at_end b \<or> t \<noteq> u" using at_end_inj 4 unfolding inj_on_def by blast
+        moreover
+        have "(t, at_end a) \<in> plan_happ_seq" using 4 unfolding plan_happ_seq_def by auto
+        moreover
+        have "(u, at_end b) \<in> plan_happ_seq" using 4 unfolding plan_happ_seq_def by blast
+        ultimately
+        have "\<not>mutex_snap_action (at_end a) (at_end b)" using a tu unfolding nm_happ_seq_def by (auto simp: Let_def)
+        thus ?thesis using 4 mutex_trans by auto
+      qed
+    qed
+    moreover
+    have "\<not>mutex_annotated_action h i"
+      if th: "(t, h) \<in> annotated_action_seq"
+      and ti: "(t, i) \<in> annotated_action_seq"
+      and ne: "h \<noteq> i" for h i t 
+    proof -
+      consider 
+          a d b e where 
+          "(a, t, d) \<in> ran \<pi>" "AtStart a = h" 
+          "(b, t, e) \<in> ran \<pi>" "AtStart b = i"
+        | a d b u e where 
+          "(a, t, d) \<in> ran \<pi>" "AtStart a = h" 
+          "(b, u, e) \<in> ran \<pi>" "AtEnd b = i" "t = u + e"
+        | a t' d b e where 
+          "(a, t', d) \<in> ran \<pi>" "AtEnd a = h" "t = t' + d" 
+          "(b, t, e) \<in> ran \<pi>" "AtStart b = i"
+        | a t' d b u e where 
+          "(a, t', d) \<in> ran \<pi>" "AtEnd a = h" "t = t' + d" 
+          "(b, u, e) \<in> ran \<pi>" "AtEnd b = i" "t = u + e" 
+        using th ti unfolding annotated_action_seq_def by auto
+      thus ?thesis
+      proof cases
+        case 1
+        have "a \<noteq> b" using ne 1 by auto
+        hence "at_start a \<noteq> at_start b" using at_start_inj 1 unfolding inj_on_def by blast
+        moreover
+        have "(t, at_start a) \<in> plan_happ_seq" using 1 unfolding plan_happ_seq_def by auto
+        moreover
+        have "(t, at_start b) \<in> plan_happ_seq" using 1 unfolding plan_happ_seq_def by auto
+        ultimately
+        have "\<not>mutex_snap_action (at_start a) (at_start b)"using a unfolding nm_happ_seq_def by (auto simp: Let_def)
+        thus ?thesis using 1 mutex_trans by auto
+      next
+        case 2
+        have "at_start a \<noteq> at_end b" using snaps_disj 2 by auto
+        moreover
+        have "(t, at_start a) \<in> plan_happ_seq" using 2 unfolding plan_happ_seq_def by auto
+        moreover
+        have "(t, at_end b) \<in> plan_happ_seq" using 2 unfolding plan_happ_seq_def by auto
+        ultimately
+        have "\<not>mutex_snap_action (at_start a) (at_end b)"using a unfolding nm_happ_seq_def by (auto simp: Let_def)
+        thus ?thesis using 2 mutex_trans by auto
+      next
+        case 3
+        have "at_end a \<noteq> at_start b" using snaps_disj 3 by auto
+        moreover
+        have "(t, at_end a) \<in> plan_happ_seq" using 3 unfolding plan_happ_seq_def by auto
+        moreover
+        have "(t, at_start b) \<in> plan_happ_seq" using 3 unfolding plan_happ_seq_def by auto
+        ultimately
+        have "\<not>mutex_snap_action (at_end a) (at_start b)" using a unfolding nm_happ_seq_def by (auto simp: Let_def)
+        thus ?thesis using 3 mutex_trans by auto
+      next
+        case 4
+        have "a \<noteq> b" using ne 4 by auto
+        hence "at_end a \<noteq> at_end b" using at_end_inj 4 unfolding inj_on_def by blast
+        moreover
+        have "(t, at_end a) \<in> plan_happ_seq" using 4 unfolding plan_happ_seq_def by auto
+        moreover
+        have "(t, at_end b) \<in> plan_happ_seq" using 4 unfolding plan_happ_seq_def by blast
+        ultimately
+        have "\<not>mutex_snap_action (at_end a) (at_end b)" using a unfolding nm_happ_seq_def by (auto simp: Let_def)
+        thus ?thesis using 4 mutex_trans by auto
+      qed
+    qed
+    ultimately
+    show nm_anno_act_seq unfolding nm_anno_act_seq_def Let_def by blast
+  qed
+end
+
+
+
+subsection \<open>Indexing timepoints\<close>
+
 text \<open>Basic facts about the indexing of timepoints\<close>
 lemma time_index_bij_betw_list: "bij_betw time_index {n. n < length htpl} (set htpl)"
   using bij_betw_nth distinct_sorted_list_of_set htpl_def[symmetric] lessThan_def
@@ -983,6 +1371,8 @@ proof -
   }
   thus "card (ran \<pi>) = 0" by blast
 qed
+
+subsection \<open>Fluents and Constants in a Plan\<close>
 
 text \<open>Actions only refer to fluent propositions. The entire problem is fluent.\<close>
 abbreviation snap_ref_fluents where
@@ -1480,7 +1870,7 @@ proof -
   thus "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS" unfolding valid_state_sequence_def by (auto simp: Let_def)
 qed
 
-text \<open>Not necessary.\<close>
+text \<open>Not necessary, probably.\<close>
 lemma cvp_nm_happ_seq_equiv: "nm_happ_seq pre adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end) \<longleftrightarrow> nm_happ_seq pre' adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end)"
 proof -
   from cvp
@@ -1519,8 +1909,6 @@ qed
 text \<open>An attempt was made to remove these assumptions by proving that constants in a plan are
       indeed constant. However, this only works for the direction of the proof that does not 
       need it.\<close>
-
-(* To do: mutex condition *)
 
 lemma cvp_mutex_plan_equiv:
   "mutex_valid_plan \<pi> at_start at_end pre adds dels \<epsilon> \<longleftrightarrow> mutex_valid_plan \<pi> at_start at_end pre' adds dels \<epsilon>"
@@ -1741,9 +2129,10 @@ next
     show ?thesis using dur mutex cvp_mutex_plan_equiv finite vss by auto
   qed
 qed 
-
 end
-text \<open>Another thing we need to prove is the relationship between at_start, at_end, pre, adds, and dels. To do.\<close>
+
+text \<open>Another thing we need to prove is the relationship between at_start, at_end, 
+  pre, adds, and dels.\<close>
 
 context 
   fixes \<pi>::"('i, 'action, 'time::time) temp_plan"
@@ -1810,7 +2199,7 @@ lemmas pre_transfer = f_transfer[OF start_snap_replacement(1) end_snap_replaceme
 lemmas adds_transfer = f_transfer[OF start_snap_replacement(2) end_snap_replacement(2)]
 lemmas dels_transfer = f_transfer[OF start_snap_replacement(3) end_snap_replacement(3)]
 
-lemma valid_state_seq_equiv_if_snaps_functionally_equiv:
+lemma vss_equiv_if_snaps_functionally_equiv:
   "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS \<longleftrightarrow> valid_state_sequence \<pi> at_start' at_end' over_all pre' adds' dels' MS"
   unfolding valid_state_sequence_def  using adds_transfer dels_transfer pre_transfer unfolding Let_def apply_effects_def by simp
 
@@ -1830,8 +2219,8 @@ lemma in_happ_seqE1:
 lemma in_happ_seq_trans_2:  
   assumes "h \<in> happ_at (plan_happ_seq \<pi> at_start' at_end') time" 
     shows "\<exists>h' \<in> happ_at (plan_happ_seq \<pi> at_start at_end) time. pre h' = pre' h \<and> adds h' = adds' h \<and> dels h' = dels' h"
-  apply (rule in_happ_seqE[OF assms[simplified ]])
-  unfolding  plan_happ_seq_def using start_snap_replacement apply blast
+  apply (rule in_happ_seqE[OF assms[simplified]])
+  unfolding plan_happ_seq_def using start_snap_replacement apply blast
   using end_snap_replacement by fastforce
 
 lemma in_happ_seqE2:  
@@ -1839,24 +2228,144 @@ lemma in_happ_seqE2:
       and "\<And>h'. h' \<in> happ_at (plan_happ_seq \<pi> at_start at_end) time \<Longrightarrow> pre h' = pre' h \<Longrightarrow> adds h' = adds' h \<Longrightarrow> dels h' = dels' h \<Longrightarrow> thesis"
     shows thesis
   using assms in_happ_seq_trans_2 by blast
-  
-context
-  assumes at_start_inj: "inj_on at_start {a| a t d. (a, t, d) \<in> ran \<pi>}"
-      and at_end_inj: "inj_on at_end {a| a t d. (a, t, d) \<in> ran \<pi>}"
-      and snaps_disj: "at_start ` {a| a t d. (a, t, d) \<in> ran \<pi>} \<inter> at_end ` {a| a t d. (a, t, d) \<in> ran \<pi>} = {}"
-      and dg0: "durations_ge_0 \<pi>"
-      and nso: "no_self_overlap \<pi>"
-begin
-lemma nm_happ_seq_equiv_if_snaps_functionally_equiv: 
-  "nm_happ_seq pre adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end) \<longleftrightarrow> nm_happ_seq pre' adds' dels' \<epsilon> (plan_happ_seq \<pi> at_start' at_end')"
-  sorry
+
+lemma mutex_snap_action_equiv:
+  assumes a: "\<exists>t d. (a, t, d) \<in> ran \<pi>"
+      and b: "\<exists>t d. (b, t, d) \<in> ran \<pi>"
+      and h: "h = at_start a \<and> h' = at_start' a \<or> h = at_end a \<and> h' = at_end' a"
+      and i: "i = at_start b \<and> i' = at_start' b \<or> i = at_end b \<and> i' = at_end' b"
+    shows "mutex_snap_action pre adds dels h i
+    \<longleftrightarrow> mutex_snap_action pre' adds' dels' h' i'"
+proof -
+  have "pre h = pre' h'" using h a start_snap_replacement end_snap_replacement by auto
+  moreover
+  have "adds h = adds' h'" using h a start_snap_replacement end_snap_replacement by auto
+  moreover 
+  have "dels h = dels' h'" using h a start_snap_replacement end_snap_replacement by auto
+  moreover
+  have "pre i = pre' i'" using i b start_snap_replacement end_snap_replacement by auto
+  moreover
+  have "adds i = adds' i'" using i b start_snap_replacement end_snap_replacement by auto
+  moreover 
+  have "dels i = dels' i'" using i b start_snap_replacement end_snap_replacement by auto
+  ultimately
+  show ?thesis unfolding mutex_snap_action_def by simp
+qed
+
+lemma mutex_valid_plan_equiv_if_snaps_functionally_equiv:
+  "mutex_valid_plan \<pi> at_start at_end pre adds dels \<epsilon> 
+\<longleftrightarrow> mutex_valid_plan \<pi> at_start' at_end' pre' adds' dels' \<epsilon>"
+proof -
+  have "(\<forall>(a, t, d)\<in>ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not> mutex_snap_action pre adds dels (at_start a) (at_end a))
+    \<longleftrightarrow> (\<forall>(a, t, d)\<in>ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not> mutex_snap_action pre' adds' dels' (at_start' a) (at_end' a))"
+    using mutex_snap_action_equiv by fast
+  moreover
+  have "mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db \<longleftrightarrow> mutex_sched at_start' at_end' pre' adds' dels' \<epsilon> a ta da b tb db" if 
+    "i \<in> dom \<pi>" "j \<in> dom \<pi>" "i \<noteq> j" 
+    "\<pi> i = Some (a, ta, da)" 
+    "\<pi> j = Some (b, tb, db)" for i j a ta da b tb db
+   proof -
+     have ab_ran: "\<exists>t d. (a, t, d) \<in> ran \<pi>" "\<exists>t d. (b, t, d) \<in> ran \<pi>" 
+       using that ranI by fast+
+    show ?thesis 
+         proof 
+      assume as: "mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db"
+      have "\<not> mutex_snap_action pre' adds' dels' sa sb" 
+        if "sa = at_start' a \<and> t = ta \<or> sa = at_end' a \<and> t = ta + da" 
+           "sb = at_start' b \<and> u = tb \<or> sb = at_end' b \<and> u = tb + db" 
+        and t:  "t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u" for sa sb t u
+      proof -
+        from that
+        consider 
+          "sa = at_start' a \<and> t = ta" "sb = at_start' b \<and> u = tb" |
+          "sa = at_start' a \<and> t = ta" "sb = at_end' b \<and> u = tb + db" | 
+          "sa = at_end' a \<and> t = ta + da" "sb = at_start' b \<and> u = tb" |
+          "sa = at_end' a \<and> t = ta + da" "sb = at_end' b \<and> u = tb + db" by argo
+        thus ?thesis
+        proof (cases)
+          case 1
+          with t as
+          have "\<not>mutex_snap_action pre adds dels (at_start a) (at_start b)" 
+            unfolding mutex_sched_def by blast
+          then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 1 by auto
+        next
+          case 2
+          with t as
+          have "\<not>mutex_snap_action pre adds dels (at_start a) (at_end b)" 
+            unfolding mutex_sched_def by blast
+          then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 2 by auto
+        next
+          case 3
+          with t as
+          have "\<not>mutex_snap_action pre adds dels (at_end a) (at_start b)" 
+            unfolding mutex_sched_def by blast
+          then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 3 by auto
+        next
+          case 4
+          with t as
+          have "\<not>mutex_snap_action pre adds dels (at_end a) (at_end b)" 
+            unfolding mutex_sched_def by blast
+          then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 4 by auto
+        qed
+      qed
+      thus "mutex_sched at_start' at_end' pre' adds' dels' \<epsilon> a ta da b tb db" 
+        unfolding mutex_sched_def by blast
+    next
+      assume as: "mutex_sched at_start' at_end' pre' adds' dels' \<epsilon> a ta da b tb db"
+      have "\<not> mutex_snap_action pre adds dels sa sb" 
+        if "sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da" 
+           "sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db" 
+        and t:  "t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u" for sa sb t u
+      proof -
+        from that
+        consider 
+          "sa = at_start a \<and> t = ta" "sb = at_start b \<and> u = tb" |
+          "sa = at_start a \<and> t = ta" "sb = at_end b \<and> u = tb + db" | 
+          "sa = at_end a \<and> t = ta + da" "sb = at_start b \<and> u = tb" |
+          "sa = at_end a \<and> t = ta + da" "sb = at_end b \<and> u = tb + db" by argo
+        thus ?thesis
+        proof (cases)
+          case 1
+          with t as
+          have "\<not>mutex_snap_action pre' adds' dels' (at_start' a) (at_start' b)" 
+            unfolding mutex_sched_def by blast
+          then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 1 by auto
+        next
+          case 2
+          with t as
+          have "\<not>mutex_snap_action pre' adds' dels' (at_start' a) (at_end' b)" 
+            unfolding mutex_sched_def by blast
+          then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 2 by auto
+        next
+          case 3
+          with t as
+          have "\<not>mutex_snap_action pre' adds' dels' (at_end' a) (at_start' b)" 
+            unfolding mutex_sched_def by blast
+          then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 3 by auto
+        next
+          case 4
+          with t as
+          have "\<not>mutex_snap_action pre' adds' dels' (at_end' a) (at_end' b)" 
+            unfolding mutex_sched_def by blast
+          then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 4 by auto
+        qed
+      qed
+      thus "mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db" 
+        unfolding mutex_sched_def by blast
+    qed
+  qed
+  hence "(\<forall>i j a ta da b tb db. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db) \<longrightarrow> mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db) 
+  \<longleftrightarrow> (\<forall>i j a ta da b tb db. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db) \<longrightarrow> mutex_sched at_start' at_end' pre' adds' dels' \<epsilon> a ta da b tb db)" by blast
+  ultimately
+  show ?thesis unfolding mutex_valid_plan_eq mutex_valid_plan_alt_def by argo
+qed
 
 lemma valid_plan_equiv_if_snaps_functionally_equiv:
-  "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
+  "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon>
   \<longleftrightarrow> valid_plan \<pi> init goal at_start' at_end' over_all lower upper pre' adds' dels' \<epsilon>"
-  sorry
-
-end 
+  unfolding valid_plan_def
+  using vss_equiv_if_snaps_functionally_equiv mutex_valid_plan_equiv_if_snaps_functionally_equiv
+  by simp
 end
 
 locale temp_planning_problem =
@@ -1939,15 +2448,12 @@ sublocale finite_props_temp_planning_problem init' goal' at_start at_end over_al
   unfolding const_valid_domain_def fluent_domain_def act_mod_fluents_def act_ref_fluents_def
   by blast+
 
-
-text \<open>To do: plan validity equivalence\<close>
 context 
   fixes \<pi>::"('i, 'action, 'time) temp_plan"
   assumes plan_actions_in_problem: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
 begin
   lemma valid_plan_in_finite_props:
-  assumes "finite_plan \<pi>"
-      and "goal - fluents \<subseteq> init - fluents"
+  assumes "goal - fluents \<subseteq> init - fluents"
       and "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents"
     shows
     "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
@@ -1956,7 +2462,6 @@ begin
     show "const_valid_plan \<pi> fluents at_start at_end adds dels" using plan_actions_in_problem finite_fluent_domain const_valid_plan_def const_valid_domain_def by fast
   qed (auto simp: assms)
 end
-
 end
 
 locale unique_snaps_temp_planning_problem = 
@@ -1991,11 +2496,12 @@ locale finite_temp_planning_problem' =
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
     and \<epsilon>::       "'time"
-    and props:: "'proposition set"
+    and props::   "'proposition set"
     and actions:: "'action set"
 begin
-
-  sublocale unique_snaps_temp_planning_problem init goal AtStart AtEnd over_all lower upper pre_imp add_imp del_imp \<epsilon> props actions 
+  sublocale unique_snaps_temp_planning_problem 
+    init goal AtStart AtEnd over_all lower upper 
+    "pre_imp at_start at_end pre" "add_imp at_start at_end adds" "del_imp at_start at_end dels" \<epsilon> props actions 
   proof
     show "inj_on AtStart actions" "inj_on AtEnd actions" unfolding inj_on_def by blast+
     show "AtStart ` actions \<inter> AtEnd ` actions = {}" by blast
@@ -2016,23 +2522,47 @@ locale finite_fluent_temp_planning_problem' =
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
     and \<epsilon>::       "'time"
-    and fluents::   "'proposition set"
+    and fluents:: "'proposition set"
     and actions:: "'action set"
 begin
+abbreviation pre_imp'::"'action snap_action \<Rightarrow> 'proposition set" where
+"pre_imp' \<equiv> \<lambda>x. (pre_imp at_start at_end pre x \<inter> fluents)"
 
-abbreviation "pre_imp' \<equiv> \<lambda>x. pre_imp x \<inter> fluents"
 
-sublocale unique_snaps_temp_planning_problem init' goal' AtStart AtEnd over_all' lower upper pre_imp' add_imp del_imp \<epsilon> fluents actions ..
+sublocale unique_snaps_temp_planning_problem 
+  init' goal' AtStart AtEnd over_all' lower upper 
+  pre_imp' "add_imp at_start at_end adds" "del_imp at_start at_end dels" \<epsilon> fluents actions 
+  ..
 
-sublocale finite_props_temp_planning_problem init' goal' AtStart AtEnd over_all' lower upper pre_imp' add_imp del_imp \<epsilon> fluents actions
+sublocale finite_props_temp_planning_problem 
+  init' goal' AtStart AtEnd over_all' lower upper 
+  pre_imp' "add_imp at_start at_end adds" "del_imp at_start at_end dels" \<epsilon> fluents actions
   apply standard
   using finite_fluent_domain
   unfolding add_imp_def del_imp_def fluent_domain_def act_ref_fluents_def pre_imp_def const_valid_domain_def act_mod_fluents_def
   by auto
-
+context 
+  fixes \<pi>::"('i, 'action, 'time) temp_plan"
+  assumes plan_actions_in_problem: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
+      and "goal - fluents \<subseteq> init - fluents"
+begin
+  lemma valid_plan_in_finite_props:
+  assumes 
+      and "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents"
+    shows
+    "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
+  \<longleftrightarrow> valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>"
+  proof (rule const_plan_equiv[simplified fluent_state_def])
+    show "const_valid_plan \<pi> fluents at_start at_end adds dels" using plan_actions_in_problem finite_fluent_domain const_valid_plan_def const_valid_domain_def by fast
+  qed (auto simp: assms)
+end
 lemma valid_plan_alt:
-  assumes "const_valid_domain \<pi> at_start at_end adds dels actions"
-  shows "True" sorry
+  assumes "const_valid_domain fluents at_start at_end adds dels actions"
+  shows "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon>
+    \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd over_all' lower upper pre_imp' (add_imp at_start at_end adds) (del_imp at_start at_end dels) \<epsilon>"
+proof -
+  using const_plan_equiv
+qed
 end
 
 locale ta_temp_planning = 
@@ -2120,151 +2650,5 @@ lemma eps_cases:
     shows "thesis"
   using assms eps_range by blast
 
-subsection \<open>Temporal plans\<close>
-context
-fixes \<pi>:: "('i, 'action, 'time) temp_plan"
-begin
-
-definition plan_actions_in_problem where
-"plan_actions_in_problem \<equiv> \<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
-
-lemma at_start_in_happ_seqE: 
-  assumes in_happ_seq: "(t, at_start a) \<in> plan_happ_seq \<pi> at_start at_end"
-      and a_in_actions: "a \<in> actions"
-      and nso: "no_self_overlap \<pi>"
-      and dp: "durations_positive \<pi>"
-      and pap: "plan_actions_in_problem"
-  shows "\<exists>!d. (a, t, d) \<in> ran \<pi>"
-proof -
-  have some_in_ran: "(a, t, SOME x. (a, t, x) \<in> ran \<pi>) \<in> ran \<pi>"
-  proof -
-    from in_happ_seq[simplified plan_happ_seq_def]
-    consider "(t, at_start a) \<in> {(t, at_start a)|a t d. (a, t, d) \<in> ran \<pi>}" 
-        | "(t, at_start a) \<in>  {(t + d, at_end a) |a t d. (a, t, d) \<in> ran \<pi>}"
-        by blast
-    then
-    have "\<exists>d. (a, t, d) \<in> ran \<pi>"
-    proof cases
-      case 1
-      with pap[simplified plan_actions_in_problem_def]
-      have "\<exists>a' d. at_start a = at_start a'\<and> (a', t, d) \<in> ran \<pi> \<and> a' \<in> actions" by auto
-      with 1 a_in_actions at_start_inj_on[simplified inj_on_def]
-      show ?thesis by blast
-    next
-      case 2
-      with pap[simplified plan_actions_in_problem_def]
-      have "\<exists>a' t' d. (t, at_start a) = (t' + d, at_end a') \<and> (a', t', d) \<in> ran \<pi> \<and> a' \<in> actions" by blast
-      with 2 a_in_actions snaps_disj
-      have False by blast
-      thus ?thesis ..
-    qed
-    thus ?thesis ..
-  qed
-  moreover
-  have "d = (SOME x. (a, t, x) \<in> ran \<pi>)" if d_in_ran: "(a, t, d) \<in> ran \<pi>" for d
-  proof -
-    from some_in_ran
-    obtain e where
-      e: "(a, t, e) \<in> ran \<pi>"
-      "e = (SOME x. (a, t, x) \<in> ran \<pi>)" by auto
-    from e(1) d_in_ran
-    obtain i j where
-      ij: "\<pi> i = Some (a, t, d)"
-      "\<pi> j = Some (a, t, e)" unfolding ran_def by blast
-    have "d = e" 
-    proof (cases "i = j")
-      case True
-      then show ?thesis using ij by auto
-    next
-      case False
-      from dp[simplified durations_positive_def] d_in_ran e(1)
-      consider "t \<le> t + d" | "t \<le> t + e" by fastforce
-      hence False 
-        apply cases
-        using False nso[simplified no_self_overlap_def] ij 
-        by fastforce+
-      then show ?thesis by simp
-    qed
-    with e
-    show ?thesis by simp
-  qed
-  ultimately
-  show ?thesis by blast
-qed
-
-lemma at_end_in_happ_seqE:
-  assumes in_happ_seq: "(s, at_end a) \<in> plan_happ_seq \<pi> at_start at_end"
-      and a_in_actions: "a \<in> actions"
-      and nso: "no_self_overlap \<pi>" (* Can be removed if uniqueness quantification \<exists>! is replaced with \<exists> *)
-      and dp: "durations_positive \<pi>"
-      and pap: "plan_actions_in_problem"
-    shows "\<exists>!(t,d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"
-proof -
-  define pair where "pair = (SOME (t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d)"
-  from in_happ_seq[simplified plan_happ_seq_def]
-  consider "(s, at_end a) \<in> {(t, at_start a)|a t d. (a, t, d) \<in> ran \<pi>}" 
-      | "(s, at_end a) \<in>  {(t + d, at_end a) |a t d. (a, t, d) \<in> ran \<pi>}"
-      by blast
-    then
-  have some_in_ran: "(a, pair) \<in> ran \<pi> 
-    \<and> s = fst pair + snd pair"
-  proof cases
-    case 1
-    with pap[simplified plan_actions_in_problem_def] 
-    have "\<exists>a' d. (s, at_end a) = (s, at_start a') \<and> (a', s, d) \<in> ran \<pi> \<and> a' \<in> actions" by blast
-    with snaps_disj 1 a_in_actions
-    show ?thesis by blast
-  next
-    case 2
-    with pap[simplified plan_actions_in_problem_def]
-    have "\<exists>a' t d. (s, at_end a) = (t + d, at_end a') \<and>(a', t, d) \<in> ran \<pi> \<and> a' \<in> actions" by blast
-    with at_end_inj_on[simplified inj_on_def] a_in_actions
-    have "\<exists>t d. (a, t, d) \<in> ran \<pi> \<and> s = t + d" by blast
-    thus ?thesis using some_eq_ex[where P = "\<lambda>(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"] pair_def by auto
-  qed
-  moreover
-  have "p = pair" if td_def: "p = (t, d)" and td_in_ran: "(a, t, d) \<in> ran \<pi>" and td_eq_s: "t + d = s" for t d p
-  proof -
-    obtain t' d' where
-      t'd'_def: "pair = (t', d')" by fastforce
-    with some_in_ran
-    have t'd'_in_ran: "(a, t', d') \<in> ran \<pi>"
-      and t'd'_eq_s: "s = t' + d'" by simp+
-      
-    with td_in_ran
-    obtain i j where
-      ij: "\<pi> i = Some (a, t, d)"
-      "\<pi> j = Some (a, t', d')" unfolding ran_def by blast
-    
-
-    from td_eq_s t'd'_eq_s
-    have td_t'd': "t + d = t' + d'" by simp
-    show "p = pair"
-    proof (cases "i = j")
-      case True
-      then show ?thesis using pair_def ij t'd'_def td_def by simp
-    next
-      case False
-      consider "t \<le> t'" | "t' \<le> t" by fastforce
-      thus ?thesis 
-      proof cases
-        case 1
-        with dp[simplified durations_positive_def] t'd'_in_ran td_t'd'
-        have "t' \<le> t + d" by force
-        with False ij 1
-        show ?thesis using nso[simplified no_self_overlap_def] by force
-      next
-        case 2
-        with dp[simplified durations_positive_def] td_in_ran td_t'd'
-        have "t \<le> t' + d'" by (metis add.commute less_add_same_cancel2 order_less_le)
-        with False ij 2
-        show ?thesis using nso[simplified no_self_overlap_def] by force 
-      qed
-    qed
-  qed
-  ultimately
-  show ?thesis apply - by (rule ex1I, auto)
-qed
-end
 end
 end
