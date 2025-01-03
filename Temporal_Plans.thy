@@ -206,6 +206,12 @@ proofs, because of how some automata are constructed. *)
 definition durations_ge_0::bool where
 "durations_ge_0 \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 \<le> d"
 
+definition durations_positive::bool where
+"durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 < d"
+
+lemma dp_imp_dg0: "durations_positive \<Longrightarrow> durations_ge_0"
+  unfolding durations_positive_def durations_ge_0_def by fastforce
+
 definition durations_valid::bool where
 "durations_valid \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> satisfies_duration_bounds a d"
 
@@ -224,9 +230,6 @@ definition valid_plan::"bool" where
     \<and> durations_valid
     \<and> mutex_valid_plan
     \<and> finite_plan"
-
-definition durations_positive::bool where
-"durations_positive \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 < d"
 
 definition no_self_overlap::"bool" where
 "no_self_overlap \<equiv> \<not>(\<exists>i j a t d u e. i \<noteq> j
@@ -822,14 +825,17 @@ qed
 abbreviation "plan_actions \<equiv> {a| a t d. (a, t, d) \<in> ran \<pi>}"
 
 context
-  assumes at_start_inj: "inj_on at_start plan_actions"
-      and at_end_inj: "inj_on at_end plan_actions"
-      and snaps_disj: "at_start ` plan_actions \<inter> at_end ` plan_actions = {}"
+  fixes domain
+  assumes domain: "plan_actions \<subseteq> domain"
+  assumes at_start_inj: "inj_on at_start domain"
+      and at_end_inj: "inj_on at_end domain"
+      and snaps_disj: "at_start ` domain \<inter> at_end ` domain = {}"
 begin
+
   
   lemma at_start_in_happ_seqE: 
     assumes in_happ_seq: "(s, at_start a) \<in> plan_happ_seq"
-        and a_in_actions: "a \<in> plan_actions"
+        and a_in_actions: "a \<in> domain"
         and nso: no_self_overlap
         and dg0: durations_ge_0
     shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t"
@@ -837,11 +843,11 @@ begin
     from in_happ_seq in_happ_seqE'
     have "\<exists>(a', t, d) \<in> ran \<pi>. (at_start a' = at_start a \<and> s = t \<or> at_end a' = at_start a \<and> s = t + d)"
       by blast
-    with snaps_disj a_in_actions
+    with snaps_disj a_in_actions domain
     have "\<exists>(a', t, d) \<in> ran \<pi>. at_start a' = at_start a \<and> s = t" by fast
     moreover
     have "\<forall>(a', t, d) \<in> ran \<pi>. at_start a = at_start a' \<longrightarrow> a = a'" 
-      using at_start_inj a_in_actions unfolding inj_on_def by blast
+      using at_start_inj a_in_actions domain unfolding inj_on_def by blast
     ultimately
     show "\<exists>x. case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t" by auto
   next
@@ -854,9 +860,9 @@ begin
 
   lemma at_end_in_happ_seqE:
     assumes in_happ_seq: "(s, at_end a) \<in> plan_happ_seq"
-        and a_in_actions: "a \<in> plan_actions"
+        and a_in_actions: "a \<in> domain"
         and nso: "no_self_overlap"
-        and dp: "durations_positive"
+        and dp: "durations_ge_0"
       shows "\<exists>!(t,d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"
   proof -
     define pair where "pair = (SOME (t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d)"
@@ -869,15 +875,15 @@ begin
       \<and> s = fst pair + snd pair"
     proof cases
       case 1
-      with a_in_actions
-      have "\<exists>a' d. (s, at_end a) = (s, at_start a') \<and> (a', s, d) \<in> ran \<pi> \<and> a' \<in> plan_actions" by blast
+      with a_in_actions domain
+      have "\<exists>a' d. (s, at_end a) = (s, at_start a') \<and> (a', s, d) \<in> ran \<pi> \<and> a' \<in> domain" by blast
       with snaps_disj 1 a_in_actions
       show ?thesis by blast
     next
       case 2
       with a_in_actions
       have "\<exists>a' t d. (s, at_end a) = (t + d, at_end a') \<and>(a', t, d) \<in> ran \<pi> \<and> a' \<in> plan_actions" by blast
-      with at_end_inj[simplified inj_on_def] a_in_actions
+      with at_end_inj[simplified inj_on_def] a_in_actions domain
       have "\<exists>t d. (a, t, d) \<in> ran \<pi> \<and> s = t + d" by blast
       thus ?thesis using some_eq_ex[where P = "\<lambda>(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"] pair_def by auto
     qed
@@ -1085,7 +1091,7 @@ begin
       proof cases
         case 1
         have "a \<noteq> b \<or> t \<noteq> u" using ne 1 by auto
-        hence "at_start a \<noteq> at_start b \<or> t \<noteq> u" using at_start_inj 1 unfolding inj_on_def by blast
+        hence "at_start a \<noteq> at_start b \<or> t \<noteq> u" using at_start_inj 1 domain unfolding inj_on_def by blast
         moreover
         have "(t, at_start a) \<in> plan_happ_seq" using 1 unfolding plan_happ_seq_def by auto
         moreover
@@ -1099,7 +1105,7 @@ begin
         moreover
         have "(u, at_end b) \<in> plan_happ_seq" using 2 unfolding plan_happ_seq_def by blast
         moreover
-        have "at_start a \<noteq> at_end b" using 2 snaps_disj by auto
+        have "at_start a \<noteq> at_end b" using 2 snaps_disj domain by fast
         ultimately
         have "\<not>mutex_snap_action (at_start a) (at_end b)" using a tu unfolding nm_happ_seq_def by (auto simp: Let_def)
         thus ?thesis using 2 mutex_trans by auto
@@ -1109,14 +1115,14 @@ begin
         moreover
         have "(u, at_start b) \<in> plan_happ_seq" using 3 unfolding plan_happ_seq_def by blast
         moreover
-        have "at_end a \<noteq> at_start b" using 3 snaps_disj by auto
+        have "at_end a \<noteq> at_start b" using 3 snaps_disj domain by fast
         ultimately
         have "\<not>mutex_snap_action (at_end a) (at_start b)" using a tu unfolding nm_happ_seq_def by (auto simp: Let_def)
         thus ?thesis using 3 mutex_trans by auto
       next
         case 4
         have "a \<noteq> b \<or> t \<noteq> u" using ne 4 by auto
-        hence "at_end a \<noteq> at_end b \<or> t \<noteq> u" using at_end_inj 4 unfolding inj_on_def by blast
+        hence "at_end a \<noteq> at_end b \<or> t \<noteq> u" using at_end_inj 4 domain unfolding inj_on_def by blast
         moreover
         have "(t, at_end a) \<in> plan_happ_seq" using 4 unfolding plan_happ_seq_def by auto
         moreover
@@ -1150,7 +1156,7 @@ begin
       proof cases
         case 1
         have "a \<noteq> b" using ne 1 by auto
-        hence "at_start a \<noteq> at_start b" using at_start_inj 1 unfolding inj_on_def by blast
+        hence "at_start a \<noteq> at_start b" using at_start_inj 1 domain unfolding inj_on_def by blast
         moreover
         have "(t, at_start a) \<in> plan_happ_seq" using 1 unfolding plan_happ_seq_def by auto
         moreover
@@ -1160,7 +1166,7 @@ begin
         thus ?thesis using 1 mutex_trans by auto
       next
         case 2
-        have "at_start a \<noteq> at_end b" using snaps_disj 2 by auto
+        have "at_start a \<noteq> at_end b" using snaps_disj 2 domain by fast
         moreover
         have "(t, at_start a) \<in> plan_happ_seq" using 2 unfolding plan_happ_seq_def by auto
         moreover
@@ -1170,7 +1176,7 @@ begin
         thus ?thesis using 2 mutex_trans by auto
       next
         case 3
-        have "at_end a \<noteq> at_start b" using snaps_disj 3 by auto
+        have "at_end a \<noteq> at_start b" using snaps_disj 3 domain by fast
         moreover
         have "(t, at_end a) \<in> plan_happ_seq" using 3 unfolding plan_happ_seq_def by auto
         moreover
@@ -1181,7 +1187,7 @@ begin
       next
         case 4
         have "a \<noteq> b" using ne 4 by auto
-        hence "at_end a \<noteq> at_end b" using at_end_inj 4 unfolding inj_on_def by blast
+        hence "at_end a \<noteq> at_end b" using at_end_inj 4 domain unfolding inj_on_def by blast
         moreover
         have "(t, at_end a) \<in> plan_happ_seq" using 4 unfolding plan_happ_seq_def by auto
         moreover

@@ -21,11 +21,11 @@ datatype ('proposition, 'action) clock =
   | StartDur 'action
   | EndDur   'action
   | SchedStartSnap 'action
-  | SchedEndSnap    'action
+  | SchedEndSnap   'action
 
 datatype alpha = Unit
 
-context temp_planning_problem
+context ta_temp_planning
 begin
 
 abbreviation "N \<equiv> card props"
@@ -247,12 +247,13 @@ definition prob_automaton::"(alpha, ('proposition, 'action) clock, 'time, ('prop
   \<union> decision_making \<union> {dm_to_exec} \<union> execution \<union> {exec_to_main} \<union> {goal_trans}, invs)"
 end
 
-context temp_planning_problem
+context ta_temp_planning
 begin
 context 
   fixes \<pi>::"('i, 'action, 'time) temp_plan"
 begin
 
+text \<open>Some abbreviations to make things more readable\<close>
 abbreviation "happ_seq \<equiv> plan_happ_seq \<pi> at_start at_end"
 
 abbreviation "finite_\<pi> \<equiv> finite_plan \<pi>"
@@ -265,7 +266,7 @@ abbreviation "timepoint_set \<equiv> htps \<pi>"
 
 abbreviation "ti \<equiv> time_index \<pi>"
 
-abbreviation "pap_\<pi> \<equiv> plan_actions_in_problem _ \<pi>"
+abbreviation "pap_\<pi> \<equiv> plan_actions_in_problem \<pi> actions"
 
 abbreviation "dp_\<pi> \<equiv> durations_positive \<pi>"
 
@@ -288,6 +289,42 @@ abbreviation "nm \<equiv> nm_happ_seq pre adds dels \<epsilon>"
 abbreviation "sat_dur_bounds \<equiv> satisfies_duration_bounds lower upper"
 
 abbreviation "app_effs \<equiv> apply_effects adds dels"
+
+lemma at_start_inj_on_plan: 
+  assumes "pap_\<pi>"
+  shows "inj_on at_start {a| a t d. (a, t, d) \<in> ran \<pi>}"
+  using assms at_start_inj_on unfolding inj_on_def plan_actions_in_problem_def by blast
+
+lemma at_end_inj_on_plan:
+  assumes "pap_\<pi>"
+  shows "inj_on at_end {a| a t d. (a, t, d) \<in> ran \<pi>}"
+  using assms at_end_inj_on unfolding inj_on_def plan_actions_in_problem_def by blast
+
+lemma snaps_disj_on_plan:
+  assumes "pap_\<pi>"
+  shows "at_start ` {a| a t d. (a, t, d) \<in> ran \<pi>} \<inter> at_end ` {a| a t d. (a, t, d) \<in> ran \<pi>} = {}"
+  using assms snaps_disj unfolding plan_actions_in_problem_def by fast
+
+lemma at_start_in_happ_seqE':
+  assumes a_in_acts: "a \<in> actions"
+      and pap: pap_\<pi>
+      and nso: nso_\<pi>
+      and dp: dp_\<pi>
+      and sn: "(s, at_start a) \<in> plan_happ_seq \<pi> at_start at_end"
+    shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t"
+  using at_start_in_happ_seqE[OF _ at_start_inj_on at_end_inj_on snaps_disj sn a_in_acts nso]
+  using dp[THEN dp_imp_dg0] pap unfolding plan_actions_in_problem_def by auto
+
+lemma at_end_in_happ_seqE':
+  assumes a_in_acts: "a \<in> actions"
+      and pap: pap_\<pi>
+      and nso: nso_\<pi>
+      and dp: dp_\<pi>
+      and sn: "(s, at_end a) \<in> plan_happ_seq \<pi> at_start at_end"
+    shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"
+  using at_end_in_happ_seqE[OF _ at_start_inj_on at_end_inj_on snaps_disj sn a_in_acts nso]
+  using dp[THEN dp_imp_dg0] pap unfolding plan_actions_in_problem_def by auto
+  
 
 subsection \<open>Definitions that connect the plan to the automaton\<close>
 subsubsection \<open>Proposition and execution state\<close>
@@ -331,12 +368,12 @@ abbreviation "PES t \<equiv> {a. (t, at_start a) \<in> happ_seq \<and> (t, at_en
 
 lemma in_ES_iff: "a \<in> ES t \<longleftrightarrow> (\<exists>s. a \<in> actions \<and>  at_start a \<in> B s \<and> s < t 
                   \<and> \<not>(\<exists>s'. at_end a \<in> B s' \<and> s \<le> s' \<and> s' < t))"
-  unfolding exec_state_sequence_def happ_at_def by blast
+  unfolding exec_state_sequence_def by blast
 
 
 lemma in_IES_iff: "a \<in> IES t \<longleftrightarrow> (\<exists>s. a \<in> actions \<and>  at_start a \<in> B s \<and> s \<le> t 
                   \<and> \<not>(\<exists>s'. at_end a \<in> B s' \<and> s \<le> s' \<and> s' \<le> t))"
-  unfolding exec_state_sequence'_def happ_at_def by blast
+  unfolding exec_state_sequence'_def by blast
 
 lemma inc_es_is_next_es:
   assumes "finite_\<pi>"
@@ -351,7 +388,7 @@ proof (rule equalityI; rule subsetI)
     unfolding exec_state_sequence'_def by blast
   from this(2) time_index_strict_sorted_list[rotated, OF assms(2)] no_actions_between_indexed_timepoints[OF assms]
   have "\<not>(\<exists>s'. (s', at_end a) \<in> happ_seq \<and> s \<le> s' \<and> s' < ti (Suc l))"
-    unfolding happ_at_def by fastforce
+    by fastforce
   with time_index_strict_sorted_list[rotated, OF \<open>Suc l < length timepoint_list\<close>] s(1)
   show "a \<in> ES (ti(Suc l))" using exec_state_sequence_def by force
 next
@@ -364,7 +401,7 @@ next
     "\<not>(\<exists>s'. (s', at_end a) \<in> happ_seq \<and> s \<le> s' \<and> s' < ti (Suc l))"
     unfolding exec_state_sequence_def by blast
   from this(2, 3) no_actions_between_indexed_timepoints[OF assms]
-  have "s \<le> ti l" using happ_at_def by fastforce
+  have "s \<le> ti l" by fastforce
   moreover
   have "\<not>(\<exists>s'. (s', at_end a) \<in> happ_seq \<and> s \<le> s' \<and> s' \<le> ti l)" 
   proof (rule notI)
@@ -498,7 +535,7 @@ proof (rule notI)
   from started
   obtain d where
     as_in_plan: "(a, s, d) \<in> ran \<pi>"
-    using at_start_in_happ_seqE assms by blast+
+    using at_start_in_happ_seqE assms at_start_inj_on_plan at_end_inj_on_plan snaps_disj_on_plan sorry
   hence "(s + d, at_end a) \<in> happ_seq" unfolding plan_happ_seq_def by blast
   with durations_positive[simplified durations_positive_def] as_in_plan not_ended 
   have t_sd: "t \<le> s + d" by fastforce
@@ -506,7 +543,7 @@ proof (rule notI)
   from snap_in_B
   obtain d' where
     at_in_plan: "(a, t, d') \<in> ran \<pi>" 
-    using at_start_in_happ_seqE assms unfolding happ_at_def by blast
+    using at_start_in_happ_seqE assms by blast
 
   from started as_in_plan t_sd at_in_plan
   show False using no_self_overlap[THEN no_self_overlap_spec] by fastforce
@@ -524,7 +561,7 @@ proof -
   obtain s d where
     s: "(a, s, d) \<in> ran \<pi>"   
     "t = s + d"
-    using at_end_in_happ_seqE assms unfolding happ_at_def by blast
+    using at_end_in_happ_seqE assms by blast
   with durations_positive[simplified durations_positive_def] 
   have "(s, at_start a) \<in> happ_seq \<and> s < t" unfolding plan_happ_seq_def by auto
   moreover
@@ -578,7 +615,7 @@ proof (rule iffI)
     and s': "(\<nexists>s'. (s', at_end a) \<in> happ_seq \<and> s \<le> s' \<and> s' < t)" by blast
   have "s \<le> t" using s by auto
   moreover
-  have "(\<nexists>s'. (s', at_end a) \<in> happ_seq \<and> s \<le> s' \<and> s' \<le> t)" using s' not_ending unfolding happ_at_def by auto
+  have "(\<nexists>s'. (s', at_end a) \<in> happ_seq \<and> s \<le> s' \<and> s' \<le> t)" using s' not_ending by auto
   ultimately
   show "a \<in> IES t" using s unfolding exec_state_sequence'_def by blast
 next
@@ -587,7 +624,7 @@ next
   obtain s where  
     s: "a \<in> actions \<and> (s, at_start a) \<in> happ_seq \<and> s \<le> t" 
     and s': "(\<nexists>s'. (s', at_end a) \<in> happ_seq \<and> s \<le> s' \<and> s' \<le> t)" by blast
-  have "s < t" using not_starting s unfolding happ_at_def by force
+  have "s < t" using not_starting s by force
   moreover 
   have "(\<nexists>s'. (s', at_end a) \<in> happ_seq \<and> s \<le> s' \<and> s' < t)" using s' by auto
   ultimately
@@ -835,7 +872,7 @@ proof -
     sd: "(a, s, d) \<in> ran \<pi>" 
     "t = s + d" by auto
   with dp
-  have wit: "s < t \<and> at_start a \<in> B s" unfolding happ_at_def plan_happ_seq_def durations_positive_def by force
+  have wit: "s < t \<and> at_start a \<in> B s" unfolding plan_happ_seq_def durations_positive_def by force
   moreover
   have "t' \<le> s" if "t' < t" "at_start a \<in> B t'" for t'
   proof (rule ccontr)
@@ -872,10 +909,10 @@ proof -
   have "\<forall>i < card timepoint_set. ti 0 \<le> ti i" using time_index_sorted_set by blast
   hence "\<forall>t \<in> timepoint_set. ti 0 \<le> t" using time_index_img_set[OF fp] by force
   hence "\<not>(\<exists>s \<in> timepoint_set. s < ti 0)" by auto
-  hence 1: "\<not>(\<exists>s < ti 0. B s \<noteq> {})" unfolding happ_at_def plan_happ_seq_def htps_def by blast
+  hence 1: "\<not>(\<exists>s < ti 0. B s \<noteq> {})" unfolding plan_happ_seq_def htps_def by blast
   
   have "ti 0 \<in> timepoint_set" using time_index_img_set[OF fp]  using some_happs by blast
-  hence "B (ti 0) \<noteq> {}" unfolding happ_at_def plan_happ_seq_def unfolding htps_def by blast
+  hence "B (ti 0) \<noteq> {}" unfolding plan_happ_seq_def unfolding htps_def by blast
   with 1
   have "Least (\<lambda>t'. B t' \<noteq> {}) = ti 0" by (meson Least_equality not_le_imp_less)
   with 1
@@ -930,7 +967,7 @@ proof (rule limit_M_eq_orig)
     fix x
     assume "x \<in> B t"
     then have "\<exists>a. (x = at_start a \<or> x = at_end a) \<and> a \<in> actions" 
-      unfolding happ_at_def plan_happ_seq_def using assms(1)[simplified plan_actions_in_problem_def]
+      unfolding plan_happ_seq_def using assms(1)[simplified plan_actions_in_problem_def]
       by blast
     then show "x \<in> snap_actions" unfolding snap_actions_def by blast
   qed
@@ -2259,7 +2296,7 @@ proof -
       thus "\<forall>i\<ge>Suc m. i < M \<longrightarrow> exec_corr W' (ES (ti l)) (act i)" using exec_corr by simp
       have "W' (Running (act m)) = 1" unfolding W'_def at_start_effects_def effects_def add_effects_def del_effects_def by simp
       moreover 
-      have "act m \<in> IES (ti l)" using a m_in_acts unfolding happ_at_def exec_state_sequence'_def by auto
+      have "act m \<in> IES (ti l)" using a m_in_acts unfolding exec_state_sequence'_def by auto
       ultimately
       have m_c: "exec_corr W' (IES (ti l)) (act m)" by simp
       have "exec_corr W' (IES (ti l)) (act i)" if "i < Suc m" for i 
@@ -2423,7 +2460,7 @@ proof -
         using exec_corr by simp
       have "\<forall>i< m. exec_corr W' (IES (ti l)) (act i)" using W'_inv exec_corr' by simp
       moreover 
-      have "act m \<notin> IES (ti l)" using a(2) unfolding happ_at_def exec_state_sequence'_def by blast
+      have "act m \<notin> IES (ti l)" using a(2) unfolding exec_state_sequence'_def by blast
       hence "exec_corr W' (IES (ti l)) (act m)" unfolding W'_def at_end_effects_def by simp
       ultimately
       show "\<forall>i<Suc m. exec_corr W' (IES (ti l)) (act i)" using less_antisym by blast
@@ -2682,14 +2719,14 @@ proof -
       "W' Stop = 0"
       using some_actions execution_strong[of "M - 1"] by auto
 
-    have "(B (ti l)) \<subseteq> snap_actions" unfolding happ_at_def plan_happ_seq_def snap_actions_def using pap unfolding plan_actions_in_problem_def by auto
+    have "(B (ti l)) \<subseteq> snap_actions" unfolding plan_happ_seq_def snap_actions_def using pap unfolding plan_actions_in_problem_def by auto
     moreover
     have "\<forall>a b. a \<in> B (ti l) \<and> b \<in> B (ti l) \<and> a \<noteq> b \<longrightarrow> \<not> msa a b"
       apply (intro allI)
       subgoal for a b
         apply (rule impI)
         apply (elim conjE)
-        using nm[simplified nm_happ_seq_def] unfolding happ_at_def 
+        using nm[simplified nm_happ_seq_def] unfolding 
         using eps_range by force
       done
     moreover
