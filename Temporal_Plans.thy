@@ -2451,16 +2451,17 @@ sublocale finite_props_temp_planning_problem init' goal' at_start at_end over_al
 context 
   fixes \<pi>::"('i, 'action, 'time) temp_plan"
   assumes plan_actions_in_problem: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
+      and actions_wf: "\<forall>a \<in> actions. act_consts fluents at_start at_end over_all pre adds dels a \<subseteq> init - fluents"
+      and dom_wf: "goal - fluents \<subseteq> init - fluents" (* This is necessary, so we don't admit invalid plans *)
 begin
   lemma valid_plan_in_finite_props:
-  assumes "goal - fluents \<subseteq> init - fluents"
-      and "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents"
-    shows
     "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
   \<longleftrightarrow> valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>"
   proof (rule const_plan_equiv[simplified fluent_state_def])
     show "const_valid_plan \<pi> fluents at_start at_end adds dels" using plan_actions_in_problem finite_fluent_domain const_valid_plan_def const_valid_domain_def by fast
-  qed (auto simp: assms)
+    show "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents" 
+      using plan_actions_in_problem actions_wf unfolding plan_consts_def by blast
+  qed (auto simp: dom_wf)
 end
 end
 
@@ -2525,44 +2526,44 @@ locale finite_fluent_temp_planning_problem' =
     and fluents:: "'proposition set"
     and actions:: "'action set"
 begin
-abbreviation pre_imp'::"'action snap_action \<Rightarrow> 'proposition set" where
-"pre_imp' \<equiv> \<lambda>x. (pre_imp at_start at_end pre x \<inter> fluents)"
+  abbreviation pre_imp'::"'action snap_action \<Rightarrow> 'proposition set" where
+  "pre_imp' \<equiv> \<lambda>x. (pre_imp at_start at_end pre x \<inter> fluents)"
+  
+  sublocale unique_snaps_temp_planning_problem 
+    init' goal' AtStart AtEnd over_all' lower upper 
+    pre_imp' "add_imp at_start at_end adds" "del_imp at_start at_end dels" \<epsilon> fluents actions 
+    ..
+  
+  sublocale finite_props_temp_planning_problem 
+    init' goal' AtStart AtEnd over_all' lower upper 
+    pre_imp' "add_imp at_start at_end adds" "del_imp at_start at_end dels" \<epsilon> fluents actions
+    apply standard
+    using finite_fluent_domain
+    unfolding add_imp_def del_imp_def fluent_domain_def act_ref_fluents_def pre_imp_def const_valid_domain_def act_mod_fluents_def
+    by auto
 
-
-sublocale unique_snaps_temp_planning_problem 
-  init' goal' AtStart AtEnd over_all' lower upper 
-  pre_imp' "add_imp at_start at_end adds" "del_imp at_start at_end dels" \<epsilon> fluents actions 
-  ..
-
-sublocale finite_props_temp_planning_problem 
-  init' goal' AtStart AtEnd over_all' lower upper 
-  pre_imp' "add_imp at_start at_end adds" "del_imp at_start at_end dels" \<epsilon> fluents actions
-  apply standard
-  using finite_fluent_domain
-  unfolding add_imp_def del_imp_def fluent_domain_def act_ref_fluents_def pre_imp_def const_valid_domain_def act_mod_fluents_def
-  by auto
-context 
-  fixes \<pi>::"('i, 'action, 'time) temp_plan"
-  assumes plan_actions_in_problem: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
-      and "goal - fluents \<subseteq> init - fluents"
-begin
-  lemma valid_plan_in_finite_props:
-  assumes 
-      and "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents"
-    shows
-    "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
-  \<longleftrightarrow> valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>"
-  proof (rule const_plan_equiv[simplified fluent_state_def])
-    show "const_valid_plan \<pi> fluents at_start at_end adds dels" using plan_actions_in_problem finite_fluent_domain const_valid_plan_def const_valid_domain_def by fast
-  qed (auto simp: assms)
-end
-lemma valid_plan_alt:
-  assumes "const_valid_domain fluents at_start at_end adds dels actions"
-  shows "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon>
+  context
+    fixes \<pi>::"('i, 'action, 'time) temp_plan"
+    assumes plan_actions_in_problem: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
+        and actions_wf: "\<forall>a \<in> actions. act_consts fluents at_start at_end over_all pre adds dels a \<subseteq> init - fluents"
+        and dom_wf: "goal - fluents \<subseteq> init - fluents" (* This is necessary, so we don't admit invalid plans *)
+  begin
+  lemma valid_plan_alt:
+    "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon>
+      \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd over_all' lower upper pre_imp' (add_imp at_start at_end adds) (del_imp at_start at_end dels) \<epsilon>"
+  proof -
+    have "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
+    \<longleftrightarrow> valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>"
+      using valid_plan_in_finite_props plan_actions_in_problem actions_wf dom_wf by blast
+    moreover
+    have "valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>
     \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd over_all' lower upper pre_imp' (add_imp at_start at_end adds) (del_imp at_start at_end dels) \<epsilon>"
-proof -
-  using const_plan_equiv
-qed
+      apply (rule valid_plan_equiv_if_snaps_functionally_equiv)
+      unfolding pre_imp_def add_imp_def del_imp_def by simp+
+    ultimately
+    show ?thesis by simp
+  qed
+  end
 end
 
 locale ta_temp_planning = 
