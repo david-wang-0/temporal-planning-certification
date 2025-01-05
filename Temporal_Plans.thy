@@ -2517,8 +2517,7 @@ end
 
 locale finite_fluent_temp_planning_problem' = 
   finite_fluent_temp_planning_problem init goal at_start at_end over_all lower upper pre adds dels \<epsilon> fluents actions
-+ finite_temp_planning_problem' init goal at_start at_end over_all lower upper pre adds dels \<epsilon> fluents actions
-    for init::    "'proposition set"
+  for init::    "'proposition set"
     and goal::    "'proposition set"
     and at_start::"'action  \<Rightarrow> 'snap_action"
     and at_end::  "'action  \<Rightarrow> 'snap_action"
@@ -2534,25 +2533,26 @@ locale finite_fluent_temp_planning_problem' =
 begin
   abbreviation pre_imp'::"'action snap_action \<Rightarrow> 'proposition set" where
   "pre_imp' \<equiv> \<lambda>x. (pre_imp at_start at_end pre x \<inter> fluents)"
+
+  abbreviation add_imp'::"'action snap_action \<Rightarrow> 'proposition set" where
+  "add_imp' \<equiv> add_imp at_start at_end adds"
   
-  sublocale unique_snaps_temp_planning_problem 
-    init' goal' AtStart AtEnd over_all' lower upper 
-    pre_imp' "add_imp at_start at_end adds" "del_imp at_start at_end dels" \<epsilon> fluents actions 
-    ..
+  abbreviation del_imp'::"'action snap_action \<Rightarrow> 'proposition set" where
+  "del_imp' \<equiv> del_imp at_start at_end dels"
   
   sublocale finite_props_temp_planning_problem 
     init' goal' AtStart AtEnd over_all' lower upper 
-    pre_imp' "add_imp at_start at_end adds" "del_imp at_start at_end dels" \<epsilon> fluents actions
+    pre_imp' add_imp' del_imp' \<epsilon> fluents actions
     apply standard
     using finite_fluent_domain
-    unfolding add_imp_def del_imp_def fluent_domain_def act_ref_fluents_def pre_imp_def const_valid_domain_def act_mod_fluents_def
-    by auto
+    unfolding add_imp_def del_imp_def fluent_domain_def act_ref_fluents_def pre_imp_def 
+      const_valid_domain_def act_mod_fluents_def inj_on_def by auto
 
   context
     fixes \<pi>::"('i, 'action, 'time) temp_plan"
     assumes plan_actions_in_problem: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
         and actions_wf: "\<forall>a \<in> actions. act_consts fluents at_start at_end over_all pre adds dels a \<subseteq> init - fluents"
-        and dom_wf: "goal - fluents \<subseteq> init - fluents" (* This is necessary, so we don't admit invalid plans *)
+        and dom_wf: "goal - fluents \<subseteq> init - fluents" 
   begin
   lemma valid_plan_alt:
     "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon>
@@ -2575,11 +2575,9 @@ end
 locale ta_temp_planning = 
   finite_props_temp_planning_problem init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions  +
   unique_snaps_temp_planning_problem init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions 
-    for props::   "('proposition::linorder) set"
-    and actions:: "('action::linorder) set"
-    and init::    "'proposition set"
+    for init::    "('proposition::linorder) set"
     and goal::    "'proposition set"
-    and at_start::"'action  \<Rightarrow> 'snap_action"
+    and at_start::"('action::linorder)  \<Rightarrow> 'snap_action"
     and at_end::  "'action  \<Rightarrow> 'snap_action"
     and over_all::"'action  \<Rightarrow> 'proposition set"
     and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
@@ -2588,6 +2586,8 @@ locale ta_temp_planning =
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
     and \<epsilon>::       "'time"
+    and props::   "'proposition set"
+    and actions:: "'action set"
 begin 
 
 abbreviation snaps::"'action \<Rightarrow> 'snap_action set" where
