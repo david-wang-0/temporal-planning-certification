@@ -895,37 +895,12 @@ begin
       with some_in_ran
       have t'd'_in_ran: "(a, t', d') \<in> ran \<pi>"
         and t'd'_eq_s: "s = t' + d'" by simp+
-        
-      with td_in_ran
-      obtain i j where
-        ij: "\<pi> i = Some (a, t, d)"
-        "\<pi> j = Some (a, t', d')" unfolding ran_def by blast
-      
   
       from td_eq_s t'd'_eq_s
       have td_t'd': "t + d = t' + d'" by simp
-      show "p = pair"
-      proof (cases "i = j")
-        case True
-        then show ?thesis using pair_def ij t'd'_def td_def by simp
-      next
-        case False
-        consider "t \<le> t'" | "t' \<le> t" by fastforce
-        thus ?thesis 
-        proof cases
-          case 1
-          with dp[simplified durations_positive_def] t'd'_in_ran td_t'd'
-          have "t' \<le> t + d" by force
-          with False ij 1
-          show ?thesis using nso[simplified no_self_overlap_def] by force
-        next
-          case 2
-          with dp[simplified durations_positive_def] td_in_ran td_t'd'
-          have "t \<le> t' + d'" by (metis add.commute less_add_same_cancel2 order_less_le)
-          with False ij 2
-          show ?thesis using nso[simplified no_self_overlap_def] by force 
-        qed
-      qed
+      with nso_ends[OF nso dp td_in_ran t'd'_in_ran]
+      have "t = t'" "d = d'" by blast+
+      thus "p = pair" using t'd'_def td_def by simp
     qed
     ultimately
     show ?thesis apply - by (rule ex1I, auto)
@@ -2530,6 +2505,7 @@ locale finite_fluent_temp_planning_problem' =
     and \<epsilon>::       "'time"
     and fluents:: "'proposition set"
     and actions:: "'action set"
+  + assumes finite_fluent_domain: "const_valid_domain fluents at_start at_end adds dels actions"
 begin
   abbreviation pre_imp'::"'action snap_action \<Rightarrow> 'proposition set" where
   "pre_imp' \<equiv> \<lambda>x. (pre_imp at_start at_end pre x \<inter> fluents)"

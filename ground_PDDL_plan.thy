@@ -90,6 +90,51 @@ begin
   | None \<Rightarrow> None)"
 
 
+  abbreviation pre_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+  "pre_imp' \<equiv> \<lambda>x. (pre_imp s_snap e_snap snap_pre x \<inter> props)"
+
+  abbreviation add_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+  "add_imp' \<equiv> add_imp s_snap e_snap snap_adds"
+  
+  abbreviation del_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+  "del_imp' \<equiv> del_imp s_snap e_snap snap_dels"
+
+  abbreviation "init' \<equiv> init \<inter> props"
+  
+  abbreviation "goal' \<equiv> goal \<inter> props"                 
+  
+  abbreviation "over_all' \<equiv> (\<lambda>a. (set o oc) a \<inter> props)"
+
+  sublocale finite_props_temp_planning_problem 
+    init' goal' AtStart AtEnd over_all' lower_imp upper_imp 
+    pre_imp' add_imp' del_imp' 0 props actions
+    apply standard
+    using finite_props some_props some_actions finite_actions act_mod_fluents 
+    unfolding add_imp_def del_imp_def fluent_domain_def act_ref_fluents_def pre_imp_def 
+      const_valid_domain_def act_mod_fluents_def inj_on_def by auto
+
+  context
+    fixes \<pi>::"('i, ('proposition, rat) action, 'time) temp_plan"
+    assumes plan_actions_in_problem: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
+        and actions_wf: "\<forall>a \<in> actions. act_consts props AtStart AtEnd over_all' pre_imp add_imp del_imp' a \<subseteq> init - props"
+        and dom_wf: "goal - props \<subseteq> init - props" 
+  begin
+  lemma valid_plan_alt:
+    "valid_plan \<pi> init goal AtStart AtEnd over_all' pre_imp' add_imp del_imp \<epsilon>
+      \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd over_all' lower_imp upper_imp pre_imp' del_imp' del_imp' \<epsilon>"
+  proof -
+    have "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
+    \<longleftrightarrow> valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>"
+      using valid_plan_in_finite_props plan_actions_in_problem actions_wf dom_wf by blast
+    moreover
+    have "valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>
+    \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd over_all' lower upper pre_imp' (add_imp at_start at_end adds) (del_imp at_start at_end dels) \<epsilon>"
+      apply (rule valid_plan_equiv_if_snaps_functionally_equiv)
+      unfolding pre_imp_def add_imp_def del_imp_def by simp+
+    ultimately
+    show ?thesis by simp
+  qed
+end
 sublocale finite_fluent_temp_planning_problem' init goal s_snap e_snap "set o oc" 
   lower_imp upper_imp snap_pre snap_adds snap_dels 0 props actions 
   apply unfold_locales
@@ -98,10 +143,9 @@ text \<open>The above locale is a superlocale of the locale below. Now, we can o
 
 sublocale ta_temp_planning 
     init' goal' AtStart AtEnd over_all' lower_imp upper_imp
-    pre_imp' add_imp' del_imp' 0 props actions ..
-
-
-
+    pre_imp' add_imp' del_imp' 0 props actions 
+  apply standard
+  unfolding inj_on_def by auto
 end
 
 
