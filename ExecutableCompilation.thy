@@ -23,7 +23,7 @@ datatype RefinedClock =
   | SchedEndSnap   nat
 
 context ta_temp_planning
-begin
+begin              
 
 text \<open>Preventing time from passing in any location other than the main location.\<close>
 fun refined_invs::"(RefinedClock, 'time, RefinedLocation) invassn" where
