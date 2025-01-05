@@ -450,13 +450,13 @@ fun app_snap::"('snap_action \<Rightarrow> 'proposition set) \<Rightarrow> 'acti
 "app_snap f (AtEnd a) = f (at_end a)"
 
 definition pre_imp::"'action snap_action \<Rightarrow> 'proposition set" where
-"pre_imp = app_snap pre"
+"pre_imp x = app_snap pre x"
 
 definition add_imp::"'action snap_action \<Rightarrow> 'proposition set" where
-"add_imp = app_snap adds"
+"add_imp x = app_snap adds x"
 
 definition del_imp::"'action snap_action \<Rightarrow> 'proposition set" where
-"del_imp = app_snap dels"
+"del_imp x = app_snap dels x"
 
 definition mutex_annotated_action where
 "mutex_annotated_action a b = (
@@ -2349,6 +2349,8 @@ lemma valid_plan_equiv_if_snaps_functionally_equiv:
   by simp
 end
 
+
+text \<open>To do: sublocales using namespaces\<close>
 
 locale temp_planning_problem =
   fixes init::    "'proposition set"

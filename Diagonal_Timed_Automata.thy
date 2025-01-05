@@ -7,7 +7,7 @@ chapter \<open>Basic Definitions and Semantics\<close>
 text \<open>
 clock \<open>'c\<close> \<open>\<le>\<close> clock \<open>'c\<close> + time \<open>'t\<close>
 \<close>
-datatype ('c, 't :: time) dconstraint =
+datatype ('c, 't) dconstraint =
   AND "('c, 't) dconstraint" "('c, 't) dconstraint" |
   LT 'c 't |
   LE 'c 't |

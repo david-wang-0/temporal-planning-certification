@@ -71,150 +71,198 @@ definition refined_exec_decoding_to_decision_making::"(alpha, RefinedClock, 'tim
 
 subsubsection \<open>Decision-making\<close>
 
+abbreviation "action_list' \<equiv> sorted_list_of_set actions"
+abbreviation "prop_list' \<equiv> sorted_list_of_set props"
+
+abbreviation "M' \<equiv> length action_list'"
+abbreviation "N' \<equiv> length prop_list'"
+
+text \<open>Treat a list as an array and find the indexes.\<close>
+fun double_filter::"(nat \<Rightarrow> 'x \<Rightarrow> bool) \<Rightarrow> nat \<Rightarrow> 'x list \<Rightarrow> (nat \<times> 'x) list \<Rightarrow> (nat \<times> 'x) list" where
+"double_filter P n [] ns = ns" |
+"double_filter P n (pr#ps) ns = (if P n pr then double_filter P (Suc n) ps ((n,pr)#ns) else double_filter P (Suc n) ps ns)"
+
+abbreviation numbers_gather::"('x \<Rightarrow> bool) \<Rightarrow> nat \<Rightarrow> 'x list \<Rightarrow> nat list" where
+"numbers_gather P n pr \<equiv> map fst (double_filter (\<lambda>x y. P y) n pr [])"
+
+fun numbers_find::"('x \<Rightarrow> bool) \<Rightarrow> nat \<Rightarrow> 'x list  \<Rightarrow> nat" where
+"numbers_find P n [] = 0" |
+"numbers_find P n (pr#ps) = (if P pr then n else numbers_find P (Suc n) ps)"
+
+text \<open>Gets the numbers of every numbered propositional clock\<close>
+definition "refined_prop_numbers S = numbers_gather (\<lambda>p. p \<in> S) 0 prop_list'"
+definition "refined_act_numbers S = numbers_gather (\<lambda>a. a \<in> S) 0 action_list'"
+
 text \<open>Interfering snap-actions\<close>
 
-text \<open>In order to capture \<open>0\<close>-separation, we need to check that that all snap actions numbered
-lower than \<open>n\<close>, do not interfere. For at-end snap-actions we also need to include the at-start 
-snap action with the same numbering.\<close> (* TODO *)
+definition "start_snap_list \<equiv> map at_start action_list'"
+definition "end_snap_list \<equiv> map at_end action_list'"
 
-(* 
-definition n_int_at_start::"nat \<Rightarrow> nat list" where
-"n_int_at_start a = sorted_list_of_set {n. n < M \<and> (msa a (at_start (act n)) \<or> a = at_start (act n))}"
+text \<open>Every start snap action that interferes with the given start snap-action and has been
+treated in the current execution cycle\<close>
+definition "s_snap_s_int sn \<equiv> (
+  let 
+    n = numbers_find (\<lambda>x. x = sn) 0 start_snap_list;
+    P = (\<lambda>n' sn'. n' < n \<and> msa sn sn')
+  in
+    double_filter P 0 start_snap_list []
+)"
 
- *)
-definition refined_start_constraints::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint list" where
-"refined_start_constraints a = map (\<lambda>b. GE (StartDur b) \<epsilon>) (interfering_at_start a)"
-(* 
-definition n_start_constraints::"nat \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
-"n_start_constraints a = map (\<lambda>b. GE (StartDur (act b)) \<epsilon>) (interfering_at_start a)"
- *)
-definition refined_end_constraints::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint list" where
-"refined_end_constraints a = map (\<lambda>b. GE (EndDur b) \<epsilon>) (interfering_at_end a)"
-(* 
-definition n_end_constraints::"nat \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint list" where
-"n_end_constraints a = map (\<lambda>b. AND (GE (StartDur (act b)) \<epsilon>) (GT (SchedStartSnap (act b)) 0)) (interfering_at_start a)"
-                 *)
-definition refined_instant_start_constraints::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint list" where
-"refined_instant_start_constraints a = map (\<lambda>b. DGE (SchedStartSnap b) Delta \<epsilon>) (interfering_at_start a)"
+text \<open>start and end\<close>
+definition "s_snap_e_int sn \<equiv> (
+  let 
+    n = numbers_find (\<lambda>x. x = sn) 0 start_snap_list;
+    P = (\<lambda>n' sn'. n' \<le> n \<and> msa sn sn')
+  in
+    double_filter P 0 end_snap_list []
+)"
 
-definition refined_sep::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint" where
-"refined_sep a \<equiv> AND_ALL (refined_start_constraints a @ refined_end_constraints a)"
-(* 
-definition n_sep_s::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
-"n_sep_s \<equiv> AND_ALL (start_constraints n @ end_constraints a)"
- *)
+text \<open>end and start\<close>
+definition "e_snap_s_int sn \<equiv> (
+  let 
+    n = numbers_find (\<lambda>x. x = sn) 0 end_snap_list;
+    P = (\<lambda>n' sn'. n' \<le> n \<and> msa sn sn')
+  in
+    double_filter P 0 start_snap_list []
+)"
+
+text \<open>end and end\<close>
+definition "e_snap_e_int sn \<equiv> (
+  let 
+    n = numbers_find (\<lambda>x. x = sn) 0 end_snap_list;
+    P = (\<lambda>n' sn'. n' < n \<and> msa sn sn')
+  in
+    double_filter P 0 end_snap_list []
+)"
+
+text \<open>Constraints\<close>
+
+definition refined_start_start_consts::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint list" where
+"refined_start_start_consts a = map (\<lambda>b. GE (StartDur (fst  b)) \<epsilon>) (s_snap_s_int a)"
+
+definition refined_start_end_consts::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint list" where
+"refined_start_end_consts a = map (\<lambda>b. GE (EndDur (fst  b)) \<epsilon>) (s_snap_e_int a)"
+
+definition refined_end_start_consts::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint list" where
+"refined_end_start_consts a = map (\<lambda>b. GE (StartDur (fst  b)) \<epsilon>) (e_snap_s_int a)"
+
+definition refined_end_end_consts::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint list" where
+"refined_end_end_consts a = map (\<lambda>b. GE (EndDur (fst  b)) \<epsilon>) (e_snap_e_int a)"
+text \<open>The constraints are incorrectly implemented, but they should be okay.\<close>
+
+definition refined_start_constraints::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint" where
+"refined_start_constraints a = AND_ALL (refined_start_start_consts a @ refined_start_end_consts a)"
+
+definition refined_end_constraints::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint" where
+"refined_end_constraints a = AND_ALL (refined_end_start_consts a @ refined_end_end_consts a)"
+
 text \<open>The clock constraints for the precondition\<close>
 definition refined_pre_clocks::"'snap_action \<Rightarrow> RefinedClock list" where
-"refined_pre_clocks a \<equiv> map PropClock (prop_numbers a)"
+"refined_pre_clocks a \<equiv> map PropClock (refined_prop_numbers (pre a))"
 
-definition pre_constraint::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
-"pre_constraint a \<equiv> AND_ALL (map (\<lambda>c. EQ c 1) (pre_clocks a))"
+definition refined_pre_constraint::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint" where
+"refined_pre_constraint a \<equiv> AND_ALL (map (\<lambda>c. EQ c 1) (refined_pre_clocks a))"
 
 text \<open>The guard constraints\<close>
-definition guard::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
-"guard a \<equiv> AND (sep a) (pre_constraint a)"
+definition refined_start_guard::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint" where
+"refined_start_guard a \<equiv> AND (refined_start_constraints a) (refined_pre_constraint a)"
 
-(* 
-definition n_guard_s::"nat \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
-"n_guard_s n \<equiv> AND (sep n) (pre_constraint a)"
+definition refined_end_guard::"'snap_action \<Rightarrow> (RefinedClock, 'time) dconstraint" where
+"refined_end_guard a \<equiv> AND (refined_end_constraints a) (refined_pre_constraint a)"
 
-definition n_guard_e::"nat \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
-"n_guard_e n \<equiv> AND (sep n) (pre_constraint a)" *)
+text \<open>Another layer of guard constraints\<close>
+definition refined_guard_at_start::"nat \<Rightarrow> (RefinedClock, 'time::time) dconstraint" where
+"refined_guard_at_start n \<equiv> AND (refined_start_guard (at_start (act n))) (EQ (Running n) 0)"
 
-definition guard_at_start::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
-"guard_at_start a \<equiv> AND (guard (at_start a)) (EQ (Running a) 0)"
-(* 
-definition guard_at_start_snap::"nat \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
-"guard_at_start a \<equiv> AND (guard (at_start a)) (EQ (Running a) 0)" *)
-
-definition clock_duration_bounds::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
-"clock_duration_bounds a \<equiv> 
-  let l = case (lower a) of 
-    Some (lower_bound.GT t) \<Rightarrow> GT (StartDur a) t
-  | Some (lower_bound.GE t) \<Rightarrow> GE (StartDur a) t
+definition refined_clock_duration_bounds::"nat \<Rightarrow> (RefinedClock, 'time::time) dconstraint" where
+"refined_clock_duration_bounds n \<equiv> 
+  let a = act n;
+    l = case (lower a) of 
+    Some (lower_bound.GT t) \<Rightarrow> GT (StartDur n) t
+  | Some (lower_bound.GE t) \<Rightarrow> GE (StartDur n) t
   | None \<Rightarrow> GE Stop 0;
   u = case (upper a) of 
-    Some (upper_bound.LT t) \<Rightarrow> LT (StartDur a) t
-  | Some (upper_bound.LE t) \<Rightarrow> LE (StartDur a) t
+    Some (upper_bound.LT t) \<Rightarrow> LT (StartDur n) t
+  | Some (upper_bound.LE t) \<Rightarrow> LE (StartDur n) t
   | None \<Rightarrow> GE Stop 0
   in (AND l u)"
 
-definition guard_at_end::"'action \<Rightarrow> (('proposition, 'action) clock, 'time::time) dconstraint" where
-"guard_at_end a \<equiv> AND (AND (guard (at_end a)) (EQ (Running a) 1)) (clock_duration_bounds a)"
 
-definition decision_making::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition set" where
-"decision_making \<equiv> 
-  {(Decision (at_start m), guard_at_start m, Unit, [(SchedStartSnap m, 1)], Decision (at_end m)) | m. m < M}
-  \<union> {(Decision (at_start m), GE Stop 0, Unit, [(SchedStartSnap m, 0)], Decision (at_end m)) | m. m < M}
-  \<union> {(Decision (at_end m), guard_at_end m, Unit, [(SchedEndSnap m, 1)], Decision (at_start (act (Suc m)))) | m. m < M}
-  \<union> {(Decision (at_end m), GE Stop 0, Unit, [(SchedEndSnap m, 0)], Decision (at_start (act (Suc m)))) | m. m < M}"
+definition refined_guard_at_end::"nat \<Rightarrow> (RefinedClock, 'time::time) dconstraint" where
+"refined_guard_at_end n \<equiv> AND (AND (refined_end_guard (at_end (act n))) (EQ (Running n) 1)) (refined_clock_duration_bounds n)"
 
-definition dm_to_exec::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition" where
-"dm_to_exec \<equiv> (Decision (at_start M), GE Stop 0, Unit, [], Execution (at_start (act 0)))"
+definition refined_decision_making::"(alpha, RefinedClock, 'time, RefinedLocation) transition set" where
+"refined_decision_making \<equiv> 
+  {(DecAtStart m, refined_guard_at_start m, Unit, [(SchedStartSnap m, 1)], DecAtEnd m) | m. m < M}
+  \<union> {(DecAtStart m, GE Stop 0, Unit, [(SchedStartSnap m, 0)], DecAtEnd m) | m. m < M}
+  \<union> {(DecAtEnd m, refined_guard_at_end m, Unit, [(SchedEndSnap m, 1)], DecAtStart (Suc m)) | m. m < M}
+  \<union> {(DecAtEnd m, GE Stop 0, Unit, [(SchedEndSnap m, 0)], DecAtStart (Suc m)) | m. m < M}"
+
+definition refined_dm_to_exec::"(alpha, RefinedClock, 'time, RefinedLocation) transition" where
+"refined_dm_to_exec \<equiv> (DecAtStart M, GE Stop 0, Unit, [], ExecAtStart 0)"
 
 subsubsection \<open>Execution\<close>
 
-definition add_effects::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) clkassn list" where
-"add_effects s \<equiv> map (\<lambda>p. (PropClock p, 1)) (prop_list (adds s))"
+definition refined_add_effects::"'snap_action \<Rightarrow> (RefinedClock, 'time) clkassn list" where
+"refined_add_effects s \<equiv> map (\<lambda>p. (PropClock p, 1)) (refined_prop_numbers (adds s))"
 
-definition del_effects::"'snap_action  \<Rightarrow> (('proposition, 'action) clock, 'time) clkassn list" where
-"del_effects s \<equiv> map (\<lambda>p. (PropClock p, 0)) (prop_list ((dels s) - (adds s)))"
+definition refined_del_effects::"'snap_action  \<Rightarrow> (RefinedClock, 'time) clkassn list" where
+"refined_del_effects s \<equiv> 
+  let P = (\<lambda>p. p \<in> dels s \<and> p \<notin> adds s)
+  in map (\<lambda>p. (PropClock p, 0)) (numbers_gather P 0 prop_list')"
 
-definition effects::"'snap_action \<Rightarrow> (('proposition, 'action) clock, 'time) clkassn list" where
-"effects s \<equiv> del_effects s @ add_effects s"
+definition refined_effects::"'snap_action \<Rightarrow> (RefinedClock, 'time) clkassn list" where
+"refined_effects s \<equiv> refined_del_effects s @ refined_add_effects s"
 
-definition at_start_effects::"'action \<Rightarrow> (('proposition, 'action) clock, 'time) clkassn list" where
-"at_start_effects a \<equiv> (Running a, 1) # (StartDur a, 0) # effects (at_start a)"
+definition refined_at_start_effects::"nat \<Rightarrow> (RefinedClock, 'time) clkassn list" where
+"refined_at_start_effects n \<equiv> (Running n, 1) # (StartDur n, 0) # refined_effects (at_start (act n))"
 
-definition at_end_effects::"'action \<Rightarrow> (('proposition, 'action) clock, 'time) clkassn list" where
-"at_end_effects a \<equiv> (Running a, 0) # (EndDur a, 0) # effects (at_end a)"
+definition refined_at_end_effects::"nat \<Rightarrow> (RefinedClock, 'time) clkassn list" where
+"refined_at_end_effects n \<equiv> (Running n, 0) # (EndDur n, 0) # refined_effects (at_end (act n))"
 
-definition execution::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition set" where
-"execution \<equiv> 
-  {(Execution (at_start m), EQ (SchedStartSnap m) 1, Unit, at_start_effects m, Execution (at_end m)) | m. m < M}
-  \<union> {(Execution (at_start m), EQ (SchedStartSnap m) 0, Unit, [], Execution (at_end m)) | m. m < M}
-  \<union> {(Execution (at_end m), EQ (SchedEndSnap m) 1, Unit, at_end_effects m, Execution (at_start (act (Suc m)))) | m. m < M}
-  \<union> {(Execution (at_end m), EQ (SchedEndSnap m) 0, Unit, [], Execution (at_start (act (Suc m)))) | m. m < M}"
-(* To do: again, a non-existent action is being accessed
-The benefit here is that there is no need to change the indexing to {0..2M} *)
+definition refined_execution::"(alpha, RefinedClock, 'time, RefinedLocation) transition set" where
+"refined_execution \<equiv> 
+  {(ExecAtStart m, EQ (SchedStartSnap m) 1, Unit, refined_at_start_effects m, ExecAtEnd m) | m. m < M}
+  \<union> {(ExecAtStart m, EQ (SchedStartSnap m) 0, Unit, [], ExecAtEnd m) | m. m < M}
+  \<union> {(ExecAtEnd m, EQ (SchedEndSnap m) 1, Unit, refined_at_end_effects m, ExecAtStart (Suc m)) | m. m < M}
+  \<union> {(ExecAtEnd m, EQ (SchedEndSnap m) 0, Unit, [], ExecAtStart (Suc m)) | m. m < M}"
 
 subsubsection \<open>Over-all conditions\<close>
-abbreviation "action_list \<equiv> map act (sorted_list_of_set {m. m < M})"
+abbreviation "refined_action_number_list \<equiv> numbers_gather (\<lambda>x. True) 0 action_list'"
 
-lemma set_act_list: 
-  shows "set action_list = actions"
-  using act_img_actions by auto
+definition refined_over_all_clocks::"'action \<Rightarrow> RefinedClock list" where
+"refined_over_all_clocks a \<equiv> map PropClock (refined_prop_numbers (over_all a))"
 
-definition over_all_clocks::"'action \<Rightarrow> ('proposition, 'action) clock list" where
-"over_all_clocks a \<equiv> map PropClock (prop_list (over_all a))"
+definition refined_action_over_all::"nat \<Rightarrow> (RefinedClock, 'time) dconstraint" where
+"refined_action_over_all n \<equiv> AND_ALL (map (\<lambda>c. DLE (Running n) c 0) (refined_over_all_clocks (act n)))"
 
-definition action_over_all::"'action \<Rightarrow> (('proposition, 'action) clock, 'time) dconstraint" where
-"action_over_all a \<equiv> AND_ALL (map (\<lambda>c. DLE (Running a) c 0) (over_all_clocks a))"
+definition refined_over_all_conds::"(RefinedClock, 'time) dconstraint" where
+"refined_over_all_conds \<equiv> AND_ALL (map refined_action_over_all refined_action_number_list)"
 
-definition over_all_conds::"(('proposition, 'action) clock, 'time) dconstraint" where
-"over_all_conds \<equiv> AND_ALL (map action_over_all action_list)"
-
-definition exec_to_main::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition" where
-"exec_to_main \<equiv> (Execution (at_start M), over_all_conds, Unit, [(Delta, 0)], Main)"
+definition refined_exec_to_main::"(alpha, RefinedClock, 'time, RefinedLocation) transition" where
+"refined_exec_to_main \<equiv> (ExecAtStart M, refined_over_all_conds, Unit, [(Delta, 0)], Main)"
 
 subsubsection \<open>The goal\<close>
-definition none_running::"(('proposition, 'action) clock, 'time) dconstraint" where
-"none_running \<equiv> AND_ALL (map (\<lambda>a. EQ (Running a) 0) action_list)"
+definition refined_none_running::"(RefinedClock, 'time) dconstraint" where
+"refined_none_running \<equiv> AND_ALL (map (\<lambda>a. EQ (Running a) 0) refined_action_number_list)"
 
-definition goal_satisfied::"(('proposition, 'action) clock, 'time) dconstraint" where
-"goal_satisfied \<equiv> AND_ALL (map (\<lambda>p. EQ (PropClock p) 1) (prop_list goal))"
+abbreviation "refined_goal_props \<equiv> refined_prop_numbers goal"
 
-definition goal_constraint::"(('proposition, 'action) clock, 'time) dconstraint" where
-"goal_constraint \<equiv> AND none_running goal_satisfied"
+definition refined_goal_satisfied::"(RefinedClock, 'time) dconstraint" where
+"refined_goal_satisfied \<equiv> AND_ALL (map (\<lambda>p. EQ (PropClock p) 1) refined_goal_props)"
 
-definition goal_trans::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) transition" where
-"goal_trans \<equiv> (ExecDecoding M, goal_constraint, Unit, [], Goal)"
+definition refined_goal_constraint::"(RefinedClock, 'time) dconstraint" where
+"refined_goal_constraint \<equiv> AND refined_none_running refined_goal_satisfied"
+
+definition refined_goal_trans::"(alpha, RefinedClock, 'time, RefinedLocation) transition" where
+"refined_goal_trans \<equiv> (ExecDecoding M, refined_goal_constraint, Unit, [], Goal)"
 
 subsubsection \<open>The automaton\<close>
-definition prob_automaton::"(alpha, ('proposition, 'action) clock, 'time, ('proposition, 'action, 'snap_action) location) ta" ("\<T>") where
-"prob_automaton \<equiv> ({initial_transition} \<union> {main_to_decoding} \<union> prop_decoding 
-  \<union> {prop_decoding_to_exec_decoding} \<union> exec_decoding \<union> {exec_decoding_to_decision_making}
-  \<union> decision_making \<union> {dm_to_exec} \<union> execution \<union> {exec_to_main} \<union> {goal_trans}, invs)"
+definition refined_prob_automaton::"(alpha, RefinedClock, 'time, RefinedLocation) ta" ("\<T>") where
+"refined_prob_automaton \<equiv> ({refined_initial_transition} \<union> {refined_main_to_decoding} \<union> refined_prop_decoding 
+  \<union> {refined_prop_decoding_to_exec_decoding} \<union> refined_exec_decoding \<union> {refined_exec_decoding_to_decision_making}
+  \<union> refined_decision_making \<union> {refined_dm_to_exec} \<union> refined_execution \<union> {refined_exec_to_main} 
+  \<union> {refined_goal_trans}, refined_invs)"
 end
 
 end

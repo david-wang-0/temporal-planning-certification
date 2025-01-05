@@ -104,7 +104,7 @@ snap action with the same numbering.\<close> (* TODO *)
 
 definition interfering_at_start::"'snap_action \<Rightarrow> nat list" where
 "interfering_at_start a = sorted_list_of_set {n. n < M \<and> (msa a (at_start (act n)) \<or> a = at_start (act n))}"
-(* 
+(*                                                         
 definition n_int_at_start::"nat \<Rightarrow> nat list" where
 "n_int_at_start a = sorted_list_of_set {n. n < M \<and> (msa a (at_start (act n)) \<or> a = at_start (act n))}"
 

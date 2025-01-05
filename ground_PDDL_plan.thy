@@ -1,6 +1,6 @@
 theory ground_PDDL_plan
 imports Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics
-    Compilation                    
+    ExecutableCompilation                    
     Containers.Containers
 begin
 
@@ -32,10 +32,10 @@ datatype ('pr, 't) action = GroundAction
 text \<open>These orderings are necessary for proofs\<close>
 derive (linorder) compare rat 
 
-derive (eq) ceq predicate func atom object formula 
-derive ccompare predicate func atom object formula
+derive (eq) ceq predicate func atom object formula action RefinedLocation dconstraint
+derive ccompare predicate func atom object formula duration_op snap action rat RefinedLocation
 derive (no) cenum atom object formula
-derive (rbt) set_impl func atom object formula
+derive (rbt) set_impl func atom object formula action
 
 derive (rbt) mapping_impl object
 
@@ -101,34 +101,72 @@ begin
 
   abbreviation add_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
   "add_imp' \<equiv> add_imp s_snap e_snap snap_adds"
-  
+
   abbreviation del_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
   "del_imp' \<equiv> del_imp s_snap e_snap snap_dels"
 
+fun pre_imp''::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+  "pre_imp'' (AtStart x) = set (pre (s_snap x)) \<inter> props" |
+  "pre_imp'' (AtEnd x) = set (pre (e_snap x)) \<inter> props"
+
+lemma [simp]: "pre_imp'' = pre_imp'" unfolding pre_imp_def 
+  apply (rule ext)
+  subgoal for x by (cases x; auto)
+  done
+
+
+fun del_imp''::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+  "del_imp'' (AtStart x) = set (dels (s_snap x))" |
+  "del_imp'' (AtEnd x) = set (dels (e_snap x))"
+
+lemma [simp]: "del_imp'' = del_imp'" unfolding del_imp_def 
+  apply (rule ext)
+  subgoal for x by (cases x; auto)
+  done
+
+
+fun add_imp''::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+  "add_imp'' (AtStart x) = set (adds (s_snap x))" |
+  "add_imp'' (AtEnd x) = set (adds (e_snap x))"
+
+lemma [simp]: "add_imp'' = add_imp'" unfolding add_imp_def 
+  apply (rule ext)
+  subgoal for x by (cases x; auto)
+  done
+  
   abbreviation "init' \<equiv> init \<inter> props"
   
   abbreviation "goal' \<equiv> goal \<inter> props"
 
   sublocale finite_props_temp_planning_problem 
     init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp 
-    pre_imp' add_imp' del_imp' 0 props actions
+    pre_imp'' add_imp'' del_imp'' 0 props actions
   proof unfold_locales
-    show "fluent_domain props AtStart AtEnd fluent_over_all pre_imp' add_imp' del_imp' actions"
+    show "fluent_domain props AtStart AtEnd fluent_over_all pre_imp'' add_imp'' del_imp'' actions"
       unfolding fluent_domain_def
       using act_mod_fluents unfolding const_valid_domain_def 
       unfolding act_mod_fluents_def act_ref_fluents_def
-      unfolding pre_imp_def add_imp_def del_imp_def by auto
+      apply -
+      apply (rule ballI)
+      subgoal for a
+        apply (induction a)
+        apply (drule bspec, assumption)
+        subgoal for n s o e d
+          apply (subst (asm) action.sel)+
+          apply (intro conjI)
+            apply (rule Set.Un_least)
+          find_theorems "?a \<union> ?b \<subseteq> ?S"
   qed (auto simp: finite_props' some_props' finite_actions' some_actions')
 
   sublocale unique_snaps_temp_planning_problem
       init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp 
-      pre_imp' add_imp' del_imp' 0 props actions
+      pre_imp'' add_imp'' del_imp'' 0 props actions
     apply unfold_locales
     unfolding inj_on_def by auto
 
   sublocale ta_temp_planning
       init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp 
-      pre_imp' add_imp' del_imp' 0 props actions ..
+      pre_imp'' add_imp'' del_imp'' 0 props actions
 
   context
     fixes \<pi>::"('i, ('proposition, rat) action, rat) temp_plan"
@@ -394,7 +432,24 @@ proof
   qed
 qed
 
+lemma [code]: "pre_imp s_snap e_snap (set o pre) (AtStart x) = set (pre (s_snap x))" 
+  "pre_imp s_snap e_snap (set o pre) (AtEnd x) = set (pre (e_snap x))"
+  unfolding pre_imp_def by simp+
 
+find_consts name: "pre_imp"
+
+
+value "length (sorted_list_of_set {me113, me112})"
+
+
+value "nth (sorted_list_of_set {me113, me112}) 0"
+
+derive compare dconstraint RefinedClock
+derive (compare) ccompare dconstraint RefinedClock
+derive ceq alpha 
+derive ccompare alpha
+derive (eq) ceq RefinedClock rat
+value "refined_prob_automaton"
 
 ML \<open>\<close>
       
