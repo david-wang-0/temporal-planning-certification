@@ -2349,6 +2349,7 @@ lemma valid_plan_equiv_if_snaps_functionally_equiv:
   by simp
 end
 
+
 locale temp_planning_problem =
   fixes init::    "'proposition set"
     and goal::    "'proposition set"

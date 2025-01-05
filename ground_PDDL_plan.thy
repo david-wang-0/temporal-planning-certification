@@ -58,40 +58,46 @@ possible to derive the formulation of planning used for the compilation to timed
 The the representations of the state is not necessarily finite, because the initial and final, and 
 thus all states can be infinite in size.\<close>
 
-abbreviation "snap_pre \<equiv> set o pre"
+
+text \<open>To sets\<close>
+abbreviation "snap_over_all \<equiv> set o oc"
+abbreviation "snap_pres \<equiv> set o pre"
 abbreviation "snap_adds \<equiv> set o adds"
 abbreviation "snap_dels \<equiv> set o dels"
 
+
+definition lower_imp::"('proposition, rat) action \<rightharpoonup> rat lower_bound" where
+"lower_imp a \<equiv> (case d_const a of 
+  (Some (duration_op.EQ, n)) \<Rightarrow> Some (lower_bound.GE n)
+| (Some (duration_op.GEQ, n)) \<Rightarrow> Some (lower_bound.GE n)
+| (Some (duration_op.LEQ, n)) \<Rightarrow> None
+| None \<Rightarrow> None)"
+
+definition upper_imp::"('proposition, rat) action \<rightharpoonup> rat upper_bound" where
+"upper_imp a \<equiv> (case d_const a of 
+  (Some (duration_op.EQ, n)) \<Rightarrow> Some (upper_bound.LE n)
+| (Some (duration_op.GEQ, n)) \<Rightarrow> None
+| (Some (duration_op.LEQ, n)) \<Rightarrow> Some (upper_bound.LE n)
+| None \<Rightarrow> None)"
 
 locale ground_PDDL_planning =
   fixes props::   "('proposition::linorder) set"
     and actions:: "('proposition, rat) action set"
     and init::    "'proposition set"
     and goal::    "'proposition set"
-  assumes some_props:       "card props > 0"
-      and some_actions:     "card actions > 0"
-      and finite_props:     "finite props"
-      and finite_actions:   "finite actions"
+  assumes some_props':       "card props > 0" (* TODO: fix locale hierarchy and naming collisions *)
+      and some_actions':     "card actions > 0"
+      and finite_props':     "finite props"
+      and finite_actions':   "finite actions"
       and act_mod_fluents:  "const_valid_domain props s_snap e_snap snap_adds snap_dels actions"
 begin
+  text \<open>Removing constants\<close>
+  abbreviation "fluent_over_all x \<equiv> snap_over_all x \<inter> props"
+  abbreviation "fluent_pres x \<equiv> snap_pres x \<inter> props"
 
-  definition lower_imp::"('proposition, rat) action \<rightharpoonup> rat lower_bound" where
-  "lower_imp a \<equiv> (case d_const a of 
-    (Some (duration_op.EQ, n)) \<Rightarrow> Some (lower_bound.GE n)
-  | (Some (duration_op.GEQ, n)) \<Rightarrow> Some (lower_bound.GE n)
-  | (Some (duration_op.LEQ, n)) \<Rightarrow> None
-  | None \<Rightarrow> None)"
-  
-  definition upper_imp::"('proposition, rat) action \<rightharpoonup> rat upper_bound" where
-  "upper_imp a \<equiv> (case d_const a of 
-    (Some (duration_op.EQ, n)) \<Rightarrow> Some (upper_bound.LE n)
-  | (Some (duration_op.GEQ, n)) \<Rightarrow> None
-  | (Some (duration_op.LEQ, n)) \<Rightarrow> Some (upper_bound.LE n)
-  | None \<Rightarrow> None)"
-
-
+  text \<open>Replacing snap actions with annotated actions\<close>
   abbreviation pre_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
-  "pre_imp' \<equiv> \<lambda>x. (pre_imp s_snap e_snap snap_pre x \<inter> props)"
+  "pre_imp' \<equiv> \<lambda>x. (pre_imp s_snap e_snap snap_pres x \<inter> props)"
 
   abbreviation add_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
   "add_imp' \<equiv> add_imp s_snap e_snap snap_adds"
@@ -101,51 +107,62 @@ begin
 
   abbreviation "init' \<equiv> init \<inter> props"
   
-  abbreviation "goal' \<equiv> goal \<inter> props"                 
-  
-  abbreviation "over_all' \<equiv> (\<lambda>a. (set o oc) a \<inter> props)"
+  abbreviation "goal' \<equiv> goal \<inter> props"
 
   sublocale finite_props_temp_planning_problem 
-    init' goal' AtStart AtEnd over_all' lower_imp upper_imp 
+    init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp 
     pre_imp' add_imp' del_imp' 0 props actions
-    apply standard
-    using finite_props some_props some_actions finite_actions act_mod_fluents 
-    unfolding add_imp_def del_imp_def fluent_domain_def act_ref_fluents_def pre_imp_def 
-      const_valid_domain_def act_mod_fluents_def inj_on_def by auto
+  proof unfold_locales
+    show "fluent_domain props AtStart AtEnd fluent_over_all pre_imp' add_imp' del_imp' actions"
+      unfolding fluent_domain_def
+      using act_mod_fluents unfolding const_valid_domain_def 
+      unfolding act_mod_fluents_def act_ref_fluents_def
+      unfolding pre_imp_def add_imp_def del_imp_def by auto
+  qed (auto simp: finite_props' some_props' finite_actions' some_actions')
+
+  sublocale unique_snaps_temp_planning_problem
+      init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp 
+      pre_imp' add_imp' del_imp' 0 props actions
+    apply unfold_locales
+    unfolding inj_on_def by auto
+
+  sublocale ta_temp_planning
+      init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp 
+      pre_imp' add_imp' del_imp' 0 props actions ..
 
   context
-    fixes \<pi>::"('i, ('proposition, rat) action, 'time) temp_plan"
+    fixes \<pi>::"('i, ('proposition, rat) action, rat) temp_plan"
     assumes plan_actions_in_problem: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
-        and actions_wf: "\<forall>a \<in> actions. act_consts props AtStart AtEnd over_all' pre_imp add_imp del_imp' a \<subseteq> init - props"
-        and dom_wf: "goal - props \<subseteq> init - props" 
+        and actions_wf: "\<forall>a \<in> actions. act_consts props s_snap e_snap snap_over_all snap_pres snap_adds snap_dels a \<subseteq> init - props"
+        and dom_wf: "goal - props \<subseteq> init - props"
   begin
-  lemma valid_plan_alt:
-    "valid_plan \<pi> init goal AtStart AtEnd over_all' pre_imp' add_imp del_imp \<epsilon>
-      \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd over_all' lower_imp upper_imp pre_imp' del_imp' del_imp' \<epsilon>"
-  proof -
-    have "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
-    \<longleftrightarrow> valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>"
-      using valid_plan_in_finite_props plan_actions_in_problem actions_wf dom_wf by blast
-    moreover
-    have "valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>
-    \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd over_all' lower upper pre_imp' (add_imp at_start at_end adds) (del_imp at_start at_end dels) \<epsilon>"
-      apply (rule valid_plan_equiv_if_snaps_functionally_equiv)
-      unfolding pre_imp_def add_imp_def del_imp_def by simp+
-    ultimately
-    show ?thesis by simp
-  qed
-end
-sublocale finite_fluent_temp_planning_problem' init goal s_snap e_snap "set o oc" 
-  lower_imp upper_imp snap_pre snap_adds snap_dels 0 props actions 
-  apply unfold_locales
-  using some_props some_actions finite_props finite_actions act_mod_fluents by auto
-text \<open>The above locale is a superlocale of the locale below. Now, we can obtain the timed automaton\<close>
-
-sublocale ta_temp_planning 
-    init' goal' AtStart AtEnd over_all' lower_imp upper_imp
-    pre_imp' add_imp' del_imp' 0 props actions 
-  apply standard
-  unfolding inj_on_def by auto
+    lemma valid_plan_alt:
+      "valid_plan \<pi> init goal s_snap e_snap snap_over_all lower_imp upper_imp snap_pres snap_adds snap_dels \<epsilon>
+        \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp pre_imp' del_imp' del_imp' \<epsilon>"
+    proof -
+      have 1: "valid_plan \<pi> init goal s_snap e_snap snap_over_all lower_imp upper_imp snap_pres snap_adds snap_dels \<epsilon> 
+      \<longleftrightarrow> valid_plan \<pi> init' goal' s_snap e_snap fluent_over_all lower_imp upper_imp fluent_pres snap_adds snap_dels \<epsilon>"
+      proof (subst const_plan_equiv[where over_all' = fluent_over_all and pre' = fluent_pres]) 
+        show "const_valid_plan \<pi> props s_snap e_snap snap_adds snap_dels" 
+          using act_mod_fluents plan_actions_in_problem unfolding const_valid_plan_def const_valid_domain_def by auto
+        show "fluent_over_all = fluent_over_all" by simp
+        show "fluent_pres = fluent_pres" by simp
+        show "goal - props \<subseteq> init - props" using dom_wf by simp
+        show "plan_consts \<pi> props s_snap e_snap snap_over_all snap_pres snap_adds snap_dels \<subseteq> init - props" 
+          using plan_actions_in_problem actions_wf unfolding plan_consts_def by blast
+        show "valid_plan \<pi> (fluent_state props init) (fluent_state props goal) s_snap e_snap fluent_over_all lower_imp upper_imp fluent_pres snap_adds snap_dels \<epsilon> =
+        valid_plan \<pi> init' goal' s_snap e_snap fluent_over_all lower_imp upper_imp fluent_pres snap_adds snap_dels \<epsilon>" unfolding fluent_state_def by simp
+      qed 
+      have 2: "valid_plan \<pi> init' goal' s_snap e_snap fluent_over_all lower_imp upper_imp fluent_pres snap_adds snap_dels \<epsilon>
+      \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp pre_imp' add_imp' del_imp' \<epsilon>"
+        apply (rule valid_plan_equiv_if_snaps_functionally_equiv)
+        unfolding pre_imp_def add_imp_def del_imp_def by simp+
+      
+      show "valid_plan \<pi> init goal s_snap e_snap snap_over_all lower_imp upper_imp snap_pres snap_adds snap_dels \<epsilon>
+        \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp pre_imp' del_imp' del_imp' \<epsilon>" apply (subst 1)
+        apply (subst 2) sorry
+    qed
+  end
 end
 
 
@@ -376,6 +393,7 @@ proof
       by (cases rule: ac; simp add: preds_def)
   qed
 qed
+
 
 
 ML \<open>\<close>
