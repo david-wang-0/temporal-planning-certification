@@ -686,14 +686,18 @@ lemma g_ref_ge_code [code]: "g_ref_ge n =
   AND_ALL_imp ((EQ (Running n) 1)#g_ref_cdb n#(g_ref_eg (AtEnd (g_ref_act n))))"
   using gPp.ta.refined_guard_at_end_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_eg_def g_ref_ge_def refined_AND_ALL_imp_lol by force
 
+lemma set_map_distrib: "set a \<union> set b = set (a @ b)"
+  by auto
 
 lemma g_ref_dm_code [code]: "g_ref_dm = 
   set ((map (\<lambda>m. (DecAtStart m, g_ref_gs m, Unit, [(SchedStartSnap m, 1)], DecAtEnd m)) g_ref_anl)
   @ (map (\<lambda>m. (DecAtStart m, GE Stop 0, Unit, [(SchedStartSnap m, 0)], DecAtEnd m)) g_ref_anl)
   @ (map (\<lambda>m. (DecAtEnd m, g_ref_ge m, Unit, [(SchedEndSnap m, 1)], DecAtStart (Suc m))) g_ref_anl)
   @ (map (\<lambda>m. (DecAtEnd m, GE Stop 0, Unit, [(SchedEndSnap m, 0)], DecAtStart (Suc m))) g_ref_anl))"
-  using gPp.ta.refined_decision_making_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_dm_def g_ref_ge_def g_ref_gs_def by force
-
+  apply (subst set_map_distrib[symmetric])+
+  apply (subst gPp.ta.act_number_set_alt)+
+  by (metis (no_types, lifting) Un_assoc gPp.ta.refined_decision_making_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_dm_def g_ref_ge_def g_ref_gs_def image_cong)
+  
 lemma g_ref_ae_code [code]: "g_ref_ae sn = map (\<lambda>p. (PropClock p, 1)) (g_ref_pn (g_add_imp sn))"
   using gPp.ta.refined_add_effects_def g_add_imp_def g_ref_ae_def by force
 
@@ -711,12 +715,16 @@ lemma g_ref_ase_code [code]: "g_ref_ase n = (Running n, 1) # (StartDur n, 0) # g
 lemma g_ref_aee_code [code]: "g_ref_aee n = (Running n, 0) # (EndDur n, 0) # g_ref_eff (AtEnd (g_ref_act n))"
   using gPp.ta.act_def gPp.ta.action_list'_def gPp.ta.refined_act_def gPp.ta.refined_at_end_effects_def g_add_imp_def g_del_imp_def g_ref_aee_def g_ref_eff_def by force
 
+
 lemma g_ref_exec_code [code]: "g_ref_exec =
 set ((map (\<lambda>m. (ExecAtStart m, EQ (SchedStartSnap m) 1, Unit, g_ref_ase m, ExecAtEnd m)) g_ref_anl)
   @ (map (\<lambda>m. (ExecAtStart m, EQ (SchedStartSnap m) 0, Unit, [], ExecAtEnd m)) g_ref_anl)
   @ (map (\<lambda>m. (ExecAtEnd m, EQ (SchedEndSnap m) 1, Unit, g_ref_aee m, ExecAtStart (Suc m))) g_ref_anl)
   @ (map (\<lambda>m. (ExecAtEnd m, EQ (SchedEndSnap m) 0, Unit, [], ExecAtStart (Suc m))) g_ref_anl))"
-  using gPp.ta.refined_execution_def g_add_imp_def g_del_imp_def g_ref_aee_def g_ref_ase_def g_ref_exec_def by force
+  apply (subst set_map_distrib[symmetric])+
+  apply (subst gPp.ta.act_number_set_alt)+
+  by (metis (no_types, lifting) Un_assoc gPp.ta.refined_execution_def g_add_imp_def g_del_imp_def g_ref_aee_def g_ref_ase_def g_ref_exec_def image_cong)
+  
 
 lemma autom [code]: "autom = ({g_ref_init_t} \<union> {g_ref_m_d_t} \<union> g_ref_pd 
   \<union> {g_ref_pd_ed} \<union> g_ref_ed \<union> {g_ref_ed_dm}
@@ -724,8 +732,7 @@ lemma autom [code]: "autom = ({g_ref_init_t} \<union> {g_ref_m_d_t} \<union> g_r
   \<union> {g_ref_goal_trans}, g_ref_inv)"
   using autom_def gPp.ta.refined_prob_automaton_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_dm_def g_ref_exec_def by argo
 
-lemma "set (map f g_ref_anl) = f ` g_ref_aa"
-  sorry
+
 
 value "g_ref_init_t"
 value "g_ref_m_d_t"

@@ -275,19 +275,19 @@ definition refined_prob_automaton::"(alpha, RefinedClock, 'time, RefinedLocation
 
 
 
-lemma set_map: "set (map f refined_action_number_list) = f ` refined_all_acts"
-  unfolding refined_action_number_list_def refined_all_acts_def M'_def 
+lemma act_number_set_alt: "set (map f refined_action_number_list) 
+  = f ` refined_all_acts"
 proof -
   { fix x
     have "(i \<in> collect_nats n {}) = (i < n)" for i n by  (induction n) auto
-    hence "x \<in> refined_all_acts \<longleftrightarrow> x < M'"  unfolding M'_def refined_all_acts_def by sipm
+    hence "x \<in> refined_all_acts \<longleftrightarrow> x < M'"  unfolding M'_def refined_all_acts_def sorry
   }
   { fix x
     have "i \<in> set (numbers_gather (\<lambda>y. True) 0 xs) \<longleftrightarrow> i < length xs" for i xs
       apply (induction xs)
       apply simp sorry
     have "x \<in> set (numbers_gather (\<lambda>y. True) 0 action_list') \<longleftrightarrow> x < M'"
-    
+      sorry
     }
     show ?thesis sorry
 qed
