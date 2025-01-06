@@ -96,77 +96,86 @@ begin
   abbreviation "fluent_pres x \<equiv> snap_pres x \<inter> props"
 
   text \<open>Replacing snap actions with annotated actions\<close>
-  abbreviation pre_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+  definition pre_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
   "pre_imp' \<equiv> \<lambda>x. (pre_imp s_snap e_snap snap_pres x \<inter> props)"
 
-  abbreviation add_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+  definition add_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
   "add_imp' \<equiv> add_imp s_snap e_snap snap_adds"
 
-  abbreviation del_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+  definition del_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
   "del_imp' \<equiv> del_imp s_snap e_snap snap_dels"
 
-fun pre_imp''::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
-  "pre_imp'' (AtStart x) = set (pre (s_snap x)) \<inter> props" |
-  "pre_imp'' (AtEnd x) = set (pre (e_snap x)) \<inter> props"
-
-lemma [simp]: "pre_imp'' = pre_imp'" unfolding pre_imp_def 
-  apply (rule ext)
-  subgoal for x by (cases x; auto)
-  done
+  fun pre_imp''::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+    "pre_imp'' (AtStart x) = set (pre (s_snap x)) \<inter> props" |
+    "pre_imp'' (AtEnd x) = set (pre (e_snap x)) \<inter> props"
 
 
-fun del_imp''::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
-  "del_imp'' (AtStart x) = set (dels (s_snap x))" |
-  "del_imp'' (AtEnd x) = set (dels (e_snap x))"
-
-lemma [simp]: "del_imp'' = del_imp'" unfolding del_imp_def 
-  apply (rule ext)
-  subgoal for x by (cases x; auto)
-  done
+  lemma pre_imp''_eq': "pre_imp'' = pre_imp'" unfolding pre_imp_def 
+    apply (rule ext)
+    subgoal for x by (cases x; auto simp: pre_imp'_def pre_imp_def)
+    done
 
 
-fun add_imp''::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
-  "add_imp'' (AtStart x) = set (adds (s_snap x))" |
-  "add_imp'' (AtEnd x) = set (adds (e_snap x))"
-
-lemma [simp]: "add_imp'' = add_imp'" unfolding add_imp_def 
-  apply (rule ext)
-  subgoal for x by (cases x; auto)
-  done
+lemma [code]: "pre_imp' (AtStart x) = set (pre (s_snap x)) \<inter> props"
+    "pre_imp' (AtEnd x) = set (pre (e_snap x)) \<inter> props" 
+  using pre_imp''_eq'[symmetric] by auto
   
+  fun del_imp''::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+    "del_imp'' (AtStart x) = set (dels (s_snap x))" |
+    "del_imp'' (AtEnd x) = set (dels (e_snap x))"
+
+  lemma del_imp''_eq': "del_imp'' = del_imp'" unfolding del_imp_def 
+    apply (rule ext)
+    subgoal for x by (cases x; auto simp: del_imp'_def del_imp_def)
+    done
+  
+  fun add_imp''::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
+    "add_imp'' (AtStart x) = set (adds (s_snap x))" |
+    "add_imp'' (AtEnd x) = set (adds (e_snap x))"
+  
+  lemma add_imp''_eq': "add_imp'' = add_imp'" unfolding add_imp_def 
+    apply (rule ext)
+    subgoal for x by (cases x; auto simp: add_imp'_def add_imp_def)
+    done
+    
   abbreviation "init' \<equiv> init \<inter> props"
   
   abbreviation "goal' \<equiv> goal \<inter> props"
 
   sublocale finite_props_temp_planning_problem 
     init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp 
-    pre_imp'' add_imp'' del_imp'' 0 props actions
+    pre_imp' add_imp' del_imp' 0 props actions
   proof unfold_locales
-    show "fluent_domain props AtStart AtEnd fluent_over_all pre_imp'' add_imp'' del_imp'' actions"
-      unfolding fluent_domain_def
-      using act_mod_fluents unfolding const_valid_domain_def 
-      unfolding act_mod_fluents_def act_ref_fluents_def
-      apply -
-      apply (rule ballI)
-      subgoal for a
-        apply (induction a)
-        apply (drule bspec, assumption)
-        subgoal for n s o e d
-          apply (subst (asm) action.sel)+
-          apply (intro conjI)
-            apply (rule Set.Un_least)
-          find_theorems "?a \<union> ?b \<subseteq> ?S"
+    show "fluent_domain props AtStart AtEnd fluent_over_all pre_imp' add_imp' del_imp' actions"
+    proof(subst fluent_domain_def, rule ballI)
+      fix x
+      assume "x \<in> actions"
+      hence "snap_mod_fluents props snap_adds snap_dels (s_snap x)" 
+            "snap_mod_fluents props snap_adds snap_dels (e_snap x)" 
+        using act_mod_fluents unfolding const_valid_domain_def unfolding act_mod_fluents_def by blast+
+      hence "snap_mod_fluents props add_imp' del_imp' (AtStart x)" 
+            "snap_mod_fluents props add_imp' del_imp' (AtEnd x)" 
+        unfolding add_imp_def del_imp_def add_imp'_def del_imp'_def by simp+
+      hence "snap_ref_fluents props pre_imp' add_imp' del_imp' (AtStart x)" 
+            "snap_ref_fluents props pre_imp' add_imp' del_imp' (AtEnd x)" 
+        unfolding pre_imp'_def by simp+
+      thus "act_ref_fluents props AtStart AtEnd fluent_over_all pre_imp' add_imp' del_imp' x"
+        unfolding act_ref_fluents_def by blast
+    qed
   qed (auto simp: finite_props' some_props' finite_actions' some_actions')
 
   sublocale unique_snaps_temp_planning_problem
       init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp 
-      pre_imp'' add_imp'' del_imp'' 0 props actions
+      pre_imp' add_imp' del_imp' 0 props actions
     apply unfold_locales
     unfolding inj_on_def by auto
 
-  sublocale ta_temp_planning
-      init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp 
-      pre_imp'' add_imp'' del_imp'' 0 props actions
+  sublocale ta: ta_temp_planning
+        init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp 
+        pre_imp' add_imp' del_imp' 0 props actions
+      by standard
+
+    find_consts name: "refined"
 
   context
     fixes \<pi>::"('i, ('proposition, rat) action, rat) temp_plan"
@@ -176,7 +185,7 @@ lemma [simp]: "add_imp'' = add_imp'" unfolding add_imp_def
   begin
     lemma valid_plan_alt:
       "valid_plan \<pi> init goal s_snap e_snap snap_over_all lower_imp upper_imp snap_pres snap_adds snap_dels \<epsilon>
-        \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp pre_imp' del_imp' del_imp' \<epsilon>"
+        \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp pre_imp' add_imp' del_imp' \<epsilon>"
     proof -
       have 1: "valid_plan \<pi> init goal s_snap e_snap snap_over_all lower_imp upper_imp snap_pres snap_adds snap_dels \<epsilon> 
       \<longleftrightarrow> valid_plan \<pi> init' goal' s_snap e_snap fluent_over_all lower_imp upper_imp fluent_pres snap_adds snap_dels \<epsilon>"
@@ -194,11 +203,11 @@ lemma [simp]: "add_imp'' = add_imp'" unfolding add_imp_def
       have 2: "valid_plan \<pi> init' goal' s_snap e_snap fluent_over_all lower_imp upper_imp fluent_pres snap_adds snap_dels \<epsilon>
       \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp pre_imp' add_imp' del_imp' \<epsilon>"
         apply (rule valid_plan_equiv_if_snaps_functionally_equiv)
-        unfolding pre_imp_def add_imp_def del_imp_def by simp+
+        unfolding pre_imp_def add_imp_def del_imp_def pre_imp'_def add_imp'_def del_imp'_def by simp+
       
       show "valid_plan \<pi> init goal s_snap e_snap snap_over_all lower_imp upper_imp snap_pres snap_adds snap_dels \<epsilon>
-        \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp pre_imp' del_imp' del_imp' \<epsilon>" apply (subst 1)
-        apply (subst 2) sorry
+        \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd fluent_over_all lower_imp upper_imp pre_imp' add_imp' del_imp' \<epsilon>" apply (subst 1)
+        apply (subst 2) by simp
     qed
   end
 end
@@ -399,8 +408,65 @@ definition init::"object atom set" where
 definition goal::"object atom set" where
 "goal \<equiv> {predAtm person_on_floor [floor3, person1]}"
 
-
-global_interpretation ground_PDDL_planning_with_equality preds actions init goal
+global_interpretation gPp: ground_PDDL_planning_with_equality preds actions init goal
+  defines g_pre_imp = gPp.pre_imp'
+      and g_add_imp = gPp.add_imp'
+      and g_del_imp = gPp.del_imp'
+      and g_ref_inv = gPp.ta.refined_invs
+      and g_ref_act_list = gPp.ta.action_list'
+      and g_ref_prop_list = gPp.ta.prop_list'
+      and g_ref_M = gPp.ta.M'
+      and g_ref_N = gPp.ta.N'
+      and g_ref_pn = gPp.ta.refined_prop_numbers
+      and g_ref_an = gPp.ta.refined_act_numbers
+      and g_ref_ap = gPp.ta.refined_all_props
+      and g_ref_aa = gPp.ta.refined_all_acts
+      and g_ref_act = gPp.ta.refined_act
+      and g_ref_init = gPp.ta.refined_init_asmt
+      and g_ref_init_t = gPp.ta.refined_initial_transition
+      and g_ref_m_d_t = gPp.ta.refined_main_to_decoding
+      and g_ref_pd = gPp.ta.refined_prop_decoding
+      and g_ref_pd_ed = gPp.ta.refined_prop_decoding_to_exec_decoding
+      and g_ref_ed = gPp.ta.refined_exec_decoding
+      and g_ref_ed_dm = gPp.ta.refined_exec_decoding_to_decision_making
+      and g_ref_ssl = gPp.ta.start_snap_list
+      and g_ref_esl = gPp.ta.end_snap_list
+      and g_ref_ssi = gPp.ta.s_snap_s_int
+      and g_ref_sei = gPp.ta.s_snap_e_int
+      and g_ref_esi = gPp.ta.e_snap_s_int
+      and g_ref_eei = gPp.ta.e_snap_e_int
+      and g_ref_ssc = gPp.ta.refined_start_start_consts
+      and g_ref_sec = gPp.ta.refined_start_end_consts
+      and g_ref_esc = gPp.ta.refined_end_start_consts
+      and g_ref_eec = gPp.ta.refined_end_end_consts
+      and g_ref_sc = gPp.ta.refined_start_constraints
+      and g_ref_ec = gPp.ta.refined_end_constraints
+      and g_ref_pre_clocks = gPp.ta.refined_pre_clocks
+      and g_ref_pre_const = gPp.ta.refined_pre_constraints
+      and g_ref_sg = gPp.ta.refined_start_guard
+      and g_ref_eg = gPp.ta.refined_end_guard
+      and g_ref_gs = gPp.ta.refined_guard_at_start
+      and g_ref_cdb = gPp.ta.refined_clock_duration_bounds
+      and g_ref_ge = gPp.ta.refined_guard_at_end
+      and g_ref_dm = gPp.ta.refined_decision_making
+      and g_ref_dm_ex = gPp.ta.refined_dm_to_exec
+      and g_ref_ae = gPp.ta.refined_add_effects
+      and g_ref_de = gPp.ta.refined_del_effects
+      and g_ref_eff = gPp.ta.refined_effects
+      and g_ref_ase = gPp.ta.refined_at_start_effects
+      and g_ref_aee = gPp.ta.refined_at_end_effects
+      and g_ref_exec = gPp.ta.refined_execution
+      and g_ref_anl = gPp.ta.refined_action_number_list
+      and g_ref_oaclocks = gPp.ta.refined_over_all_clocks
+      and g_ref_actoa = gPp.ta.refined_action_over_all
+      and g_ref_oaconds = gPp.ta.refined_over_all_conds
+      and g_ref_exm = gPp.ta.refined_exec_to_main
+      and g_ref_nr = gPp.ta.refined_none_running
+      and g_ref_gp = gPp.ta.refined_goal_props
+      and g_ref_goal_sat = gPp.ta.refined_goal_satisfied
+      and g_ref_goal_const = gPp.ta.refined_goal_constraint
+      and g_ref_goal_trans = gPp.ta.refined_goal_trans
+      and autom = gPp.ta.refined_prob_automaton
 proof
   show "finite preds" unfolding preds_def by blast
   moreover 
@@ -432,9 +498,6 @@ proof
   qed
 qed
 
-lemma [code]: "pre_imp s_snap e_snap (set o pre) (AtStart x) = set (pre (s_snap x))" 
-  "pre_imp s_snap e_snap (set o pre) (AtEnd x) = set (pre (e_snap x))"
-  unfolding pre_imp_def by simp+
 
 find_consts name: "pre_imp"
 
@@ -444,13 +507,234 @@ value "length (sorted_list_of_set {me113, me112})"
 
 value "nth (sorted_list_of_set {me113, me112}) 0"
 
+find_consts name: "ta_temp_planning*pre"
+
+find_theorems name: "ground_PDDL_planning"
+
 derive compare dconstraint RefinedClock
 derive (compare) ccompare dconstraint RefinedClock
 derive ceq alpha 
 derive ccompare alpha
 derive (eq) ceq RefinedClock rat
-value "refined_prob_automaton"
+derive (rbt) set_impl RefinedClock RefinedLocation dconstraint alpha
 
-ML \<open>\<close>
-      
+
+find_theorems name: "refined_prob_automaton"
+
+term add_imp 
+
+
+find_theorems "ground_PDDL_planning preds"
+
+lemmas [code] = add_imp_def del_imp_def pre_imp_def gPp.ta.refined_invs.simps
+lemmas [code] = ground_PDDL_planning.pre_imp'_def[OF gPp.ground_PDDL_planning_axioms]
+
+lemma g_pre_imp_code [code]: "g_pre_imp (AtStart x) = set (pre (s_snap x)) \<inter> preds" 
+  "g_pre_imp (AtEnd x) = set (pre (e_snap x)) \<inter> preds"
+  unfolding pre_imp_def gPp.pre_imp'_def by simp+
+
+lemma g_add_imp_code [code]: "g_add_imp (AtStart x) = set (adds (s_snap x))" 
+  "g_add_imp (AtEnd x) = set (adds (e_snap x))" 
+  using gPp.add_imp''.simps gPp.add_imp''_eq' g_add_imp_def by auto
+
+lemma g_del_imp_code [code]: "g_del_imp (AtStart x) = set (dels (s_snap x))" 
+  "g_del_imp (AtEnd x) = set (dels (e_snap x))" 
+  using gPp.del_imp''.simps gPp.del_imp''_eq' g_del_imp_def by auto
+
+lemma g_ref_inv_code [code]: "g_ref_inv x = (if x = Main then GE Stop 0 else EQ Stop 0)" 
+  apply (cases x) by simp+
+
+lemma g_ref_pre_clocks_code [code]: "g_ref_pre_clocks a = map PropClock (g_ref_pn (g_pre_imp a))"
+  using gPp.ta.refined_pre_clocks_def g_pre_imp_def g_ref_pn_def g_ref_pre_clocks_def by simp
+
+lemma g_ref_pre_const_code [code]: "g_ref_pre_const a = (map (\<lambda>c. EQ c 1) (g_ref_pre_clocks a))"
+  using gPp.ta.refined_pre_constraints_def g_pre_imp_def g_ref_pre_clocks_def g_ref_pre_const_def by force
+
+lemma g_add_del_unions:
+  "g_add_imp (AtStart a) \<union> g_del_imp (AtStart b) = set (adds (s_snap a) @ dels (s_snap b))"
+  "g_add_imp (AtStart a) \<union> g_del_imp (AtEnd b) = set (adds (s_snap a) @ dels (e_snap b))"
+  "g_add_imp (AtEnd a) \<union> g_del_imp (AtStart b) = set (adds (e_snap a) @ dels (s_snap b))"
+  "g_add_imp (AtEnd a) \<union> g_del_imp (AtEnd b) = set (adds (e_snap a) @ dels (e_snap b))"
+  unfolding g_add_imp_code g_del_imp_code by auto
+
+lemma g_inters_1: "(g_pre_imp (AtStart a)) \<inter> ((g_add_imp (AtStart b)) \<union> (g_del_imp (AtStart b))) \<noteq> {} 
+  \<longleftrightarrow> filter (\<lambda>x. x \<in> set (pre (s_snap a)) \<inter> preds) (adds (s_snap b) @ dels (s_snap b)) \<noteq> []"
+  "(g_pre_imp (AtStart a)) \<inter> ((g_add_imp (AtEnd b)) \<union> (g_del_imp (AtEnd b))) \<noteq> {} 
+  \<longleftrightarrow> filter (\<lambda>x. x \<in> set (pre (s_snap a)) \<inter> preds) (adds (e_snap b) @ dels (e_snap b)) \<noteq> []"
+  "(g_pre_imp (AtEnd a)) \<inter> ((g_add_imp (AtStart b)) \<union> (g_del_imp (AtStart b))) \<noteq> {} 
+  \<longleftrightarrow> filter (\<lambda>x. x \<in> set (pre (e_snap a)) \<inter> preds) (adds (s_snap b) @ dels (s_snap b)) \<noteq> []"
+  "(g_pre_imp (AtEnd a)) \<inter> ((g_add_imp (AtEnd b)) \<union> (g_del_imp (AtEnd b))) \<noteq> {} 
+  \<longleftrightarrow> filter (\<lambda>x. x \<in> set (pre (e_snap a)) \<inter> preds) (adds (e_snap b) @ dels (e_snap b)) \<noteq> []"
+  by (subst g_add_del_unions, subst inter_set_filter, subst g_pre_imp_code, blast)+
+
+lemma g_inters_2: 
+"((g_add_imp (AtStart a)) \<inter> (g_del_imp (AtStart b))) \<noteq> {}
+  \<longleftrightarrow> filter (\<lambda>x. x \<in> set (adds (s_snap a))) (dels (s_snap b)) \<noteq> []" 
+"((g_add_imp (AtStart a)) \<inter> (g_del_imp (AtEnd b))) \<noteq> {}
+  \<longleftrightarrow> filter (\<lambda>x. x \<in> set (adds (s_snap a))) (dels (e_snap b)) \<noteq> []" 
+"((g_add_imp (AtEnd a)) \<inter> (g_del_imp (AtStart b))) \<noteq> {}
+  \<longleftrightarrow> filter (\<lambda>x. x \<in> set (adds (e_snap a))) (dels (s_snap b)) \<noteq> []" 
+"((g_add_imp (AtEnd a)) \<inter> (g_del_imp (AtEnd b))) \<noteq> {}
+  \<longleftrightarrow> filter (\<lambda>x. x \<in> set (adds (e_snap a))) (dels (e_snap b)) \<noteq> []" 
+  by (subst g_add_imp_code, subst g_del_imp_code, subst inter_set_filter, blast)+
+
+fun msa_imp::"(object atom, rat) action snap_action \<Rightarrow> (object atom, rat) action snap_action \<Rightarrow> bool" where
+"msa_imp (AtStart a) (AtStart b) = (
+  filter (\<lambda>x. x \<in> set (pre (s_snap a)) \<inter> preds) (adds (s_snap b) @ dels (s_snap b)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (adds (s_snap a))) (dels (s_snap b)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (pre (s_snap b)) \<inter> preds) (adds (s_snap a) @ dels (s_snap a)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (adds (s_snap b))) (dels (s_snap a)) \<noteq> [])" |
+"msa_imp (AtStart a) (AtEnd b) = (
+  filter (\<lambda>x. x \<in> set (pre (s_snap a)) \<inter> preds) (adds (e_snap b) @ dels (e_snap b)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (adds (s_snap a))) (dels (e_snap b)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (pre (e_snap b)) \<inter> preds) (adds (s_snap a) @ dels (s_snap a)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (adds (e_snap b))) (dels (s_snap a)) \<noteq> [])" |
+"msa_imp (AtEnd a) (AtStart b) = (
+  filter (\<lambda>x. x \<in> set (pre (e_snap a)) \<inter> preds) (adds (s_snap b) @ dels (s_snap b)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (adds (e_snap a))) (dels (s_snap b)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (pre (s_snap b)) \<inter> preds) (adds (e_snap a) @ dels (e_snap a)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (adds (s_snap b))) (dels (e_snap a)) \<noteq> [])" |
+"msa_imp (AtEnd a) (AtEnd b) = (
+  filter (\<lambda>x. x \<in> set (pre (e_snap a)) \<inter> preds) (adds (e_snap b) @ dels (e_snap b)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (adds (e_snap a))) (dels (e_snap b)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (pre (e_snap b)) \<inter> preds) (adds (e_snap a) @ dels (e_snap a)) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set (adds (e_snap b))) (dels (e_snap a)) \<noteq> [])" 
+
+lemma mutex_snap_action_imp:
+"mutex_snap_action g_pre_imp g_add_imp g_del_imp a b = msa_imp a b"
+   apply (induction a; induction b)
+  by (subst msa_imp.simps, subst mutex_snap_action_def, (subst g_inters_1)+, (subst g_inters_2)+, blast)+
+
+lemmas [code] = numbers_find.simps double_filter.simps mutex_snap_action_def msa_imp.simps
+
+lemma g_ref_ssi_code [code]: "g_ref_ssi sn = (
+  let 
+    n = numbers_find (\<lambda>x. x = sn) 0 g_ref_ssl;
+    P = (\<lambda>n' sn'. n' < n \<and> msa_imp sn sn')
+  in
+    double_filter P 0 g_ref_ssl []
+)" unfolding mutex_snap_action_imp[symmetric] 
+  using gPp.ta.s_snap_s_int_def g_add_imp_def g_del_imp_def g_pre_imp_def 
+  g_ref_ssi_def by simp
+
+lemma g_ref_sei_code [code]: "g_ref_sei sn = (
+  let 
+    n = numbers_find (\<lambda>x. x = sn) 0 g_ref_ssl;
+    P = (\<lambda>n' sn'. n' \<le> n \<and> msa_imp sn sn')
+  in
+    double_filter P 0 g_ref_esl []
+)" unfolding mutex_snap_action_imp[symmetric]
+  using gPp.ta.s_snap_e_int_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_sei_def by auto
+
+lemma g_ref_eei_code [code]: "g_ref_eei sn \<equiv> (
+  let 
+    n = numbers_find (\<lambda>x. x = sn) 0 g_ref_esl;
+    P = (\<lambda>n' sn'. n' < n \<and> msa_imp sn sn')
+  in
+    double_filter P 0 g_ref_esl []
+)" unfolding mutex_snap_action_imp[symmetric]
+  using gPp.ta.e_snap_e_int_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_eei_def by auto
+
+lemma g_ref_esi_code [code]: "g_ref_esi sn \<equiv> (
+  let 
+    n = numbers_find (\<lambda>x. x = sn) 0 g_ref_esl;
+    P = (\<lambda>n' sn'. n' \<le> n \<and> msa_imp sn sn')
+  in
+    double_filter P 0 g_ref_ssl []
+)" unfolding mutex_snap_action_imp[symmetric] 
+  using gPp.ta.e_snap_s_int_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_esi_def by force
+(* To do: is there a way to unfold visually? *)
+lemma g_ref_ssc_code [code]: "g_ref_ssc sn \<equiv> map (\<lambda>b. GE (StartDur (fst  b)) 0) (g_ref_ssi sn)"
+  using gPp.ta.refined_start_start_consts_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_ssc_def g_ref_ssi_def by force
+
+lemma g_ref_sec_code [code]: "g_ref_sec sn = map (\<lambda>b. GE (EndDur (fst  b)) 0) (g_ref_sei sn)"
+  using gPp.ta.refined_start_end_consts_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_sec_def g_ref_sei_def by force
+
+lemma g_ref_esc_code [code]: "g_ref_esc sn = map (\<lambda>b. GE (StartDur (fst  b)) 0) (g_ref_esi sn)"
+  using gPp.ta.refined_end_start_consts_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_esc_def g_ref_esi_def by force
+
+
+lemma g_ref_eec_code [code]: "g_ref_eec sn = map (\<lambda>b. GE (EndDur (fst  b)) 0) (g_ref_eei sn)"
+  using gPp.ta.refined_end_end_consts_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_eec_def g_ref_eei_def by force
+
+lemma g_ref_sc_code [code]: "g_ref_sc sn = g_ref_ssc sn @ g_ref_sec sn"
+  using gPp.ta.refined_start_constraints_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_sc_def g_ref_sec_def g_ref_ssc_def by force
+
+lemma g_ref_ec_code [code]: "g_ref_ec sn = g_ref_esc sn @ g_ref_eec sn"
+  using gPp.ta.refined_end_constraints_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_ec_def g_ref_eec_def g_ref_esc_def by force
+
+lemma g_ref_sg_code [code]: "g_ref_sg sn = g_ref_sc sn @ g_ref_pre_const sn"
+  using gPp.ta.refined_start_guard_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_pre_const_def g_ref_sc_def g_ref_sg_def by force
+
+lemma g_ref_eg_code [code]: "g_ref_eg sn = g_ref_ec sn @ g_ref_pre_const sn"
+  using gPp.ta.refined_end_guard_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_ec_def g_ref_eg_def g_ref_pre_const_def by force
+
+fun AND_ALL_imp::"(RefinedClock, rat) dconstraint list \<Rightarrow> (RefinedClock, rat) dconstraint" where
+"AND_ALL_imp [] = GE Stop 0" |
+"AND_ALL_imp (c#cs) = AND c (AND_ALL_imp cs)"
+
+lemma refined_AND_ALL_imp_lol: "refined_AND_ALL = AND_ALL_imp" 
+  apply (rule ext)
+  subgoal for xs apply (induction xs) by auto
+  done
+
+lemma g_ref_gs_code [code]: "g_ref_gs n = 
+  AND_ALL_imp ((EQ (Running n) 0)#(g_ref_sg (AtStart (g_ref_act n))))"
+  using gPp.ta.refined_guard_at_start_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_gs_def g_ref_sg_def refined_AND_ALL_imp_lol by force
+
+lemma g_ref_ge_code [code]: "g_ref_ge n = 
+  AND_ALL_imp ((EQ (Running n) 1)#g_ref_cdb n#(g_ref_eg (AtEnd (g_ref_act n))))"
+  using gPp.ta.refined_guard_at_end_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_eg_def g_ref_ge_def refined_AND_ALL_imp_lol by force
+
+
+lemma g_ref_dm_code [code]: "g_ref_dm = 
+  set ((map (\<lambda>m. (DecAtStart m, g_ref_gs m, Unit, [(SchedStartSnap m, 1)], DecAtEnd m)) g_ref_anl)
+  @ (map (\<lambda>m. (DecAtStart m, GE Stop 0, Unit, [(SchedStartSnap m, 0)], DecAtEnd m)) g_ref_anl)
+  @ (map (\<lambda>m. (DecAtEnd m, g_ref_ge m, Unit, [(SchedEndSnap m, 1)], DecAtStart (Suc m))) g_ref_anl)
+  @ (map (\<lambda>m. (DecAtEnd m, GE Stop 0, Unit, [(SchedEndSnap m, 0)], DecAtStart (Suc m))) g_ref_anl))"
+  using gPp.ta.refined_decision_making_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_dm_def g_ref_ge_def g_ref_gs_def by force
+
+lemma g_ref_ae_code [code]: "g_ref_ae sn = map (\<lambda>p. (PropClock p, 1)) (g_ref_pn (g_add_imp sn))"
+  using gPp.ta.refined_add_effects_def g_add_imp_def g_ref_ae_def by force
+
+lemma g_ref_de_code [code]: "g_ref_de sn = 
+  (let P = (\<lambda>p. p \<in> g_del_imp sn \<and> p \<notin> g_add_imp sn)
+  in map (\<lambda>p. (PropClock p, 0)) (numbers_gather P 0 g_ref_prop_list))"
+  using gPp.ta.refined_del_effects_def g_add_imp_def g_del_imp_def g_ref_de_def by fastforce
+
+lemma g_ref_eff_code [code]: "g_ref_eff sn = g_ref_de sn @ g_ref_ae sn"
+  using gPp.ta.refined_del_effects_def gPp.ta.refined_effects_def g_add_imp_def g_del_imp_def g_ref_ae_def g_ref_de_code g_ref_eff_def by auto
+
+lemma g_ref_ase_code [code]: "g_ref_ase n = (Running n, 1) # (StartDur n, 0) # g_ref_eff (AtStart (g_ref_act n))"
+  using gPp.ta.act_def gPp.ta.action_list'_def gPp.ta.refined_act_def gPp.ta.refined_at_start_effects_def g_add_imp_def g_del_imp_def g_ref_ase_def g_ref_eff_def by force
+
+lemma g_ref_aee_code [code]: "g_ref_aee n = (Running n, 0) # (EndDur n, 0) # g_ref_eff (AtEnd (g_ref_act n))"
+  using gPp.ta.act_def gPp.ta.action_list'_def gPp.ta.refined_act_def gPp.ta.refined_at_end_effects_def g_add_imp_def g_del_imp_def g_ref_aee_def g_ref_eff_def by force
+
+lemma g_ref_exec_code [code]: "g_ref_exec =
+set ((map (\<lambda>m. (ExecAtStart m, EQ (SchedStartSnap m) 1, Unit, g_ref_ase m, ExecAtEnd m)) g_ref_anl)
+  @ (map (\<lambda>m. (ExecAtStart m, EQ (SchedStartSnap m) 0, Unit, [], ExecAtEnd m)) g_ref_anl)
+  @ (map (\<lambda>m. (ExecAtEnd m, EQ (SchedEndSnap m) 1, Unit, g_ref_aee m, ExecAtStart (Suc m))) g_ref_anl)
+  @ (map (\<lambda>m. (ExecAtEnd m, EQ (SchedEndSnap m) 0, Unit, [], ExecAtStart (Suc m))) g_ref_anl))"
+  using gPp.ta.refined_execution_def g_add_imp_def g_del_imp_def g_ref_aee_def g_ref_ase_def g_ref_exec_def by force
+
+lemma autom [code]: "autom = ({g_ref_init_t} \<union> {g_ref_m_d_t} \<union> g_ref_pd 
+  \<union> {g_ref_pd_ed} \<union> g_ref_ed \<union> {g_ref_ed_dm}
+  \<union> g_ref_dm \<union> {g_ref_dm_ex} \<union> g_ref_exec \<union> {g_ref_exm} 
+  \<union> {g_ref_goal_trans}, g_ref_inv)"
+  using autom_def gPp.ta.refined_prob_automaton_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_dm_def g_ref_exec_def by argo
+
+lemma "set (map f g_ref_anl) = f ` g_ref_aa"
+  sorry
+
+value "g_ref_init_t"
+value "g_ref_m_d_t"
+value "g_ref_pd"
+value "g_ref_pd_ed"
+value "g_ref_ed"
+value "g_ref_ed_dm"
+value "g_ref_dm"
+
+value "autom"
+
 end
