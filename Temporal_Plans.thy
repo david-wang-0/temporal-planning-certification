@@ -163,12 +163,6 @@ lemma mutex_valid_plan_eq: "mutex_valid_plan \<longleftrightarrow> mutex_valid_p
   apply (rule iffI; intro conjI)
   by blast+
 
-
-text \<open>This definition arose from the statement in \<^cite>\<open>Gigante2020\<close>, that every at-start 
-snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
-snap-actions. Moreover, in their definition of a planning problem, the assumption is made that 
-no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at_end(b) and at-start(a) \<noteq> at-end(a).\<close>
-
 subsubsection \<open>Valid state sequence\<close>
 
 definition valid_state_sequence::"'proposition state_sequence \<Rightarrow> bool" where
@@ -798,6 +792,12 @@ qed
 
 
 subsubsection \<open>Non-Interference w.r.t the Happening Sequence\<close>
+
+
+text \<open>This definition comes from the statement in \<^cite>\<open>Gigante2020\<close>, that every at-start 
+snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
+snap-actions. Moreover, in their definition of a planning problem, the assumption is made that 
+no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at_end(b) and at-start(a) \<noteq> at-end(a).\<close>
 
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_happ_seq B \<equiv> 

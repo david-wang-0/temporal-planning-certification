@@ -4,6 +4,7 @@ session "temporal-planning-certification" =
   sessions
     Temporal_AI_Planning_Languages_Semantics
     Timed_Automata
+    TA_Planning
 (*theories [document = false]
     A
     B
