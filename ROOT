@@ -1,4 +1,11 @@
-session "temporal-planning-certification" = 
+session TP_Parsing in Parsing =
+    Temporal_AI_Planning_Languages_Semantics +
+  sessions 
+    Parsing
+  theories 
+    Ground_PDDL_Parsing
+
+session "temporal-planning-certification" =
   HOL +
   options [document = pdf, document_output = "output"]
   sessions

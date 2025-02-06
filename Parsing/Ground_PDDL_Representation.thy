@@ -1,0 +1,6 @@
+theory Ground_PDDL_Representation
+  imports Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics
+begin
+
+
+end
