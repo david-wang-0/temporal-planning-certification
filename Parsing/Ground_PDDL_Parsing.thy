@@ -1,9 +1,11 @@
 theory Ground_PDDL_Parsing
   imports Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics
           Parsing.JSON_Parsing
+          TA_Library.Error_List_Monad
 begin
 
-
+definition flat222 where
+"flat222 \<equiv> \<lambda>(a, b, (c, d), e, f). (a, b, c, d, e, f)"
 
 text \<open>
 This is a parser for the output of the grounder provided by Andrew and Amanda Coles. 
@@ -79,12 +81,10 @@ definition
 definition alt_list::"('i, 'o) parser list \<Rightarrow> ('i, 'o) parser" where
   "alt_list ps \<equiv> fold (\<parallel>) ps (error (shows_string ''''))"
 
-abbreviation (input) app (infixl "|>" 59) where "a |> b \<equiv> b a"
-
-abbreviation 
+abbreviation str_to_pred::"string \<Rightarrow> object atom" where
   "str_to_pred x \<equiv> predAtm (Pred x) []"
 
-definition
+definition 
   "pddl_predicate \<equiv> pddl_identifier with str_to_pred"
 
 definition 
@@ -100,7 +100,7 @@ definition
 definition
   "pddl_predicates \<equiv> parens (pddl_keyword '':predicates'' *-- repeat (opt_parens pddl_predicate))"
 
-definition
+definition pddl_action_params::"(char, variable list) parser" where
   "pddl_action_params \<equiv> pddl_keyword '':parameters'' *-- parens (return [])"
 
 definition
@@ -117,7 +117,7 @@ fun fract_to_rat::"fract \<Rightarrow> rat" where
 "fract_to_rat (fract.Rat False n d) = Fract (-n) d"
 
 (* It seems that durations use inclusive bounds. *)
-definition
+definition pddl_duration_constraint::"(char, object duration_constraint) parser" where
   "pddl_duration_constraint \<equiv> 
   ( ( (pddl_keyword ''<='' *-- return duration_op.LEQ)
     \<parallel> (pddl_keyword ''>='' *-- return duration_op.GEQ)
@@ -128,17 +128,6 @@ definition
 
 definition 
   "pddl_duration_constraints \<equiv> pddl_opt_and pddl_duration_constraint"
-
-definition
-  "pddl_timed_pred \<equiv> 
-    ( ((pddl_keyword ''at'' -- pddl_keyword ''start'') *-- (return At_Start))
-    \<parallel> ((pddl_keyword ''at''-- pddl_keyword ''end'') *-- (return At_End))
-    \<parallel> ((pddl_keyword ''over'' -- pddl_keyword ''all'') *-- (return Over_All))
-    ) -- pddl_opt_and pddl_predicate"
-
-definition
-  "pddl_conditions \<equiv>
-    pddl_keyword '':condition'' *-- pddl_opt_and pddl_timed_pred"
 
 definition 
   "pddl_add_or_del \<equiv> 
@@ -178,8 +167,29 @@ fun is_some::"'a option \<Rightarrow> bool" where
 "is_some (Some x) = True" |
 "is_some None = False"
 
-
+(* Could be done with a filter followed by a map *)
 definition "collect f xs \<equiv> xs |> map f |> filter is_some |> sequence_list_opt |> list_opt_unwrap"
+
+definition
+  "pddl_timed_pred \<equiv> 
+    ( ((pddl_keyword ''at'' -- pddl_keyword ''start'') *-- (return At_Start))
+    \<parallel> ((pddl_keyword ''at''-- pddl_keyword ''end'') *-- (return At_End))
+    \<parallel> ((pddl_keyword ''over'' -- pddl_keyword ''all'') *-- (return Over_All))
+    ) -- pddl_opt_and pddl_predicate"
+
+definition 
+  "start_filter \<equiv> (\<lambda>(a, b). if (a = At_Start) then Some b else None)"
+
+definition 
+  "end_filter \<equiv> (\<lambda>(a, b). if (a = At_End) then Some b else None)"
+
+definition
+  "pddl_conditions \<equiv> do {
+    conditions \<leftarrow> pddl_keyword '':condition'' *-- pddl_opt_and pddl_timed_pred;
+    let s_effs = conditions |> collect start_filter |> (\<lambda>xs. fold (@) xs []);
+    let e_effs = conditions |> collect end_filter |> (\<lambda>xs. fold (@) xs []);
+    return (s_effs, e_effs)
+  }"
 
 definition 
   "pddl_timed_effect \<equiv> do {
@@ -197,27 +207,27 @@ definition
 definition
   "pddl_effects \<equiv> do {
     effects \<leftarrow> pddl_keyword '':effects'' *-- pddl_opt_and pddl_timed_effect;
-    let is_as = (\<lambda>(a, b, c). if (a = At_Start) then (Some (b, c)) else None);
-    let is_ae = (\<lambda>(a, b, c). if (a = At_End) then (Some (b, c)) else None);
     let combine_list_prod = (\<lambda>(a, b) (c, d). (a @ c, b @ c));
     let combine_effects = (\<lambda>xs. 
       fold combine_list_prod xs ([], []) 
       |> (map_prod (map formula.Atom) (map formula.Atom)) 
       |> uncurry Effect
       );
-    let start_effs = effects |> collect is_as |> combine_effects;
-    let end_effs = effects |> collect is_ae |> combine_effects;
+    let start_effs = effects |> collect start_filter |> combine_effects;
+    let end_effs = effects |> collect end_filter |> combine_effects;
     return (start_effs, end_effs)
   }"
 
 definition
   "pddl_durative_action \<equiv> 
     parens (
-      pddl_keyword '':durative-action'' 
-  *-- pddl_action_params 
-   -- pddl_duration_constraints
-   -- pddl_conditions
-   -- pddl_effects)"
+      (pddl_keyword '':durative-action'' *-- pddl_identifier)
+   -- (pddl_action_params 
+    *-- pddl_duration_constraints
+     -- pddl_conditions
+     -- pddl_effects
+      )
+    ) with flat222"
 
 definition
   "pddl_ground_domain \<equiv> 
@@ -225,7 +235,7 @@ definition
       pddl_keyword ''define'' 
   *-- pddl_domain_head 
   *-- pddl_requirements 
-   -- pddl_predicates 
+  *-- pddl_predicates 
    -- repeat pddl_durative_action)"
 
 definition
@@ -238,13 +248,13 @@ definition
   "pddl_init \<equiv>
     parens (
       pddl_keyword '':init'' 
-  *-- repeat (opt_parens pddl_identifier))"
+  *-- repeat (opt_parens pddl_predicate))"
 
 definition
   "pddl_goal \<equiv>
     parens (
       pddl_keyword '':goal''
-  *-- repeat (opt_parens pddl_identifier))"
+  *-- repeat (opt_parens pddl_predicate))"
 
 
 definition
@@ -253,5 +263,38 @@ definition
   *-- pddl_problem_head
   *-- pddl_init
    -- pddl_goal)"
+
+
+definition parse where
+  "parse parser s \<equiv> case parse_all lx_ws parser s of
+    Inl e \<Rightarrow> Error [e () ''Parser: '' |> String.implode]
+  | Inr r \<Rightarrow> Result r"
+
+value [code] "parse pddl_goal (STR ''1234'')"
+
+ML_val \<open>
+  @{code parse} @{code pddl_duration_constraints} "1234";\<close>
+
+definition 
+  "parse_dom_and_prob d p \<equiv> do {
+    (preds, acts) \<leftarrow> parse pddl_ground_domain d;
+    (init, goal) \<leftarrow> parse pddl_ground_problem p;
+    
+    Result (preds, acts, init, goal)
+  }"
+
+
+
+ML \<open>
+  fun parse_domain_and_prob df pf =
+  let 
+    val p = file_to_string pf; 
+    val d = file_to_string df
+  in
+    @{code parse_dom_and_prob} d p
+  end
+\<close>
+
+
 
 end

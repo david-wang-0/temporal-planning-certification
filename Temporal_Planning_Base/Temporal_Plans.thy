@@ -906,7 +906,8 @@ begin
     show ?thesis apply - by (rule ex1I, auto)
   qed
 
-
+  text \<open>If there is no self-overlap, the condition for mutex validition on the annotated action
+        sequence is the same as the one on the happening sequence.\<close>
   lemma nso_mutex_happ_seq:
     assumes nso: no_self_overlap
         and dg0: local.durations_ge_0
@@ -2637,4 +2638,20 @@ lemma eps_cases:
   using assms eps_range by blast
 
 end
+
+(* To do: Fix locale hierarchy 
+  abstract        concrete
+    A       <-      A'
+    \<and>       \<sim>      \<and>
+    B       <-      B'
+    \<and>       \<sim>
+    C
+
+  A' is A but with a transformation that makes it B
+  B' is an extension of A' but with a transformation that makes it C'
+
+  Example transformations: 
+    - removing constants to make a domain with finite fluents one with
+      finite propositions
+*)
 end

@@ -5,19 +5,24 @@ session TP_Parsing in Parsing =
   theories 
     Ground_PDDL_Parsing
 
-session "temporal-planning-certification" =
-  HOL +
-  options [document = pdf, document_output = "output"]
-  sessions
-    Temporal_AI_Planning_Languages_Semantics
-    Timed_Automata
-    TA_Planning
-(*theories [document = false]
-    A
-    B
-  theories
-    Ccd
-    D*)
-  document_files
-    "root.tex"
-    "root.bib"
+session Temporal_Planning_Base in Temporal_Planning_Base =
+    Containers +
+    theories
+      Base
+      Temporal_Plans
+
+session TP_TA_Reduction in Timed_Automaton =
+    Temporal_Planning_Base +
+    theories
+      Compilation
+      Compilation_Correctness
+      Diagonal_Timed_Automata
+      ground_PDDL_plan
+
+session TP_NTA_Reduction in TA_Network =
+    Temporal_Planning_Base +
+    sessions
+      TP_Parsing
+      Timed_Automata
+      TA_Planning
+

@@ -1,4 +1,4 @@
-theory CompilationCorrectness
+theory Compilation_Correctness
   imports Compilation
 begin 
 
