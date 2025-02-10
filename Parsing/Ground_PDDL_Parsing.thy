@@ -2,10 +2,17 @@ theory Ground_PDDL_Parsing
   imports Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics
           Parsing.JSON_Parsing
           TA_Library.Error_List_Monad
+          Temporal_Planning_Base.Base
 begin
 
 definition flat222 where
 "flat222 \<equiv> \<lambda>(a, b, (c, d), e, f). (a, b, c, d, e, f)"
+
+definition
+"flat322 \<equiv> \<lambda>(a, b, c, (d, e), f, g). (a, b, c, d, e, f, g)"
+
+abbreviation
+"flat232 \<equiv> flat322 o flat222"
 
 text \<open>
 This is a parser for the output of the grounder provided by Andrew and Amanda Coles. 
@@ -142,15 +149,6 @@ fun right_sum::"('a, 'b) sum \<Rightarrow> 'b option" where
 "right_sum (Inr a) = Some a" |
 "right_sum (Inl a) = None"
 
-fun sequence_list_opt::"'a option list \<Rightarrow> 'a list option" where
-"sequence_list_opt [] = Some []" |
-"sequence_list_opt (x#xs) = 
-  do {
-    x \<leftarrow> x;
-    xs \<leftarrow> sequence_list_opt xs;
-    Some (x # xs)
-  }"
-
 (* fun is_left::"('a, 'b) sum \<Rightarrow> bool" where
 "is_left (Inl a) = True" |
 "is_left (Inr a) = False"
@@ -158,14 +156,6 @@ fun sequence_list_opt::"'a option list \<Rightarrow> 'a list option" where
 fun is_right::"('a, 'b) sum \<Rightarrow> bool" where
 "is_right (Inr a) = False" |
 "is_right (Inl a) = True" *)
-
-fun list_opt_unwrap::"'a list option \<Rightarrow> 'a list" where
-"list_opt_unwrap None = []" |
-"list_opt_unwrap (Some xs) = xs"
-
-fun is_some::"'a option \<Rightarrow> bool" where
-"is_some (Some x) = True" |
-"is_some None = False"
 
 (* Could be done with a filter followed by a map *)
 definition "collect f xs \<equiv> xs |> map f |> filter is_some |> sequence_list_opt |> list_opt_unwrap"
@@ -184,11 +174,15 @@ definition
   "end_filter \<equiv> (\<lambda>(a, b). if (a = At_End) then Some b else None)"
 
 definition
+  "oa_filter \<equiv> (\<lambda>(a, b). if (a = Over_All) then Some b else None)"
+
+definition
   "pddl_conditions \<equiv> do {
     conditions \<leftarrow> pddl_keyword '':condition'' *-- pddl_opt_and pddl_timed_pred;
     let s_effs = conditions |> collect start_filter |> (\<lambda>xs. fold (@) xs []);
     let e_effs = conditions |> collect end_filter |> (\<lambda>xs. fold (@) xs []);
-    return (s_effs, e_effs)
+    let oc = conditions |> collect oa_filter |> (\<lambda>xs. fold (@) xs []);
+    return (oc, s_effs, e_effs)
   }"
 
 definition 
@@ -209,9 +203,7 @@ definition
     effects \<leftarrow> pddl_keyword '':effects'' *-- pddl_opt_and pddl_timed_effect;
     let combine_list_prod = (\<lambda>(a, b) (c, d). (a @ c, b @ c));
     let combine_effects = (\<lambda>xs. 
-      fold combine_list_prod xs ([], []) 
-      |> (map_prod (map formula.Atom) (map formula.Atom)) 
-      |> uncurry Effect
+      fold combine_list_prod xs ([], [])
       );
     let start_effs = effects |> collect start_filter |> combine_effects;
     let end_effs = effects |> collect end_filter |> combine_effects;
@@ -227,7 +219,7 @@ definition
      -- pddl_conditions
      -- pddl_effects
       )
-    ) with flat222"
+    ) with flat232"
 
 definition
   "pddl_ground_domain \<equiv> 

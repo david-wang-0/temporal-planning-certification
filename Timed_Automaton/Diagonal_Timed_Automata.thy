@@ -1,5 +1,5 @@
 theory Diagonal_Timed_Automata
-  imports Base
+  imports "Temporal_Planning_Base.Base"
 begin
 
 chapter \<open>Basic Definitions and Semantics\<close>

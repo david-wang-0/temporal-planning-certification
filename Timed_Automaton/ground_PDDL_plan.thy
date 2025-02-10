@@ -102,6 +102,8 @@ begin
   definition add_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
   "add_imp' \<equiv> add_imp s_snap e_snap snap_adds"
 
+lemma [code]: "add_imp' = add_imp s_snap e_snap snap_adds" unfolding add_imp'_def by simp
+
   definition del_imp'::"('proposition, rat) action snap_action \<Rightarrow> 'proposition set" where
   "del_imp' \<equiv> del_imp s_snap e_snap snap_dels"
 
@@ -522,12 +524,21 @@ derive (rbt) set_impl RefinedClock RefinedLocation dconstraint alpha
 find_theorems name: "refined_prob_automaton"
 
 term add_imp 
+(* 
 
+I think this must be implemented for each instance.
+
+value "g_add_imp (AtStart me131)"
+
+value[code] "mutex_snap_action g_pre_imp g_add_imp g_del_imp (AtStart me131) (AtEnd me131)"
+ *)
 
 find_theorems "ground_PDDL_planning preds"
 
 lemmas [code] = add_imp_def del_imp_def pre_imp_def gPp.ta.refined_invs.simps
 lemmas [code] = ground_PDDL_planning.pre_imp'_def[OF gPp.ground_PDDL_planning_axioms]
+
+value [code] "g_pre_imp (AtStart me131)"
 
 lemma g_pre_imp_code [code]: "g_pre_imp (AtStart x) = set (pre (s_snap x)) \<inter> preds" 
   "g_pre_imp (AtEnd x) = set (pre (e_snap x)) \<inter> preds"
@@ -673,18 +684,18 @@ fun AND_ALL_imp::"(RefinedClock, rat) dconstraint list \<Rightarrow> (RefinedClo
 "AND_ALL_imp [] = GE Stop 0" |
 "AND_ALL_imp (c#cs) = AND c (AND_ALL_imp cs)"
 
-lemma refined_AND_ALL_imp_lol: "refined_AND_ALL = AND_ALL_imp" 
+lemma refined_AND_ALL_imp: "refined_AND_ALL = AND_ALL_imp" 
   apply (rule ext)
   subgoal for xs apply (induction xs) by auto
   done
 
 lemma g_ref_gs_code [code]: "g_ref_gs n = 
   AND_ALL_imp ((EQ (Running n) 0)#(g_ref_sg (AtStart (g_ref_act n))))"
-  using gPp.ta.refined_guard_at_start_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_gs_def g_ref_sg_def refined_AND_ALL_imp_lol by force
+  using gPp.ta.refined_guard_at_start_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_gs_def g_ref_sg_def refined_AND_ALL_imp by force
 
 lemma g_ref_ge_code [code]: "g_ref_ge n = 
   AND_ALL_imp ((EQ (Running n) 1)#g_ref_cdb n#(g_ref_eg (AtEnd (g_ref_act n))))"
-  using gPp.ta.refined_guard_at_end_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_eg_def g_ref_ge_def refined_AND_ALL_imp_lol by force
+  using gPp.ta.refined_guard_at_end_def g_add_imp_def g_del_imp_def g_pre_imp_def g_ref_eg_def g_ref_ge_def refined_AND_ALL_imp by force
 
 lemma set_map_distrib: "set a \<union> set b = set (a @ b)"
   by auto

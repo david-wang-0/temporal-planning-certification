@@ -29,6 +29,8 @@ lemma GreatestI_time:
   
 end
 
+section \<open>Utility Functions and Lemmas\<close>
+
 lemma list_all2_twist: "list_all2 P xs ys \<longleftrightarrow> list_all2 (\<lambda>y x. P x y) ys xs" for xs ys P
   apply (subst list_all2_iff)+
   apply (rule iffI; rule conjI; simp)
@@ -65,5 +67,34 @@ lemma distinct_inj_map: "distinct xs \<Longrightarrow> inj f \<Longrightarrow> d
   apply (induction xs)
   unfolding inj_def
   by auto
+
+
+fun sequence_list_opt::"'a option list \<Rightarrow> 'a list option" where
+"sequence_list_opt [] = Some []" |
+"sequence_list_opt (x#xs) = 
+  do {
+    x \<leftarrow> x;
+    xs \<leftarrow> sequence_list_opt xs;
+    Some (x # xs)
+  }"
+
+fun list_opt_unwrap::"'a list option \<Rightarrow> 'a list" where
+"list_opt_unwrap None = []" |
+"list_opt_unwrap (Some xs) = xs"
+
+fun is_some::"'a option \<Rightarrow> bool" where
+"is_some (Some x) = True" |
+"is_some None = False"
+
+value "upto 1 0"
+
+function upto_aux_nat::"nat \<Rightarrow> nat \<Rightarrow> nat list" where
+"upto_aux_nat m n = (if (m < n) then m#upto_aux_nat (m+1) n else [])"
+  by auto
+termination by (relation "measure (\<lambda>(x, y). y - x)") auto
+
+definition "upto_nat \<equiv> upto_aux_nat 0"
+
+value "upto_nat 1"
 
 end

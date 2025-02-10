@@ -1,5 +1,5 @@
 theory Compilation
-  imports Temporal_Plans Diagonal_Timed_Automata
+  imports "Temporal_Planning_Base.Temporal_Plans" Diagonal_Timed_Automata
 begin
 
 text \<open>This formalisation follows the pen-and-paper compilation defined by Gigante, et al.\<close>
