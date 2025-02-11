@@ -10,6 +10,7 @@ session Temporal_Planning_Base in Temporal_Planning_Base =
     theories
       Base
       Temporal_Plans
+      Error_List_Monad_Add
 
 session TP_TA_Reduction in Timed_Automaton =
     Temporal_Planning_Base +

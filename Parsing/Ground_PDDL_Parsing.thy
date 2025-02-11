@@ -1,8 +1,8 @@
 theory Ground_PDDL_Parsing
   imports Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics
           Parsing.JSON_Parsing
-          TA_Library.Error_List_Monad
           Temporal_Planning_Base.Base
+          Temporal_Planning_Base.Error_List_Monad_Add
 begin
 
 definition flat222 where
@@ -116,12 +116,13 @@ definition
 definition
   "pddl_opt_and p \<equiv> (parens (pddl_and p)) \<parallel> p with (\<lambda>x. [x])"
 
-definition
-  "pddl_num \<equiv> lx_rat"
-
 fun fract_to_rat::"fract \<Rightarrow> rat" where
 "fract_to_rat (fract.Rat True n d) = Fract n d" |
 "fract_to_rat (fract.Rat False n d) = Fract (-n) d"
+
+definition
+  "pddl_num \<equiv> lx_rat with fract_to_rat"
+
 
 (* It seems that durations use inclusive bounds. *)
 definition pddl_duration_constraint::"(char, object duration_constraint) parser" where
@@ -130,8 +131,7 @@ definition pddl_duration_constraint::"(char, object duration_constraint) parser"
     \<parallel> (pddl_keyword ''>='' *-- return duration_op.GEQ)
     ) --* (pddl_keyword ''?duration'')
   ) -- pddl_num 
-  with 
-  (\<lambda>(op, dur). (Time_Const op (fract_to_rat dur)))"
+  with uncurry Time_Const"
 
 definition 
   "pddl_duration_constraints \<equiv> pddl_opt_and pddl_duration_constraint"
@@ -156,9 +156,6 @@ fun right_sum::"('a, 'b) sum \<Rightarrow> 'b option" where
 fun is_right::"('a, 'b) sum \<Rightarrow> bool" where
 "is_right (Inr a) = False" |
 "is_right (Inl a) = True" *)
-
-(* Could be done with a filter followed by a map *)
-definition "collect f xs \<equiv> xs |> map f |> filter is_some |> sequence_list_opt |> list_opt_unwrap"
 
 definition
   "pddl_timed_pred \<equiv> 

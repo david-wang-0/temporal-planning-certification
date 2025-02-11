@@ -86,6 +86,25 @@ fun is_some::"'a option \<Rightarrow> bool" where
 "is_some (Some x) = True" |
 "is_some None = False"
 
+abbreviation "option_list_to_list \<equiv> list_opt_unwrap o sequence_list_opt o (filter is_some)"
+
+
+fun list_min_opt'::"('a::linorder) list \<Rightarrow> 'a \<Rightarrow> 'a" where
+"list_min_opt' [] y = y" |
+"list_min_opt' (x#xs) y = (if (x < y) then list_min_opt' xs x else list_min_opt' xs y)"
+
+fun list_min_opt::"('a::linorder) list \<Rightarrow> 'a option" where
+"list_min_opt [] = None" |
+"list_min_opt (x#xs) = Some (list_min_opt' xs x)"
+
+fun list_max_opt'::"('a::linorder) list \<Rightarrow> 'a \<Rightarrow> 'a" where
+"list_max_opt' [] y = y" |
+"list_max_opt' (x#xs) y = (if (x > y) then list_max_opt' xs x else list_max_opt' xs y)"
+
+fun list_max_opt::"('a::linorder) list \<Rightarrow> 'a option" where
+"list_max_opt [] = None" |
+"list_max_opt (x#xs) = Some (list_max_opt' xs x)"
+
 value "upto 1 0"
 
 function upto_aux_nat::"nat \<Rightarrow> nat \<Rightarrow> nat list" where
