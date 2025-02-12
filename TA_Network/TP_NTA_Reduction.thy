@@ -644,18 +644,7 @@ definition main_auto::"
 context
 begin
 
-private fun longest_pre_suff_aux::"string \<Rightarrow> string \<Rightarrow> nat" where
-"longest_pre_suff_aux [] [] = 0" |
-"longest_pre_suff_aux (x#xs) (y#ys) = (if (x = y) then 1 + (longest_pre_suff_aux xs ys) else 0)"
-
-private fun longest_pre_suff_aux'::"string \<Rightarrow> string \<Rightarrow> nat \<Rightarrow> nat" where
-"longest_pre_suff_aux' [] [] n = n" |
-"longest_pre_suff_aux' (x#xs) (y#ys) n = (if (x = y) then longest_pre_suff_aux' xs ys (n + 1) else n)"
-
-private fun longest_pre_suff::"string \<Rightarrow> nat" where
-"longest_pre_suff s = longest_pre_suff_aux' s (rev s) 0"
-
-value "longest_pre_suff ''123''"
+fun longest_pre_suff
 
 (* For every prefix p of the pattern. Compute the longest suffix in p that is also a prefix in p *)
 definition construct_lps::"string \<Rightarrow> nat list" where
