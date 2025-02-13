@@ -1,5 +1,5 @@
 theory Base                
-  imports Main Containers.Containers
+  imports Main Containers.Containers "KnuthMorrisPratt.KnuthMorrisPratt"
 begin
 
 section \<open>Time\<close>
@@ -114,6 +114,29 @@ termination by (relation "measure (\<lambda>(x, y). y - x)") auto
 
 definition "upto_nat \<equiv> upto_aux_nat 0"
 
-value "upto_nat 1"
+
+value "KMP_search (array_of_list ''be'') (array_of_list ''ababcababdababe'')"
+value "length ''ababcababdababe''"
+text \<open>Obtaining a unique name by appending underscores\<close>
+
+fun matches_start::"'a list \<Rightarrow> 'a list \<Rightarrow> bool" where
+"matches_start [] ys = True" |
+"matches_start xs [] = False" |
+"matches_start (x#xs) (y#ys) = (if (x \<noteq> y) then False else matches_start xs ys)"
+
+inductive_set unique_name_r::"((string \<times> string list) \<times> (string \<times> string list)) set" where
+"((s, xs), (t, xs)) \<in> unique_name_r " if "length s > length t" |
+"((s, xs), (s, x#xs)) \<in> unique_name_r"
+
+
+function unique_name::"string \<Rightarrow> string list \<Rightarrow> string" where
+"unique_name s [] = s" |
+"unique_name s (x#xs) = (if (matches_start s x) then unique_name (s@''_'') (x#xs) else unique_name s xs)"
+  apply pat_completeness 
+  by auto
+termination sorry
+ 
+
+value "unique_name ''main'' [''main_'', ''main__'', ''abc'', ''_main_'', ''__main'']"
 
 end

@@ -6,6 +6,7 @@ theory TP_NTA_Reduction
           "Simple_Networks.Simple_Network_Language_Model_Checking"
           "TA_Planning.Simple_Network_Language_Printing"
           Temporal_Planning_Base.Error_List_Monad_Add
+          "TP_Parsing.Ground_PDDL_Parsing"
 begin
 
 hide_const Simple_Expressions.bexp.true
@@ -49,6 +50,12 @@ end
 
 
 text \<open>Converting propositions to variables\<close>
+
+
+abbreviation "var_is n v \<equiv> bexp.eq (exp.var v) (exp.const n)"
+abbreviation "inc_var n v \<equiv> (v, exp.add (exp.var v) (exp.const n))"
+abbreviation "set_var n v \<equiv> (v, exp.const n)"
+
 definition get_prop_num::"('p \<Rightarrow> nat option) \<Rightarrow> 'p \<Rightarrow> nat Error_List_Monad.result" where
 "get_prop_num prop_nums p \<equiv> case prop_nums p of 
     None \<Rightarrow> Error [''Proposition has no ID'' |> String.implode]
@@ -64,12 +71,14 @@ abbreviation var_prop::"('p::show) \<Rightarrow> String.literal" where
 definition "get_prop_lock prop_nums p \<equiv> get_prop_num prop_nums p \<bind> Result o var_prop_lock"
 definition "get_prop_var prop_nums p \<equiv> get_prop_num prop_nums p \<bind> Result o var_prop"
 
-abbreviation "prop_is prop_nums n p \<equiv> get_prop_var prop_nums p \<bind> (\<lambda>x. Result (bexp.eq (exp.var x) (exp.const n)))"
-abbreviation "set_prop prop_nums n p \<equiv> get_prop_var prop_nums p \<bind> (\<lambda>x. Result (x, exp.const n))"
+abbreviation "prop_is prop_nums n p \<equiv> get_prop_var prop_nums p \<bind> (Result o (var_is n))"
+abbreviation "set_prop prop_nums n p \<equiv> get_prop_var prop_nums p \<bind> (Result o (set_var n))"
 
-abbreviation "prop_lock_is prop_nums n p \<equiv> get_prop_lock prop_nums p \<bind> (\<lambda>x. Result (bexp.eq (exp.var x) (exp.const n)))"
-abbreviation "inc_prop_lock prop_nums n p \<equiv> get_prop_lock prop_nums p \<bind> (\<lambda>x. Result (x, (exp.add (exp.var x) (exp.const n))))"
+abbreviation "prop_lock_is prop_nums n p \<equiv> get_prop_lock prop_nums p \<bind> (Result o (var_is n))"
+abbreviation "inc_prop_lock prop_nums n p \<equiv> get_prop_lock prop_nums p \<bind> (Result o (inc_var n))"
 
+text \<open>Names for the two variables used to indicate the status of the plan and the number
+  of active actions respectively\<close>
 definition "planning_lock \<equiv> ''planning_lock'' |> String.implode"
 definition "acts_active \<equiv> ''actions_active'' |> String.implode"
 
@@ -291,9 +300,6 @@ do {
   Result (dur_sat, bexp.true, guard, Sil (STR ''''), unlock_invs, [end_clock], urg)
 }"
 
-
-
-
 definition pre_eff_to_end_edge::"
   (object atom \<Rightarrow> nat option) \<Rightarrow>
   's \<Rightarrow> 's \<Rightarrow> 
@@ -323,6 +329,49 @@ definition pre_eff_to_end_edge::"
   Result (urg, check, [], Sil (STR ''''), adds @ dels, [], inactive)  
 }"
 
+definition add_guard::"
+  ('a, 'b) bexp
+\<Rightarrow> ('s \<times>
+    ('a, 'b) bexp \<times>
+    ('c, 'd) acconstraint list \<times> 
+    'e act \<times> 
+    ('f \<times> ('a, 'b) exp) list \<times> 
+    'g list \<times> 
+    's) 
+\<Rightarrow> ('s \<times>
+    ('a, 'b) bexp \<times>
+    ('c, 'd) acconstraint list \<times> 
+    'e act \<times> 
+    ('f \<times> ('a, 'b) exp) list \<times> 
+    'g list \<times> 
+    's) " where
+"add_guard g t \<equiv>
+do {
+  let (s, guard, const, act, upds, resets, t) = t;
+  (s, bexp.and g guard, const, act, upds, resets, t)
+}"
+
+definition add_upd::"
+  ('f \<times> ('a, 'b) exp)
+\<Rightarrow> ('s \<times>
+    ('a, 'b) bexp \<times>
+    ('c, 'd) acconstraint list \<times> 
+    'e act \<times> 
+    ('f \<times> ('a, 'b) exp) list \<times> 
+    'g list \<times> 
+    's) 
+\<Rightarrow> ('s \<times>
+    ('a, 'b) bexp \<times>
+    ('c, 'd) acconstraint list \<times> 
+    'e act \<times> 
+    ('f \<times> ('a, 'b) exp) list \<times> 
+    'g list \<times> 
+    's) " where
+"add_upd u t \<equiv> 
+do {
+  let (s, guard, const, act, upds, resets, t) = t;
+  (s, guard, const, act, u#upds, resets, t)
+}"
 
 (* This is more or less the output of Simple_Network_Language_Export_Code.convert_automaton *)
 definition action_to_automaton::"
@@ -335,6 +384,8 @@ definition action_to_automaton::"
       (object atom list \<times> object atom list) 
       \<Rightarrow> nat option)
   \<Rightarrow> (object atom \<Rightarrow> nat option)
+  \<Rightarrow> String.literal
+  \<Rightarrow> String.literal
   \<Rightarrow> string \<times> 
       object duration_constraint list \<times> 
       object atom list \<times> 
@@ -344,8 +395,18 @@ definition action_to_automaton::"
       (object atom list \<times> object atom list) 
   \<Rightarrow> String.literal list
   \<Rightarrow> String.literal list
-  \<Rightarrow> _" where
-"action_to_automaton act_nums prop_nums a intfs intfe  \<equiv> do {
+  \<Rightarrow> (String.literal \<times>
+       (String.literal \<Rightarrow> nat option) \<times>
+       (nat \<Rightarrow> String.literal option) \<times>
+       nat \<times>
+       nat list \<times>
+       nat list \<times>
+       (nat \<times>
+         (String.literal, int) Simple_Network_Language_Printing.bexp \<times>
+         (String.literal, int) acconstraint list \<times> String.literal act \<times> (String.literal \<times> (String.literal, int) Simple_Network_Language_Printing.exp) list \<times> String.literal list \<times> nat) list \<times>
+       (nat \<times> (String.literal, int) acconstraint list) list
+      ) Error_List_Monad.result" where
+"action_to_automaton act_nums prop_nums plan_lock acts_active_count a intfs intfe \<equiv> do {
   let (name, dc, oc, pre_at_start, pre_at_end, eff_at_start, eff_at_end) = a;
   num \<leftarrow> get_act_num act_nums a;
   
@@ -366,20 +427,21 @@ definition action_to_automaton::"
   start_clock \<leftarrow> get_start_clock act_nums a;
   end_clock \<leftarrow> get_end_clock act_nums a;
 
-  e1 \<leftarrow> pre_eff_to_start_urg_edge prop_nums (0::nat) (1::nat) pre_at_start eff_at_start start_clock intfs;
+  e1 \<leftarrow> pre_eff_to_start_urg_edge prop_nums (0::nat) (1::nat) pre_at_start eff_at_start start_clock intfs
+      \<bind> (Result o add_upd (inc_var (1::int) acts_active_count));
 
   e2 \<leftarrow> oc_to_active_edge prop_nums 1 2 oc;
-
   e3 \<leftarrow> dur_consts_to_can_term 2 3 dc start_clock;
-  
   e4 \<leftarrow> oc_const_to_urg_edge prop_nums 3 4 oc dc start_clock end_clock intfe;
 
-  e5 \<leftarrow> pre_eff_to_end_edge prop_nums 4 1 pre_at_end eff_at_end;
+  e5 \<leftarrow> pre_eff_to_end_edge prop_nums 4 1 pre_at_end eff_at_end
+      \<bind> (Result o add_upd (inc_var (-1) acts_active_count));
 
-  let edges = [e1, e2, e3, e4, e5];
+  let edges = [e1, e2, e3, e4, e5] |> map (add_guard (var_is (1::int) plan_lock));
+
   let invs = ([]::(nat \<times> (String.literal, int) acconstraint list) list);
 
-  Result (name |> String.implode, names_to_ids, ids_to_names, committed, urgent, edges, invs)
+  Result (name |> String.implode, names_to_ids, ids_to_names, snd off, committed, urgent, edges, invs)
 }
 "
 
@@ -423,6 +485,27 @@ definition mutex_effects::"
   set a1 \<inter> set d2 \<noteq> {} \<or>
   set a2 \<inter> set d1 \<noteq> {}
 "
+
+lemma inter_pre_add_del: "set p \<inter> (set a \<union> set d) \<noteq> {} 
+  \<longleftrightarrow> filter (\<lambda>x. x \<in> set p) (a @ d) \<noteq> []" 
+  apply (subst set_union_code)
+  apply (subst inter_set_filter) 
+  by blast
+  
+
+lemma inter_set_filter': "(set a \<inter> set d) \<noteq> {} \<longleftrightarrow> filter (\<lambda>x. x \<in> set a) d \<noteq> []" 
+  apply (subst inter_set_filter) by blast
+
+lemma mutex_effects_code [code]:
+"mutex_effects p1 a1 d1 p2 a2 d2 \<equiv> 
+  filter (\<lambda>x. x \<in> set p1) (a2 @ d2) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set p2) (a1 @ d1) \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set a1) d2 \<noteq> [] \<or>
+  filter (\<lambda>x. x \<in> set a2) d1 \<noteq> []
+" apply (subst mutex_effects_def)
+  apply (subst inter_pre_add_del)+
+  apply (subst inter_set_filter')+
+  by (rule Pure.reflexive)
 
 definition mutex_start::"
   string \<times> 
@@ -528,20 +611,22 @@ definition actions_to_automata::"
     (object atom list \<times> object atom list)
      \<Rightarrow> nat option)
   \<Rightarrow> (object atom \<Rightarrow> nat option)
+  \<Rightarrow> String.literal
+  \<Rightarrow> String.literal
   \<Rightarrow> (string \<times> 
       object duration_constraint list \<times>
       object atom list \<times>
       object atom list \<times>
       object atom list \<times>
       (object atom list \<times> object atom list) \<times>
-      (object atom list \<times> object atom list)) list
+      (object atom list \<times> object atom list)) list 
     \<Rightarrow> _" where
-"actions_to_automata act_num prop_num as \<equiv> do {
+"actions_to_automata act_num prop_num plan_lock acts_active_num as \<equiv> do {
   let msf = mutex_snap_fun act_num as;
   
   let to_auto = (\<lambda>a. do {
     (intfs, intfe) \<leftarrow> msf a;
-    action_to_automaton act_num prop_num a intfs intfe
+    action_to_automaton act_num prop_num plan_lock acts_active_num a intfs intfe
   });
   
   autos \<leftarrow> combine_map to_auto as;
@@ -551,8 +636,6 @@ definition actions_to_automata::"
 "
 
 (*names_to_ids, ids_to_names, committed, urgent, edges, invs*)
-
-(* To do(?): map names rather than actions to numbers *)
 
 definition init_props_and_lock_to_init_edge::"
   (object atom \<Rightarrow> nat option)
@@ -605,9 +688,10 @@ definition main_auto::"
 \<Rightarrow> String.literal
 \<Rightarrow> String.literal
 \<Rightarrow> String.literal
-\<Rightarrow> (String.literal \<times>
+\<Rightarrow> (nat \<times> String.literal \<times>
    (String.literal \<Rightarrow> nat option) \<times>
    (nat \<Rightarrow> String.literal option) \<times>
+   nat \<times>
    nat list \<times>
    nat list \<times>
    (nat \<times>
@@ -638,22 +722,17 @@ definition main_auto::"
   
   let invs = [];
   
-  Result (auto_name, names_to_ids, ids_to_names, committed, urgent, edges, invs)
+  Result (2, auto_name, names_to_ids, ids_to_names, snd start, committed, urgent, edges, invs)
 }"
 
-context
-begin
 
-fun longest_pre_suff
+definition main_name::"string list \<Rightarrow> string" where
+"main_name xs = unique_name ''main'' xs"
 
-(* For every prefix p of the pattern. Compute the longest suffix in p that is also a prefix in p *)
-definition construct_lps::"string \<Rightarrow> nat list" where
-"construct_lps str \<equiv> undefined"
-end
-
-definition unique_main_name::"string list \<Rightarrow> string" where
-"unique_main_name names \<equiv> filter (
-
+(* The parser does not check that the bounds include 0, which is the default initial value of variables.
+    To do: where is this checked in Munta? *)
+(* Unlike the convert function, this does not put the initial locations into a separate list, but 
+  leaves them as part of the automaton *)
 definition tp_to_ta_net::"
   object atom list \<times>
   (string \<times> object duration_constraint list \<times> 
@@ -664,27 +743,72 @@ definition tp_to_ta_net::"
 "tp_to_ta_net args \<equiv>
   let (props, acts, init, goal) = args
   in do {
-    let prop_numbering = [0..(length props - 1)] |> map nat |> zip props |> map_of;
-    let act_numbering = [0..(length acts - 1)] |> map nat |> zip acts |> map_of;
+    let prop_nums = [0..(length props - 1)] |> map nat |> zip props |> map_of;
+    let act_nums = [0..(length acts - 1)] |> map nat |> zip acts |> map_of;
     
-    prop_locks \<leftarrow> combine_map (get_prop_lock prop_numbering) props;
-    prop_vars \<leftarrow> combine_map (get_prop_var prop_numbering) props;
+    prop_locks \<leftarrow> combine_map (get_prop_lock prop_nums) props;
+    prop_vars \<leftarrow> combine_map (get_prop_var prop_nums) props;
 
-    act_start_clocks \<leftarrow> combine_map (get_start_clock act_numbering) acts;
-    act_end_clocks \<leftarrow> combine_map (get_end_clock act_numbering) acts;
+    act_start_clocks \<leftarrow> combine_map (get_start_clock act_nums) acts;
+    act_end_clocks \<leftarrow> combine_map (get_end_clock act_nums) acts;
     
-    act_automata \<leftarrow> actions_to_automata act_numbering prop_numbering acts;
-    
-    let prop_lock_var_defs = map (\<lambda>x. (x, 0, 1)) prop_locks;
+    let prop_lock_var_defs = map (\<lambda>x. (x, 0::nat, 1)) prop_locks;
     let prop_var_var_defs = map (\<lambda>x. (x, 0, 1)) prop_vars;
+    let planning_lock_var_def = (planning_lock, 0, 2);
+    let acts_active_var_def = (acts_active, 0, length acts);
+
+    act_autos \<leftarrow> actions_to_automata act_nums prop_nums planning_lock acts_active acts;
+
+    let main_name = main_name (map fst acts) |> String.implode;
+    (goal_loc, main_auto) \<leftarrow> main_auto prop_nums init goal main_name planning_lock acts_active;
     
-    let planning_lock = (planning_lock, 0, 2);
-    let acts_active = (acts_active, 0, length acts);
-    
-    Result undefined
+
+    let main_auto_n = (length acts);
+
+    let acts_and_names = [0..(length acts)] |> map nat 
+      |> zip (map (String.implode o fst) acts @ [main_name]);
+
+    let act_name_nums = map_of acts_and_names;
+    let act_num_names = map_of (map prod.swap acts_and_names);
+
+    let automata = main_auto#act_autos;
+    let clocks = act_start_clocks@act_end_clocks;
+    let vars = planning_lock_var_def # acts_active_var_def # prop_lock_var_defs @ prop_var_var_defs;
+    let formula = formula.EX (loc main_auto_n goal_loc);
+    Result (act_name_nums, act_num_names, automata, clocks, vars, formula)
   }
 "
 
-term combine_map
+definition [code]: "parse_and_convert d p \<equiv> do {
+  (preds, acts, init, goal) \<leftarrow> parse_dom_and_prob d p;
+  autos \<leftarrow> tp_to_ta_net (preds, acts, init, goal);
+  Result autos
+}"
+
+ML \<open>
+  @{code parse_and_convert}
+\<close>
+
+export_code parse_and_convert
+in SML module_name TP_TA_Net_Red file "ML/TA_Network_Reduction.sml"
+
+
+ML \<open>
+  fun parse_and_convert_dom_and_prob df pf =
+  let 
+    val p = file_to_string pf; 
+    val d = file_to_string df
+  in
+    @{code parse_and_convert} d p
+  end
+\<close>
+(* 
+ML_val \<open>OS.FileSys.getDir()\<close>
+
+ML_val \<open>
+  parse_and_convert_dom_and_prob
+  "work/temporal_planning_certification/temporal-planning-certification/examples/ground-elevators.pddl"
+  "work/temporal_planning_certification/temporal-planning-certification/examples/ground-elevators-prob1.pddl"
+\<close> *)
 
 end

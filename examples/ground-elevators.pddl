@@ -10,7 +10,6 @@
  (elevator-on-floor_e0_f0)
  (elevator-on-floor_e0_f1)
 )
-
 (:durative-action _enter-elevator_p0_e0_f0_
  :parameters ()
  :duration

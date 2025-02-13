@@ -7,6 +7,8 @@ session TP_Parsing in Parsing =
 
 session Temporal_Planning_Base in Temporal_Planning_Base =
     Containers +
+    sessions
+      KnuthMorrisPratt
     theories
       Base
       Temporal_Plans
