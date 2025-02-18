@@ -4,9 +4,10 @@ theory TP_NTA_Reduction
           "Show.Show_Instances"
           "List-Index.List_Index"
           "Simple_Networks.Simple_Network_Language_Model_Checking"
-          "TA_Planning.Simple_Network_Language_Printing"
           Temporal_Planning_Base.Error_List_Monad_Add
           "TP_Parsing.Ground_PDDL_Parsing"
+          "TA_Planning.Simple_Network_Language_Printable"
+          TA_Library.Error_List_Monad
 begin
 
 hide_const Simple_Expressions.bexp.true
@@ -56,10 +57,7 @@ abbreviation "var_is n v \<equiv> bexp.eq (exp.var v) (exp.const n)"
 abbreviation "inc_var n v \<equiv> (v, exp.add (exp.var v) (exp.const n))"
 abbreviation "set_var n v \<equiv> (v, exp.const n)"
 
-definition get_prop_num::"('p \<Rightarrow> nat option) \<Rightarrow> 'p \<Rightarrow> nat Error_List_Monad.result" where
-"get_prop_num prop_nums p \<equiv> case prop_nums p of 
-    None \<Rightarrow> Error [''Proposition has no ID'' |> String.implode]
-  | Some n \<Rightarrow> Result n"
+abbreviation "get_prop_num \<equiv> get_or_err ''Proposition has no ID''"
 
 (* Clocks and variables do not need to be hard-coded *)
 abbreviation var_prop_lock::"('p::show) \<Rightarrow> String.literal" where
@@ -83,10 +81,7 @@ definition "planning_lock \<equiv> ''planning_lock'' |> String.implode"
 definition "acts_active \<equiv> ''actions_active'' |> String.implode"
 
 text \<open>Converting actions to clocks\<close>
-definition get_act_num:: "('a \<Rightarrow> nat option) \<Rightarrow> 'a \<Rightarrow> nat Error_List_Monad.result" where
-"get_act_num act_nums a \<equiv> case act_nums a of 
-        None \<Rightarrow> Error [String.implode ''Action has no ID ''] 
-      | Some n \<Rightarrow> Result n"
+abbreviation "get_act_num \<equiv> get_or_err ''Action has no ID ''"
 
 (* Is called with the number of the action *)
 abbreviation start_act_clock::"('a::show) \<Rightarrow> String.literal" where
@@ -211,12 +206,12 @@ definition oc_to_active_edge::"
 fun duration_constraint_constant::"object duration_constraint \<Rightarrow> int option Error_List_Monad.result" where
 "duration_constraint_constant No_Const = Result None" |
 "duration_constraint_constant (Func_Const _ f _) = 
-  err (''Unground (functional) duration constraint \"'' @ (func.name f) @ ''\" encountered.''|> String.implode)" |
+  Error [''Unground (functional) duration constraint \"'' @ (func.name f) @ ''\" encountered.''|> String.implode]" |
 "duration_constraint_constant (Time_Const _ t) = (
   let (n, d) = quotient_of t
   in (
     if (d \<noteq> 1) 
-    then (err o String.implode) (''Fraction encountered in duration constraint: '' @ show t @ ''. Needs normalisation to integers'') 
+    then Error [''Fraction encountered in duration constraint: '' @ show t @ ''. Needs normalisation to integers'' |> String.implode] 
     else Result (Some n)
   )
 )"
@@ -401,9 +396,10 @@ definition action_to_automaton::"
        nat \<times>
        nat list \<times>
        nat list \<times>
+       nat list \<times>
        (nat \<times>
-         (String.literal, int) Simple_Network_Language_Printing.bexp \<times>
-         (String.literal, int) acconstraint list \<times> String.literal act \<times> (String.literal \<times> (String.literal, int) Simple_Network_Language_Printing.exp) list \<times> String.literal list \<times> nat) list \<times>
+         (String.literal, int) bexp \<times>
+         (String.literal, int) acconstraint list \<times> String.literal act \<times> (String.literal \<times> (String.literal, int) exp) list \<times> String.literal list \<times> nat) list \<times>
        (nat \<times> (String.literal, int) acconstraint list) list
       ) Error_List_Monad.result" where
 "action_to_automaton act_nums prop_nums plan_lock acts_active_count a intfs intfe \<equiv> do {
@@ -441,7 +437,7 @@ definition action_to_automaton::"
 
   let invs = ([]::(nat \<times> (String.literal, int) acconstraint list) list);
 
-  Result (name |> String.implode, names_to_ids, ids_to_names, snd off, committed, urgent, edges, invs)
+  Result (name |> String.implode, names_to_ids, ids_to_names, snd off, map snd node_list, committed, urgent, edges, invs)
 }
 "
 
@@ -694,6 +690,7 @@ definition main_auto::"
    nat \<times>
    nat list \<times>
    nat list \<times>
+   nat list \<times>
    (nat \<times>
       (String.literal, int) bexp \<times>
       (String.literal, int) acconstraint list \<times> 
@@ -722,7 +719,7 @@ definition main_auto::"
   
   let invs = [];
   
-  Result (2, auto_name, names_to_ids, ids_to_names, snd start, committed, urgent, edges, invs)
+  Result (2, auto_name, names_to_ids, ids_to_names, snd start, map snd node_list, committed, urgent, edges, invs)
 }"
 
 
@@ -737,9 +734,27 @@ definition tp_to_ta_net::"
   object atom list \<times>
   (string \<times> object duration_constraint list \<times> 
     object atom list \<times> object atom list \<times> object atom list \<times> 
-    (object atom list \<times> object atom list) \<times> (object atom list \<times> object atom list)
+    (object atom list \<times> object atom list) \<times> 
+    (object atom list \<times> object atom list)
   ) list \<times>
-  object atom list \<times> object atom list \<Rightarrow> _" where
+  object atom list \<times> object atom list 
+\<Rightarrow> ((String.literal \<Rightarrow> nat option) \<times>
+   (nat \<Rightarrow> String.literal option) \<times>
+   (String.literal \<times>
+    (String.literal \<Rightarrow> nat option) \<times>
+    (nat \<Rightarrow> String.literal option) \<times>
+    nat \<times>
+    nat list \<times>
+    nat list \<times>
+    nat list \<times>
+    (nat \<times>
+     (String.literal, int) Simple_Network_Language_Printable.bexp \<times>
+     (String.literal, int) acconstraint list \<times>
+     String.literal act \<times> (String.literal \<times> (String.literal, int) Simple_Network_Language_Printable.exp) list \<times> String.literal list \<times> nat) list \<times>
+    (nat \<times> (String.literal, int) acconstraint list) list) list \<times>
+   String.literal list \<times> 
+  (String.literal \<times> int \<times> int) list \<times> 
+  (nat, nat, String.literal, int) Simple_Network_Language_Model_Checking.formula) Error_List_Monad.result" where
 "tp_to_ta_net args \<equiv>
   let (props, acts, init, goal) = args
   in do {
@@ -752,7 +767,7 @@ definition tp_to_ta_net::"
     act_start_clocks \<leftarrow> combine_map (get_start_clock act_nums) acts;
     act_end_clocks \<leftarrow> combine_map (get_end_clock act_nums) acts;
     
-    let prop_lock_var_defs = map (\<lambda>x. (x, 0::nat, 1)) prop_locks;
+    let prop_lock_var_defs = map (\<lambda>x. (x, 0::int, 1::int)) prop_locks;
     let prop_var_var_defs = map (\<lambda>x. (x, 0, 1)) prop_vars;
     let planning_lock_var_def = (planning_lock, 0, 2);
     let acts_active_var_def = (acts_active, 0, length acts);
@@ -762,7 +777,6 @@ definition tp_to_ta_net::"
     let main_name = main_name (map fst acts) |> String.implode;
     (goal_loc, main_auto) \<leftarrow> main_auto prop_nums init goal main_name planning_lock acts_active;
     
-
     let main_auto_n = (length acts);
 
     let acts_and_names = [0..(length acts)] |> map nat 

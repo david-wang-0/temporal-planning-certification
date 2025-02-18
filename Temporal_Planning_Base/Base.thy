@@ -139,4 +139,10 @@ termination sorry
 
 value "unique_name ''main'' [''main_'', ''main__'', ''abc'', ''_main_'', ''__main'']"
 
+fun get_or_default::"'a option \<Rightarrow> 'a \<Rightarrow> 'a" where
+"get_or_default None d = d" |
+"get_or_default (Some x) _ = x"
+
+
+
 end
