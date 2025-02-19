@@ -52,7 +52,7 @@
               "guard":
                 "planning_lock = 0",
               "update":
-                "planning_lock := 1, actions_active := 0, p_elevator_on_floor_e0_f2 := 1, p_stopped_e0 := 1, p_person_on_floor_p0_f0 := 1"
+                "planning_lock := 1, actions_active := 0, p_elevator_on_floor_e0_f1 := 1, p_stopped_e0 := 1, p_person_on_floor_p0_f0 := 1"
             },
             {
               "source":
@@ -62,7 +62,7 @@
               "target":
                 2,
               "guard":
-                "planning_lock = 1 && p_person_on_floor_p0_f1 = 1 && p_person_on_floor_p0_f2 = 1",
+                "planning_lock = 1 && p_person_on_floor_p0_f1 = 1 && p_person_on_floor_p0_f0 = 1",
               "update":
                 "planning_lock := 2"
             }

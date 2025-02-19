@@ -59,8 +59,8 @@ ML \<open>
 ML_val \<open>
   parse_and_print
   "work/temporal_planning_certification/temporal-planning-certification/examples/ground-elevators.pddl"
-  "work/temporal_planning_certification/temporal-planning-certification/examples/ground-elevators-prob1.pddl"
-  "work/temporal_planning_certification/temporal-planning-certification/examples/ground-elevators-out.muntax"
+  "work/temporal_planning_certification/temporal-planning-certification/examples/ground-elevators-prob2.pddl"
+  "work/temporal_planning_certification/temporal-planning-certification/examples/ground-elevators-out2.muntax"
 \<close>
 
 end

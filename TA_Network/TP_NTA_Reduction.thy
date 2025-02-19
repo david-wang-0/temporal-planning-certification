@@ -57,23 +57,72 @@ abbreviation "var_is n v \<equiv> bexp.eq (exp.var v) (exp.const n)"
 abbreviation "inc_var n v \<equiv> (v, exp.add (exp.var v) (exp.const n))"
 abbreviation "set_var n v \<equiv> (v, exp.const n)"
 
-abbreviation "get_prop_num \<equiv> get_or_err ''Proposition has no ID''"
+abbreviation "get_prop_id \<equiv> get_or_err ''Proposition has no ID''"
+
+
+text \<open>Makes it much more readable to print propositions as strings\<close>
+fun obj_to_string::"object \<Rightarrow> string option" where
+"obj_to_string (Obj n) = Some n" |
+"obj_to_string _ = None"
+
+fun replace::"'a \<Rightarrow> 'a \<Rightarrow> 'a list \<Rightarrow> 'a list \<Rightarrow> 'a list" where
+"replace a b xs [] = rev xs" |
+"replace a b xs (y#ys) = (if (y = a) then replace a b (b#xs) ys else replace a b (y#xs) ys)"
+
+value "replace (CHR ''-'') (CHR ''_'') [] ''abc-xyz''"
+
+fun prop_name_to_string::"predicate \<Rightarrow> string" where
+"prop_name_to_string (predicate.Pred n) = replace (CHR ''-'') (CHR ''_'') [] n"
+
+fun prop_to_string::"object atom \<Rightarrow> string option" where
+"prop_to_string (predAtm pn as) = do {
+  let pred_name = prop_name_to_string pn;
+  let args = map obj_to_string as;
+  if (list_all (\<lambda>x. x \<noteq> None) args)
+  then (case (sequence_list_opt args) of
+    Some xs \<Rightarrow>  do {
+      let arg_str = pred_name#xs |> intersperse ''_'' |> concat;
+      Some arg_str
+    } 
+  | None \<Rightarrow> None) 
+  else None
+}" |
+"prop_to_string (eqAtm a b) = do {
+  o1 \<leftarrow> obj_to_string a;
+  o2 \<leftarrow> obj_to_string b;
+  Some (''eq_'' @ o1 @ ''_'' @ o2)
+}"
+
+abbreviation "obj_to_string_err \<equiv> get_or_err ''Object is not a constant'' obj_to_string"
+
+fun prop_to_string_err::"object atom \<Rightarrow> string Error_List_Monad.result" where
+"prop_to_string_err (predAtm pn as) = do {
+  args \<leftarrow> combine_map obj_to_string_err as;
+  let pred_name = prop_name_to_string pn;
+  let arg_str = (pred_name#args) |> intersperse ''_'' |> concat;
+  Result arg_str
+}" |
+"prop_to_string_err (eqAtm a b) = do {
+  o1 \<leftarrow> obj_to_string_err a;
+  o2 \<leftarrow> obj_to_string_err b;
+  Result (''eq_'' @ o1 @ ''_'' @ o2)
+}"
 
 (* Clocks and variables do not need to be hard-coded *)
 abbreviation var_prop_lock::"('p::show) \<Rightarrow> String.literal" where
 "var_prop_lock p \<equiv> ''l_'' @ show p |> String.implode"
 
 abbreviation var_prop::"('p::show) \<Rightarrow> String.literal" where
-"var_prop \<equiv> String.implode o show"
+"var_prop p \<equiv> ''p_'' @ show p |> String.implode"
 
-definition "get_prop_lock prop_nums p \<equiv> get_prop_num prop_nums p \<bind> Result o var_prop_lock"
-definition "get_prop_var prop_nums p \<equiv> get_prop_num prop_nums p \<bind> Result o var_prop"
 
-abbreviation "prop_is prop_nums n p \<equiv> get_prop_var prop_nums p \<bind> (Result o (var_is n))"
-abbreviation "set_prop prop_nums n p \<equiv> get_prop_var prop_nums p \<bind> (Result o (set_var n))"
+definition "get_prop_var prop_str p \<equiv> get_prop_id prop_str p \<bind> Result o var_prop"
+abbreviation "prop_is prop_str n p \<equiv> get_prop_var prop_str p \<bind> (Result o (var_is n))"
+abbreviation "set_prop prop_str n p \<equiv> get_prop_var prop_str p \<bind> (Result o (set_var n))"
 
-abbreviation "prop_lock_is prop_nums n p \<equiv> get_prop_lock prop_nums p \<bind> (Result o (var_is n))"
-abbreviation "inc_prop_lock prop_nums n p \<equiv> get_prop_lock prop_nums p \<bind> (Result o (inc_var n))"
+definition "get_prop_lock prop_str p \<equiv> get_prop_id prop_str p \<bind> Result o var_prop_lock"
+abbreviation "prop_lock_is prop_str n p \<equiv> get_prop_lock prop_str p \<bind> (Result o (var_is n))"
+abbreviation "inc_prop_lock prop_str n p \<equiv> get_prop_lock prop_str p \<bind> (Result o (inc_var n))"
 
 text \<open>Names for the two variables used to indicate the status of the plan and the number
   of active actions respectively\<close>
@@ -149,8 +198,8 @@ section \<open>Reduction\<close>
     taken while model-checking
     *)
 (* intfs is a list of all interfering snap_actions *)
-definition pre_eff_to_start_urg_edge::"
-  (object atom \<Rightarrow> nat option) \<Rightarrow>
+definition start_edge::"
+  (object atom \<Rightarrow> string option) \<Rightarrow>
   's \<Rightarrow> 's \<Rightarrow> 
   object atom list \<Rightarrow> 
   object atom list \<times> object atom list \<Rightarrow>
@@ -163,13 +212,13 @@ definition pre_eff_to_start_urg_edge::"
     (String.literal \<times> (String.literal, int) exp) list \<times> 
     String.literal list \<times> 
   's) Error_List_Monad.result" where
-"pre_eff_to_start_urg_edge prop_nums inactive s_urg pre eff start_clock intfs = do {
+"start_edge prop_nums inactive s_urg pre eff start_clock intfs = do {
   let guard = map (\<lambda>x. acconstraint.GT x (0::int)) intfs;
   
   let adds = fst eff;
   let dels = snd eff;
   
-  not_locked \<leftarrow> combine_map (prop_is prop_nums 0) dels;
+  not_locked \<leftarrow> combine_map (prop_lock_is prop_nums 0) dels;
   
   pres \<leftarrow> combine_map (prop_is prop_nums 1) pre;
   let check = bexp_and_all (not_locked @ pres);
@@ -183,8 +232,8 @@ definition pre_eff_to_start_urg_edge::"
 (* In the same instant an action is activated, other actions which interact with an invariant can start.
     Invariants are checked over the open interval according to Fox and Long. Therefore, we add an urgent
     location. *)
-definition oc_to_active_edge::"
-  (object atom \<Rightarrow> nat option) \<Rightarrow> 
+definition edge_2::"
+  (object atom \<Rightarrow> string option) \<Rightarrow> 
   's \<Rightarrow> 's \<Rightarrow> 
   object atom list \<Rightarrow>
   ('s \<times>
@@ -194,7 +243,7 @@ definition oc_to_active_edge::"
     (String.literal \<times> (String.literal, int) exp) list \<times> 
     String.literal list \<times> 
   's) Error_List_Monad.result" where
-"oc_to_active_edge prop_nums s_urg active oc \<equiv> do {
+"edge_2 prop_nums s_urg active oc \<equiv> do {
   let to_inc = (\<lambda>v. Result (v, (exp.add (exp.var v) (exp.const 1))));
   
   lock_invs \<leftarrow> combine_map (\<lambda>p. get_prop_var prop_nums p \<bind> to_inc) oc;
@@ -233,7 +282,7 @@ definition max_lower_dc::"object duration_constraint list \<Rightarrow> int opti
 }"
 (* To do: check mutex when the clock is updated, not after *)
 
-definition dur_consts_to_can_term::"
+definition edge_3::"
   's \<Rightarrow> 's \<Rightarrow> 
   object duration_constraint list \<Rightarrow> 
   String.literal \<Rightarrow>
@@ -244,7 +293,7 @@ definition dur_consts_to_can_term::"
     (String.literal \<times> (String.literal, int) exp) list \<times> 
     String.literal list \<times> 
   's) Error_List_Monad.result" where
-"dur_consts_to_can_term active can_terminate dcs start_clock \<equiv> 
+"edge_3 active can_terminate dcs start_clock \<equiv> 
 do {
   dc \<leftarrow> max_lower_dc dcs;
   let guard = [get_or_default dc 0 |> acconstraint.GT start_clock];
@@ -267,8 +316,8 @@ definition min_upper_dc::"object duration_constraint list \<Rightarrow> int opti
   Result (list_min_opt consts)  
 }"
 
-definition oc_const_to_urg_edge::"
-  (object atom \<Rightarrow> nat option) \<Rightarrow>
+definition edge_4::"
+  (object atom \<Rightarrow> string option) \<Rightarrow>
   's \<Rightarrow> 's \<Rightarrow>
   object atom list \<Rightarrow>
   object duration_constraint list \<Rightarrow>
@@ -282,7 +331,7 @@ definition oc_const_to_urg_edge::"
     (String.literal \<times> (String.literal, int) exp) list \<times> 
     String.literal list \<times> 
   's) Error_List_Monad.result"  where
-"oc_const_to_urg_edge prop_nums dur_sat urg oc dur_consts start_clock end_clock intfe \<equiv> 
+"edge_4 prop_nums dur_sat urg oc dur_consts start_clock end_clock intfe \<equiv> 
 do {
   
   let guard = map (\<lambda>x. acconstraint.GT x (0::int)) intfe;
@@ -295,8 +344,8 @@ do {
   Result (dur_sat, bexp.true, guard, Sil (STR ''''), unlock_invs, [end_clock], urg)
 }"
 
-definition pre_eff_to_end_edge::"
-  (object atom \<Rightarrow> nat option) \<Rightarrow>
+definition edge_5::"
+  (object atom \<Rightarrow> string option) \<Rightarrow>
   's \<Rightarrow> 's \<Rightarrow> 
   object atom list \<Rightarrow> 
   object atom list \<times> object atom list \<Rightarrow>
@@ -307,7 +356,7 @@ definition pre_eff_to_end_edge::"
     (String.literal \<times> (String.literal, int) exp) list \<times> 
     String.literal list \<times> 
   's) Error_List_Monad.result" where
-"pre_eff_to_end_edge prop_nums urg inactive pre eff  = do {
+"edge_5 prop_nums urg inactive pre eff  = do {
 
   let adds = fst eff;
   let dels = snd eff;
@@ -378,7 +427,7 @@ definition action_to_automaton::"
       (object atom list \<times> object atom list) \<times> 
       (object atom list \<times> object atom list) 
       \<Rightarrow> nat option)
-  \<Rightarrow> (object atom \<Rightarrow> nat option)
+  \<Rightarrow> (object atom \<Rightarrow> string option)
   \<Rightarrow> String.literal
   \<Rightarrow> String.literal
   \<Rightarrow> string \<times> 
@@ -423,14 +472,14 @@ definition action_to_automaton::"
   start_clock \<leftarrow> get_start_clock act_nums a;
   end_clock \<leftarrow> get_end_clock act_nums a;
 
-  e1 \<leftarrow> pre_eff_to_start_urg_edge prop_nums (0::nat) (1::nat) pre_at_start eff_at_start start_clock intfs
+  e1 \<leftarrow> start_edge prop_nums (0::nat) (1::nat) pre_at_start eff_at_start start_clock intfs
       \<bind> (Result o add_upd (inc_var (1::int) acts_active_count));
 
-  e2 \<leftarrow> oc_to_active_edge prop_nums 1 2 oc;
-  e3 \<leftarrow> dur_consts_to_can_term 2 3 dc start_clock;
-  e4 \<leftarrow> oc_const_to_urg_edge prop_nums 3 4 oc dc start_clock end_clock intfe;
+  e2 \<leftarrow> edge_2 prop_nums 1 2 oc;
+  e3 \<leftarrow> edge_3 2 3 dc start_clock;
+  e4 \<leftarrow> edge_4 prop_nums 3 4 oc dc start_clock end_clock intfe;
 
-  e5 \<leftarrow> pre_eff_to_end_edge prop_nums 4 1 pre_at_end eff_at_end
+  e5 \<leftarrow> edge_5 prop_nums 4 1 pre_at_end eff_at_end
       \<bind> (Result o add_upd (inc_var (-1) acts_active_count));
 
   let edges = [e1, e2, e3, e4, e5] |> map (add_guard (var_is (1::int) plan_lock));
@@ -606,7 +655,7 @@ definition actions_to_automata::"
     (object atom list \<times> object atom list) \<times>
     (object atom list \<times> object atom list)
      \<Rightarrow> nat option)
-  \<Rightarrow> (object atom \<Rightarrow> nat option)
+  \<Rightarrow> (object atom \<Rightarrow> string option)
   \<Rightarrow> String.literal
   \<Rightarrow> String.literal
   \<Rightarrow> (string \<times> 
@@ -634,9 +683,10 @@ definition actions_to_automata::"
 (*names_to_ids, ids_to_names, committed, urgent, edges, invs*)
 
 definition init_props_and_lock_to_init_edge::"
-  (object atom \<Rightarrow> nat option)
+  (object atom \<Rightarrow> string option)
 \<Rightarrow> 's \<Rightarrow> 's 
 \<Rightarrow> object atom list
+\<Rightarrow> String.literal
 \<Rightarrow> String.literal
 \<Rightarrow> ('s \<times> 
     (String.literal, int) bexp \<times>
@@ -645,15 +695,16 @@ definition init_props_and_lock_to_init_edge::"
     (String.literal \<times> (String.literal, int) exp) list \<times>
     String.literal list \<times>
     's) Error_List_Monad.result" where
-"init_props_and_lock_to_init_edge prop_nums i p init_props is_planning \<equiv> do {
+"init_props_and_lock_to_init_edge prop_nums i p init_props is_planning active_act_c \<equiv> do {
   init_upds \<leftarrow> combine_map (set_prop prop_nums 1) init_props;
   let plan_lock = (is_planning, (exp.const 1));
+  let set_active = (active_act_c, (exp.const 0));
   let can_start = bexp.eq (exp.var is_planning) (exp.const 0);
-  Result (i, can_start, [], Sil (STR ''''), plan_lock#init_upds, [], p)
+  Result (i, can_start, [], Sil (STR ''''), plan_lock#set_active#init_upds, [], p)
 }"
 
 definition goal_props_and_locks_to_goal_edge::"
-  (object atom \<Rightarrow> nat option)
+  (object atom \<Rightarrow> string option)
 \<Rightarrow> 's \<Rightarrow> 's 
 \<Rightarrow> object atom list
 \<Rightarrow> String.literal
@@ -668,7 +719,7 @@ definition goal_props_and_locks_to_goal_edge::"
 "goal_props_and_locks_to_goal_edge prop_nums p g goal_props is_planning actions_active \<equiv> do {
   let plan_lock = (is_planning, (exp.const 2));
 
-  let can_end = bexp.eq (exp.var is_planning) (exp.const 0);
+  let can_end = bexp.eq (exp.var is_planning) (exp.const 1);
   goal_sat \<leftarrow> combine_map (prop_is prop_nums 1) goal_props;
   let cond = bexp_and_all (can_end#goal_sat);
   
@@ -678,7 +729,7 @@ definition goal_props_and_locks_to_goal_edge::"
 (* is_planning_lock permits planning when it is set to 1. active_action_lock is only 0, when all
     actions have terminated. *)
 definition main_auto::"
-  (object atom \<Rightarrow> nat option)
+  (object atom \<Rightarrow> string option)
 \<Rightarrow> object atom list
 \<Rightarrow> object atom list
 \<Rightarrow> String.literal
@@ -712,7 +763,7 @@ definition main_auto::"
   let names_to_ids = map_of node_list;
   let ids_to_names = map_of (map prod.swap node_list);
 
-  e1 \<leftarrow> init_props_and_lock_to_init_edge prop_nums 0 1 init_props is_planning_lock;
+  e1 \<leftarrow> init_props_and_lock_to_init_edge prop_nums 0 1 init_props is_planning_lock active_action_lock;
   e2 \<leftarrow> goal_props_and_locks_to_goal_edge prop_nums 1 2 goal_props is_planning_lock active_action_lock;
   
   let edges = [e1, e2];
@@ -759,10 +810,16 @@ definition tp_to_ta_net::"
   let (props, acts, init, goal) = args
   in do {
     let prop_nums = [0..(length props - 1)] |> map nat |> zip props |> map_of;
+    prop_names' \<leftarrow> combine_map (\<lambda>p. do {
+      n \<leftarrow> prop_to_string_err p;
+      Result (p, n)
+    }) props;
+
+    let prop_names = map_of prop_names';
     let act_nums = [0..(length acts - 1)] |> map nat |> zip acts |> map_of;
     
-    prop_locks \<leftarrow> combine_map (get_prop_lock prop_nums) props;
-    prop_vars \<leftarrow> combine_map (get_prop_var prop_nums) props;
+    prop_locks \<leftarrow> combine_map (get_prop_lock prop_names) props;
+    prop_vars \<leftarrow> combine_map (get_prop_var prop_names) props;
 
     act_start_clocks \<leftarrow> combine_map (get_start_clock act_nums) acts;
     act_end_clocks \<leftarrow> combine_map (get_end_clock act_nums) acts;
@@ -770,12 +827,13 @@ definition tp_to_ta_net::"
     let prop_lock_var_defs = map (\<lambda>x. (x, 0::int, 1::int)) prop_locks;
     let prop_var_var_defs = map (\<lambda>x. (x, 0, 1)) prop_vars;
     let planning_lock_var_def = (planning_lock, 0, 2);
-    let acts_active_var_def = (acts_active, 0, length acts);
+    let acts_active_var_def = (acts_active, 0, int (length acts));
+    let vars = planning_lock_var_def # acts_active_var_def # prop_lock_var_defs @ prop_var_var_defs;
 
-    act_autos \<leftarrow> actions_to_automata act_nums prop_nums planning_lock acts_active acts;
+    act_autos \<leftarrow> actions_to_automata act_nums prop_names planning_lock acts_active acts;
 
     let main_name = main_name (map fst acts) |> String.implode;
-    (goal_loc, main_auto) \<leftarrow> main_auto prop_nums init goal main_name planning_lock acts_active;
+    (goal_loc, main_auto) \<leftarrow> main_auto prop_names init goal main_name planning_lock acts_active;
     
     let main_auto_n = (length acts);
 
@@ -787,7 +845,6 @@ definition tp_to_ta_net::"
 
     let automata = main_auto#act_autos;
     let clocks = act_start_clocks@act_end_clocks;
-    let vars = planning_lock_var_def # acts_active_var_def # prop_lock_var_defs @ prop_var_var_defs;
     let formula = formula.EX (loc main_auto_n goal_loc);
     Result (act_name_nums, act_num_names, automata, clocks, vars, formula)
   }
