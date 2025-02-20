@@ -1,0 +1,5 @@
+(:invariant
+  :name elevator-at-most-one-floor
+  :vars (?e - elevator ?f0 ?f1 - floor)
+  :set-constraint (or (not (elevator-at ?e ?f0)) (not (elevator-at ?e ?f1)) (= ?f0 ?f1))
+)

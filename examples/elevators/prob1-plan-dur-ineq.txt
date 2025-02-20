@@ -1,0 +1,8 @@
+0.0: (close-elevator-door e0)[1.0]
+1.0: (move-elevator e0 f0 f1)[1.0]
+2.0: (open-elevator-door e0)[1.0]
+3.0: (enter-elevator p0 e0 f1)[0.4367]
+4.0: (close-elevator-door e0)[1.0]
+5.0: (move-elevator e0 f1 f0)[1.0]
+6.0: (open-elevator-door e0)[1.0]
+7.0: (exit-elevator p0 e0 f0)[0.6734]
