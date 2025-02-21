@@ -35,7 +35,7 @@ definition [consuming]:
 
 definition 
   "pddl_requirement_keywords \<equiv> ['':strips'', '':equality'', '':typing'', '':action-costs'', 
-      '':negative-preconditions'', '':disjunctive-preconditions'', 
+      '':negative-preconditions'', '':disjunctive-preconditions'', '':durative-actions'',
       '':existential-preconditions'', '':universal-preconditions'', '':quantified-preconditions'',
       '':adl'', '':numeric-fluents'', '':object-fluents'', '':action-costs'']"
 

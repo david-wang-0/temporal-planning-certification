@@ -117,11 +117,11 @@ abbreviation var_prop::"('p::show) \<Rightarrow> String.literal" where
 
 
 definition "get_prop_var prop_str p \<equiv> get_prop_id prop_str p \<bind> Result o var_prop"
-abbreviation "prop_is prop_str n p \<equiv> get_prop_var prop_str p \<bind> (Result o (var_is n))"
+abbreviation "is_prop prop_str n p \<equiv> get_prop_var prop_str p \<bind> (Result o (var_is n))"
 abbreviation "set_prop prop_str n p \<equiv> get_prop_var prop_str p \<bind> (Result o (set_var n))"
 
 definition "get_prop_lock prop_str p \<equiv> get_prop_id prop_str p \<bind> Result o var_prop_lock"
-abbreviation "prop_lock_is prop_str n p \<equiv> get_prop_lock prop_str p \<bind> (Result o (var_is n))"
+abbreviation "is_prop_lock prop_str n p \<equiv> get_prop_lock prop_str p \<bind> (Result o (var_is n))"
 abbreviation "inc_prop_lock prop_str n p \<equiv> get_prop_lock prop_str p \<bind> (Result o (inc_var n))"
 
 text \<open>Names for the two variables used to indicate the status of the plan and the number
@@ -152,7 +152,8 @@ fun bexp_and_all::"('a, 'b) bexp list \<Rightarrow> ('a, 'b) bexp" where
 section \<open>Reduction\<close>
 (* prop_nums is a function that assigns an identifier to a predicate. It could be a number or a string *)
 (*  off \<rightarrow> start instant!! \<rightarrow> pass time \<rightarrow> can end \<rightarrow> end instant!! \<rightarrow> off
-      
+                  
+                  check invariants hold!
                   increment mutex vars!
       check mutex vars!
 
@@ -196,6 +197,9 @@ section \<open>Reduction\<close>
     
     Checking preconditions should be done at the start of the instants. Could result in fewer transitions
     taken while model-checking
+
+    When the mutex variable is incremented, the invariant propositions has to be checked to be true. 
+    Otherwise, it could be false and never explicitly set to false during action execution, and still not hold.
     *)
 (* intfs is a list of all interfering snap_actions *)
 definition start_edge::"
@@ -218,9 +222,9 @@ definition start_edge::"
   let adds = fst eff;
   let dels = snd eff;
   
-  not_locked \<leftarrow> combine_map (prop_lock_is prop_nums 0) dels;
+  not_locked \<leftarrow> combine_map (is_prop_lock prop_nums 0) dels;
   
-  pres \<leftarrow> combine_map (prop_is prop_nums 1) pre;
+  pres \<leftarrow> combine_map (is_prop prop_nums 1) pre;
   let check = bexp_and_all (not_locked @ pres);
 
   dels \<leftarrow> combine_map (set_prop prop_nums 0) dels;
@@ -232,6 +236,8 @@ definition start_edge::"
 (* In the same instant an action is activated, other actions which interact with an invariant can start.
     Invariants are checked over the open interval according to Fox and Long. Therefore, we add an urgent
     location. *)
+
+(* Something is wrong with the mutex lock *)
 definition edge_2::"
   (object atom \<Rightarrow> string option) \<Rightarrow> 
   's \<Rightarrow> 's \<Rightarrow> 
@@ -244,11 +250,13 @@ definition edge_2::"
     String.literal list \<times> 
   's) Error_List_Monad.result" where
 "edge_2 prop_nums s_urg active oc \<equiv> do {
-  let to_inc = (\<lambda>v. Result (v, (exp.add (exp.var v) (exp.const 1))));
+  lock_invs \<leftarrow> combine_map (inc_prop_lock prop_nums 1) oc;
   
-  lock_invs \<leftarrow> combine_map (\<lambda>p. get_prop_var prop_nums p \<bind> to_inc) oc;
+  check_invs \<leftarrow> combine_map (is_prop_lock prop_nums 1) oc;
+
+  let check_invs = bexp_and_all check_invs;
   
-  Result (s_urg, bexp.true, [], Sil (STR ''''), lock_invs, [], active)
+  Result (s_urg, check_invs, [], Sil (STR ''''), lock_invs, [], active)
 }"
 
 
@@ -361,9 +369,9 @@ definition edge_5::"
   let adds = fst eff;
   let dels = snd eff;
   
-  not_locked \<leftarrow> combine_map (prop_lock_is prop_nums 0) dels;
+  not_locked \<leftarrow> combine_map (is_prop_lock prop_nums 0) dels;
   
-  pres \<leftarrow> combine_map (prop_is prop_nums 1) pre;
+  pres \<leftarrow> combine_map (is_prop prop_nums 1) pre;
 
   let check = bexp_and_all (not_locked @ pres);
 
@@ -720,7 +728,7 @@ definition goal_props_and_locks_to_goal_edge::"
   let plan_lock = (is_planning, (exp.const 2));
 
   let can_end = bexp.eq (exp.var is_planning) (exp.const 1);
-  goal_sat \<leftarrow> combine_map (prop_is prop_nums 1) goal_props;
+  goal_sat \<leftarrow> combine_map (is_prop prop_nums 1) goal_props;
   let cond = bexp_and_all (can_end#goal_sat);
   
   Result (p, cond, [], Sil (STR ''''), [plan_lock], [], g)

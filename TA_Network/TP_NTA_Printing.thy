@@ -58,9 +58,24 @@ ML \<open>
 
 ML_val \<open>
   parse_and_print
-  "work/temporal_planning_certification/temporal-planning-certification/examples/ground-elevators.pddl"
-  "work/temporal_planning_certification/temporal-planning-certification/examples/ground-elevators-prob2.pddl"
-  "work/temporal_planning_certification/temporal-planning-certification/examples/ground-elevators-out2.muntax"
+  "work/temporal_planning_certification/temporal-planning-certification/examples/blocks-world/ground-blocks.pddl"
+  "work/temporal_planning_certification/temporal-planning-certification/examples/blocks-world/ground-blocks-prob-1.pddl"
+  "work/temporal_planning_certification/temporal-planning-certification/examples/out/blocks-world-1.muntax"
+\<close>
+
+ML_val \<open>
+  parse_and_print
+  "work/temporal_planning_certification/temporal-planning-certification/examples/elevators-new/ground-elevators.pddl"
+  "work/temporal_planning_certification/temporal-planning-certification/examples/elevators-new/ground-elevators-prob1.pddl"
+  "work/temporal_planning_certification/temporal-planning-certification/examples/out/elevators-1.muntax"
+\<close>
+
+
+ML_val \<open>
+  parse_and_print
+  "work/temporal_planning_certification/temporal-planning-certification/examples/blocks-world/ground-blocks-2.pddl"
+  "work/temporal_planning_certification/temporal-planning-certification/examples/blocks-world/ground-blocks-prob-2.pddl"
+  "work/temporal_planning_certification/temporal-planning-certification/examples/out/blocks-world-2.muntax"
 \<close>
 
 end
