@@ -34,16 +34,36 @@ in
   net_to_JSON act_num_names (automata, clocks, vars, formula)"
 
 
-definition "parse_tp_to_JSON d p \<equiv> do {
+definition [code]: "parse_tp_to_JSON d p \<equiv> do {
   (preds, acts, init, goal) \<leftarrow> parse_dom_and_prob d p;
   autos \<leftarrow> tp_to_ta_net (preds, acts, init, goal);
   tp_net_to_JSON autos
 }"
 
-definition "parse_tp_to_JSON_string d p \<equiv> 
+definition [code]: "parse_tp_to_opt_JSON d p \<equiv> (
+  case parse_tp_to_JSON d p of 
+  Error es \<Rightarrow> do {let _ = show es |> String.implode |> println; None}
+| Result res \<Rightarrow> do {res |> show |> String.implode |> Some}
+)"
+
+definition [code]: "parse_tp_to_JSON_string d p \<equiv> 
 (case (parse_tp_to_JSON d p) of
   Error es \<Rightarrow> show es
 | Result res \<Rightarrow> show res) |> String.implode"
+
+(* 
+code_printing
+  constant upto \<rightharpoonup> (SML) "_ upto _" *)
+
+code_printing
+  constant println \<rightharpoonup> (SML) "writeln _"
+       and          (OCaml) "print'_string _"
+
+export_code parse_tp_to_opt_JSON Result Error String.explode int_of_integer nat_of_integer
+  JSON.Object JSON.Array JSON.String JSON.Int JSON.Nat JSON.Rat JSON.Boolean JSON.Null fract.Rat
+  shows_json
+in SML module_name TP_NTA_Printing file "../ML/TP_NTA_Printing.sml"
+
 
 ML \<open>
   fun parse_and_print df pf out_f =
@@ -56,6 +76,7 @@ ML \<open>
   end
 \<close>
 
+(*
 ML_val \<open>
   parse_and_print
   "work/temporal_planning_certification/temporal-planning-certification/examples/blocks-world/ground-blocks.pddl"
@@ -77,5 +98,6 @@ ML_val \<open>
   "work/temporal_planning_certification/temporal-planning-certification/examples/blocks-world/ground-blocks-prob-2.pddl"
   "work/temporal_planning_certification/temporal-planning-certification/examples/out/blocks-world-2.muntax"
 \<close>
+ *)
 
 end

@@ -105,8 +105,6 @@ fun list_max_opt::"('a::linorder) list \<Rightarrow> 'a option" where
 "list_max_opt [] = None" |
 "list_max_opt (x#xs) = Some (list_max_opt' xs x)"
 
-value "upto 1 0"
-
 function upto_aux_nat::"nat \<Rightarrow> nat \<Rightarrow> nat list" where
 "upto_aux_nat m n = (if (m < n) then m#upto_aux_nat (m+1) n else [])"
   by auto
@@ -123,11 +121,6 @@ fun matches_start::"'a list \<Rightarrow> 'a list \<Rightarrow> bool" where
 "matches_start [] ys = True" |
 "matches_start xs [] = False" |
 "matches_start (x#xs) (y#ys) = (if (x \<noteq> y) then False else matches_start xs ys)"
-
-inductive_set unique_name_r::"((string \<times> string list) \<times> (string \<times> string list)) set" where
-"((s, xs), (t, xs)) \<in> unique_name_r " if "length s > length t" |
-"((s, xs), (s, x#xs)) \<in> unique_name_r"
-
 
 function unique_name::"string \<Rightarrow> string list \<Rightarrow> string" where
 "unique_name s [] = s" |

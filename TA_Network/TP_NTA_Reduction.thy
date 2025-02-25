@@ -864,13 +864,6 @@ definition [code]: "parse_and_convert d p \<equiv> do {
   Result autos
 }"
 
-ML \<open>
-  @{code parse_and_convert}
-\<close>
-
-export_code parse_and_convert
-in SML module_name TP_TA_Net_Red file "ML/TA_Network_Reduction.sml"
-
 
 ML \<open>
   fun parse_and_convert_dom_and_prob df pf =
