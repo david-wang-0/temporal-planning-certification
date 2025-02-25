@@ -130,7 +130,8 @@ definition "planning_lock \<equiv> ''planning_lock'' |> String.implode"
 definition "acts_active \<equiv> ''actions_active'' |> String.implode"
 
 text \<open>Converting actions to clocks\<close>
-abbreviation "get_act_num \<equiv> get_or_err ''Action has no ID ''"
+abbreviation "get_act_id \<equiv> get_or_err ''Action has no ID ''"
+
 
 (* Is called with the number of the action *)
 abbreviation start_act_clock::"('a::show) \<Rightarrow> String.literal" where
@@ -139,8 +140,8 @@ abbreviation start_act_clock::"('a::show) \<Rightarrow> String.literal" where
 abbreviation end_act_clock::"('a::show) \<Rightarrow> String.literal" where
 "end_act_clock a \<equiv> ''e_'' @ show a |> String.implode"
 
-definition "get_start_clock act_nums a \<equiv> get_act_num act_nums a \<bind> (Result o start_act_clock)"
-definition "get_end_clock act_nums a \<equiv> get_act_num act_nums a \<bind> (Result o end_act_clock)"
+definition "get_start_clock act_ids a \<equiv> get_act_id act_ids a \<bind> (Result o start_act_clock)"
+definition "get_end_clock act_ids a \<equiv> get_act_id act_ids a \<bind> (Result o end_act_clock)"
 
 
 
@@ -434,7 +435,7 @@ definition action_to_automaton::"
       object atom list \<times>
       (object atom list \<times> object atom list) \<times> 
       (object atom list \<times> object atom list) 
-      \<Rightarrow> nat option)
+      \<Rightarrow> string option)
   \<Rightarrow> (object atom \<Rightarrow> string option)
   \<Rightarrow> String.literal
   \<Rightarrow> String.literal
@@ -459,9 +460,9 @@ definition action_to_automaton::"
          (String.literal, int) acconstraint list \<times> String.literal act \<times> (String.literal \<times> (String.literal, int) exp) list \<times> String.literal list \<times> nat) list \<times>
        (nat \<times> (String.literal, int) acconstraint list) list
       ) Error_List_Monad.result" where
-"action_to_automaton act_nums prop_nums plan_lock acts_active_count a intfs intfe \<equiv> do {
+"action_to_automaton act_ids prop_nums plan_lock acts_active_count a intfs intfe \<equiv> do {
   let (name, dc, oc, pre_at_start, pre_at_end, eff_at_start, eff_at_end) = a;
-  num \<leftarrow> get_act_num act_nums a;
+  num \<leftarrow> get_act_id act_ids a;
   
   let off = (''off_'' @ name |> String.implode, 0::nat);
   let starting = (''starting_'' @ name |> String.implode, 1);
@@ -477,8 +478,8 @@ definition action_to_automaton::"
   let urgent = [snd starting, snd stopping];
   let committed = ([]::nat list);
 
-  start_clock \<leftarrow> get_start_clock act_nums a;
-  end_clock \<leftarrow> get_end_clock act_nums a;
+  start_clock \<leftarrow> get_start_clock act_ids a;
+  end_clock \<leftarrow> get_end_clock act_ids a;
 
   e1 \<leftarrow> start_edge prop_nums (0::nat) (1::nat) pre_at_start eff_at_start start_clock intfs
       \<bind> (Result o add_upd (inc_var (1::int) acts_active_count));
@@ -618,7 +619,7 @@ definition mutex_start_end::"
      object atom list \<times> 
     (object atom list \<times> object atom list) \<times> 
     (object atom list \<times> object atom list) 
-    \<Rightarrow> nat option)
+    \<Rightarrow> string option)
   \<Rightarrow> (string \<times> 
       object duration_constraint list \<times>
       object atom list \<times>
@@ -662,7 +663,7 @@ definition actions_to_automata::"
      object atom list \<times>                                             
     (object atom list \<times> object atom list) \<times>
     (object atom list \<times> object atom list)
-     \<Rightarrow> nat option)
+     \<Rightarrow> string option)
   \<Rightarrow> (object atom \<Rightarrow> string option)
   \<Rightarrow> String.literal
   \<Rightarrow> String.literal
@@ -674,12 +675,12 @@ definition actions_to_automata::"
       (object atom list \<times> object atom list) \<times>
       (object atom list \<times> object atom list)) list 
     \<Rightarrow> _" where
-"actions_to_automata act_num prop_num plan_lock acts_active_num as \<equiv> do {
-  let msf = mutex_snap_fun act_num as;
+"actions_to_automata act_ids prop_num plan_lock acts_active_num as \<equiv> do {
+  let msf = mutex_snap_fun act_ids as;
   
   let to_auto = (\<lambda>a. do {
     (intfs, intfe) \<leftarrow> msf a;
-    action_to_automaton act_num prop_num plan_lock acts_active_num a intfs intfe
+    action_to_automaton act_ids prop_num plan_lock acts_active_num a intfs intfe
   });
   
   autos \<leftarrow> combine_map to_auto as;
@@ -818,19 +819,21 @@ definition tp_to_ta_net::"
   let (props, acts, init, goal) = args
   in do {
     let prop_nums = [0..(length props - 1)] |> map nat |> zip props |> map_of;
+    let act_nums = [0..(length acts - 1)] |> map nat |> zip acts |> map_of;
+
     prop_names' \<leftarrow> combine_map (\<lambda>p. do {
       n \<leftarrow> prop_to_string_err p;
       Result (p, n)
     }) props;
-
     let prop_names = map_of prop_names';
-    let act_nums = [0..(length acts - 1)] |> map nat |> zip acts |> map_of;
-    
+
+    let act_names = map_of (map (\<lambda>a. (a, replace (CHR ''-'') (CHR ''_'') [] (fst a))) acts);
+  
     prop_locks \<leftarrow> combine_map (get_prop_lock prop_names) props;
     prop_vars \<leftarrow> combine_map (get_prop_var prop_names) props;
 
-    act_start_clocks \<leftarrow> combine_map (get_start_clock act_nums) acts;
-    act_end_clocks \<leftarrow> combine_map (get_end_clock act_nums) acts;
+    act_start_clocks \<leftarrow> combine_map (get_start_clock act_names) acts;
+    act_end_clocks \<leftarrow> combine_map (get_end_clock act_names) acts;
     
     let prop_lock_var_defs = map (\<lambda>x. (x, 0::int, 1::int)) prop_locks;
     let prop_var_var_defs = map (\<lambda>x. (x, 0, 1)) prop_vars;
@@ -838,7 +841,7 @@ definition tp_to_ta_net::"
     let acts_active_var_def = (acts_active, 0, int (length acts));
     let vars = planning_lock_var_def # acts_active_var_def # prop_lock_var_defs @ prop_var_var_defs;
 
-    act_autos \<leftarrow> actions_to_automata act_nums prop_names planning_lock acts_active acts;
+    act_autos \<leftarrow> actions_to_automata act_names prop_names planning_lock acts_active acts;
 
     let main_name = main_name (map fst acts) |> String.implode;
     (goal_loc, main_auto) \<leftarrow> main_auto prop_names init goal main_name planning_lock acts_active;
