@@ -17,9 +17,9 @@ CERTIFICATE?="none"
 RENAMING?="none"
 
 touch_pd: 
-	mkdir -p -- $$(dirname $(PDDL_DOMAIN))
-	touch $(PDDL_DOMAIN)
-	mkdir -p -- $$(dirname $(PDDL_PROBLEM))
+	mkdir -p -- $$(dirname $(PDDL_DOMAIN)) &
+	touch $(PDDL_DOMAIN) &
+	mkdir -p -- $$(dirname $(PDDL_PROBLEM)) &
 	touch $(PDDL_PROBLEM)
 
 ground_problem: touch_pd
@@ -37,16 +37,16 @@ build_muntac:
 build_all: | build_tp_conversion build_mluntac build_muntac
 
 touch_o:
-	mkdir -p -- $$(dirname "$(OUTPUT)")
+	mkdir -p -- $$(dirname "$(OUTPUT)") &
 	touch $(OUTPUT)
 
 tp_to_muntax: touch_o
 	./tp_cert -domain $(DOMAIN) -problem $(PROBLEM) -output $(OUTPUT)
 
 touch_cert_rnm:
-	mkdir -p -- $$(dirname "$(CERTIFICATE)")
-	touch $(CERTIFICATE)
-	mkdir -p -- $$(dirname "$(RENAMING)")
+	mkdir -p -- $$(dirname "$(CERTIFICATE)") &
+	touch $(CERTIFICATE) &
+	mkdir -p -- $$(dirname "$(RENAMING)") &
 	touch $(RENAMING)
 
 

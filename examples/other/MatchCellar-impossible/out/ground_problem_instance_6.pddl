@@ -1,0 +1,22 @@
+(define (problem groundproblem) (:domain ground)
+(:init
+ (handfree)
+ (unused_match0)
+ (unused_match1)
+ (unused_match2)
+ (unused_match3)
+)
+(:goal
+(and
+ (mended_fuse0)
+ (mended_fuse1)
+ (mended_fuse2)
+ (mended_fuse3)
+ (mended_fuse4)
+ (mended_fuse5)
+ (mended_fuse6)
+ (mended_fuse7)
+ (mended_fuse8)
+)
+)
+)
