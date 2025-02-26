@@ -12,4 +12,4 @@ make -C ML ground_compile_cert_check \
     PROBLEM=../$dir/out/ground_problem_$instance_name.pddl \
     OUTPUT=../$dir/out/$instance_name.muntax \
     CERTIFICATE=../$dir/out/$instance_name.cert \
-    CERTIFICATE=../$dir/out/$instance_name.rnm
+    RENAMING=../$dir/out/$instance_name.rnm
