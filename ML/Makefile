@@ -16,13 +16,15 @@ OUTPUT?="none"
 CERTIFICATE?="none"
 RENAMING?="none"
 
-touch_pd: 
-	mkdir -p -- $$(dirname $(GROUND_DOMAIN)) &
-	touch $(GROUND_DOMAIN) &
-	mkdir -p -- $$(dirname $(GROUND_PROBLEM)) &
+mk_dir_pd:
+	mkdir -p -- $$(dirname $(GROUND_DOMAIN)) 
+	mkdir -p -- $$(dirname $(GROUND_PROBLEM))
+
+touch_pd: mk_dir_pd
+	touch $(GROUND_DOMAIN)
 	touch $(GROUND_PROBLEM)
 
-ground_dom_and_prob: touch_pd
+ground_dom_and_prob: mk_dir_pd
 	$(GROUNDER) --write-pddl $(GROUND_DOMAIN) $(GROUND_PROBLEM) $(PDDL_DOMAIN) $(PDDL_PROBLEM)
 
 build_tp_conversion: 
@@ -36,11 +38,13 @@ build_muntac:
 
 build_all: | build_tp_conversion build_mluntac build_muntac
 
-touch_o:
-	mkdir -p -- $$(dirname "$(OUTPUT)") &
+mk_dir_o:
+	mkdir -p -- $$(dirname "$(OUTPUT)") 
+
+touch_o: mk_dir_o
 	touch $(OUTPUT)
 
-tp_to_muntax: touch_o
+tp_to_muntax: mk_dir_o
 	./tp_cert -domain $(GROUND_DOMAIN) -problem $(GROUND_PROBLEM) -output $(OUTPUT)
 
 touch_cert_rnm:

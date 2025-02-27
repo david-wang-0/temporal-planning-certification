@@ -80,7 +80,7 @@ def guess(n, lbound=1, ubound=50):
 def calc_duration(l1, l2, speed):
     return ceil(abs(l1 - l2) / speed)
 
-# From 
+# From original source
 def guess_d(n, bound, possible):
     res = []
     m, M = None, None
