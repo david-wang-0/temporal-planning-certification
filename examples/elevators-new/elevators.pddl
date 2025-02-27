@@ -1,5 +1,5 @@
 (define (domain elevators)
-  (:requirements :typing :durative-actions :numeric-fluents)
+  (:requirements :typing :durative-actions :fluents)
   (:types elevator person floor - object)
   (:predicates 
     (person-on-floor ?p - person ?f - floor)

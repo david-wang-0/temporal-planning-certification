@@ -24,6 +24,8 @@ PDDL_TEMPLATE = Template('''(define (problem {{problem_name}})
   (:init
   {%- for p in persons %}
     (person-on-floor {{p.name}} {{p.init_loc}})
+  {%- endfor %}
+  {% for p in persons %}
     (= (dur-enter {{p.name}}) {{p.dur_enter}})
     (= (dur-exit {{p.name}}) {{p.dur_exit}})
   {%- endfor %}
@@ -33,6 +35,7 @@ PDDL_TEMPLATE = Template('''(define (problem {{problem_name}})
   {%- endfor %}
   {% for eff in effs %}
     (= (travel-dur {{eff.elevator_name}} {{eff.floor_from}} {{eff.floor_to}}) {{eff.time}})
+    (= (travel-dur {{eff.elevator_name}} {{eff.floor_to}} {{eff.floor_from}}) {{eff.time}})
   {%- endfor %}
   )
 
@@ -44,14 +47,16 @@ PDDL_TEMPLATE = Template('''(define (problem {{problem_name}})
     {% for g in pgs %}
       (person-on-floor {{g.person}} {{g.goal_loc}})
     {%- endfor %}
-    {% for g in egs %}
-      (person-on-floor {{g.elevator}} {{g.goal_loc}})
-    {%- endfor %}
+   
 
     )
   )
 )
 ''')
+
+# {% for g in egs %}
+#     (elevator-on-floor {{g.elevator}} {{g.goal_loc}})
+# {%- endfor %}
 
 Floor = namedtuple('Floor', ['name', 'level'])
 
@@ -148,19 +153,19 @@ def mk_effs(elevators, floors):
     return res
 
 def mk_impossible_goal(persons, elevators, floors):
-    lock = randint(1, 3)
+    # lock = randint(1, 3)
     egs = []
     pgs = []
-    if (lock & 0b1):
-        p, *tail = sample(persons, 1)
-        f1, f2, *tail = sample(floors, 2)
-        pgs.append(PersonLoc(person=p.name, goal_loc=f1.name))
-        pgs.append(PersonLoc(person=p.name, goal_loc=f2.name))
-    if (lock & 0b10):
-        e, *tail = sample(elevators, 1)
-        f1, f2, *tail = sample(floors, 2)
-        egs.append(ElevatorLoc(elevator=e.name, goal_loc=f1.name))
-        egs.append(ElevatorLoc(elevator=e.name, goal_loc=f2.name))
+    # if (lock & 0b1):
+    p, *tail = sample(persons, 1)
+    f1, f2, *tail = sample(floors, 2)
+    pgs.append(PersonLoc(person=p.name, goal_loc=f1.name))
+    pgs.append(PersonLoc(person=p.name, goal_loc=f2.name))
+    # if (lock & 0b10):
+    #     e, *tail = sample(elevators, 1)
+    #     f1, f2, *tail = sample(floors, 2)
+    #     egs.append(ElevatorLoc(elevator=e.name, goal_loc=f1.name))
+    #     egs.append(ElevatorLoc(elevator=e.name, goal_loc=f2.name))
     return pgs, egs
         
 
