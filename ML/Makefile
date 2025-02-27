@@ -10,20 +10,20 @@ GROUNDER="./../../grounder"
 
 PDDL_DOMAIN?="none"
 PDDL_PROBLEM?="none"
-DOMAIN?="none"
-PROBLEM?="none"
+GROUND_DOMAIN?="none"
+GROUND_PROBLEM?="none"
 OUTPUT?="none"
 CERTIFICATE?="none"
 RENAMING?="none"
 
 touch_pd: 
-	mkdir -p -- $$(dirname $(PDDL_DOMAIN)) &
-	touch $(PDDL_DOMAIN) &
-	mkdir -p -- $$(dirname $(PDDL_PROBLEM)) &
-	touch $(PDDL_PROBLEM)
+	mkdir -p -- $$(dirname $(GROUND_DOMAIN)) &
+	touch $(GROUND_DOMAIN) &
+	mkdir -p -- $$(dirname $(GROUND_PROBLEM)) &
+	touch $(GROUND_PROBLEM)
 
-ground_problem: touch_pd
-	$(GROUNDER) --write-pddl $(DOMAIN) $(PROBLEM) $(PDDL_DOMAIN) $(PDDL_PROBLEM)
+ground_dom_and_prob: touch_pd
+	$(GROUNDER) --write-pddl $(GROUND_DOMAIN) $(GROUND_PROBLEM) $(PDDL_DOMAIN) $(PDDL_PROBLEM)
 
 build_tp_conversion: 
 	mlton -default-type int64 -output tp_cert temporal_planning.mlb
@@ -41,7 +41,7 @@ touch_o:
 	touch $(OUTPUT)
 
 tp_to_muntax: touch_o
-	./tp_cert -domain $(DOMAIN) -problem $(PROBLEM) -output $(OUTPUT)
+	./tp_cert -domain $(GROUND_DOMAIN) -problem $(GROUND_PROBLEM) -output $(OUTPUT)
 
 touch_cert_rnm:
 	mkdir -p -- $$(dirname "$(CERTIFICATE)") &
@@ -60,5 +60,5 @@ check_certificate:
 
 compile_cert_check: | tp_to_certificate check_certificate
 
-ground_compile_cert_check: | ground_problem compile_cert_check
+ground_compile_cert_check: | ground_dom_and_prob compile_cert_check
 
