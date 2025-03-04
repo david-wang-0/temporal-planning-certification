@@ -1,6 +1,5 @@
 theory TP_NTA_Reduction
-  imports Temporal_Planning_Base.Temporal_Plans
-          "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics"
+  imports "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics"
           "Show.Show_Instances"
           "List-Index.List_Index"
           "Simple_Networks.Simple_Network_Language_Model_Checking"
@@ -38,17 +37,8 @@ hide_const UPPAAL_State_Networks_Impl.bexp.not
            UPPAAL_State_Networks_Impl.bexp.ge
            UPPAAL_State_Networks_Impl.bexp.gt
 
-(* To do: implement the compilation abstractly or directly using show? *)
 
-(* To do: How does Simon Wimmer use int (32/64) instead of unlimited integers for some types? *)
-
-context ta_temp_planning
-begin
-  (* To do: Implement abstract definition later *)
-  (* This reduction has a different definition of no self overlap. Ends can interfere. 
-     Actions can also have a duration of 0, if this matters. *)
-end
-
+(* To do: How do I use int (32/64) instead of unlimited integers for some types? *)
 
 text \<open>Converting propositions to variables\<close>
 
@@ -60,7 +50,8 @@ abbreviation "set_var n v \<equiv> (v, exp.const n)"
 abbreviation "get_prop_id \<equiv> get_or_err ''Proposition has no ID''"
 
 
-text \<open>Makes it much more readable to print propositions as strings\<close>
+text \<open>It is much more readable to print propositions as strings. It is not necessarily correct,
+because there could be naming collisions. Do this later.\<close>
 fun obj_to_string::"object \<Rightarrow> string option" where
 "obj_to_string (Obj n) = Some n" |
 "obj_to_string _ = None"
@@ -238,7 +229,6 @@ definition start_edge::"
     Invariants are checked over the open interval according to Fox and Long. Therefore, we add an urgent
     location. *)
 
-(* Something is wrong with the mutex lock *)
 definition edge_2::"
   (object atom \<Rightarrow> string option) \<Rightarrow> 
   's \<Rightarrow> 's \<Rightarrow> 
@@ -305,7 +295,7 @@ definition edge_3::"
 "edge_3 active can_terminate dcs start_clock \<equiv> 
 do {
   dc \<leftarrow> max_lower_dc dcs;
-  let guard = [get_or_default dc 0 |> acconstraint.GT start_clock];
+  let guard = [get_or_default dc 0 |> acconstraint.GE start_clock];
   Result (active, bexp.true, guard, Sil (STR ''''), [], [], can_terminate)
 }"
 (* To do: numbering states? No. Nodes have names and ids. Transitions are just ids *)
@@ -343,17 +333,17 @@ definition edge_4::"
 "edge_4 prop_nums dur_sat urg oc dur_consts start_clock end_clock intfe \<equiv> 
 do {
   
-  let guard = map (\<lambda>x. acconstraint.GT x (0::int)) intfe;
+  let int_clocks = map (\<lambda>x. acconstraint.GT x (0::int)) intfe;
 
   unlock_invs \<leftarrow> combine_map (inc_prop_lock prop_nums (-1)) oc;
 
   dc \<leftarrow> min_upper_dc dur_consts;
-  let guard = (case dc of Some n \<Rightarrow> [acconstraint.LE start_clock n] | None \<Rightarrow> []);
+  let guard = (case dc of Some n \<Rightarrow> [acconstraint.LE start_clock n] | None \<Rightarrow> []) @ int_clocks;
   
   Result (dur_sat, bexp.true, guard, Sil (STR ''''), unlock_invs, [end_clock], urg)
 }"
 
-definition edge_5::"
+definition end_edge::"
   (object atom \<Rightarrow> string option) \<Rightarrow>
   's \<Rightarrow> 's \<Rightarrow> 
   object atom list \<Rightarrow> 
@@ -365,7 +355,7 @@ definition edge_5::"
     (String.literal \<times> (String.literal, int) exp) list \<times> 
     String.literal list \<times> 
   's) Error_List_Monad.result" where
-"edge_5 prop_nums urg inactive pre eff  = do {
+"end_edge prop_nums urg inactive pre eff  = do {
 
   let adds = fst eff;
   let dels = snd eff;
@@ -461,8 +451,8 @@ definition action_to_automaton::"
        (nat \<times> (String.literal, int) acconstraint list) list
       ) Error_List_Monad.result" where
 "action_to_automaton act_ids prop_nums plan_lock acts_active_count a intfs intfe \<equiv> do {
-  let (name, dc, oc, pre_at_start, pre_at_end, eff_at_start, eff_at_end) = a;
-  num \<leftarrow> get_act_id act_ids a;
+  let (_, dc, oc, pre_at_start, pre_at_end, eff_at_start, eff_at_end) = a;
+  name  \<leftarrow> get_act_id act_ids a;
   
   let off = (''off_'' @ name |> String.implode, 0::nat);
   let starting = (''starting_'' @ name |> String.implode, 1);
@@ -488,7 +478,7 @@ definition action_to_automaton::"
   e3 \<leftarrow> edge_3 2 3 dc start_clock;
   e4 \<leftarrow> edge_4 prop_nums 3 4 oc dc start_clock end_clock intfe;
 
-  e5 \<leftarrow> edge_5 prop_nums 4 1 pre_at_end eff_at_end
+  e5 \<leftarrow> end_edge prop_nums 4 1 pre_at_end eff_at_end
       \<bind> (Result o add_upd (inc_var (-1) acts_active_count));
 
   let edges = [e1, e2, e3, e4, e5] |> map (add_guard (var_is (1::int) plan_lock));
@@ -706,9 +696,9 @@ definition init_props_and_lock_to_init_edge::"
     's) Error_List_Monad.result" where
 "init_props_and_lock_to_init_edge prop_nums i p init_props is_planning active_act_c \<equiv> do {
   init_upds \<leftarrow> combine_map (set_prop prop_nums 1) init_props;
-  let plan_lock = (is_planning, (exp.const 1));
-  let set_active = (active_act_c, (exp.const 0));
-  let can_start = bexp.eq (exp.var is_planning) (exp.const 0);
+  let plan_lock = set_var 1 is_planning;
+  let set_active = set_var 0 active_act_c;
+  let can_start = var_is 0 is_planning;
   Result (i, can_start, [], Sil (STR ''''), plan_lock#set_active#init_upds, [], p)
 }"
 
@@ -728,7 +718,7 @@ definition goal_props_and_locks_to_goal_edge::"
 "goal_props_and_locks_to_goal_edge prop_nums p g goal_props is_planning actions_active \<equiv> do {
   let plan_lock = (is_planning, (exp.const 2));
 
-  let can_end = bexp.eq (exp.var is_planning) (exp.const 1);
+  let can_end = var_is 1 is_planning;
   goal_sat \<leftarrow> combine_map (is_prop prop_nums 1) goal_props;
   let cond = bexp_and_all (can_end#goal_sat);
   
@@ -835,7 +825,7 @@ definition tp_to_ta_net::"
     act_start_clocks \<leftarrow> combine_map (get_start_clock act_names) acts;
     act_end_clocks \<leftarrow> combine_map (get_end_clock act_names) acts;
     
-    let prop_lock_var_defs = map (\<lambda>x. (x, 0::int, 1::int)) prop_locks;
+    let prop_lock_var_defs = map (\<lambda>x. (x, 0::int, int (length acts))) prop_locks;
     let prop_var_var_defs = map (\<lambda>x. (x, 0, 1)) prop_vars;
     let planning_lock_var_def = (planning_lock, 0, 2);
     let acts_active_var_def = (acts_active, 0, int (length acts));
@@ -862,8 +852,8 @@ definition tp_to_ta_net::"
 "
 
 definition [code]: "parse_and_convert d p \<equiv> do {
-  (preds, acts, init, goal) \<leftarrow> parse_dom_and_prob d p;
-  autos \<leftarrow> tp_to_ta_net (preds, acts, init, goal);
+  (props, acts, init, goal) \<leftarrow> parse_dom_and_prob d p;
+  autos \<leftarrow> tp_to_ta_net (props, acts, init, goal);
   Result autos
 }"
 

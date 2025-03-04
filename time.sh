@@ -39,7 +39,9 @@ do
     do  
         f_act=$((f + 1))
         echo "Running instance: ${p}_${e}_${f_act}" >> test.log
-        timeout -f 5m bash -c "run_example $p $e $f"
+        timeout -f 5m bash -c \
+            '{ { time run_example ${0} ${1} ${2} ; } 2>&1 ; } >> test.log' \
+            $p $e $f_act
         x1=$((p - 1))
         y1=$((f + 1))
         while [ $x1 -lt 1 ] || [ $x1 -gt $p_max ] || [ $y1 -gt $f_max ]
