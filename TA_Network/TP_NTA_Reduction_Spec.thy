@@ -22,8 +22,7 @@ datatype 'action clock =
 datatype 'action location =
   Off 'action |
   StartInstant 'action |
-  PassTime 'action |
-  CanEnd 'action |
+  Running 'action |
   EndInstant 'action |
   InitialLocation |
   Planning |
@@ -138,7 +137,7 @@ definition edge_2_spec::"'action \<Rightarrow> _" where
 "edge_2_spec a \<equiv> 
 let 
   start_inst = StartInstant a;
-  pass_time = PassTime a;
+  pass_time = Running a;
 
   check_invs = bexp_and_all (map (is_prop_lock_ab 1) (over_all a));
   lock_invs = map (inc_prop_lock_ab 1) (over_all a)
@@ -163,28 +162,16 @@ definition u_dur_spec::"'action \<Rightarrow> _" where
 definition edge_3_spec::"'action \<Rightarrow> _" where
 "edge_3_spec a \<equiv>
 let
-  pass_time = PassTime a;
-  can_end = CanEnd a;
-  guard = l_dur_spec a
-in 
-  (pass_time, bexp.true, guard, Sil (STR ''''), [], [], can_end)
-"
-
-definition edge_4_spec::"'action \<Rightarrow> _" where
-"edge_4_spec a \<equiv>
-let 
-  can_end = CanEnd a;
-  end_instant = EndInstant a;
-  
   end_snap = at_end a;
   
   int_clocks = map (\<lambda>x. acconstraint.GT x (0::'time)) (int_clocks_spec end_snap);
+
   u_dur_const = u_dur_spec a;
-  guard = u_dur_const @ int_clocks;
+  guard = l_dur_spec a @ u_dur_spec a @ int_clocks;
 
   unlock_invs = map (inc_prop_lock_ab (-1)) (over_all a)
 in 
-  (can_end, bexp.true, guard, Sil (STR ''''), unlock_invs, [], end_instant)
+  (Running a, bexp.true, guard, Sil (STR ''''), [], [], EndInstant a)
 "
 
 definition end_edge_spec::"'action \<Rightarrow> _" where
@@ -213,10 +200,10 @@ definition action_to_automaton_spec::"'action \<Rightarrow> _" where
 "action_to_automaton_spec a \<equiv>
 let 
   init_loc = Off a;
-  locs = [Off a, StartInstant a, PassTime a, CanEnd a, EndInstant a];
+  locs = [Off a, StartInstant a, Running a, EndInstant a];
   committed_locs = (Nil::'action location list);
   urgent_locs = [StartInstant a, EndInstant a];
-  edges = [start_edge_spec a, edge_2_spec a, edge_3_spec a, edge_4_spec a, end_edge_spec a];
+  edges = [start_edge_spec a, edge_2_spec a, edge_3_spec a, end_edge_spec a];
   invs = ([]::('action location \<times> ('action clock, 'time) acconstraint list) list)
 in 
   (ActAuto a, init_loc, locs, committed_locs, urgent_locs, edges, invs)"

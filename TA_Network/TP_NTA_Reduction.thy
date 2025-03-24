@@ -143,7 +143,7 @@ fun bexp_and_all::"('a, 'b) bexp list \<Rightarrow> ('a, 'b) bexp" where
 
 section \<open>Reduction\<close>
 (* prop_nums is a function that assigns an identifier to a predicate. It could be a number or a string *)
-(*  off \<rightarrow> start instant!! \<rightarrow> pass time \<rightarrow> can end \<rightarrow> end instant!! \<rightarrow> off
+(*  off \<rightarrow> start instant!! \<rightarrow> pass time \<rightarrow> end instant!! \<rightarrow> off
                   
                   check invariants hold!
                   increment mutex vars!
@@ -158,16 +158,16 @@ section \<open>Reduction\<close>
       
 
                                     check lower constraint!
-                                              check upper constraint!
+                                    check upper constraint!
     
-                                              decrement mutex vars!
-                                                            check mutex vars!
+                                    decrement mutex vars!
+                                                  check mutex vars!
 
-                                                            apply effects
-                                                        <-- check pres (optional)
+                                                  apply effects
+                                                  check pres (optional)
 
-                                              update end clock!**
-                                              check mutex actions**
+                                    update end clock!**
+                                    check mutex actions**
 
                                     
                                                             
@@ -281,25 +281,6 @@ definition max_lower_dc::"object duration_constraint list \<Rightarrow> int opti
 }"
 (* To do: check mutex when the clock is updated, not after *)
 
-definition edge_3::"
-  's \<Rightarrow> 's \<Rightarrow> 
-  object duration_constraint list \<Rightarrow> 
-  String.literal \<Rightarrow>
-  ('s \<times>
-    (String.literal, int) bexp \<times>
-    (String.literal, int) acconstraint list \<times>
-    String.literal act \<times> 
-    (String.literal \<times> (String.literal, int) exp) list \<times> 
-    String.literal list \<times> 
-  's) Error_List_Monad.result" where
-"edge_3 active can_terminate dcs start_clock \<equiv> 
-do {
-  dc \<leftarrow> max_lower_dc dcs;
-  let guard = [get_or_default dc 0 |> acconstraint.GE start_clock];
-  Result (active, bexp.true, guard, Sil (STR ''''), [], [], can_terminate)
-}"
-(* To do: numbering states? No. Nodes have names and ids. Transitions are just ids *)
-
 fun is_upper_constraint::"object duration_constraint \<Rightarrow> bool" where
 "is_upper_constraint (Func_Const duration_op.EQ _ _) = True" |
 "is_upper_constraint (Func_Const duration_op.LEQ _ _) = True" |
@@ -315,7 +296,7 @@ definition min_upper_dc::"object duration_constraint list \<Rightarrow> int opti
   Result (list_min_opt consts)  
 }"
 
-definition edge_4::"
+definition edge_3::"
   (object atom \<Rightarrow> string option) \<Rightarrow>
   's \<Rightarrow> 's \<Rightarrow>
   object atom list \<Rightarrow>
@@ -330,17 +311,18 @@ definition edge_4::"
     (String.literal \<times> (String.literal, int) exp) list \<times> 
     String.literal list \<times> 
   's) Error_List_Monad.result"  where
-"edge_4 prop_nums dur_sat urg oc dur_consts start_clock end_clock intfe \<equiv> 
+"edge_3 prop_nums running ending oc dur_consts start_clock end_clock intfe \<equiv> 
 do {
   
   let int_clocks = map (\<lambda>x. acconstraint.GT x (0::int)) intfe;
 
   unlock_invs \<leftarrow> combine_map (inc_prop_lock prop_nums (-1)) oc;
 
-  dc \<leftarrow> min_upper_dc dur_consts;
-  let guard = (case dc of Some n \<Rightarrow> [acconstraint.LE start_clock n] | None \<Rightarrow> []) @ int_clocks;
+  ldc \<leftarrow> max_lower_dc dur_consts;
+  udc \<leftarrow> min_upper_dc dur_consts;
+  let guard = [get_or_default ldc 0 |> acconstraint.GE start_clock] @ (case udc of Some n \<Rightarrow> [acconstraint.LE start_clock n] | None \<Rightarrow> []) @ int_clocks;
   
-  Result (dur_sat, bexp.true, guard, Sil (STR ''''), unlock_invs, [end_clock], urg)
+  Result (running, bexp.true, guard, Sil (STR ''''), unlock_invs, [end_clock], ending)
 }"
 
 definition end_edge::"
@@ -457,10 +439,9 @@ definition action_to_automaton::"
   let off = (''off_'' @ name |> String.implode, 0::nat);
   let starting = (''starting_'' @ name |> String.implode, 1);
   let active = (''active_'' @ name |> String.implode, 2);
-  let can_stop = (''can_stop_'' @ name |> String.implode, 3);
-  let stopping = (''stopping_'' @ name |> String.implode, 4);
+  let stopping = (''stopping_'' @ name |> String.implode, 3);
   
-  let node_list = [off, starting, active, can_stop, stopping];
+  let node_list = [off, starting, active, stopping];
 
   let names_to_ids = map_of node_list;
   let ids_to_names = map_of (map prod.swap node_list);
@@ -475,13 +456,12 @@ definition action_to_automaton::"
       \<bind> (Result o add_upd (inc_var (1::int) acts_active_count));
 
   e2 \<leftarrow> edge_2 prop_nums 1 2 oc;
-  e3 \<leftarrow> edge_3 2 3 dc start_clock;
-  e4 \<leftarrow> edge_4 prop_nums 3 4 oc dc start_clock end_clock intfe;
+  e3 \<leftarrow> edge_3 prop_nums 2 3 oc dc start_clock end_clock intfe;
 
-  e5 \<leftarrow> end_edge prop_nums 4 1 pre_at_end eff_at_end
+  e4 \<leftarrow> end_edge prop_nums 4 1 pre_at_end eff_at_end
       \<bind> (Result o add_upd (inc_var (-1) acts_active_count));
 
-  let edges = [e1, e2, e3, e4, e5] |> map (add_guard (var_is (1::int) plan_lock));
+  let edges = [e1, e2, e3, e4] |> map (add_guard (var_is (1::int) plan_lock));
 
   let invs = ([]::(nat \<times> (String.literal, int) acconstraint list) list);
 

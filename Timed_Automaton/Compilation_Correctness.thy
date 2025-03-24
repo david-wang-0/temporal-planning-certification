@@ -497,9 +497,10 @@ lemma updated_exec_time_and_next:
 lemma exec_time_and_epsilon:
   assumes nm: "nm happ_seq"
       and s_at_t: "s \<in> B t"
-      and mutex: "msa s b \<or> s = b"
+      and mutex: "msa s b"
+      and s_not_b: "s \<noteq> b"
       and fp: "fp_\<pi>"
-    shows "exec_time b t \<ge> \<epsilon>"
+    shows "exec_time b t \<ge> \<epsilon> \<and> exec_time b t > 0"
 proof (cases "\<exists>u < t. b \<in> B u")
   case True
 
