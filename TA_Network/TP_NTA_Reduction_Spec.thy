@@ -1,6 +1,7 @@
 theory TP_NTA_Reduction_Spec
   imports Temporal_Planning_Base.Temporal_Plans
-      Simple_Networks.Simple_Network_Language_Renaming
+      TA_Code.Simple_Network_Language_Export_Code
+
 begin
   
 (* To do: implement the compilation abstractly or directly using show? *)
@@ -17,7 +18,8 @@ datatype 'proposition variable =
 
 datatype 'action clock =
   ActStart 'action |
-  ActEnd 'action
+  ActEnd 'action |
+  Urge
 
 datatype 'action location =
   Off 'action |
@@ -32,20 +34,32 @@ datatype 'action auto_id =
   ActAuto 'action |
   MainAuto
 
+instance variable::(countable) countable
+  by countable_datatype
+
+instance clock::(countable) countable
+  by countable_datatype
+
+instance location::(countable) countable
+  by countable_datatype
+
 (* draft *)
 (* IMPORTANT: Replace the hard-coded datatypes for equivalence of representations in the non-draft version *)
+(* Time is hardcoded as int here, because this is how Simon does it. He then defines semantics w.r.t. some 
+    automata obtained by replacing integers with reals (which satisfy the assumptions about the time class)
+    To do: Copy the locale structure, so this extends the temporal planning locales. *)
 locale tp_nta_reduction_spec =
-  fixes init :: "'proposition list"
+  fixes init :: "('proposition::countable) list"
     and goal :: "'proposition list"
-    and at_start :: "'action \<Rightarrow> 'snap_action"
+    and at_start :: "('action::countable) \<Rightarrow> 'snap_action"
     and at_end :: "'action \<Rightarrow> 'snap_action"
     and over_all :: "'action \<Rightarrow> 'proposition list"
-    and lower :: "'action \<Rightarrow> ('time::time) lower_bound option"
-    and upper :: "'action \<Rightarrow> 'time upper_bound option"
+    and lower :: "'action \<Rightarrow> int lower_bound option"
+    and upper :: "'action \<Rightarrow> int upper_bound option"
     and pre :: "'snap_action \<Rightarrow> 'proposition list"
     and adds :: "'snap_action \<Rightarrow> 'proposition list"
     and dels :: "'snap_action \<Rightarrow> 'proposition list"
-    and \<epsilon> :: "'time"
+    and \<epsilon> :: "int"
     and props :: "'proposition list"
     and actions :: "'action list"
 begin
@@ -129,7 +143,7 @@ let
 
   start_snap = at_start a;
   
-  guard = map (\<lambda>x. acconstraint.GT x (0::'time)) (int_clocks_spec start_snap);
+  guard = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec start_snap);
   
   not_locked_check = map (is_prop_lock_ab 0) (dels start_snap);
   pre_check = map (is_prop_ab 1) (pre start_snap);
@@ -139,7 +153,7 @@ let
   del_upds = map (set_prop_ab 0) (dels start_snap);
   upds = add_upds @ del_upds;
 
-  resets = [AtStart a]
+  resets = [ActStart a]
 in (off, var_check, guard, Sil (STR ''''), upds, resets, start_inst)"
 
 definition edge_2_spec::"'action \<Rightarrow> _" where
@@ -156,11 +170,11 @@ in
 
 find_theorems name: "Option*map"
 
-definition l_dur_spec::"'action \<Rightarrow> _" where
-"l_dur_spec a \<equiv> (case lower a of 
+definition l_dur_spec::"'action \<Rightarrow> ('action clock, int) acconstraint list" where
+"l_dur_spec act \<equiv> (case lower act of 
   None \<Rightarrow> []
-| Some (lower_bound.GE n) \<Rightarrow> [acconstraint.GE (ActStart a) n]
-| Some (lower_bound.GT n) \<Rightarrow> [acconstraint.GT (ActStart a) n])"
+| Some (lower_bound.GE n) \<Rightarrow> [acconstraint.GE (ActStart act) n]
+| Some (lower_bound.GT n) \<Rightarrow> [acconstraint.GT (ActStart act) n])"
 
 definition u_dur_spec::"'action \<Rightarrow> _" where
 "u_dur_spec a \<equiv> (case upper a of 
@@ -173,7 +187,7 @@ definition edge_3_spec::"'action \<Rightarrow> _" where
 let
   end_snap = at_end a;
   
-  int_clocks = map (\<lambda>x. acconstraint.GT x (0::'time)) (int_clocks_spec end_snap);
+  int_clocks = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec end_snap);
 
   u_dur_const = u_dur_spec a;
   guard = l_dur_spec a @ u_dur_spec a @ int_clocks;
@@ -196,10 +210,11 @@ let
   check = bexp_and_all (not_locked_check @ pre_check);
   
   adds = map (set_prop_ab 1) (adds end_snap);
-  dels = map (set_prop_ab 0) (dels end_snap)
+  dels = map (set_prop_ab 0) (dels end_snap);
   
+  resets = [ActEnd a]
 in
-  (end_instant, check, [], Sil (STR ''''), adds @ dels, [], off)
+  (end_instant, check, [], Sil (STR ''''), adds @ dels, resets, off)
 "
 
   (* To do: Implement abstract definition later *)
@@ -213,9 +228,9 @@ let
   committed_locs = (Nil::'action location list);
   urgent_locs = [StartInstant a, EndInstant a];
   edges = [start_edge_spec a, edge_2_spec a, edge_3_spec a, end_edge_spec a];
-  invs = ([]::('action location \<times> ('action clock, 'time) acconstraint list) list)
+  invs = []
 in 
-  (ActAuto a, init_loc, locs, committed_locs, urgent_locs, edges, invs)"
+  (init_loc, locs, committed_locs, urgent_locs, edges, invs)"
 
 (* To do: add the conditions on the planning state *)
 
@@ -254,23 +269,118 @@ let
   edges = [main_auto_init_edge_spec, main_auto_goal_edge_spec];
   invs = []
 in
-  (MainAuto, init_loc, locs, committed_locs, urgent_locs, edges, invs)
+  (init_loc, locs, committed_locs, urgent_locs, edges, invs)
 "
 
-definition timed_automaton_net_spec::"_" where
-"timed_automaton_net_spec _ \<equiv> 
+definition timed_automaton_net_spec::"
+  (
+    'action auto_id \<times>
+    'action location \<times>
+    'action location list \<times>
+    'action location list \<times>
+    'action location list \<times>
+    (
+      'action location \<times>
+      ('proposition variable, int) Simple_Expressions.bexp \<times>
+      ('action clock, int) acconstraint list \<times> 
+      String.literal act \<times> 
+      (
+        'proposition variable \<times> 
+        ('proposition variable, int) exp
+      ) list \<times> 
+      'action clock list \<times> 
+      'action location) list \<times>
+      ('action location \<times> 
+      ('action clock, int) acconstraint list
+    ) list
+  ) list \<times>
+  'action clock list \<times> 
+  ('proposition variable \<times> int \<times> int) list \<times> 
+  ('action auto_id, 'action location, 'proposition variable, int) formula" where
+"timed_automaton_net_spec \<equiv> 
 let
   automata = main_auto_spec # (map action_to_automaton_spec actions);
+  automata = zip (map to_nat [0..length automata - 1]) automata;
+
   clocks = map ActStart actions @ map ActEnd actions;
+
   prop_lock_var_defs = map (\<lambda>p. (PropLock p, 0::int, int (length actions))) props;
-  prop_var_vars_defs = map (\<lambda>p . (PropVar p, 0::int, 1::int)) props
-in (automata, clocks)"
+  prop_var_vars_defs = map (\<lambda>p . (PropVar p, 0::int, 1::int)) props;
+  acts_active_var = (ActsActive, 0, length actions);
+  planning_lock_var = (PlanningLock, 0, 2);
+  vars = planning_lock_var # acts_active_var # prop_lock_var_defs @ prop_var_vars_defs;
+
+  formula = formula.EX (loc MainAuto GoalLocation)
+in (automata, clocks, vars, formula)"
 
 end
 
+find_consts name: "renum"
+
+definition mk_renum::"'a list \<Rightarrow> 'a \<Rightarrow> nat" where
+"mk_renum l \<equiv>
+  let
+    nums = [0..length l - 1]  |> map nat;
+    act_nums = nums |> zip l;
+    f = map_of act_nums
+  in the o f"
+
+definition mk_snd_ord_renum::"'a list list \<Rightarrow> nat \<Rightarrow> 'a \<Rightarrow> nat" where
+"mk_snd_ord_renum \<equiv> (!) o map mk_renum"
+
 context tp_nta_reduction_spec
 begin
+definition "nta_vars \<equiv> let (automata, clocks, vars, formula) = timed_automaton_net_spec in vars"
+
+abbreviation "var_renum \<equiv> mk_renum (map fst nta_vars)"
+
+definition "nta_clocks \<equiv> let (automata, clocks, vars, formula) = timed_automaton_net_spec in clocks"
+
+abbreviation "clock_renum \<equiv> mk_renum nta_clocks"
+
+definition "ntas \<equiv> let (automata, clocks, vars, formula) = timed_automaton_net_spec in automata"
+
+abbreviation "nta_states a \<equiv> case a of 
+  (name, init, states, _) \<Rightarrow> states"
+
+abbreviation "ntas_states \<equiv> map nta_states ntas"
+
+abbreviation "state_renum \<equiv> mk_snd_ord_renum ntas_states"
+
+abbreviation "nta_init \<equiv> fst o snd"
+
+abbreviation "ntas_inits \<equiv> map nta_init ntas"
+
+definition "urge_clock \<equiv> Urge"
+
+(* This needs to be lifted out of the locale *)
+definition "broadcast \<equiv> []::String.literal list"
+
+(* There is one action *)
+definition "nta_actions \<equiv> [STR '''']::String.literal list"
+
+find_consts name: "mk_renaming"
+
+abbreviation "act_renum \<equiv> mk_renum (broadcast @ nta_actions)"
+
+abbreviation "init_vars \<equiv> map (\<lambda>x. (fst x, 0::int)) nta_vars"
+
+definition "autos \<equiv> map (snd o snd o snd) ntas"
+
+definition "form \<equiv> let (automata, clocks, vars, formula) = timed_automaton_net_spec in formula"
+
 sublocale Simple_Network_Rename_Formula
+    broadcast 
+    nta_vars 
+    act_renum 
+    var_renum 
+    clock_renum
+    state_renum
+    urge_clock
+    init_vars
+    ntas_inits
+    autos
+    form
 end
 
 (* Functions from actions to locations and clocks, and from propositions to variables must be fixed

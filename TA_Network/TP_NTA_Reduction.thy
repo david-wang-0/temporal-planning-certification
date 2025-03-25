@@ -40,6 +40,12 @@ hide_const UPPAAL_State_Networks_Impl.bexp.not
 
 (* To do: How do I use int (32/64) instead of unlimited integers for some types? *)
 
+
+text \<open>Utility\<close>
+fun bexp_and_all::"('a, 'b) bexp list \<Rightarrow> ('a, 'b) bexp" where
+"bexp_and_all [] = bexp.true" |
+"bexp_and_all (x#xs) = bexp.and x (bexp_and_all xs)"
+
 text \<open>Converting propositions to variables\<close>
 
 
@@ -135,11 +141,6 @@ definition "get_start_clock act_ids a \<equiv> get_act_id act_ids a \<bind> (Res
 definition "get_end_clock act_ids a \<equiv> get_act_id act_ids a \<bind> (Result o end_act_clock)"
 
 
-
-text \<open>Utility\<close>
-fun bexp_and_all::"('a, 'b) bexp list \<Rightarrow> ('a, 'b) bexp" where
-"bexp_and_all [] = bexp.true" |
-"bexp_and_all (x#xs) = bexp.and x (bexp_and_all xs)"
 
 section \<open>Reduction\<close>
 (* prop_nums is a function that assigns an identifier to a predicate. It could be a number or a string *)

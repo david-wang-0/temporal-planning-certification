@@ -2,11 +2,11 @@ theory Temporal_Plans
   imports Base
 begin
 
-datatype ('t :: time) lower_bound =
+datatype ('t) lower_bound =
   GT 't |
   GE 't
 
-datatype ('t :: time) upper_bound =
+datatype ('t) upper_bound =
   LT 't |
   LE 't
 
