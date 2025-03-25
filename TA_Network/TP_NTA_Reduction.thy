@@ -5,7 +5,7 @@ theory TP_NTA_Reduction
           "Simple_Networks.Simple_Network_Language_Model_Checking"
           Temporal_Planning_Base.Error_List_Monad_Add
           "TP_Parsing.Ground_PDDL_Parsing"
-          "TA_Planning.Simple_Network_Language_Printable"
+          "TA_Planning.Printable_Simple_Expressions"
           TA_Library.Error_List_Monad
 begin
 
@@ -778,9 +778,9 @@ definition tp_to_ta_net::"
     nat list \<times>
     nat list \<times>
     (nat \<times>
-     (String.literal, int) Simple_Network_Language_Printable.bexp \<times>
+     (String.literal, int) bexp \<times>
      (String.literal, int) acconstraint list \<times>
-     String.literal act \<times> (String.literal \<times> (String.literal, int) Simple_Network_Language_Printable.exp) list \<times> String.literal list \<times> nat) list \<times>
+     String.literal act \<times> (String.literal \<times> (String.literal, int) exp) list \<times> String.literal list \<times> nat) list \<times>
     (nat \<times> (String.literal, int) acconstraint list) list) list \<times>
    String.literal list \<times> 
   (String.literal \<times> int \<times> int) list \<times> 

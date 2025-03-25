@@ -1,6 +1,6 @@
 theory TP_NTA_Reduction_Spec
-  imports TP_NTA_Reduction
-          Temporal_Planning_Base.Temporal_Plans
+  imports Temporal_Planning_Base.Temporal_Plans
+      Simple_Networks.Simple_Network_Language_Renaming
 begin
   
 (* To do: implement the compilation abstractly or directly using show? *)
@@ -49,6 +49,15 @@ locale tp_nta_reduction_spec =
     and props :: "'proposition list"
     and actions :: "'action list"
 begin
+
+abbreviation "var_is n v \<equiv> bexp.eq (exp.var v) (exp.const n)"
+abbreviation "inc_var n v \<equiv> (v, exp.binop (+) (exp.var v) (exp.const n))"
+abbreviation "set_var n v \<equiv> (v, exp.const n)"
+
+
+fun bexp_and_all::"('a, 'b) bexp list \<Rightarrow> ('a, 'b) bexp" where
+"bexp_and_all [] = bexp.true" |
+"bexp_and_all (x#xs) = bexp.and x (bexp_and_all xs)"
 
 (* To do: Reason about sets that the lists actually represent *)
 
@@ -259,8 +268,13 @@ in (automata, clocks)"
 
 end
 
+context tp_nta_reduction_spec
+begin
+sublocale Simple_Network_Rename_Formula
+end
+
 (* Functions from actions to locations and clocks, and from propositions to variables must be fixed
-  later *)
+  later. Renamings like in Munta. *)
 
 (* Lists are used to implement sets. Lift this to a higher level. *)
 
