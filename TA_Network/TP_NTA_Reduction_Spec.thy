@@ -274,7 +274,7 @@ in
 
 definition timed_automaton_net_spec::"
   (
-    'action auto_id \<times>
+    nat \<times>
     'action location \<times>
     'action location list \<times>
     'action location list \<times>
@@ -296,7 +296,7 @@ definition timed_automaton_net_spec::"
   ) list \<times>
   'action clock list \<times> 
   ('proposition variable \<times> int \<times> int) list \<times> 
-  ('action auto_id, 'action location, 'proposition variable, int) formula" where
+  (nat, 'action location, 'proposition variable, int) formula" where
 "timed_automaton_net_spec \<equiv> 
 let
   automata = main_auto_spec # (map action_to_automaton_spec actions);
@@ -306,13 +306,13 @@ let
 
   prop_lock_var_defs = map (\<lambda>p. (PropLock p, 0::int, int (length actions))) props;
   prop_var_vars_defs = map (\<lambda>p . (PropVar p, 0::int, 1::int)) props;
-  acts_active_var = (ActsActive, 0, length actions);
-  planning_lock_var = (PlanningLock, 0, 2);
+  acts_active_var = (ActsActive, 0, from_nat (length actions)::int);
+  planning_lock_var = (PlanningLock, 0, 2::int);
   vars = planning_lock_var # acts_active_var # prop_lock_var_defs @ prop_var_vars_defs;
 
-  formula = formula.EX (loc MainAuto GoalLocation)
+  formula = formula.EX (loc 0 GoalLocation)
 in (automata, clocks, vars, formula)"
-
+(* The id of the main automaton is 0 *)
 end
 
 find_consts name: "renum"
@@ -340,12 +340,261 @@ abbreviation "clock_renum \<equiv> mk_renum nta_clocks"
 
 definition "ntas \<equiv> let (automata, clocks, vars, formula) = timed_automaton_net_spec in automata"
 
-abbreviation "nta_states a \<equiv> case a of 
+(* Explicitly returned states *)
+abbreviation "ta_states a \<equiv> case a of 
   (name, init, states, _) \<Rightarrow> states"
 
-abbreviation "ntas_states \<equiv> map nta_states ntas"
+abbreviation "individual_ta_states \<equiv> map ta_states ntas"
 
-abbreviation "state_renum \<equiv> mk_snd_ord_renum ntas_states"
+definition "all_ta_states = fold (@) individual_ta_states []"
+
+(* Actual states defined by transitions *)
+
+abbreviation get_actual_auto where
+"get_actual_auto gen_auto \<equiv> 
+  let 
+    (name, initial, states, committed, urgent, transitions) = gen_auto 
+  in (committed, urgent, transitions)"
+
+definition actual_autos where
+"actual_autos = map get_actual_auto ntas"
+
+abbreviation trans_locs where
+"trans_locs tr \<equiv>
+  let
+    (s, g, c, a, u, r, t) = tr
+  in
+    {s, t}"
+
+abbreviation auto_trans where
+"auto_trans auto \<equiv> 
+  let
+    (committed, urgent, trans, invs) = auto
+  in
+    trans"
+
+definition actual_locs where
+"actual_locs \<equiv>
+  let 
+    trans = (fold (@) (map auto_trans actual_autos) [])
+  in
+    fold (\<union>) (map trans_locs trans) {}"
+
+(* Renumbering states *)
+abbreviation "state_renum' \<equiv> mk_snd_ord_renum individual_ta_states"
+
+(* The injective renumbering from every single state *)
+definition "inj_state_renum i \<equiv> 
+  let renum' = state_renum' i;
+      states = individual_ta_states ! i;
+      other_states = list_of_set (set all_ta_states - set states);
+      renum = extend_domain renum' other_states (length states - 1)
+  in renum"
+
+lemma extend_domain_not_in_set:
+  assumes "x \<notin> set es"
+  shows "extend_domain f es n x = f x"
+  using assms
+  unfolding extend_domain_def
+  by (auto split: prod.splits)
+
+lemma extend_domain_fold_lemma:
+  assumes "set as \<subseteq> set as'"
+  shows "fold (\<lambda>x (i, xs). if x \<in> set as' then (i + 1, (x, i + 1) # xs) else (i, xs)) as (n, bs)
+  = (n + length as, rev (zip as [int (n+1)..int (n + (length as))]) @ bs)" (is "fold ?f as (n, bs) = _")
+  using assms
+proof (induction as arbitrary: n bs)
+  case Nil
+  then show ?case by auto
+next
+  case (Cons a as)
+  have "\<And>n bs. fold (\<lambda>x (i, xs). if x \<in> set as' then (i + 1, (x, i + 1) # xs) else (i, xs)) as (n, bs) =
+    (n + length as, rev (zip as [int (n+1)..int (n + length as)]) @ bs)"
+    using Cons by auto
+  hence IH': "\<And>n bs. fold ?f as (n, bs) =
+    (n + length as, rev (zip as [n+1..(n + length as)]) @ bs)"
+    by blast
+  have "a \<in> set as'" using Cons by simp
+  hence "fold ?f (a # as) (n, bs)
+    = fold ?f as (n + 1, (a, n + 1) # bs)"
+    apply (subst fold_Cons) 
+    apply (subst o_apply)
+    apply (subst prod.case)+
+    by (auto simp: z3_rule(112))
+  also have "... = 
+    ((n + 1) + length as, rev (zip as [int ((n + 1) + 1)..int (n + 1) + int (length as)]) @ (a, n + 1) # bs)" 
+    using IH' 
+    by auto
+  also have "... = (n + (length (a#as)), rev (zip as [int ((n + 1) + 1)..int (n + length (a#as))]) @ (a, n + 1) # bs)" 
+    by (metis add_Suc add_Suc_right int_ops(5) length_nth_simps(2) semiring_norm(174))
+  also have "... = (n + (length (a#as)), rev (zip as [int ((n + 1) + 1)..int (n + length (a#as))]) @ [(a, n + 1)] @ bs)" 
+    by fastforce
+  also have "... = (n + (length (a#as)), (rev ((a, n + 1)#(zip as [int ((n + 1) + 1)..int (n + length (a#as))]))) @ bs)" 
+    by auto
+  also have "... = (n + (length (a#as)), (rev (zip (a#as) [int (n + 1)..int (n + length (a#as))])) @ bs)"
+    apply (subst prod.case)
+    apply (subst zip_Cons_Cons[symmetric])
+    apply (subst (2) int_plus)
+    apply (subst int_ops(2))
+    apply (subst upto_rec1[symmetric])
+     apply simp
+    by simp
+  finally show ?case by blast
+qed
+
+
+lemma extend_domain_fold:
+  "extend_domain f (e#es) n x = extend_domain (f(e := n + 1)) es (n + 1) x"
+proof (induction es arbitrary: f e n)
+  case Nil
+  then show ?case unfolding extend_domain_def 
+    by (auto split: prod.splits)
+next
+  case (Cons a es f e n)
+  have "extend_domain f (e # a # es) n x = 
+    ( let 
+        (i, xs) = fold 
+            (\<lambda>x (i, xs). if x \<in> set (e # a # es) then (i + 1, (x, i + 1) # xs) else (i, xs)) 
+            (e # a # es) 
+            (n, []); 
+        m' = map_of xs
+      in 
+        (\<lambda>x. if x \<in> set (e # a # es) then the (m' x) else f x)
+    ) x" unfolding extend_domain_def ..
+  hence "extend_domain f (e # a # es) n x = 
+    (let 
+      (i, xs) = fold 
+          (\<lambda>x (i, xs). if x \<in> set (e # a # es) then (i + 1, (x, i + 1) # xs) else (i, xs)) 
+          (a # es)
+          (n + 1, [(e, n + 1)]);
+         m' = map_of xs
+     in (\<lambda>x. if x \<in> set (e # a # es) then the (m' x) else f x)) x"
+    using fold_Cons by simp
+  have "extend_domain (f(e := n + 1)) (a # es) (n + 1) x = extend_domain (f(e := n + 1, a := n + 1 + 1)) es (n + 1 + 1) x" 
+    apply (subst Cons.IH) 
+    ..
+  
+  show ?case
+  proof (cases "x \<in> set (a # es)"; cases "x = e")
+    assume "x \<in> set (a # es)" "x = e"
+    then show ?thesis sorry
+  next
+    assume "x \<in> set (a # es)" "x \<noteq> e"
+    then show ?thesis sorry
+  next
+    assume "x \<notin> set (a # es)" "x = e"
+    then show ?thesis sorry
+  next
+    assume "x \<notin> set (a # es)" "x \<noteq> e"
+    then show ?thesis sorry
+  qed
+qed
+
+lemma extend_domain_index:
+  assumes "x \<in> set es"
+  shows "extend_domain f es n x = n + last_index es x + 1"
+  using assms
+proof (induction es arbitrary: f  n)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons e es f n)
+  then show ?case 
+  proof (cases "x \<in> set es")
+    case False
+    with Cons
+    have xe: "x = e" by simp
+    hence "n + last_index (e # es) x + 1 = n + 1" using False
+      apply (subst last_index_Cons)
+      by simp
+    from xe 
+    have "extend_domain f (e # es) n x = 
+    (
+      let 
+        (i, xs) = fold 
+            (\<lambda>x (i, xs). if x \<in> set (e # es) then (i + 1, (x, i + 1) # xs) else (i, xs)) 
+            (es) (n + 1, [(e, n + 1)]); 
+        m' = map_of xs 
+      in 
+        (\<lambda>x. if x \<in> set (e # es) then the (m' x) else f x)) x" 
+      unfolding extend_domain_def fold_Cons by (auto split: prod.splits)
+    also have "... = 
+      (let 
+        (i, xs) = fold 
+            (\<lambda>x (i, xs). if x \<in> set (e # es) then (i + 1, (x, i + 1) # xs) else (i, xs)) 
+            (es) (n + 1, [(e, n + 1)]); 
+        m' = map_of xs
+      in 
+       the (m' x))" using xe by (auto split: prod.splits)
+    also have "... = n + 1" using False xe 
+      using extend_domain_fold_lemma
+    find_theorems name: "fold*filter"
+    thus ?thesis 
+  next
+    case False
+    then show ?thesis sorry
+  qed
+qed
+
+lemma extend_domain_inj_new:
+  "inj_on (extend_domain f e n) (set e)"
+proof (induction e)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a as)
+   show ?case 
+   proof (rule inj_onI)
+     fix x y
+     assume x: "x \<in> set (a # as)" 
+        and y: "y \<in> set (a # as)" 
+        and f: "extend_domain f (a # as) n x = extend_domain f (a # as) n y"
+     consider "x \<noteq> a \<and> y \<noteq> a"
+       | "x \<noteq> a \<and> y = a"
+       | "x = a \<and> y \<noteq> a"
+       | "x = a \<and> y = a" by blast
+     thus "x = y"
+     proof cases
+       case 1
+       then show ?thesis 
+         using x y f unfolding extend_domain_def
+         apply -
+         apply (rule Cons.IH[THEN inj_onD])
+         
+     next
+       case 2
+       then show ?thesis sorry
+     next
+       case 3
+       then show ?thesis sorry
+     next
+       case 4
+       then show ?thesis sorry
+     qed
+   qed
+qed
+   apply simp
+  subgoal for x xs
+
+
+lemma extend_domain_inj:
+  assumes "inj_on f (set d)"
+      and "\<forall>x \<in> set d. f x \<le> n"
+          "n = length d - 1"
+  shows "inj_on (extend_domain f e n) (set d \<union> set e)"
+proof -
+
+qed
+
+lemma state_renum'_inj: 
+  assumes i_ran: "i < length individual_ta_states"
+      and x: "x \<in> set all_ta_states"
+      and y: "y \<in> set all_ta_states"
+      and e: "inj_state_renum i x = inj_state_renum i y"
+        shows "x = y"
+proof -
+  
+qed
 
 abbreviation "nta_init \<equiv> fst o snd"
 
@@ -375,12 +624,15 @@ sublocale Simple_Network_Rename_Formula
     act_renum 
     var_renum 
     clock_renum
-    state_renum
+    inj_state_renum
     urge_clock
     init_vars
     ntas_inits
     autos
     form
+proof
+
+qed
 end
 
 (* Functions from actions to locations and clocks, and from propositions to variables must be fixed
