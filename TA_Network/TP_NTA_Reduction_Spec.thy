@@ -398,18 +398,20 @@ lemma extend_domain_not_in_set:
   unfolding extend_domain_def
   by (auto split: prod.splits)
 
+find_theorems "?f ?x = (?y::nat list)"
+
 lemma extend_domain_fold_lemma:
   assumes "set as \<subseteq> set as'"
   shows "fold (\<lambda>x (i, xs). if x \<in> set as' then (i + 1, (x, i + 1) # xs) else (i, xs)) as (n, bs)
-  = (n + length as, rev (zip as [int (n+1)..int (n + (length as))]) @ bs)" (is "fold ?f as (n, bs) = _")
+  = (n + length as, rev (zip as [(n+1)..<(n + (length as) + 1)]) @ bs)" (is "fold ?f as (n, bs) = _")
   using assms
 proof (induction as arbitrary: n bs)
   case Nil
   then show ?case by auto
 next
   case (Cons a as)
-  have "\<And>n bs. fold (\<lambda>x (i, xs). if x \<in> set as' then (i + 1, (x, i + 1) # xs) else (i, xs)) as (n, bs) =
-    (n + length as, rev (zip as [int (n+1)..int (n + length as)]) @ bs)"
+  have "\<And>n bs. fold ?f else (i, xs)) as (n, bs) =
+    (n + length as, rev (zip as [(n+1)..<(n + length as + 1)]) @ bs)"
     using Cons by auto
   hence IH': "\<And>n bs. fold ?f as (n, bs) =
     (n + length as, rev (zip as [n+1..(n + length as)]) @ bs)"
@@ -527,7 +529,9 @@ next
       in 
        the (m' x))" using xe by (auto split: prod.splits)
     also have "... = n + 1" using False xe 
-      using extend_domain_fold_lemma
+      apply (subst Let_def)
+      using  extend_domain_fold_lemma[where as' = "e#es" and as = es and n = "n + 1" and bs = "[(e, n + 1)]"]
+      apply (simp add:)
     find_theorems name: "fold*filter"
     thus ?thesis 
   next
