@@ -410,86 +410,23 @@ proof (induction as arbitrary: n bs)
   then show ?case by auto
 next
   case (Cons a as)
-  have "\<And>n bs. fold ?f else (i, xs)) as (n, bs) =
-    (n + length as, rev (zip as [(n+1)..<(n + length as + 1)]) @ bs)"
-    using Cons by auto
   hence IH': "\<And>n bs. fold ?f as (n, bs) =
-    (n + length as, rev (zip as [n+1..(n + length as)]) @ bs)"
-    by blast
+    (n + length as, rev (zip as [n+1..<(n + length as + 1)]) @ bs)"
+    by (auto split: prod.split)
   have "a \<in> set as'" using Cons by simp
   hence "fold ?f (a # as) (n, bs)
     = fold ?f as (n + 1, (a, n + 1) # bs)"
-    apply (subst fold_Cons) 
-    apply (subst o_apply)
-    apply (subst prod.case)+
-    by (auto simp: z3_rule(112))
-  also have "... = 
-    ((n + 1) + length as, rev (zip as [int ((n + 1) + 1)..int (n + 1) + int (length as)]) @ (a, n + 1) # bs)" 
-    using IH' 
-    by auto
-  also have "... = (n + (length (a#as)), rev (zip as [int ((n + 1) + 1)..int (n + length (a#as))]) @ (a, n + 1) # bs)" 
-    by (metis add_Suc add_Suc_right int_ops(5) length_nth_simps(2) semiring_norm(174))
-  also have "... = (n + (length (a#as)), rev (zip as [int ((n + 1) + 1)..int (n + length (a#as))]) @ [(a, n + 1)] @ bs)" 
-    by fastforce
-  also have "... = (n + (length (a#as)), (rev ((a, n + 1)#(zip as [int ((n + 1) + 1)..int (n + length (a#as))]))) @ bs)" 
-    by auto
-  also have "... = (n + (length (a#as)), (rev (zip (a#as) [int (n + 1)..int (n + length (a#as))])) @ bs)"
-    apply (subst prod.case)
-    apply (subst zip_Cons_Cons[symmetric])
-    apply (subst (2) int_plus)
-    apply (subst int_ops(2))
-    apply (subst upto_rec1[symmetric])
-     apply simp
+    by (auto split: prod.split)
+  also have "... = (n + (length (a#as)), rev (zip as [(n + 2)..<(n + length (a#as) + 1)]) @ (a, n + 1) # bs)" 
+    by (simp add: IH')
+  also have "... = (n + (length (a#as)), (rev ((a, n + 1)#(zip as [(n + 1) + 1..<((n + 1)+ length (a#as))]))) @ bs)" 
     by simp
+  also have "... = (n + (length (a#as)), (rev (zip (a#as) [(n + 1)..<(n + length (a#as) + 1)])) @ bs)"
+    apply (subst zip_Cons_Cons[symmetric])
+    apply (subst Suc_eq_plus1[where n = "n + 1", symmetric])
+    apply (subst upt_conv_Cons[symmetric])
+    by auto
   finally show ?case by blast
-qed
-
-
-lemma extend_domain_fold:
-  "extend_domain f (e#es) n x = extend_domain (f(e := n + 1)) es (n + 1) x"
-proof (induction es arbitrary: f e n)
-  case Nil
-  then show ?case unfolding extend_domain_def 
-    by (auto split: prod.splits)
-next
-  case (Cons a es f e n)
-  have "extend_domain f (e # a # es) n x = 
-    ( let 
-        (i, xs) = fold 
-            (\<lambda>x (i, xs). if x \<in> set (e # a # es) then (i + 1, (x, i + 1) # xs) else (i, xs)) 
-            (e # a # es) 
-            (n, []); 
-        m' = map_of xs
-      in 
-        (\<lambda>x. if x \<in> set (e # a # es) then the (m' x) else f x)
-    ) x" unfolding extend_domain_def ..
-  hence "extend_domain f (e # a # es) n x = 
-    (let 
-      (i, xs) = fold 
-          (\<lambda>x (i, xs). if x \<in> set (e # a # es) then (i + 1, (x, i + 1) # xs) else (i, xs)) 
-          (a # es)
-          (n + 1, [(e, n + 1)]);
-         m' = map_of xs
-     in (\<lambda>x. if x \<in> set (e # a # es) then the (m' x) else f x)) x"
-    using fold_Cons by simp
-  have "extend_domain (f(e := n + 1)) (a # es) (n + 1) x = extend_domain (f(e := n + 1, a := n + 1 + 1)) es (n + 1 + 1) x" 
-    apply (subst Cons.IH) 
-    ..
-  
-  show ?case
-  proof (cases "x \<in> set (a # es)"; cases "x = e")
-    assume "x \<in> set (a # es)" "x = e"
-    then show ?thesis sorry
-  next
-    assume "x \<in> set (a # es)" "x \<noteq> e"
-    then show ?thesis sorry
-  next
-    assume "x \<notin> set (a # es)" "x = e"
-    then show ?thesis sorry
-  next
-    assume "x \<notin> set (a # es)" "x \<noteq> e"
-    then show ?thesis sorry
-  qed
 qed
 
 lemma extend_domain_index:
@@ -506,7 +443,7 @@ next
     case False
     with Cons
     have xe: "x = e" by simp
-    hence "n + last_index (e # es) x + 1 = n + 1" using False
+    hence 1: "n + last_index (e # es) x + 1 = n + 1" using False
       apply (subst last_index_Cons)
       by simp
     from xe 
@@ -528,66 +465,147 @@ next
         m' = map_of xs
       in 
        the (m' x))" using xe by (auto split: prod.splits)
-    also have "... = n + 1" using False xe 
+    also have "... = n + 1" using False  
       apply (subst Let_def)
-      using  extend_domain_fold_lemma[where as' = "e#es" and as = es and n = "n + 1" and bs = "[(e, n + 1)]"]
-      apply (simp add:)
-    find_theorems name: "fold*filter"
-    thus ?thesis 
+      apply (subst extend_domain_fold_lemma[where as' = "e#es" and as = es and n = "n + 1" and bs = "[(e, n + 1)]"])
+       apply auto[1]
+      apply (subst prod.case)
+      apply (subst Let_def)
+      apply (subst xe, subst (asm) xe)
+      apply (subst map_of_distinct_lookup)
+        apply (subst zip_rev[symmetric])
+         apply (subst length_upt)
+         apply simp
+        apply (subst map_fst_zip)
+         apply (subst length_rev)+
+         apply (subst length_upt)
+      by simp+
+    finally
+    show ?thesis using 1 by simp
   next
-    case False
-    then show ?thesis sorry
+    case True 
+    {fix f n
+      have "n + last_index es x + 1 = extend_domain f es n x" using Cons True by auto
+      also have "... = the (map_of (rev (zip es [n + 1..<(n + (length es) + 1)])) x)" 
+        apply (subst extend_domain_def) 
+        apply (subst extend_domain_fold_lemma)
+         apply simp
+        apply (subst Let_def)
+        apply (subst prod.case)
+        apply (subst Let_def)
+        using True by auto
+      finally have "the (map_of (rev (zip es [n + 1..<n + length es + 1])) x) = n + last_index es x + 1" by simp
+    } note IH' = this
+
+    have 1: "x \<in> dom (map_of (rev (zip es [n + 1 + 1..<n + 1 + length es + 1])))" 
+      using True
+      apply (subst zip_rev[symmetric])
+       apply (subst length_upt)
+       apply simp
+      apply (subst dom_map_of_zip)
+       apply (subst length_rev)+
+       apply (subst length_upt)
+      by simp+
+      
+    have "extend_domain f (e # es) n x = 
+      (
+        let 
+          (i, xs) = fold 
+              (\<lambda>x (i, xs). if x \<in> set (e # es) then (i + 1, (x, i + 1) # xs) else (i, xs)) 
+              (es) (n + 1, [(e, n + 1)]); 
+          m' = map_of xs 
+        in 
+          (\<lambda>x. if x \<in> set (e # es) then the (m' x) else f x)) x" 
+        unfolding extend_domain_def fold_Cons by (auto split: prod.splits)
+    also have "... = 
+        (let 
+          (i, xs) = fold 
+              (\<lambda>x (i, xs). if x \<in> set (e # es) then (i + 1, (x, i + 1) # xs) else (i, xs)) 
+              (es) (n + 1, [(e, n + 1)]); 
+          m' = map_of xs
+        in 
+       the (m' x))" using True by (auto split: prod.splits)
+    also have "... = n + 1 + last_index es x + 1" apply (subst Let_def)
+      apply (subst extend_domain_fold_lemma[where as' = "e#es" and as = es and n = "n + 1" and bs = "[(e, n + 1)]"])
+       apply auto[1]
+      apply (subst prod.case)
+        apply (subst Let_def)
+        apply (subst map_of_append)
+        apply (subst map_add_dom_app_simps(1))
+         apply (rule 1)
+        find_theorems "map_of (?xs @ ?ys)"
+        apply (subst IH')
+        ..
+      finally show ?thesis using True 
+        apply (subst last_index_Cons)
+        by simp
   qed
 qed
 
-lemma extend_domain_inj_new:
-  "inj_on (extend_domain f e n) (set e)"
-proof (induction e)
-  case Nil
-  then show ?case by simp
-next
-  case (Cons a as)
-   show ?case 
-   proof (rule inj_onI)
-     fix x y
-     assume x: "x \<in> set (a # as)" 
-        and y: "y \<in> set (a # as)" 
-        and f: "extend_domain f (a # as) n x = extend_domain f (a # as) n y"
-     consider "x \<noteq> a \<and> y \<noteq> a"
-       | "x \<noteq> a \<and> y = a"
-       | "x = a \<and> y \<noteq> a"
-       | "x = a \<and> y = a" by blast
-     thus "x = y"
-     proof cases
-       case 1
-       then show ?thesis 
-         using x y f unfolding extend_domain_def
-         apply -
-         apply (rule Cons.IH[THEN inj_onD])
-         
-     next
-       case 2
-       then show ?thesis sorry
-     next
-       case 3
-       then show ?thesis sorry
-     next
-       case 4
-       then show ?thesis sorry
-     qed
-   qed
-qed
-   apply simp
-  subgoal for x xs
+find_theorems name: "last_index"
 
+lemma extend_domain_inj_new:
+  "inj_on (extend_domain f es (n::nat)) (set es)"
+  apply (rule inj_onI)
+  subgoal for x y
+    using extend_domain_index[of x] extend_domain_index[of y]
+    by simp
+  done
+
+lemma "x \<in> set l \<Longrightarrow> y \<in> set l \<Longrightarrow> last_index l x = last_index l y \<Longrightarrow> x = y"
+  try
 
 lemma extend_domain_inj:
-  assumes "inj_on f (set d)"
-      and "\<forall>x \<in> set d. f x \<le> n"
-          "n = length d - 1"
-  shows "inj_on (extend_domain f e n) (set d \<union> set e)"
-proof -
-
+  assumes inj_on_f: "inj_on f (set d)"
+      and f_ran: "\<forall>x \<in> set d. f x \<le> n"
+      and n: "n = length d - 1"
+        shows "inj_on (extend_domain f e n) (set d \<union> set e)"
+  find_theorems "inj_on ?f (?s \<union> ?t)"
+proof (subst inj_on_Un; intro conjI)
+  show "inj_on (extend_domain f e n) (set e)" using extend_domain_inj_new by blast
+  show "inj_on (extend_domain f e n) (set d)"
+  proof (rule inj_onI)
+    fix x y 
+    assume x: "x \<in> set d" 
+       and y: "y \<in> set d" 
+       and e: "extend_domain f e n x = extend_domain f e n y"
+    show "x = y"
+    proof (cases "x \<in> set e"; cases "y \<in> set e") 
+      assume a: "x \<notin> set e" "y \<notin> set e"
+      hence "f x = f y" using extend_domain_not_in_set e by metis
+      with x y
+      show "x = y" using inj_on_f inj_on_def by metis
+    next
+      assume a: "x \<notin> set e" "y \<in> set e"
+      hence "extend_domain f e n x = f x" using extend_domain_not_in_set by metis
+      hence "extend_domain f e n x \<le> n" using f_ran x by auto
+      moreover
+      have "extend_domain f e n y = n + last_index e y + 1" using a extend_domain_index by auto
+      ultimately 
+      have "False" using e by auto
+      thus ?thesis by simp
+    next
+      assume a: "x \<in> set e" "y \<notin> set e"
+      hence "extend_domain f e n y = f y" using extend_domain_not_in_set by metis
+      hence "extend_domain f e n y \<le> n" using f_ran y by auto
+      moreover
+      have "extend_domain f e n x = n + last_index e x + 1" using a extend_domain_index by auto
+      ultimately 
+      have "False" using e by auto
+      thus ?thesis by simp
+    next
+      assume a: "x \<in> set e" "y \<in> set e"
+      have "extend_domain f e n x = n + last_index e x + 1" using extend_domain_index a by auto
+      moreover
+      have "extend_domain f e n y = n + last_index e y + 1" using extend_domain_index a by auto
+      ultimately
+      have "last_index e x = last_index e y" using e by auto
+      with a
+      show "x = y" by auto
+    qed
+  qed
+  show "extend_domain f e n ` (set d - set e) \<inter> extend_domain f e n ` (set e - set d) = {}"
+    find_theorems "?x \<inter> ?y = {}"
 qed
 
 lemma state_renum'_inj: 
