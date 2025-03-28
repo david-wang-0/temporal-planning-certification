@@ -320,8 +320,8 @@ find_consts name: "renum"
 definition mk_renum::"'a list \<Rightarrow> 'a \<Rightarrow> nat" where
 "mk_renum l \<equiv>
   let
-    nums = [0..length l - 1]  |> map nat;
-    act_nums = nums |> zip l;
+    nums = [0..<length l];
+    act_nums = zip l nums;
     f = map_of act_nums
   in the o f"
 
@@ -347,6 +347,32 @@ abbreviation "ta_states a \<equiv> case a of
 abbreviation "individual_ta_states \<equiv> map ta_states ntas"
 
 definition "all_ta_states = fold (@) individual_ta_states []"
+
+lemma set_fold_append: "set (fold (@) xs ys) = \<Union>(set ` (set xs)) \<union> set ys"
+proof (induction xs arbitrary: ys)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons x xs)
+  have "set (fold (@) (x#xs) ys) = set (fold (@) xs (x @ ys))" by simp
+  also have "... =  \<Union> (set ` set xs) \<union> set (x @ ys)" using Cons.IH by simp
+  also have "... = \<Union> (set ` set xs) \<union> set x \<union> set ys" by auto
+  also have "... =  \<Union> (set ` (insert x (set xs)))\<union> set ys" by auto
+  also have "... = \<Union> (set ` set (x # xs)) \<union> set ys" by auto
+  finally show ?case by auto
+qed
+
+
+lemma individual_ta_states_subset_of_all:
+  assumes "i < length individual_ta_states"
+  shows "set (individual_ta_states ! i) \<subseteq> set all_ta_states"
+proof -
+  have "individual_ta_states ! i \<in> set individual_ta_states" using assms[THEN nth_mem_mset]
+    unfolding in_multiset_in_set by blast
+  thus ?thesis unfolding all_ta_states_def set_fold_append
+    by blast
+qed
+
 
 (* Actual states defined by transitions *)
 
@@ -387,9 +413,35 @@ abbreviation "state_renum' \<equiv> mk_snd_ord_renum individual_ta_states"
 definition "inj_state_renum i \<equiv> 
   let renum' = state_renum' i;
       states = individual_ta_states ! i;
-      other_states = list_of_set (set all_ta_states - set states);
+      other_states = list_remove_all all_ta_states states;
       renum = extend_domain renum' other_states (length states - 1)
   in renum"
+
+lemma list_remove_all_set:
+  "set (list_remove_all xs ys) \<union> set ys = set xs \<union> set ys"
+proof (rule equalityI; intro subsetI)
+  fix x
+  assume "x \<in> set (list_remove_all xs ys) \<union> set ys"
+  thus "x \<in> set xs \<union> set ys" 
+    apply (rule UnE)
+    apply (subst (asm) in_multiset_in_set[symmetric])
+     apply (subst (asm) list_remove_all_mset)
+     apply (rule UnI1)
+    using in_diffD apply fastforce
+    by (rule UnI2)
+next
+  fix x
+  assume "x \<in> set xs \<union> set ys" 
+  then
+  consider "x \<in> set xs - set ys" | "x \<in> set ys" by blast
+  thus "x \<in> set (list_remove_all xs ys) \<union> set ys"
+    apply (cases)
+     apply (rule UnI1)
+    apply (subst in_multiset_in_set[symmetric])
+     apply (subst list_remove_all_mset)
+     apply (metis DiffE count_greater_zero_iff count_mset_0_iff in_diff_count set_mset_mset)
+    by blast
+qed
 
 lemma extend_domain_not_in_set:
   assumes "x \<notin> set es"
@@ -398,7 +450,6 @@ lemma extend_domain_not_in_set:
   unfolding extend_domain_def
   by (auto split: prod.splits)
 
-find_theorems "?f ?x = (?y::nat list)"
 
 lemma extend_domain_fold_lemma:
   assumes "set as \<subseteq> set as'"
@@ -552,14 +603,12 @@ lemma extend_domain_inj_new:
     by simp
   done
 
-lemma "x \<in> set l \<Longrightarrow> y \<in> set l \<Longrightarrow> last_index l x = last_index l y \<Longrightarrow> x = y"
-  try
 
 lemma extend_domain_inj:
   assumes inj_on_f: "inj_on f (set d)"
       and f_ran: "\<forall>x \<in> set d. f x \<le> n"
       and n: "n = length d - 1"
-        shows "inj_on (extend_domain f e n) (set d \<union> set e)"
+    shows "inj_on (extend_domain f e n) (set d \<union> set e)"
   find_theorems "inj_on ?f (?s \<union> ?t)"
 proof (subst inj_on_Un; intro conjI)
   show "inj_on (extend_domain f e n) (set e)" using extend_domain_inj_new by blast
@@ -572,12 +621,12 @@ proof (subst inj_on_Un; intro conjI)
     show "x = y"
     proof (cases "x \<in> set e"; cases "y \<in> set e") 
       assume a: "x \<notin> set e" "y \<notin> set e"
-      hence "f x = f y" using extend_domain_not_in_set e by metis
+      hence "f x = f y" using extend_domain_not_in_set[of _ e f n] e by auto
       with x y
-      show "x = y" using inj_on_f inj_on_def by metis
+      show "x = y" using inj_on_f[simplified inj_on_def] by blast
     next
       assume a: "x \<notin> set e" "y \<in> set e"
-      hence "extend_domain f e n x = f x" using extend_domain_not_in_set by metis
+      hence "extend_domain f e n x = f x" using extend_domain_not_in_set[of x e f n] by blast
       hence "extend_domain f e n x \<le> n" using f_ran x by auto
       moreover
       have "extend_domain f e n y = n + last_index e y + 1" using a extend_domain_index by auto
@@ -604,18 +653,146 @@ proof (subst inj_on_Un; intro conjI)
       show "x = y" by auto
     qed
   qed
+  
   show "extend_domain f e n ` (set d - set e) \<inter> extend_domain f e n ` (set e - set d) = {}"
-    find_theorems "?x \<inter> ?y = {}"
+  proof -
+    { fix x y
+      assume x: "x \<in> (set d - set e)"
+         and y: "y \<in> (set e - set d)"
+      have "extend_domain f e n x \<le> n" using f_ran extend_domain_not_in_set[of x e f n] x by auto
+      moreover
+      have "extend_domain f e n y = n + last_index e y + 1" using extend_domain_index y by fast
+      ultimately
+      have "extend_domain f e n x \<noteq> extend_domain f e n y" by force
+    }
+    thus ?thesis by blast
+  qed
 qed
+
+lemma map_of_zip_fst:
+  assumes "x \<in> set as"
+     and "length as = length bs"
+   shows "map_of (zip as bs) x = Some (bs ! (List_Index.index as x))"
+  using assms
+proof (induction as arbitrary: bs)
+  case Nil
+  then show ?case by auto
+next
+  case (Cons a as)
+  then obtain c cs where
+    bs[simp]: "bs =c#cs" by (cases bs, auto)
+  show ?case 
+  proof (cases "x = a")
+    case [simp]: True
+    hence "List_Index.index (a # as) x = 0" by auto
+    hence "bs ! (List_Index.index (a # as) x) = c" using nth_Cons_0 by simp
+    moreover
+    have "map_of (zip (a # as) bs) x = Some c" by auto
+    ultimately
+    show ?thesis by simp
+  next
+    case False
+    show ?thesis 
+      apply (subst bs)+
+      apply (subst zip_Cons_Cons)
+      apply (subst map_of_Cons_code(2))
+      using False Cons
+      by simp
+  qed
+qed
+
+(* lemma map_of_zip_ran_distinct_inj:
+  assumes dist: "distinct bs"
+      and l: "length as = length bs"
+    shows "inj_on (map_of (zip as bs)) (set as)"
+proof (rule inj_onI)
+  fix x y
+  assume x: "x \<in> set as"
+     and y: "y \<in> set as"
+     and mz: "map_of (zip as bs) x = map_of (zip as bs) y"
+  
+qed *)
+
+
+lemma mk_renum_inj: "inj_on (mk_renum d) (set d)"
+proof (rule inj_onI)
+  fix x y
+  assume x: "x \<in> set d"
+     and y: "y \<in> set d"
+     and rn: "mk_renum d x = mk_renum d y"
+  have "mk_renum d x = the (map_of (zip d [0..<length d]) x)" 
+    by (simp add: mk_renum_def comp_def)
+  hence "mk_renum d x = List_Index.index d x"
+    apply (subst (asm) map_of_zip_fst[OF x])
+     apply simp
+    using x[simplified index_less_size_conv[symmetric]]
+    by simp
+  moreover
+  have "mk_renum d y = List_Index.index d y"
+    unfolding mk_renum_def comp_def Let_def
+    apply (subst map_of_zip_fst[OF y])
+     apply simp
+    using y[simplified index_less_size_conv[symmetric]]
+    by simp
+  ultimately
+  have "List_Index.index d x = List_Index.index d y" using rn by auto
+  with x y
+  show "x = y" by simp
+qed
+    
+
+lemma individual_ta_states_inj:
+  assumes i_ran: "i < length individual_ta_states"
+  shows "inj_on (state_renum' i) (set (individual_ta_states ! i))"
+  using assms
+  apply (subst mk_snd_ord_renum_def)
+  apply (subst comp_apply)
+  using mk_renum_inj 
+  apply (subst nth_map)
+  by blast+
+
+lemma state_renum'_ran:
+  assumes i: "i < length individual_ta_states"
+      and x: "x \<in> set (individual_ta_states ! i)" 
+    shows "state_renum' i x \<le> (length (individual_ta_states ! i) - 1)"
+  unfolding mk_snd_ord_renum_def comp_apply mk_renum_def Let_def
+  apply (subst nth_map[OF i])
+  apply (subst map_of_zip_fst[OF x])
+   apply simp
+  apply (subst option.sel)
+  using x[simplified index_less_size_conv[symmetric]]
+  by simp
 
 lemma state_renum'_inj: 
   assumes i_ran: "i < length individual_ta_states"
       and x: "x \<in> set all_ta_states"
       and y: "y \<in> set all_ta_states"
       and e: "inj_state_renum i x = inj_state_renum i y"
-        shows "x = y"
+    shows "x = y"
 proof -
+  have a: "inj_state_renum i = 
+  extend_domain (state_renum' i) (list_remove_all all_ta_states (individual_ta_states ! i)) (length (individual_ta_states ! i) - 1)" 
+    apply (subst inj_state_renum_def)
+    apply (subst Let_def)+
+    by blast
   
+  have 1: "inj_on (state_renum' i) (set (individual_ta_states ! i))" using individual_ta_states_inj[OF i_ran] .
+  have 2: " \<forall>x\<in>set (individual_ta_states ! i). state_renum' i x \<le> length (individual_ta_states ! i) - 1"
+    using state_renum'_ran i_ran by blast
+  
+  have "inj_on (extend_domain (state_renum' i)  (list_remove_all all_ta_states (individual_ta_states ! i)) (length (individual_ta_states ! i) - Suc 0)) (set (individual_ta_states ! i) \<union> set (list_remove_all all_ta_states (individual_ta_states ! i)))" 
+    using extend_domain_inj[OF 1 2, simplified]
+    by blast
+  hence "inj_on (extend_domain (state_renum' i) (list_remove_all all_ta_states (individual_ta_states ! i)) (length (individual_ta_states ! i) - Suc 0))
+   (set all_ta_states)" 
+    apply -
+    apply (subst (asm) Un_commute)
+    apply (subst (asm) list_remove_all_set)
+    apply (subst (asm) Un_commute)
+    apply (subst (asm) individual_ta_states_subset_of_all[OF i_ran, simplified subset_Un_eq])
+    by assumption
+  hence "inj_on (inj_state_renum i) (set all_ta_states)" using a by auto
+  thus ?thesis using e x y unfolding inj_on_def by blast
 qed
 
 abbreviation "nta_init \<equiv> fst o snd"
@@ -640,6 +817,9 @@ definition "autos \<equiv> map (snd o snd o snd) ntas"
 
 definition "form \<equiv> let (automata, clocks, vars, formula) = timed_automaton_net_spec in formula"
 
+lemma nta_length[simp]: "length individual_ta_states = length ntas"
+  using length_map .
+
 sublocale Simple_Network_Rename_Formula
     broadcast 
     nta_vars 
@@ -653,7 +833,44 @@ sublocale Simple_Network_Rename_Formula
     autos
     form
 proof
-
+  show "\<forall>i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of autos, map_of nta_vars).
+       \<forall>x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of autos, map_of nta_vars).
+          \<forall>y\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of autos, map_of nta_vars). inj_state_renum i x = inj_state_renum i y \<longrightarrow> x = y"
+  proof -
+    { fix i x y
+      assume i: "i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of autos, map_of nta_vars)"
+         and x: "x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of autos, map_of nta_vars)"
+         and y: "y\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of autos, map_of nta_vars)"
+      have "Prod_TA_Defs.n_ps (set broadcast, map automaton_of autos, map_of nta_vars) = length ntas"
+        unfolding Prod_TA_Defs.n_ps_def autos_def by simp
+      { fix p
+        assume p: "p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of autos, map_of nta_vars)" 
+        hence p1: "p < length autos" unfolding Prod_TA_Defs.n_ps_def by auto
+        hence p2: "p < length ntas" unfolding autos_def by auto
+        (* then obtain ta  where
+          ta: "ntas ! p = ta"
+          unfolding ntas_def by simp
+        then obtain n inits s c u transitions invs where
+          tr: "ta = (n, inits, s, c, u, transitions, invs)"
+          apply (cases rule: prod_cases7)
+          by blast *)
+        let ?f = "fst o snd o snd"
+        have 1: "?f (Prod_TA_Defs.N (set broadcast, map automaton_of autos, map_of nta_vars) p) = 
+            set (?f (get_actual_auto (ntas ! p)))" unfolding Prod_TA_Defs.N_def apply simp
+          unfolding automaton_of_def
+          apply (subst nth_map, rule p1)
+          unfolding autos_def comp_apply
+          apply (subst nth_map, rule p2)
+          by (auto split: prod.split)
+        have "Simple_Network_Language.trans (Prod_TA_Defs.N (set broadcast, map automaton_of autos, map_of nta_vars) p)
+          = set (auto_trans (get_actual_auto (ntas ! p)))" 
+          
+      }
+      hence "x \<in> set all_ta_states"  using x
+        unfolding Prod_TA_Defs.loc_set_def 
+        
+    }
+  qed
 qed
 end
 
