@@ -192,9 +192,11 @@ let
   u_dur_const = u_dur_spec a;
   guard = l_dur_spec a @ u_dur_spec a @ int_clocks;
 
-  unlock_invs = map (inc_prop_lock_ab (-1)) (over_all a)
+  unlock_invs = map (inc_prop_lock_ab (-1)) (over_all a);
+  
+  resets = [ActEnd a]
 in 
-  (Running a, bexp.true, guard, Sil (STR ''''), [], [], EndInstant a)
+  (Running a, bexp.true, guard, Sil (STR ''''), [], resets, EndInstant a)
 "
 
 definition end_edge_spec::"'action \<Rightarrow> _" where
@@ -210,11 +212,9 @@ let
   check = bexp_and_all (not_locked_check @ pre_check);
   
   adds = map (set_prop_ab 1) (adds end_snap);
-  dels = map (set_prop_ab 0) (dels end_snap);
-  
-  resets = [ActEnd a]
+  dels = map (set_prop_ab 0) (dels end_snap)
 in
-  (end_instant, check, [], Sil (STR ''''), adds @ dels, resets, off)
+  (end_instant, check, [], Sil (STR ''''), adds @ dels, [], off)
 "
 
   (* To do: Implement abstract definition later *)
@@ -300,7 +300,7 @@ definition timed_automaton_net_spec::"
 "timed_automaton_net_spec \<equiv> 
 let
   automata = main_auto_spec # (map action_to_automaton_spec actions);
-  automata = zip (map to_nat [0..length automata - 1]) automata;
+  automata = zip [0..<length automata] automata;
 
   clocks = map ActStart actions @ map ActEnd actions;
 
@@ -354,7 +354,7 @@ next
          apply simp
         apply (subst zip_Cons_Cons)
         apply (subst map_of_Cons_code(2)) 
-        by metis
+        by (metis (full_types))
       also have "... = the (map_of (zip as [Suc n..<Suc n + length as]) x)"
         by simp
       also have "... = Suc n + List_Index.index as x" using Cons.IH[OF True] by blast
@@ -438,9 +438,11 @@ definition "clock_renum \<equiv> mk_renum (urge_clock # nta_clocks)"
 
 subsubsection \<open>Actual clocks\<close>
 
+find_theorems name: "clkp"
+
 definition "trans_clocks t\<equiv>
 let (l, b, c, a, u, r, l') = t
-in set r"
+in set r \<union> (fst ` collect_clock_pairs c)"
 
 definition "trans_to_clocks trs \<equiv> 
 let 
@@ -456,7 +458,7 @@ lemma fold_union:
   "fold (\<union>) S T =  \<Union> (set S) \<union> T"
   by (induction S arbitrary: T) auto
 
-lemma "all_ta_clocks \<subseteq> set nta_clocks"
+lemma actual_clocks_correct: "all_ta_clocks \<subseteq> set nta_clocks"
 proof
   fix x 
   assume "x \<in> all_ta_clocks"
@@ -473,14 +475,96 @@ proof
   obtain n init states comm urg trans invs where
       tr: "nta = (n, init, states, comm, urg, trans, invs)" 
     apply (cases nta) by blast
-  then consider act where "(init, states, comm, urg, trans, invs) = action_to_automaton_spec act" |
-    "(init, states, comm, urg, trans, invs) = main_auto_spec" using nta(1) 
-    unfolding ntas_def timed_automaton_net_spec_def apply auto by (meson ex_map_conv set_ConsD set_zip_rightD)
+  hence "\<exists>act. (init, states, comm, urg, trans, invs) = action_to_automaton_spec act \<and> act \<in> set actions  
+    \<or> (init, states, comm, urg, trans, invs) = main_auto_spec" 
+  proof -
+    from nta(1)
+    have "nta \<in> set (zip [0..<length (main_auto_spec # map action_to_automaton_spec actions)] (main_auto_spec # map action_to_automaton_spec actions))" 
+      unfolding ntas_def timed_automaton_net_spec_def Let_def prod.case by simp
+    then consider "nta = (0, main_auto_spec)" | 
+      "nta \<in> set (zip [1..<1 + length (map action_to_automaton_spec actions)] (map action_to_automaton_spec actions))"
+      apply (subst (asm) upt_conv_Cons) 
+      apply simp
+      apply (subst (asm) zip_Cons_Cons) 
+      apply (drule set_ConsD)
+      apply (erule disjE)
+       apply blast
+      by fastforce
+    thus ?thesis
+    proof cases
+      case 1
+      then show ?thesis using tr by auto
+    next
+      assume "nta \<in> set (zip [1..<1 + length (map action_to_automaton_spec actions)] (map action_to_automaton_spec actions))"
+      with tr
+      have "(n, init, states, comm, urg, trans, invs) \<in> set (zip [1..<1 + length (map action_to_automaton_spec actions)] (map action_to_automaton_spec actions))"
+        by simp
+      hence "(init, states, comm, urg, trans, invs) \<in> set (map action_to_automaton_spec actions)" 
+        using set_zip_rightD by fast
+      thus ?thesis by auto
+    qed
+  qed
+  then consider (act) "\<exists>act \<in> set actions. (init, states, comm, urg, trans, invs) = action_to_automaton_spec act"  |
+    (main) "(init, states, comm, urg, trans, invs) = main_auto_spec" by blast
+  note auto_cases = this
+
   
   have xtr: "x \<in> trans_to_clocks trans" using nta(2) tr 
     unfolding auto_trans_def get_actual_auto_def 
     by (auto split: prod.split)
-  show "x \<in> set nta_clocks" sorry
+
+
+  show "x \<in> set nta_clocks" 
+  proof (cases rule: auto_cases)
+    case act
+    hence "\<exists>act \<in> set actions. trans = [start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act]"
+      unfolding action_to_automaton_spec_def by auto
+    have "trans_clocks (start_edge_spec act) \<subseteq> \<Union> ((\<lambda> act'. {ActStart act', ActEnd act'}) ` set actions)" if "act \<in> set actions" for act
+    proof (rule subsetI)
+      fix x
+      assume "x \<in> trans_clocks (start_edge_spec act)"
+      from this
+      have "x \<in> set [ActStart act] \<union> fst ` collect_clock_pairs (map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec (at_start act)))"
+        apply -
+        apply (subst (asm) trans_clocks_def)
+        apply (subst (asm) start_edge_spec_def)
+        unfolding Let_def prod.case
+        apply simp
+    qed
+    hence "trans_to_clocks trans \<subseteq> \<Union> ((\<lambda> act'. {ActStart act', ActEnd act'}) ` set actions)" 
+      unfolding action_to_automaton_spec_def Let_def apply simp
+      apply (erule bexE)
+      subgoal for act
+        apply (drule conjunct2)
+        apply (drule conjunct2)
+        apply (drule conjunct2)
+        apply (drule conjunct2)
+        apply (drule conjunct1)
+        apply (rule ssubst[of trans])
+         apply assumption
+        apply (subst start_edge_spec_def)
+        apply (subst edge_2_spec_def)
+        apply (subst edge_3_spec_def)
+        apply (subst end_edge_spec_def)
+        unfolding Let_def trans_to_clocks_def fold_union set_map 
+
+
+    moreover
+    have "\<forall> act \<in> set actions. {ActStart act, ActEnd act} \<subseteq> set nta_clocks" unfolding nta_clocks_def timed_automaton_net_spec_def
+        Let_def prod.case 
+    ultimately
+    show ?thesis sorry
+    
+  next
+    case main
+    hence "trans = [main_auto_init_edge_spec, main_auto_goal_edge_spec]" 
+      unfolding main_auto_spec_def Let_def prod.case by auto
+    hence "trans_to_clocks trans = {}" 
+      unfolding main_auto_init_edge_spec_def main_auto_goal_edge_spec_def trans_to_clocks_def 
+      Let_def trans_clocks_def by simp
+    with xtr
+    show ?thesis by blast
+  qed
 qed
 
 subsection \<open>States\<close>       
@@ -1103,7 +1187,13 @@ proof
     thus ?thesis by blast
   qed
   show "inj_on clock_renum (insert urge_clock (Simple_Network_Impl.clk_set' autos))"
-    using mk_renum_inj unfolding clock_renum_def 
+  proof -
+    have "insert urge_clock (Simple_Network_Impl.clk_set' autos) = set (urge_clock # nta_clocks)"
+      using actual_clocks_correct
+      unfolding Simple_Network_Impl.clk_set'_def all_ta_clocks_def ta_clocks_def
+trans_to_clocks_def trans_clocks_def Let_def fold_union 
+      
+  qed
 qed
 end
 
