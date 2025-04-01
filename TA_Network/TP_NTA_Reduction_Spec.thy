@@ -1229,6 +1229,21 @@ proof
     qed
     have 2: "B = C \<Longrightarrow> A \<union> B = A \<union> C" for A B C by blast
 
+    have 3: "(\<Union>A\<in>set actual_autos. \<Union>g\<in>set (snd (snd (snd A))). fst ` (collect_clock_pairs (snd g))) = 
+      (\<Union>trs\<in>set (map (\<lambda>x. fst (snd (snd x))) actual_autos). \<Union>x\<in>set trs. fst ` collect_clock_pairs (fst (snd (snd x))))"
+    proof (rule equalityI; rule subsetI)
+      fix x
+      assume "x \<in>(\<Union>A\<in>set actual_autos. \<Union>g\<in>set (snd (snd (snd A))). fst ` (collect_clock_pairs (snd g)))"
+      show "x \<in> (\<Union>trs\<in>set (map (\<lambda>x. fst (snd (snd x))) actual_autos). \<Union>x\<in>set trs. fst ` collect_clock_pairs (fst (snd (snd x))))" sorry
+    next
+      fix x
+      assume "x \<in> (\<Union>trs\<in>set (map (\<lambda>x. fst (snd (snd x))) actual_autos). \<Union>x\<in>set trs. fst ` collect_clock_pairs (fst (snd (snd x))))" 
+      show "x \<in>(\<Union>A\<in>set actual_autos. \<Union>g\<in>set (snd (snd (snd A))). fst ` (collect_clock_pairs (snd g)))"sorry
+    qed 
+
+    have 4: " (\<Union>A\<in>set actual_autos. \<Union>(l, b, g, _)\<in>set (fst (snd (snd A))). fst ` (collect_clock_pairs g)) 
+        = (\<Union>auto\<in>set actual_autos. \<Union>i\<in>set (snd (snd (snd auto))). fst ` collect_clock_pairs (snd i))" sorry
+
     have "insert urge_clock (Simple_Network_Impl.clk_set' actual_autos) = insert urge_clock all_ta_clocks"
       apply (rule arg_cong[where f = "insert urge_clock"])
       apply (subst Simple_Network_Impl.clk_set'_def)
@@ -1236,9 +1251,15 @@ proof
       apply (subst 1)
       unfolding comp_apply
       apply (subst Un_commute)
+      apply (subst Un_assoc)
       apply (rule 2)
       unfolding Simple_Network_Impl.clkp_set'_def
-      unfolding ta_trans_def comp_apply
+      unfolding ta_trans_def comp_apply inv_clocks_def
+      apply (subst 3[symmetric]) 
+      apply (subst 4[symmetric])
+      by blast
+      
+        
     have "insert urge_clock (Simple_Network_Impl.clk_set' actual_autos) = set (urge_clock # nta_clocks)"
 
       unfolding Simple_Network_Impl.clk_set'_def all_ta_clocks_def ta_clocks_def
