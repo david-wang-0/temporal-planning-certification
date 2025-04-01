@@ -30,10 +30,6 @@ datatype 'action location =
   Planning |
   GoalLocation
 
-datatype 'action auto_id =
-  ActAuto 'action |
-  MainAuto
-
 instance variable::(countable) countable
   by countable_datatype
 
@@ -405,26 +401,35 @@ definition "ntas \<equiv> let (automata, clocks, vars, formula) = timed_automato
 
 subsubsection \<open>Actual transitions\<close>
 
-definition get_actual_auto where
+(* definition get_actual_auto where
 "get_actual_auto gen_auto \<equiv> 
   let 
     (name, initial, states, committed, urgent, transitions, invs) = gen_auto 
-  in (committed, urgent, transitions, invs)"
+  in (committed, urgent, transitions, invs)" *)
+
+abbreviation "get_actual_auto \<equiv> snd o snd o snd"
 
 definition actual_autos where
 "actual_autos = map get_actual_auto ntas"
 
 
-definition auto_trans where
+(* definition auto_trans where
 "auto_trans auto \<equiv> 
   let
     (committed, urgent, trans, invs) = auto
   in
-    trans"
+    trans" *)
+
+abbreviation "auto_trans \<equiv> (fst o snd o snd)"
+
+abbreviation "auto_invs \<equiv> (snd o snd o snd)"
 
 definition ta_trans where
 "ta_trans = map auto_trans actual_autos"
 
+definition ta_invs where
+"ta_invs = map auto_invs actual_autos"
+                                  
 subsection \<open>Variables and Clocks\<close>
 definition "nta_vars \<equiv> let (automata, clocks, vars, formula) = timed_automaton_net_spec in vars"
 
@@ -450,7 +455,15 @@ let
 in
   fold (\<union>) trans_clocks {}"
 
-definition "ta_clocks \<equiv> map trans_to_clocks ta_trans"
+definition "inv_clocks i \<equiv> fst ` (collect_clock_pairs (snd i))"
+
+definition "invs_to_clocks is \<equiv>
+let 
+  inv_clocks = map inv_clocks is
+in
+  fold (\<union>) inv_clocks {}"
+
+definition "ta_clocks \<equiv> map trans_to_clocks ta_trans @ map invs_to_clocks ta_invs"
 
 definition "all_ta_clocks \<equiv> fold (\<union>) ta_clocks {}"
 
@@ -458,115 +471,100 @@ lemma fold_union:
   "fold (\<union>) S T =  \<Union> (set S) \<union> T"
   by (induction S arbitrary: T) auto
 
-lemma actual_clocks_correct: "all_ta_clocks \<subseteq> set nta_clocks"
-proof
-  fix x 
-  assume "x \<in> all_ta_clocks"
-  from this[simplified all_ta_clocks_def]
-  have "x \<in> \<Union> (set ta_clocks)" using fold_union by fastforce
-  hence "x \<in> \<Union> (set (map trans_to_clocks ta_trans))" unfolding ta_clocks_def by blast
-  hence "x \<in> \<Union> (set (map trans_to_clocks (map auto_trans (map get_actual_auto ntas))))" 
-    unfolding ta_trans_def actual_autos_def .
-  then obtain nta where
-    nta: "nta \<in> set ntas"
-    "x \<in> (trans_to_clocks (auto_trans (get_actual_auto nta)))"
-    by auto
-  from this(2)
-  obtain n init states comm urg trans invs where
-      tr: "nta = (n, init, states, comm, urg, trans, invs)" 
-    apply (cases nta) by blast
-  hence "\<exists>act. (init, states, comm, urg, trans, invs) = action_to_automaton_spec act \<and> act \<in> set actions  
-    \<or> (init, states, comm, urg, trans, invs) = main_auto_spec" 
-  proof -
-    from nta(1)
-    have "nta \<in> set (zip [0..<length (main_auto_spec # map action_to_automaton_spec actions)] (main_auto_spec # map action_to_automaton_spec actions))" 
-      unfolding ntas_def timed_automaton_net_spec_def Let_def prod.case by simp
-    then consider "nta = (0, main_auto_spec)" | 
-      "nta \<in> set (zip [1..<1 + length (map action_to_automaton_spec actions)] (map action_to_automaton_spec actions))"
-      apply (subst (asm) upt_conv_Cons) 
-      apply simp
-      apply (subst (asm) zip_Cons_Cons) 
-      apply (drule set_ConsD)
-      apply (erule disjE)
-       apply blast
+lemma fold_union':
+  "fold (\<union>) S {} =  \<Union> (set S)"
+  apply (subst fold_union)
+  apply (subst Un_empty_right)
+  ..
+
+lemma int_clocks_set: "set (int_clocks_spec d) \<subseteq> set (map ActStart actions) \<union> set (map ActEnd actions)"
+  unfolding int_clocks_spec_def by auto
+
+lemma nta_clocks_alt: "set nta_clocks = set (map ActStart actions) \<union> set (map ActEnd actions)"
+  unfolding nta_clocks_def Let_def timed_automaton_net_spec_def prod.case by simp
+
+abbreviation "trans_resets \<equiv> fst o snd o snd o snd o snd o snd"
+
+abbreviation "trans_guards \<equiv> fst o snd o snd"
+thm set_map
+
+lemma all_ta_clocks_alt: "all_ta_clocks = 
+(\<Union>trs\<in>set ta_trans. \<Union> ((set o trans_resets) ` set trs)) \<union> 
+(\<Union>trs\<in>set ta_trans. \<Union> (((`) fst o collect_clock_pairs o trans_guards) ` set trs)) \<union> 
+(\<Union>auto\<in>set actual_autos. \<Union> (inv_clocks ` set (auto_invs auto)))"
+proof -
+  have 1: "all_ta_clocks = (\<Union>trs\<in>set ta_trans. \<Union>(l, b, c, a, u, r, l')\<in>set trs. set r \<union> fst ` collect_clock_pairs c) \<union> 
+    (\<Union>auto\<in>set actual_autos. \<Union> (inv_clocks ` set (auto_invs auto)))"
+  unfolding all_ta_clocks_def ta_clocks_def
+  apply (subst fold_union')
+  unfolding trans_to_clocks_def trans_clocks_def Let_def
+  apply (subst fold_union')
+  apply (subst set_map)+
+  unfolding invs_to_clocks_def ta_invs_def Let_def
+  apply (subst fold_union')
+  apply (subst map_map)+
+  unfolding comp_apply
+  by simp
+  show ?thesis
+  proof (subst 1; rule equalityI; rule subsetI)
+    fix x
+    assume "x \<in> (\<Union>trs\<in>set ta_trans. \<Union>(l, b, c, a, u, r, l')\<in>set trs. set r \<union> fst ` collect_clock_pairs c)
+       \<union> (\<Union>auto\<in>set actual_autos. \<Union> (inv_clocks ` set (auto_invs auto)))"
+    thus "x \<in> (\<Union>trs\<in>set ta_trans. \<Union> ((set \<circ>\<circ>\<circ> (\<circ>)) (fst \<circ> snd \<circ> snd \<circ> snd \<circ> snd) snd ` set trs)) 
+      \<union> (\<Union>trs\<in>set ta_trans. \<Union> (((`) fst \<circ> collect_clock_pairs \<circ>\<circ>\<circ> (\<circ>)) (fst \<circ> snd) snd ` set trs))
+      \<union> (\<Union>auto\<in>set actual_autos. \<Union> (inv_clocks ` set (auto_invs auto)))"
       by fastforce
-    thus ?thesis
-    proof cases
-      case 1
-      then show ?thesis using tr by auto
-    next
-      assume "nta \<in> set (zip [1..<1 + length (map action_to_automaton_spec actions)] (map action_to_automaton_spec actions))"
-      with tr
-      have "(n, init, states, comm, urg, trans, invs) \<in> set (zip [1..<1 + length (map action_to_automaton_spec actions)] (map action_to_automaton_spec actions))"
-        by simp
-      hence "(init, states, comm, urg, trans, invs) \<in> set (map action_to_automaton_spec actions)" 
-        using set_zip_rightD by fast
-      thus ?thesis by auto
-    qed
-  qed
-  then consider (act) "\<exists>act \<in> set actions. (init, states, comm, urg, trans, invs) = action_to_automaton_spec act"  |
-    (main) "(init, states, comm, urg, trans, invs) = main_auto_spec" by blast
-  note auto_cases = this
-
-  
-  have xtr: "x \<in> trans_to_clocks trans" using nta(2) tr 
-    unfolding auto_trans_def get_actual_auto_def 
-    by (auto split: prod.split)
-
-
-  show "x \<in> set nta_clocks" 
-  proof (cases rule: auto_cases)
-    case act
-    hence "\<exists>act \<in> set actions. trans = [start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act]"
-      unfolding action_to_automaton_spec_def by auto
-    have "trans_clocks (start_edge_spec act) \<subseteq> \<Union> ((\<lambda> act'. {ActStart act', ActEnd act'}) ` set actions)" if "act \<in> set actions" for act
-    proof (rule subsetI)
-      fix x
-      assume "x \<in> trans_clocks (start_edge_spec act)"
-      from this
-      have "x \<in> set [ActStart act] \<union> fst ` collect_clock_pairs (map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec (at_start act)))"
-        apply -
-        apply (subst (asm) trans_clocks_def)
-        apply (subst (asm) start_edge_spec_def)
-        unfolding Let_def prod.case
-        apply simp
-    qed
-    hence "trans_to_clocks trans \<subseteq> \<Union> ((\<lambda> act'. {ActStart act', ActEnd act'}) ` set actions)" 
-      unfolding action_to_automaton_spec_def Let_def apply simp
-      apply (erule bexE)
-      subgoal for act
-        apply (drule conjunct2)
-        apply (drule conjunct2)
-        apply (drule conjunct2)
-        apply (drule conjunct2)
-        apply (drule conjunct1)
-        apply (rule ssubst[of trans])
-         apply assumption
-        apply (subst start_edge_spec_def)
-        apply (subst edge_2_spec_def)
-        apply (subst edge_3_spec_def)
-        apply (subst end_edge_spec_def)
-        unfolding Let_def trans_to_clocks_def fold_union set_map 
-
-
-    moreover
-    have "\<forall> act \<in> set actions. {ActStart act, ActEnd act} \<subseteq> set nta_clocks" unfolding nta_clocks_def timed_automaton_net_spec_def
-        Let_def prod.case 
-    ultimately
-    show ?thesis sorry
-    
   next
-    case main
-    hence "trans = [main_auto_init_edge_spec, main_auto_goal_edge_spec]" 
-      unfolding main_auto_spec_def Let_def prod.case by auto
-    hence "trans_to_clocks trans = {}" 
-      unfolding main_auto_init_edge_spec_def main_auto_goal_edge_spec_def trans_to_clocks_def 
-      Let_def trans_clocks_def by simp
-    with xtr
-    show ?thesis by blast
+    fix x
+    assume "x \<in> (\<Union>trs\<in>set ta_trans. \<Union> ((set \<circ>\<circ>\<circ> (\<circ>)) (fst \<circ> snd \<circ> snd \<circ> snd \<circ> snd) snd ` set trs)) 
+      \<union> (\<Union>trs\<in>set ta_trans. \<Union> (((`) fst \<circ> collect_clock_pairs \<circ>\<circ>\<circ> (\<circ>)) (fst \<circ> snd) snd ` set trs))
+      \<union> (\<Union>auto\<in>set actual_autos. \<Union> (inv_clocks ` set (auto_invs auto)))"
+    hence "x \<in> (\<Union>trs\<in>set ta_trans. \<Union>x\<in>set trs. set (fst (snd (snd (snd (snd (snd x))))))) 
+      \<union> (\<Union>trs\<in>set ta_trans. \<Union>x\<in>set trs. fst ` collect_clock_pairs (fst (snd (snd x))))
+      \<union> (\<Union>auto\<in>set actual_autos. \<Union> (inv_clocks ` set (auto_invs auto)))" unfolding comp_apply .
+    hence
+      "(\<exists>tr \<in> set ta_trans. x \<in> (\<Union>x\<in>set tr. set (fst (snd (snd (snd (snd (snd x)))))))) \<or>
+       (\<exists>tr \<in> set ta_trans. x \<in> (\<Union>x\<in>set tr. fst ` collect_clock_pairs (fst (snd (snd x))))) \<or>
+       x \<in> (\<Union>auto\<in>set actual_autos. \<Union> (inv_clocks ` set (auto_invs auto)))" by auto
+    then consider 
+      tr where "tr \<in> set ta_trans" "x \<in> (\<Union>x\<in>set tr. set (fst (snd (snd (snd (snd (snd x)))))))"
+    | tr where "tr \<in> set ta_trans" "x \<in> (\<Union>x\<in>set tr. fst ` collect_clock_pairs (fst (snd (snd x))))" 
+    | "x \<in> (\<Union>auto\<in>set actual_autos. \<Union> (inv_clocks ` set (auto_invs auto)))" 
+      apply -
+      apply (elim disjE)
+        apply blast
+      apply metis
+      by blast
+    then consider
+      tr where "tr \<in> set ta_trans" "x \<in> (\<Union>(l, b, c, a, u, r, l')\<in>set tr. set r)"
+    | tr where "tr \<in> set ta_trans" "x \<in> (\<Union>(l, b, c, a, u, r, l')\<in>set tr. fst ` collect_clock_pairs c)" 
+    | "x \<in> (\<Union>auto\<in>set actual_autos. \<Union> (inv_clocks ` set (auto_invs auto)))" 
+      apply cases
+      by fastforce+
+    hence "x \<in> (\<Union>tr\<in>set ta_trans.(\<Union>(l, b, c, a, u, r, l')\<in>set tr. set r))
+        \<or> x \<in> (\<Union>tr\<in>set ta_trans.(\<Union>(l, b, c, a, u, r, l')\<in>set tr. fst ` collect_clock_pairs c))
+        \<or> x \<in> (\<Union>auto\<in>set actual_autos. \<Union> (inv_clocks ` set (auto_invs auto)))" 
+      apply cases
+      apply fast
+       apply blast
+      by blast
+    thus "x \<in> (\<Union>trs\<in>set ta_trans. \<Union>(l, b, c, a, u, r, l')\<in>set trs. set r \<union> fst ` collect_clock_pairs c) \<union> 
+          (\<Union>auto\<in>set actual_autos. \<Union> (inv_clocks ` set (auto_invs auto)))"
+      by blast
   qed
 qed
 
+lemma all_ta_clocks_correct: "all_ta_clocks \<subseteq> set nta_clocks"
+(* proof 
+  fix x
+  assume "x \<in> all_ta_clocks"
+  with all_ta_clocks_alt
+  obtain tr where
+    "tr \<in> set ta_trans "
+    "x \<in> (\<Union>(l, b, c, a, u, r, l')\<in>set tr. set r \<union> fst ` collect_clock_pairs c)" by fastforce
+  
+qed *)
+  sorry
 subsection \<open>States\<close>       
 subsubsection \<open>Returned states for simplicity\<close>
 (* Explicitly returned states *)
@@ -652,8 +650,8 @@ proof
       tr: "auto = (n, init, states, comm, urg, trans, invs)" unfolding action_to_automaton_spec_def by simp
     
     {with 1
-      have "get_actual_auto auto = (comm, urg, trans, invs)" unfolding get_actual_auto_def by fastforce
-      hence "auto_trans (get_actual_auto auto) = trans" unfolding auto_trans_def by simp
+      have "(snd o snd o snd) auto = (comm, urg, trans, invs)" by fastforce
+      hence "auto_trans (get_actual_auto auto) = trans" by simp
       with x
       have x_in_tr: "x \<in> trans_to_locs trans" by simp
       moreover
@@ -680,8 +678,8 @@ proof
     then obtain init states comm urg trans invs where
       tr: "auto = (n, init, states, comm, urg, trans, invs)" unfolding main_auto_spec_def by simp
     {with 2
-      have "get_actual_auto auto = (comm, urg, trans, invs)" unfolding get_actual_auto_def by fastforce
-      hence "auto_trans (get_actual_auto auto) = trans" unfolding auto_trans_def by simp
+      have "get_actual_auto auto = (comm, urg, trans, invs)" by fastforce
+      hence "auto_trans (get_actual_auto auto) = trans" by simp
       with x
       have x_in_tr: "x \<in> trans_to_locs trans" by simp
       moreover
@@ -1087,11 +1085,10 @@ abbreviation "act_renum \<equiv> mk_renum (broadcast @ nta_actions)"
 
 abbreviation "init_vars \<equiv> map (\<lambda>x. (fst x, 0::int)) nta_vars"
 
-definition "autos \<equiv> map (snd o snd o snd) ntas"
-
 definition "form \<equiv> let (automata, clocks, vars, formula) = timed_automaton_net_spec in formula"
 
 lemma nta_length[simp]: "length individual_ta_states = length ntas"
+  unfolding individual_ta_states_def
   using length_map .
 
 sublocale Simple_Network_Rename_Formula
@@ -1104,50 +1101,52 @@ sublocale Simple_Network_Rename_Formula
     urge_clock
     init_vars
     ntas_inits
-    autos
+    actual_autos
     form
 proof
-  show "\<forall>i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of autos, map_of nta_vars).
-       \<forall>x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of autos, map_of nta_vars).
-          \<forall>y\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of autos, map_of nta_vars). 
+  show "\<forall>i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars).
+       \<forall>x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars).
+          \<forall>y\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars). 
             inj_state_renum i x = inj_state_renum i y \<longrightarrow> x = y"
   proof -
     { fix i x y
-      assume i: "i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of autos, map_of nta_vars)"
-         and x: "x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of autos, map_of nta_vars)"
-         and y: "y\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of autos, map_of nta_vars)"
+      assume i: "i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
+         and x: "x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
+         and y: "y\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
          and rn: "inj_state_renum i x = inj_state_renum i y"
-      have "Prod_TA_Defs.n_ps (set broadcast, map automaton_of autos, map_of nta_vars) = length ntas"
-        unfolding Prod_TA_Defs.n_ps_def autos_def by simp
-      hence 2: "p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of autos, map_of nta_vars)
-          \<Longrightarrow> p < length ntas" for p unfolding Prod_TA_Defs.n_ps_def autos_def by auto
+      have "Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars) = length ntas"
+        unfolding Prod_TA_Defs.n_ps_def actual_autos_def by simp
+      hence 2: "p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)
+          \<Longrightarrow> p < length ntas" for p unfolding Prod_TA_Defs.n_ps_def actual_autos_def by auto
 
-      have "x \<in> set (all_ta_states)" if x: "x \<in> Prod_TA_Defs.loc_set (set broadcast, map automaton_of autos, map_of nta_vars)" for x
+      have "x \<in> set (all_ta_states)" if x: "x \<in> Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)" for x
       proof - (* showing that an arbitrary x must be in the local set of locations *)
         { fix p (* the local equivalent set of transitions *)
-          assume p: "p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of autos, map_of nta_vars)" 
-          hence p1: "p < length autos" unfolding Prod_TA_Defs.n_ps_def by auto
-          hence p2: "p < length ntas" unfolding autos_def by auto
+          assume p: "p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)" 
+          hence p1: "p < length actual_autos" unfolding Prod_TA_Defs.n_ps_def by auto
+          hence p2: "p < length ntas" unfolding actual_autos_def by auto
 
           let ?f = "fst o snd o snd"
-          have 1: "?f (Prod_TA_Defs.N (set broadcast, map automaton_of autos, map_of nta_vars) p) = 
-              set (?f (get_actual_auto (ntas ! p)))" unfolding Prod_TA_Defs.N_def get_actual_auto_def apply simp
+          have 1: "?f (Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p) = 
+              set (?f (get_actual_auto (ntas ! p)))" unfolding Prod_TA_Defs.N_def apply simp
             unfolding automaton_of_def
             apply (subst nth_map, rule p1)
-            unfolding autos_def comp_apply
+            unfolding actual_autos_def comp_apply
             apply (subst nth_map, rule p2)
             by (auto split: prod.split)
-          have "Simple_Network_Language.trans (Prod_TA_Defs.N (set broadcast, map automaton_of autos, map_of nta_vars) p)
+          have "Simple_Network_Language.trans (Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p)
             = set (auto_trans (get_actual_auto (ntas ! p)))" 
             unfolding Simple_Network_Language.trans_def
             apply (subst 1[simplified comp_apply])
-            by (auto simp: get_actual_auto_def auto_trans_def split: prod.split)
+            unfolding Let_def comp_apply
+            apply (cases "snd (snd (snd (ntas ! p)))" rule: prod_cases4)
+            by auto
         } note 1 = this
     
         have "x \<in> \<Union> {fst ` set (auto_trans (get_actual_auto (ntas ! p))) |p.
-              p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of autos, map_of nta_vars)} \<union>
+              p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)} \<union>
            \<Union> {(snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd) ` set (auto_trans (get_actual_auto (ntas ! p))) |p.
-               p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of autos, map_of nta_vars)}" 
+               p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)}" 
           using x 1 
           unfolding Prod_TA_Defs.loc_set_def by blast
         hence "x \<in> \<Union> {fst ` set (auto_trans (get_actual_auto (ntas ! p))) |p.
@@ -1163,7 +1162,16 @@ proof
         hence "\<exists>nta \<in> set ntas.
             x \<in> set (map fst (auto_trans (get_actual_auto nta))) \<union>
             set (map (snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd) (auto_trans (get_actual_auto nta)))" by simp
-        hence "\<exists>nta \<in> set ntas. x \<in> \<Union> (set (map trans_locs (auto_trans (get_actual_auto nta))))" unfolding trans_locs_def by fastforce
+        hence "\<exists>nta \<in> set ntas. x \<in> \<Union> (set (map trans_locs (auto_trans (get_actual_auto nta))))" 
+          unfolding trans_locs_def Let_def comp_apply 
+          apply -
+          apply (erule bexE)
+          subgoal for nta
+            apply (rule bexI[of _ nta])
+             apply (subst (asm) Un_iff)
+             apply (erule disjE)
+            by fastforce+
+          done
         with trans_to_locs_def
         have "\<exists>nta \<in> set ntas. x \<in> (trans_to_locs (auto_trans (get_actual_auto nta)))" 
           unfolding trans_to_locs_def fold_union Let_def by blast
@@ -1186,10 +1194,53 @@ proof
     }
     thus ?thesis by blast
   qed
-  show "inj_on clock_renum (insert urge_clock (Simple_Network_Impl.clk_set' autos))"
+  show "inj_on clock_renum (insert urge_clock (Simple_Network_Impl.clk_set' actual_autos))"
   proof -
-    have "insert urge_clock (Simple_Network_Impl.clk_set' autos) = set (urge_clock # nta_clocks)"
-      using actual_clocks_correct
+    have 1: "(\<Union>A\<in>set actual_autos. \<Union>(_, _, _, _, _, r, _)\<in>set (fst (snd (snd A))). set r) 
+      = (\<Union>trs\<in>set ta_trans. \<Union>x\<in>set trs. set (fst (snd (snd (snd (snd (snd x)))))))"
+      unfolding ta_trans_def comp_apply set_map
+    proof (rule equalityI; rule subsetI)
+      fix x
+      assume "x \<in> (\<Union>A\<in>set actual_autos. \<Union>(_, _, _, _, _, r, _)\<in>set (fst (snd (snd A))). set r)"
+      then obtain A where
+       A: "A \<in> set actual_autos"
+        "x \<in> (\<Union>(_, _, _, _, _, r, _)\<in>set (fst (snd (snd A))). set r)" by blast
+      then obtain r where
+        "\<exists>a b c d e f. (a, b, c, d, e, r, f) \<in> set (fst (snd (snd A)))" 
+        "x \<in> set r" by blast
+      hence "\<exists>tr. tr \<in> set (fst (snd (snd A))) \<and> x \<in> set (fst (snd (snd (snd (snd (snd tr))))))" by fastforce
+      with A(1)
+      show "x \<in> (\<Union>trs\<in>(\<lambda>x. fst (snd (snd x))) ` set actual_autos. \<Union>x\<in>set trs. set (fst (snd (snd (snd (snd (snd x)))))))" by blast
+    next
+      fix x
+      assume "x \<in> (\<Union>trs\<in>(\<lambda>x. fst (snd (snd x))) ` set actual_autos. \<Union>x\<in>set trs. set (fst (snd (snd (snd (snd (snd x)))))))"
+      then obtain trs where
+        "trs \<in> (fst o snd o snd) ` set actual_autos"
+        "x \<in> (\<Union>x\<in>set trs. set (fst (snd (snd (snd (snd (snd x)))))))" by auto
+      then obtain A tr where
+        Atr: "A \<in> set actual_autos"
+        "trs = fst (snd (snd A))"
+        "tr \<in> set trs"
+        "x \<in> set (fst (snd (snd (snd (snd (snd tr))))))" by auto
+      then obtain r where
+        "\<exists>a b c d e f. (a, b, c, d, e, r, f) = tr" apply (cases tr) by auto
+      with Atr
+      show "x \<in> (\<Union>A\<in>set actual_autos. \<Union>(_, _, _, _, _, r, _)\<in>set (fst (snd (snd A))). set r)" by fastforce
+    qed
+    have 2: "B = C \<Longrightarrow> A \<union> B = A \<union> C" for A B C by blast
+
+    have "insert urge_clock (Simple_Network_Impl.clk_set' actual_autos) = insert urge_clock all_ta_clocks"
+      apply (rule arg_cong[where f = "insert urge_clock"])
+      apply (subst Simple_Network_Impl.clk_set'_def)
+      apply (subst all_ta_clocks_alt)
+      apply (subst 1)
+      unfolding comp_apply
+      apply (subst Un_commute)
+      apply (rule 2)
+      unfolding Simple_Network_Impl.clkp_set'_def
+      unfolding ta_trans_def comp_apply
+    have "insert urge_clock (Simple_Network_Impl.clk_set' actual_autos) = set (urge_clock # nta_clocks)"
+
       unfolding Simple_Network_Impl.clk_set'_def all_ta_clocks_def ta_clocks_def
 trans_to_clocks_def trans_clocks_def Let_def fold_union 
       

@@ -5,8 +5,7 @@ theory TP_NTA_Reduction
           "Simple_Networks.Simple_Network_Language_Model_Checking"
           Temporal_Planning_Base.Error_List_Monad_Add
           "TP_Parsing.Ground_PDDL_Parsing"
-          "TA_Planning.Printable_Simple_Expressions"
-          TA_Library.Error_List_Monad
+          "Printable_Simple_Networks.Printable_Simple_Expressions"
 begin
 
 hide_const Simple_Expressions.bexp.true

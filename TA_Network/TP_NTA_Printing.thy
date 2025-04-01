@@ -1,5 +1,5 @@
 theory TP_NTA_Printing
-  imports TP_NTA_Reduction "TA_Planning.Simple_Network_Language_Printing"
+  imports TP_NTA_Reduction "Printable_Simple_Networks.Simple_Network_Language_Printing"
 begin
 
 

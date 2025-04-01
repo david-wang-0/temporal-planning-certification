@@ -1,3 +1,9 @@
+session Printable_Simple_Networks in Printable_Simple_Networks = TA_Certificates +
+  theories Simple_Network_Language_Printing
+           Printable_Simple_Expressions
+           Printable_Network_Language_Conversion
+           Printable_Network_Expression_Conversion
+
 session TP_Parsing in Parsing =
     Temporal_AI_Planning_Languages_Semantics +
   sessions 
@@ -27,5 +33,5 @@ session TP_NTA_Reduction in TA_Network =
     sessions
       TP_Parsing
       Timed_Automata
-      TA_Planning
+      Printable_Simple_Networks
 
