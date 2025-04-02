@@ -1,9 +1,9 @@
 theory Base                
-  imports Main Containers.Containers "KnuthMorrisPratt.KnuthMorrisPratt"
+  imports Main Containers.Containers
 begin
 
 section \<open>Time\<close>
-
+(* 
 class time = linordered_ab_group_add + zero_less_one +
   assumes dense: "x < y \<Longrightarrow> \<exists>z. x < z \<and> z < y"
   assumes non_trivial: "\<exists> x. x \<noteq> 0"
@@ -26,8 +26,7 @@ lemma GreatestI_time:
   shows "P (Greatest P)"
   using assms GreatestI2_order by blast
 
-  
-end
+end *)
 
 section \<open>Utility Functions and Lemmas\<close>
 
@@ -112,9 +111,9 @@ termination by (relation "measure (\<lambda>(x, y). y - x)") auto
 
 definition "upto_nat \<equiv> upto_aux_nat 0"
 
-
+(* 
 value "KMP_search (array_of_list ''be'') (array_of_list ''ababcababdababe'')"
-value "length ''ababcababdababe''"
+value "length ''ababcababdababe''" *)
 text \<open>Obtaining a unique name by appending underscores\<close>
 
 fun matches_start::"'a list \<Rightarrow> 'a list \<Rightarrow> bool" where
