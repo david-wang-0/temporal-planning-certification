@@ -270,7 +270,27 @@ in
   (* To do: Implement abstract definition later *)
   (* This reduction has a different definition of no self overlap. Ends can interfere.
      Actions can also have a duration of 0, if this matters. *)
-definition action_to_automaton_spec::"'action \<Rightarrow> _" where 
+definition action_to_automaton_spec::"'action \<Rightarrow> 
+  'action location \<times>
+    'action location list \<times>
+    'action location list \<times>
+    'action location list \<times>
+    (
+      'action location \<times>
+      ('proposition variable, int) Simple_Expressions.bexp \<times>
+      ('action clock, int) acconstraint list \<times> 
+      String.literal act \<times> 
+      (
+        'proposition variable \<times> 
+        ('proposition variable, int) exp
+      ) list \<times> 
+      'action clock list \<times> 
+      'action location
+    ) list \<times>
+    (
+      'action location \<times> 
+      ('action clock, int) acconstraint list
+    ) list" where 
 "action_to_automaton_spec a \<equiv>
 let 
   init_loc = Off a;
@@ -324,8 +344,10 @@ definition main_auto_spec::"
         ('proposition variable, int) exp
       ) list \<times> 
       'action clock list \<times> 
-      'action location) list \<times>
-      ('action location \<times> 
+      'action location
+    ) list \<times>
+    (
+      'action location \<times> 
       ('action clock, int) acconstraint list
     ) list" where
 "main_auto_spec \<equiv> 
@@ -565,6 +587,8 @@ abbreviation "auto_invs \<equiv> (snd o snd o snd)"
 
 definition ta_trans where
 "ta_trans = map auto_trans actual_autos"
+
+definition "all_ta_trans \<equiv> fold (\<union>) (map set ta_trans) {}"
 
 definition ta_invs where
 "ta_invs = map auto_invs actual_autos"
@@ -1192,8 +1216,7 @@ qed
 subsection \<open>States\<close>       
 subsubsection \<open>Returned states for simplicity\<close>
 (* Explicitly returned states *)
-definition "ta_states a \<equiv> case a of 
-  (name, init, states, _) \<Rightarrow> states"
+definition "ta_states \<equiv> (fst o snd o snd)"
 
 definition "individual_ta_states \<equiv> map ta_states ntas"
 
@@ -1250,8 +1273,8 @@ definition trans_to_locs where
 
 definition "ta_locs \<equiv> map trans_to_locs ta_trans"
 
-definition all_locs where
-"all_locs \<equiv> fold (\<union>) ta_locs {}"
+definition actual_locs where
+"actual_locs \<equiv> fold (\<union>) ta_locs {}"
 
 
 lemma individual_locs_correct:
@@ -1329,6 +1352,86 @@ proof
   qed
 qed
 
+lemma set_append_fold: "set (fold (@) xs ys) = fold (\<union>) (map set xs) (set ys)"
+  by (induction xs arbitrary: ys) auto
+
+lemma set_append_fold': "set (fold (@) xs []) = fold (\<union>) (map set xs) {}"
+  using set_append_fold by force
+
+lemma actual_autos_alt: "set actual_autos = (\<lambda>a. snd (snd a)) ` set (main_auto_spec # map action_to_automaton_spec actions)"
+  unfolding actual_autos_def ntas_def Let_def timed_automaton_net_spec_def prod.case comp_apply set_map 
+    apply -
+    apply (subst image_image[symmetric, of _ snd])
+    apply (subst zip_range_id, simp)
+  by simp
+
+lemma actual_locs_correct: "set all_ta_states = actual_locs" 
+  proof -
+    have "\<Union> (set ` (\<lambda>a. fst (snd a)) ` set (main_auto_spec # map action_to_automaton_spec actions)) =
+    \<Union> (trans_to_locs ` (\<lambda>x. fst (snd (snd (snd (snd x))))) ` set (main_auto_spec # map action_to_automaton_spec actions))"
+    proof (rule equalityI; rule subsetI)
+      fix x
+      assume "x \<in> \<Union> (set ` (\<lambda>a. fst (snd a)) ` set (main_auto_spec # map action_to_automaton_spec actions))"
+      then obtain ls aut where
+        x: "x \<in> set ls"
+        and ls: "ls = fst (snd aut)"
+        and "aut \<in> set (main_auto_spec # map action_to_automaton_spec actions)" by blast
+      then consider (act) act where
+        "act \<in> set actions"
+        "aut = action_to_automaton_spec act"
+      | (main) "aut = main_auto_spec" by auto
+      thus "x \<in> \<Union> (trans_to_locs ` (\<lambda>x. fst (snd (snd (snd (snd x))))) ` set (main_auto_spec # map action_to_automaton_spec actions))" 
+      proof cases
+        case act
+        obtain trs where
+          trs: "trs = (\<lambda>x. fst (snd (snd (snd (snd x))))) (action_to_automaton_spec act)" 
+          "trs = [start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act]" unfolding action_to_automaton_spec_def Let_def fst_conv snd_conv prod.case Let_def by simp
+        have x: "x \<in> {Off act, StartInstant act, Running act, EndInstant act}" using ls x act unfolding action_to_automaton_spec_def Let_def by simp
+        then consider "x = Off act" | "x = StartInstant act" | "x = Running act" | "x = EndInstant act" by blast
+        hence "x \<in> trans_to_locs trs"
+          apply cases
+          unfolding trs(2) unfolding trans_to_locs_def Let_def set_map fold_union' trans_locs_def
+          subgoal unfolding start_edge_spec_def Let_def list.set by simp
+          subgoal unfolding start_edge_spec_def Let_def list.set by simp
+          subgoal unfolding edge_3_spec_def Let_def list.set by simp
+          subgoal unfolding edge_3_spec_def Let_def list.set by simp
+          done
+        with trs(1) act
+        show ?thesis by auto
+      next
+        case main
+        obtain trs where
+          trs: "trs = (\<lambda>x. fst (snd (snd (snd (snd x))))) main_auto_spec" 
+          "trs = [main_auto_init_edge_spec, main_auto_goal_edge_spec]" unfolding main_auto_spec_def Let_def fst_conv snd_conv prod.case Let_def by simp
+        have x: "x \<in> {InitialLocation, Planning, GoalLocation}" using ls x main unfolding main_auto_spec_def Let_def by simp
+        then consider "x = InitialLocation" | "x = Planning" | "x = GoalLocation" by blast
+        hence "x \<in> trans_to_locs trs"
+          apply cases
+          unfolding trs(2) unfolding trans_to_locs_def Let_def set_map fold_union' trans_locs_def
+          subgoal unfolding main_auto_init_edge_spec_def Let_def list.set by simp
+          subgoal unfolding main_auto_init_edge_spec_def Let_def list.set by simp
+          subgoal unfolding main_auto_goal_edge_spec_def Let_def list.set by simp
+          done
+        with trs(1) main
+        show ?thesis by simp
+      qed
+    next
+      fix x
+      assume "x \<in> \<Union> (trans_to_locs ` (\<lambda>x. fst (snd (snd (snd (snd x))))) ` set (main_auto_spec # map action_to_automaton_spec actions))"
+      show "x \<in> \<Union> (set ` (\<lambda>a. fst (snd a)) ` set (main_auto_spec # map action_to_automaton_spec actions))" sorry
+    qed
+    thus ?thesis
+    unfolding all_ta_states_def set_append_fold' fold_union' set_map individual_ta_states_def ntas_def ta_states_def timed_automaton_net_spec_def Let_def prod.case 
+      comp_apply
+    apply -
+    apply (subst image_image[symmetric, of _ snd])
+    apply (subst zip_range_id, simp)
+    unfolding actual_locs_def fold_union' ta_locs_def set_map  Let_def ta_trans_def comp_apply
+    unfolding actual_autos_def ntas_def Let_def timed_automaton_net_spec_def prod.case set_map comp_apply
+    apply (subst (3) image_image[symmetric, of _ snd])
+    apply (subst zip_range_id, simp)
+    by simp
+  qed
 (* Renumbering states *)
 abbreviation "state_renum' \<equiv> mk_snd_ord_renum individual_ta_states"
 
@@ -1786,8 +1889,13 @@ proof
     apply (subst (3) set_conv_nth)
     unfolding fst_conv snd_conv by blast
 
+  have trans_alt: "\<Union> (trans ` automaton_of ` (set actual_autos)) = all_ta_trans"
+    using all_ta_states_def individual_ta_states_def sorry
   have loc_set_alt: "set (all_ta_states) = Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
-  proof (rule equalityI; rule subsetI)
+  proof -
+    have "Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)
+      = fst ` (\<Union> (trans ` automaton_of ` (set actual_autos)))
+      \<union> (snd o snd o snd o snd o snd o snd) ` (\<Union> (trans ` automaton_of ` (set actual_autos)))" unfolding Prod_TA_Defs.loc_set_def auto_alt[symmetric] by blast
     
 
   qed
