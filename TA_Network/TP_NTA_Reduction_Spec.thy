@@ -1366,7 +1366,7 @@ abbreviation "nta_init \<equiv> fst o snd"
 
 abbreviation "ntas_inits \<equiv> map nta_init ntas"
 
-
+subsection \<open>Actions\<close>
 (* This needs to be lifted out of the locale *)
 definition "broadcast \<equiv> []::String.literal list"
 
@@ -1379,6 +1379,56 @@ abbreviation "act_renum \<equiv> mk_renum (broadcast @ nta_actions)"
 
 abbreviation "init_vars \<equiv> map (\<lambda>x. (fst x, 0::int)) nta_vars"
 
+definition trans_acts::"
+  'action location \<times>
+  ('proposition variable, int) Simple_Expressions.bexp \<times>
+  ('action clock, int) acconstraint list \<times> 
+  String.literal act \<times> 
+  ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 
+  'action clock list \<times> 
+  'action location \<Rightarrow> String.literal set" where
+"trans_acts \<equiv> (act.set_act o fst o snd o snd o snd)"
+
+definition trans_to_acts where
+"trans_to_acts t \<equiv> 
+let
+  trans_vars = map trans_acts t
+in fold (\<union>) trans_vars {}"
+
+definition "actual_acts \<equiv> 
+let
+  trans_vars = map trans_to_acts ta_trans
+in fold (\<union>) trans_vars {}"
+
+find_theorems name: "zip" "snd ` (set  (zip ?xs ?ys))"
+
+find_theorems " ?f ` ?g ` ?S = (\<lambda>x. ?f (?g x)) ` ?S"
+
+lemma actual_acts_correct: "actual_acts \<subseteq> set nta_actions"
+  unfolding actual_acts_def fold_union' Let_def ta_trans_def trans_to_acts_def trans_acts_def set_map comp_apply 
+    actual_autos_def nta_actions_def ntas_def prod.case timed_automaton_net_spec_def main_auto_spec_def action_to_automaton_spec_def
+  apply (rule subsetI)
+  subgoal for x
+  apply (subst (asm) Union_iff)
+    apply (erule bexE)
+    subgoal for tr
+      apply (erule imageE)
+      subgoal for trs
+        apply (erule imageE)
+        subgoal 
+          apply (subst (asm) image_image[symmetric, of snd])
+          apply (subst (asm) (3) image_image[symmetric, of _ snd])
+          apply (subst (asm) zip_range_id)
+           apply simp
+          apply (elim imageE)
+          subgoal for _ auto
+            unfolding main_auto_init_edge_spec_def main_auto_goal_edge_spec_def Let_def start_edge_spec_def end_edge_spec_def edge_2_spec_def edge_3_spec_def
+            by auto
+          done
+        done
+      done
+    done
+  done
 definition "form \<equiv> let (automata, clocks, vars, formula) = timed_automaton_net_spec in formula"
 
 lemma nta_length[simp]: "length individual_ta_states = length ntas"
@@ -1398,11 +1448,19 @@ sublocale Simple_Network_Rename_Formula
     actual_autos
     form
 proof
+  have auto_alt: "{(Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p) 
+            |p. p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)} 
+            = automaton_of ` (set actual_autos)"
+    unfolding Simple_Network_Language.Prod_TA_Defs.N_def Simple_Network_Language.Prod_TA_Defs.n_ps_def
+    apply (subst set_map[symmetric])
+    apply (subst (3) set_conv_nth)
+    unfolding fst_conv snd_conv by blast
   show "\<forall>i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars).
        \<forall>x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars).
           \<forall>y\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars). 
             inj_state_renum i x = inj_state_renum i y \<longrightarrow> x = y"
   proof -
+
     { fix i x y
       assume i: "i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
          and x: "x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
@@ -1724,7 +1782,7 @@ proof
       assume "x \<in> actual_variables"
       then obtain tran aut l c g a u r l' where
         trans: "aut \<in> set actual_autos"
-            "tran \<in> (fst o snd o snd) aut"        
+            "tran \<in> (set o fst o snd o snd) aut"        
             "tran = (l, c, g, a, u, r, l')"
         and "x \<in> vars_of_bexp c \<or> x \<in> \<Union> (vars_of_update ` set u)"
         unfolding actual_variables_def Let_def fold_union' set_map trans_to_vars_def trans_vars_def ta_trans_def comp_apply by blast
@@ -1732,23 +1790,21 @@ proof
       thus "x \<in> Prod_TA_Defs.var_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)" 
       proof cases
         case 1
-        have s: "{(Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p) |p. p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)} = 
-            automaton_of ` (set actual_autos)"
-          unfolding Simple_Network_Language.Prod_TA_Defs.N_def Simple_Network_Language.Prod_TA_Defs.n_ps_def
-          apply (subst set_map[symmetric])
-          apply (subst (3) set_conv_nth)
-          unfolding fst_conv snd_conv by blast
-        from trans(1,2)
-        have "\<exists>com urg invr. aut = (com, urg, trans, invr)" apply (auto split: prod.split) try
-        obtain com urg invr where
-        "aut = (com, urg, trans, invr)" apply (auto split: prod.split simp: trans(1, 2)) 
-        from trans
-        have "Simple_Network_Language.trans (automaton_of aut) = set trans" unfolding Simple_Network_Language.trans_def automaton_of_def apply (cases aut) 
-          subgoal 
-        have "\<exists>c tr trs aut. c = fst (snd tr) \<and> tr \<in> trs \<and> trs = Simple_Network_Language.trans aut \<and> aut \<in> automaton_of ` set actual_autos \<and> x \<in> vars_of_bexp c"
-          using trans 1 
+        obtain aut' where
+          aut': "aut' = automaton_of aut" by simp
+        moreover
+        from 1 trans obtain trs where
+          "trs = set (fst (snd (snd aut)))" by auto
+        ultimately
+        have trs: "trs = fst (snd (snd aut'))" unfolding automaton_of_def apply (cases aut) by auto
+        with aut' trans
+        have "tran \<in> trs" unfolding automaton_of_def comp_apply apply (cases aut) by auto
+        with 1 trans aut' trs
+        have "x \<in> vars_of_bexp c \<and> c = fst (snd tran) \<and> tran \<in> trs \<and> trs = fst (snd (snd aut')) \<and> aut' \<in> automaton_of ` set actual_autos" by auto
+        hence "\<exists>c tr trs aut. c = fst (snd tr) \<and> tr \<in> trs \<and> trs = Simple_Network_Language.trans aut \<and> aut \<in> automaton_of ` set actual_autos \<and> x \<in> vars_of_bexp c"
+          using trans unfolding Simple_Network_Language.trans_def automaton_of_def by blast
         hence "\<exists>c tr trs aut. (c = fst (snd tr)) \<and> tr \<in> trs \<and> trs = Simple_Network_Language.trans aut \<and> aut \<in> {Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p |p.
-              p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)} \<and> x \<in> vars_of_bexp c" unfolding s by blast
+              p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)} \<and> x \<in> vars_of_bexp c" using auto_alt by blast
         hence "\<exists>c tr trs. (c = fst (snd tr)) \<and> tr \<in> trs \<and> trs \<in> {Simple_Network_Language.trans (Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p) |p.
               p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)} \<and> x \<in> vars_of_bexp c" by blast
         hence "\<exists>c trans. (c \<in> (fst o snd) ` trans) \<and> trans \<in> {Simple_Network_Language.trans (Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p) |p.
@@ -1761,7 +1817,35 @@ proof
         then show ?thesis unfolding Prod_TA_Defs.var_set_def by blast
       next
         case 2
-        then show ?thesis sorry
+        with trans
+        obtain v e where
+          ve: "(v, e) \<in> set u"
+          "x \<in> {v} \<union> vars_of_exp e" unfolding vars_of_update_def by auto
+        obtain aut' where aut': "aut' = automaton_of aut" by simp
+        moreover
+        obtain trs where trs: "trs = Simple_Network_Language.trans aut'" by simp
+        ultimately
+        have "tran \<in> trs" unfolding Simple_Network_Language.trans_def automaton_of_def using trans unfolding comp_apply apply (cases aut) by auto
+        then
+        obtain re res where
+          "re \<in> res \<and> res = (fst o snd o snd o snd o snd) ` trs \<and> trs = Simple_Network_Language.trans aut'
+            \<and> aut' \<in> automaton_of ` (set actual_autos)
+              \<and> x \<in> (\<Union>(x, e)\<in>set re. {x} \<union> vars_of_exp e)" using trans ve trs aut' by fastforce
+        hence "re \<in> res \<and> res = (fst o snd o snd o snd o snd) ` trs \<and> trs = Simple_Network_Language.trans aut'
+            \<and> aut' \<in> {Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p |p.
+               p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)}
+              \<and> x \<in> (\<Union>(x, e)\<in>set re. {x} \<union> vars_of_exp e)" using auto_alt by blast
+        hence "re \<in> res \<and> res = (fst o snd o snd o snd o snd) ` trs 
+            \<and> trs \<in> {Simple_Network_Language.trans (Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p) |p.
+               p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)}
+              \<and> x \<in> (\<Union>(x, e)\<in>set re. {x} \<union> vars_of_exp e)" by blast
+        hence "res \<in> {(fst \<circ> snd \<circ> snd \<circ> snd \<circ> snd) ` Simple_Network_Language.trans (Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p) |p.
+               p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)}
+              \<and> x \<in> (\<Union>f\<in>res. \<Union>(x, e)\<in>set f. {x} \<union> vars_of_exp e)" by blast
+        hence "x \<in> (\<Union>S\<in>{(fst \<circ> snd \<circ> snd \<circ> snd \<circ> snd) ` Simple_Network_Language.trans (Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p) |p.
+               p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)}.
+             \<Union>f\<in>S. \<Union>(x, e)\<in>set f. {x} \<union> vars_of_exp e)" by blast
+        then show ?thesis unfolding Prod_TA_Defs.var_set_def by blast
       qed
     qed
     moreover
@@ -1769,8 +1853,88 @@ proof
     ultimately
     show ?thesis using inj_on_subset actual_variables_correct by blast
   qed
-  show "inj_on (mk_renum (broadcast @ nta_actions)) (Prod_TA_Defs.act_set (set broadcast, map automaton_of actual_autos, map_of nta_vars))" sorry
-  show "infinite UNIV" sorry
+  show "inj_on (mk_renum (broadcast @ nta_actions)) (Prod_TA_Defs.act_set (set broadcast, map automaton_of actual_autos, map_of nta_vars))" 
+  proof -
+    have 1: "Prod_TA_Defs.act_set (set broadcast, map automaton_of actual_autos, map_of nta_vars) = set broadcast \<union> actual_acts"
+      unfolding Prod_TA_Defs.act_set_def auto_alt
+    proof -
+      have "(\<Union>p\<in>{0..<Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)}.
+        \<Union>(l, e, g, a, _)\<in>Simple_Network_Language.trans (Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p). set_act a) = actual_acts"
+      proof -
+        have "(\<Union>p\<in>{0..<Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)}.
+        \<Union>(l, e, g, a, _)\<in>Simple_Network_Language.trans (Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p). set_act a) = 
+        (\<Union>act\<in>{Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p|p. p < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)}. 
+        \<Union>(l, e, g, a, _)\<in>Simple_Network_Language.trans act. set_act a)" 
+          apply (rule equalityI; rule subsetI)
+          by fastforce+
+        also have "... = (\<Union>act\<in>automaton_of ` set actual_autos. \<Union>(l, e, g, a, _)\<in>Simple_Network_Language.trans act. set_act a)" using auto_alt by simp
+        also have "... = actual_acts"
+          unfolding actual_acts_def trans_to_acts_def ta_trans_def automaton_of_def comp_apply fold_union' Let_def set_map trans_acts_def Simple_Network_Language.trans_def
+          apply (rule equalityI; rule subsetI)
+          subgoal for x 
+            apply (subst (asm) Union_iff)
+            apply (erule bexE)
+            subgoal for tr
+              apply (erule imageE)
+              subgoal for auto'
+                apply (erule imageE)
+                subgoal for auto
+                  apply (induction auto)
+                  subgoal for _ _ trs
+                  unfolding prod.case
+                    apply (rule UnionI)
+                    apply (rule imageI)
+                   apply (rule imageI)
+                   apply assumption
+                  by fastforce
+                done
+              done
+            done
+          done
+        subgoal for x
+          apply (subst (asm) Union_eq)
+          apply (erule CollectE)
+          apply (erule bexE)
+          subgoal for act'
+            apply (erule imageE)
+            subgoal for tr
+              apply (erule imageE)
+              subgoal for auto
+                apply (subst (asm) Union_eq)
+                apply (frule subst[of act'])
+                apply assumption
+                apply (erule CollectE)
+                apply (erule bexE)
+                subgoal for act''
+                  apply (rule UnionI)
+                   apply (rule imageI)
+                   apply (rule imageI)
+                  apply assumption
+                  apply (cases auto)
+                  by fastforce
+                done
+              done
+            done
+          done
+        done
+        finally
+        show ?thesis .
+      qed
+      thus "(\<Union>p\<in>{0..<Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)}.
+            \<Union>(l, e, g, a, _)\<in>Simple_Network_Language.trans (Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) p). set_act a) \<union>
+             Prod_TA_Defs.broadcast (set broadcast, map automaton_of actual_autos, map_of nta_vars)
+          = set broadcast \<union> actual_acts" unfolding Prod_TA_Defs.broadcast_def by auto
+    qed 
+    moreover
+    have "inj_on (mk_renum (broadcast @ nta_actions)) (set (broadcast @ nta_actions))" using mk_renum_inj by blast
+    ultimately
+    show ?thesis unfolding 1
+      apply -
+      apply (rule inj_on_subset)
+       apply assumption
+      using actual_acts_correct by auto
+  qed
+  show "infinite (UNIV::'action clock set)" sorry
   show "infinite UNIV" sorry
   show "infinite UNIV" sorry
   show "infinite UNIV" sorry
