@@ -1689,6 +1689,9 @@ proof -
     show ?thesis using goal by blast
   qed
 qed
+
+subsubsection \<open>Every proposition must occur somewhere\<close>
+(* To do *)
 end
 
 text \<open>
