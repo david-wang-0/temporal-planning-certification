@@ -458,7 +458,7 @@ definition action_to_automaton::"
   e2 \<leftarrow> edge_2 prop_nums 1 2 oc;
   e3 \<leftarrow> edge_3 prop_nums 2 3 oc dc start_clock end_clock intfe;
 
-  e4 \<leftarrow> end_edge prop_nums 4 1 pre_at_end eff_at_end
+  e4 \<leftarrow> end_edge prop_nums 3 0 pre_at_end eff_at_end
       \<bind> (Result o add_upd (inc_var (-1) acts_active_count));
 
   let edges = [e1, e2, e3, e4] |> map (add_guard (var_is (1::int) plan_lock));
@@ -698,9 +698,9 @@ definition goal_props_and_locks_to_goal_edge::"
 "goal_props_and_locks_to_goal_edge prop_nums p g goal_props is_planning actions_active \<equiv> do {
   let plan_lock = (is_planning, (exp.const 2));
 
-  let can_end = var_is 1 is_planning;
+  let can_end = [var_is 1 is_planning, var_is 0 actions_active];
   goal_sat \<leftarrow> combine_map (is_prop prop_nums 1) goal_props;
-  let cond = bexp_and_all (can_end#goal_sat);
+  let cond = bexp_and_all (can_end@goal_sat);
   
   Result (p, cond, [], Sil (STR ''''), [plan_lock], [], g)
 }"

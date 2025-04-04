@@ -66,6 +66,15 @@ in SML module_name TP_NTA_Printing file "../ML/TP_NTA_Printing.sml"
 
 
 ML \<open>
+  (* Read file to string *)
+  fun file_to_string name = let
+    val f = TextIO.openIn name
+    val s = TextIO.inputAll f
+    val _ = TextIO.closeIn f
+  in s end
+\<close>
+
+ML \<open>
   fun parse_and_print df pf out_f =
   let 
     val p = file_to_string pf; 

@@ -3,7 +3,7 @@
 MLUNTA_DIR="../../mlunta"
 MLUNTAC:="./$(MLUNTA_DIR)/build/mluntac-mlton"
 
-MUNTA_DIR="../../munta/ML"
+MUNTA_DIR="../../munta_2025/ML"
 MUNTAC:="./$(MUNTA_DIR)/muntac_mlton"
 
 GROUNDER="./../../grounder"
