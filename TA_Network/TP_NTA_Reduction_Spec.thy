@@ -532,24 +532,11 @@ in automata"
 text \<open>The returned automata also contain extra values\<close>
 abbreviation "get_actual_auto \<equiv> snd o snd o snd"
 
-subsubsection \<open>Parts of transitions\<close>
-abbreviation "trans_resets \<equiv> fst o snd o snd o snd o snd o snd"
-
-abbreviation "trans_guards \<equiv> fst o snd o snd"
-
-subsubsection \<open>Actual transitions\<close>
-
-(* definition get_actual_auto where
-"get_actual_auto gen_auto \<equiv> 
-  let 
-    (name, initial, states, committed, urgent, transitions, invs) = gen_auto 
-  in (committed, urgent, transitions, invs)" *)
-
+subsubsection \<open>Actual automata\<close>
 
 definition actual_autos where
 "actual_autos = map get_actual_auto ntas"
 
-find_theorems name: "option*E"
 
 lemma in_actual_autosE:
   assumes auto: "auto \<in> set actual_autos"
@@ -580,6 +567,19 @@ qed
     (committed, urgent, trans, invs) = auto
   in
     trans" *)
+
+subsubsection \<open>Parts of transitions\<close>
+abbreviation "trans_resets \<equiv> fst o snd o snd o snd o snd o snd"
+
+abbreviation "trans_guards \<equiv> fst o snd o snd"
+
+subsubsection \<open>Actual transitions\<close>
+
+(* definition get_actual_auto where
+"get_actual_auto gen_auto \<equiv> 
+  let 
+    (name, initial, states, committed, urgent, transitions, invs) = gen_auto 
+  in (committed, urgent, transitions, invs)" *)
 
 abbreviation "auto_trans \<equiv> (fst o snd o snd)"
 
@@ -1213,8 +1213,8 @@ next
   qed
 qed
 
-subsection \<open>States\<close>       
-subsubsection \<open>Returned states for simplicity\<close>
+subsection \<open>Locations\<close>       
+subsubsection \<open>Returned locations for simplicity\<close>
 (* Explicitly returned states *)
 definition "ta_states \<equiv> (fst o snd o snd)"
 
@@ -1222,19 +1222,12 @@ definition "individual_ta_states \<equiv> map ta_states ntas"
 
 definition "all_ta_states = fold (@) individual_ta_states []"
 
-lemma set_fold_append: "set (fold (@) xs ys) = \<Union>(set ` (set xs)) \<union> set ys"
-proof (induction xs arbitrary: ys)
-  case Nil
-  then show ?case by simp
-next
-  case (Cons x xs)
-  have "set (fold (@) (x#xs) ys) = set (fold (@) xs (x @ ys))" by simp
-  also have "... =  \<Union> (set ` set xs) \<union> set (x @ ys)" using Cons.IH by simp
-  also have "... = \<Union> (set ` set xs) \<union> set x \<union> set ys" by auto
-  also have "... =  \<Union> (set ` (insert x (set xs)))\<union> set ys" by auto
-  also have "... = \<Union> (set ` set (x # xs)) \<union> set ys" by auto
-  finally show ?case by auto
-qed
+
+lemma set_append_fold: "set (fold (@) xs ys) = fold (\<union>) (map set xs) (set ys)"
+  by (induction xs arbitrary: ys) auto
+
+lemma set_append_fold': "set (fold (@) xs []) = fold (\<union>) (map set xs) {}"
+  using set_append_fold by force
 
 lemma individual_ta_states_subset_of_all:
   assumes "i < length individual_ta_states"
@@ -1242,8 +1235,7 @@ lemma individual_ta_states_subset_of_all:
 proof -
   have "individual_ta_states ! i \<in> set individual_ta_states" using assms[THEN nth_mem_mset]
     unfolding in_multiset_in_set by blast
-  thus ?thesis unfolding all_ta_states_def set_fold_append
-    by blast
+  thus ?thesis unfolding all_ta_states_def unfolding set_append_fold' fold_union' by auto
 qed
 
 lemma individual_ta_states_subset_of_all':
@@ -1251,11 +1243,147 @@ lemma individual_ta_states_subset_of_all':
   shows "set (ta_states nta) \<subseteq> set all_ta_states"
   using assms
   apply (subst all_ta_states_def)
-  apply (subst set_fold_append)
+  apply (subst set_append_fold')
+  apply (subst fold_union')
   apply (subst individual_ta_states_def)
   by auto
 
-subsubsection \<open>Actual states\<close>
+subsubsection \<open>Committed locations\<close>
+definition "ta_comm = (fst o snd o snd o snd)"
+
+definition "all_ta_comm \<equiv>
+let 
+  ind_comm = map ta_comm ntas
+in 
+  fold (@) ind_comm []"
+
+subsubsection \<open>Urgent locations\<close>
+definition "ta_urg = (fst o snd o snd o snd o snd)"
+
+definition "all_ta_urg \<equiv>
+let 
+  ind_urg = map ta_urg ntas
+in
+  fold (@) ind_urg []"
+
+subsubsection \<open>Correctness\<close>
+abbreviation "ta_comm' \<equiv> fst o snd o snd"
+
+abbreviation "ta_urg' \<equiv> fst o snd o snd o snd"
+
+abbreviation "ta_states' \<equiv> fst o snd"
+
+lemma main_auto_urg_correct:
+  "set (ta_urg' main_auto_spec) \<subseteq> set (ta_states' main_auto_spec)"
+  unfolding main_auto_spec_def Let_def comp_apply fst_conv snd_conv
+  by simp
+
+lemma main_auto_comm_correct:
+  "set (ta_comm' main_auto_spec) \<subseteq> set (ta_states' main_auto_spec)"
+  unfolding main_auto_spec_def Let_def comp_apply fst_conv snd_conv
+  by simp
+
+lemma act_auto_urg_correct: 
+  "set (ta_urg' (action_to_automaton_spec act)) \<subseteq> set (ta_states' (action_to_automaton_spec act))"
+  unfolding action_to_automaton_spec_def Let_def comp_apply fst_conv snd_conv
+  by auto
+
+lemma act_auto_comm_correct: 
+  "set (ta_comm' (action_to_automaton_spec act)) \<subseteq> set (ta_states' (action_to_automaton_spec act))"
+  unfolding action_to_automaton_spec_def Let_def comp_apply fst_conv snd_conv
+  by auto
+
+lemma all_urg_correct: "set all_ta_urg \<subseteq> set all_ta_states"
+  unfolding all_ta_urg_def all_ta_states_def
+  unfolding Let_def ta_urg_def 
+  unfolding individual_ta_states_def
+  unfolding ta_states_def set_append_fold' fold_union' 
+  unfolding comp_apply set_map
+  unfolding ntas_def
+  unfolding timed_automaton_net_spec_def
+  unfolding Let_def prod.case
+  apply (rule subsetI)
+  subgoal for x
+    apply (subst (asm) image_image[symmetric, of _ snd])
+    apply (subst (asm) zip_range_id)
+     apply simp
+    apply (subst image_image[symmetric, of _ snd])
+    apply (subst zip_range_id)
+     apply simp
+    using act_auto_urg_correct main_auto_urg_correct by auto
+  done
+
+lemma all_comm_correct: "set all_ta_comm \<subseteq> set all_ta_states"
+  unfolding all_ta_comm_def all_ta_states_def
+  unfolding Let_def ta_comm_def 
+  unfolding individual_ta_states_def
+  unfolding ta_states_def set_append_fold' fold_union' 
+  unfolding comp_apply set_map
+  unfolding ntas_def
+  unfolding timed_automaton_net_spec_def
+  unfolding Let_def prod.case
+  apply (rule subsetI)
+  subgoal for x
+    apply (subst (asm) image_image[symmetric, of _ snd])
+    apply (subst (asm) zip_range_id)
+     apply simp
+    apply (subst image_image[symmetric, of _ snd])
+    apply (subst zip_range_id)
+     apply simp
+    using act_auto_comm_correct main_auto_comm_correct by auto
+  done
+
+subsubsection \<open>Invariants\<close>
+
+definition "ta_inv_loc = (map fst) o snd o snd o snd o snd o snd o snd"
+
+definition "all_ta_inv_loc \<equiv>
+let 
+  ind_ta_inv_loc = map ta_inv_loc ntas
+in
+  fold (@) ind_ta_inv_loc []"
+
+definition "ta_inv_loc' \<equiv> (map fst) o snd o snd o snd o snd o snd"
+
+lemma main_auto_inv_loc_correct:
+ "set (ta_inv_loc' main_auto_spec) \<subseteq> set (ta_states' main_auto_spec)"
+  unfolding main_auto_spec_def Let_def comp_apply fst_conv snd_conv ta_inv_loc'_def
+  by simp
+
+lemma act_auto_inv_loc_correct: 
+  "set (ta_inv_loc' (action_to_automaton_spec act)) \<subseteq> set (ta_states' (action_to_automaton_spec act))"
+  unfolding action_to_automaton_spec_def Let_def comp_apply fst_conv snd_conv ta_inv_loc'_def
+  by auto
+
+lemma all_inv_loc_correct: "set all_ta_inv_loc \<subseteq> set all_ta_states"
+  unfolding all_ta_inv_loc_def all_ta_states_def
+  unfolding Let_def ta_inv_loc_def 
+  unfolding individual_ta_states_def
+  unfolding ta_states_def set_append_fold' fold_union' 
+  unfolding comp_apply set_map
+  unfolding ntas_def
+  unfolding timed_automaton_net_spec_def
+  unfolding Let_def prod.case
+  apply (rule subsetI)
+  subgoal for x
+    apply (subst (asm) image_image[symmetric, of _ snd])
+    apply (subst (asm) zip_range_id)
+     apply simp
+    apply (subst image_image[symmetric, of _ snd])
+    apply (subst zip_range_id)
+     apply simp
+    unfolding list.set
+    apply (subst (asm) insert_is_Un)
+    apply (subst insert_is_Un)
+    apply (subst (asm) image_Un)
+    apply (subst image_Un)
+    apply (subst (asm) image_Un)
+    apply (subst (asm) Union_Un_distrib)
+    apply (erule UnE)
+    using main_auto_inv_loc_correct unfolding ta_inv_loc'_def comp_apply apply blast
+    using act_auto_inv_loc_correct unfolding ta_inv_loc'_def comp_apply by auto
+  done
+subsubsection \<open>Actual locations\<close>
 
 definition trans_locs where
 "trans_locs tr \<equiv>
@@ -1276,13 +1404,6 @@ definition "ta_locs \<equiv> map trans_to_locs ta_trans"
 definition actual_locs where
 "actual_locs \<equiv> fold (\<union>) ta_locs {}"
 
-
-
-lemma set_append_fold: "set (fold (@) xs ys) = fold (\<union>) (map set xs) (set ys)"
-  by (induction xs arbitrary: ys) auto
-
-lemma set_append_fold': "set (fold (@) xs []) = fold (\<union>) (map set xs) {}"
-  using set_append_fold by force
 
 lemma actual_autos_alt: "set actual_autos = (\<lambda>a. snd (snd a)) ` set (main_auto_spec # map action_to_automaton_spec actions)"
   unfolding actual_autos_def ntas_def Let_def timed_automaton_net_spec_def prod.case comp_apply set_map 
@@ -1777,9 +1898,9 @@ proof -
   thus ?thesis using e x y unfolding inj_on_def by blast
 qed
 
-abbreviation "nta_init \<equiv> fst o snd"
+definition "nta_init \<equiv> fst o snd"
 
-abbreviation "ntas_inits \<equiv> map nta_init ntas"
+definition "ntas_inits \<equiv> map nta_init ntas"
 
 subsection \<open>Actions\<close>
 (* This needs to be lifted out of the locale *)
@@ -1871,40 +1992,17 @@ proof
     apply (subst (3) set_conv_nth)
     unfolding fst_conv snd_conv by blast
 
+  have trans_alt':  "map (trans o automaton_of) actual_autos = map set ta_trans"
+    unfolding actual_autos_def ta_trans_def automaton_of_def Simple_Network_Language.trans_def
+    by auto
+
   have trans_alt: "\<Union> (trans ` automaton_of ` (set actual_autos)) = all_ta_trans"
-    apply (rule equalityI; rule subsetI)
-    subgoal for x
-      unfolding all_ta_trans_def fold_union' ta_trans_def set_map
-      unfolding automaton_of_def Simple_Network_Language.trans_def
-      apply (subst image_image)
-      apply (erule UnionE)
-        unfolding comp_apply
-        apply (erule imageE)
-        apply (erule imageE)
-        subgoal for _ _ A
-          apply (cases A)
-          subgoal for _ _ trans 
-            unfolding prod.case
-            apply (rule UnionI)
-             apply (rule imageI[where x = A])
-             apply assumption
-            by simp
-          done
-        done
-      subgoal for x
-        unfolding all_ta_trans_def fold_union' ta_trans_def set_map comp_apply image_image
-        apply (erule UnionE)
-        apply (erule imageE)
-        subgoal for trans A
-          apply (rule UnionI)
-           apply (rule imageI)
-           apply assumption
-          unfolding Simple_Network_Language.trans_def
-          unfolding automaton_of_def
-          apply (cases A)
-          by simp
-        done
-      done
+    unfolding all_ta_trans_def 
+    unfolding set_map[symmetric]
+    apply (subst map_map)
+    using trans_alt' 
+    unfolding fold_union'
+    by simp
 
   have loc_set_alt: "set (all_ta_states) = Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
   proof -
@@ -1965,18 +2063,8 @@ proof
       done
     finally show ?thesis by auto
   qed
-  show "\<forall>i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars).
-       \<forall>x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars).
-          \<forall>y\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars). 
-            inj_state_renum i x = inj_state_renum i y \<longrightarrow> x = y"
-  proof (intro allI impI)
-    fix i
-    assume "i < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
-    hence "i < length individual_ta_states" unfolding Prod_TA_Defs.n_ps_def fst_conv snd_conv actual_autos_def individual_ta_states_def by simp
-    from state_renum'_inj[OF this, simplified loc_set_alt]
-    show "(\<forall>x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars). \<forall>y\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars). inj_state_renum i x = inj_state_renum i y \<longrightarrow> x = y)" by simp
-  qed
-  show "inj_on clock_renum (insert urge_clock (Simple_Network_Impl.clk_set' actual_autos))"
+
+  have clk_set'_alt: "Simple_Network_Impl.clk_set' actual_autos = all_ta_clocks"
   proof -
     have 1: "(\<Union>A\<in>set actual_autos. \<Union>(_, _, _, _, _, r, _)\<in>set (fst (snd (snd A))). set r) 
       = (\<Union>trs\<in>set ta_trans. \<Union>x\<in>set trs. set (fst (snd (snd (snd (snd (snd x)))))))"
@@ -2009,7 +2097,7 @@ proof
       with Atr
       show "x \<in> (\<Union>A\<in>set actual_autos. \<Union>(_, _, _, _, _, r, _)\<in>set (fst (snd (snd A))). set r)" by fastforce
     qed
-    have 2: "B = C \<Longrightarrow> A \<union> B = A \<union> C" for A B C by blast
+    have 2: "\<And>A B C. B = C \<Longrightarrow> A \<union> B = A \<union> C" by blast
 
     have invr_clocks: "(\<Union>A\<in>set actual_autos. \<Union>g\<in>set (snd (snd (snd A))). fst ` (collect_clock_pairs (snd g))) = 
       (\<Union>auto\<in>set actual_autos. \<Union>i\<in>set (snd (snd (snd auto))). fst ` collect_clock_pairs (snd i))" by simp
@@ -2066,8 +2154,7 @@ proof
         by blast
     qed
 
-    have clk_set'_alt: "insert urge_clock (Simple_Network_Impl.clk_set' actual_autos) = insert urge_clock all_ta_clocks"
-      apply (rule arg_cong[where f = "insert urge_clock"])
+    show ?thesis
       apply (subst Simple_Network_Impl.clk_set'_def)
       apply (subst all_ta_clocks_alt)
       apply (subst 1)
@@ -2081,17 +2168,8 @@ proof
       apply (subst invr_clocks[symmetric])
       apply (subst guard_clocks[symmetric])
       by blast
-      
-        
-    have ins: "insert urge_clock all_ta_clocks \<subseteq> set (urge_clock # nta_clocks)"
-      using all_ta_clocks_correct by auto
-
-    show "inj_on clock_renum (insert urge_clock (Simple_Network_Impl.clk_set' actual_autos))"
-      apply (subst clk_set'_alt)
-      apply (rule inj_on_subset[OF _ ins])
-      unfolding clock_renum_def 
-      using mk_renum_inj by blast
   qed
+
   have var_set_alt: "Prod_TA_Defs.var_set (set broadcast, map automaton_of actual_autos, map_of nta_vars) = actual_variables"
   proof (rule equalityI; rule subsetI)
     fix x 
@@ -2276,12 +2354,39 @@ proof
       then show ?thesis unfolding Prod_TA_Defs.var_set_def by blast
     qed
   qed
+
+  show "\<forall>i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars).
+       \<forall>x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars).
+          \<forall>y\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars). 
+            inj_state_renum i x = inj_state_renum i y \<longrightarrow> x = y"
+  proof (intro allI impI)
+    fix i
+    assume "i < Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
+    hence "i < length individual_ta_states" unfolding Prod_TA_Defs.n_ps_def fst_conv snd_conv actual_autos_def individual_ta_states_def by simp
+    from state_renum'_inj[OF this, simplified loc_set_alt]
+    show "(\<forall>x\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars). \<forall>y\<in>Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars). inj_state_renum i x = inj_state_renum i y \<longrightarrow> x = y)" by simp
+  qed
+
+  show "inj_on clock_renum (insert urge_clock (Simple_Network_Impl.clk_set' actual_autos))"
+  proof -
+      
+    have ins: "insert urge_clock all_ta_clocks \<subseteq> set (urge_clock # nta_clocks)"
+      using all_ta_clocks_correct by auto
+
+    show "inj_on clock_renum (insert urge_clock (Simple_Network_Impl.clk_set' actual_autos))"
+      apply (subst clk_set'_alt)
+      apply (rule inj_on_subset[OF _ ins])
+      unfolding clock_renum_def 
+      using mk_renum_inj by blast
+  qed
+
   show "inj_on var_renum (Prod_TA_Defs.var_set (set broadcast, map automaton_of actual_autos, map_of nta_vars))" 
   proof -                                                                                          
     
     have "inj_on var_renum (set (map fst nta_vars))" unfolding var_renum_def using mk_renum_inj by blast
     thus ?thesis using inj_on_subset actual_variables_correct var_set_alt by blast
   qed
+
   show "inj_on (mk_renum (broadcast @ nta_actions)) (Prod_TA_Defs.act_set (set broadcast, map automaton_of actual_autos, map_of nta_vars))" 
   proof -
     have 1: "Prod_TA_Defs.act_set (set broadcast, map automaton_of actual_autos, map_of nta_vars) = set broadcast \<union> actual_acts"
@@ -2371,12 +2476,98 @@ proof
     using infinite_actions infinite_location by blast
   show "infinite (UNIV::String.literal set)" using infinite_literal .
   show "fst ` set nta_vars = Prod_TA_Defs.var_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)" using var_set_alt actual_variables_correct by auto
-  show "(\<Union>g\<in>set (map (snd \<circ> snd \<circ> snd) actual_autos). fst ` set g) \<subseteq> Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)" find_theorems name: "TP*loc*correc" using actual_locs_correct unfolding actual_locs_def fold_union' ta_locs_def trans_to_locs_def Let_def ta_trans_def set_map
-    apply (rule subsetI)
-    subgoal for x
-      
+  show "(\<Union>g\<in>set (map (snd \<circ> snd \<circ> snd) actual_autos). fst ` set g) \<subseteq> Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)" 
+    unfolding loc_set_alt[symmetric] unfolding actual_autos_def using all_inv_loc_correct unfolding all_ta_inv_loc_def Let_def set_append_fold' fold_union' set_map image_image comp_apply ta_inv_loc_def by blast
+  show "\<Union> ((set \<circ>\<circ>\<circ> (\<circ>)) fst snd ` set actual_autos) \<subseteq> Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
+    unfolding loc_set_alt[symmetric] unfolding actual_autos_def using all_urg_correct unfolding all_ta_urg_def Let_def ta_urg_def set_append_fold' fold_union' set_map image_image comp_apply by simp
+  show "\<Union> ((set \<circ> fst) ` set actual_autos) \<subseteq> Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
+    unfolding loc_set_alt[symmetric] unfolding actual_autos_def using all_comm_correct unfolding all_ta_comm_def Let_def ta_comm_def set_append_fold' fold_union' set_map image_image comp_apply by simp
+  show "urge_clock \<notin> Simple_Network_Impl.clk_set' actual_autos" 
+    apply (subst clk_set'_alt)
+    unfolding urge_clock_def using all_ta_clocks_correct unfolding nta_clocks_def Let_def timed_automaton_net_spec_def prod.case by auto
+
+  show "ntas_inits \<in> Prod_TA_Defs.states (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
+  proof -
+    have ntas_inits_alt: "ntas_inits = InitialLocation # map Off actions" unfolding ntas_inits_def nta_init_def ntas_def timed_automaton_net_spec_def Let_def prod.case
+      apply (subst map_map[symmetric])
+      apply (subst map_snd_zip)
+       apply simp
+      unfolding main_auto_spec_def action_to_automaton_spec_def Let_def
+      apply (subst list.map)
+      apply (subst map_map)
+      unfolding fst_conv comp_apply ..
+
+    have x: "(InitialLocation # map Off actions) ! i \<in> \<Union>(trans_locs ` ((map set ta_trans) ! i))" if "i < length actions + 1" for i
+      unfolding ta_trans_def actual_autos_def ntas_def timed_automaton_net_spec_def main_auto_spec_def action_to_automaton_spec_def
+      unfolding Let_def  prod.case
+      apply (subst (2) map_map[symmetric, where g = snd])
+      apply (subst map_snd_zip)
+       apply simp
+      unfolding comp_apply map_map 
+      apply (subst list.map)
+      apply (subst map_map)
+      apply (subst comp_def)
+      unfolding fst_conv snd_conv
+      using that
+      apply (induction i)
+        subgoal
+        unfolding main_auto_init_edge_spec_def
+        unfolding Let_def
+        unfolding trans_locs_def
+        by simp
+      subgoal for i
+        unfolding start_edge_spec_def Let_def trans_locs_def by simp
+      done
+ 
+    have l: "Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars) = length actions + 1"
+      unfolding Prod_TA_Defs.n_ps_def actual_autos_def ntas_def timed_automaton_net_spec_def Let_def comp_apply prod.case fst_conv snd_conv by auto
+    
+    have 1: "\<forall>i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars).
+       (InitialLocation # map Off actions) ! i \<in> (\<Union>(l, e, g, a, r, u, l')\<in>Simple_Network_Language.trans (Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of actual_autos, map_of nta_vars) i). {l, l'})"
+      apply (rule allI; rule impI)
+      subgoal for i
+        apply (subst (asm) l)
+        apply (frule x)
+        unfolding Prod_TA_Defs.N_def fst_conv snd_conv
+        apply (erule UnionE)
+        subgoal for loc
+          unfolding trans_locs_def
+          apply (erule imageE)
+          subgoal for tr
+            apply (subst (asm) trans_alt'[symmetric])
+            apply (cases tr)
+            subgoal for l _ _ _ _ _ l'
+              apply (rule UnionI)
+               apply (rule imageI)
+               apply (subst nth_map)
+              subgoal unfolding actual_autos_def ntas_def timed_automaton_net_spec_def Let_def prod.case comp_apply by auto
+               apply (subst (asm) nth_map)
+              subgoal unfolding actual_autos_def ntas_def timed_automaton_net_spec_def Let_def prod.case comp_apply by auto
+               apply simp
+              unfolding prod.case
+              by simp
+            done
+          done
+        done
+      done
+    
+    have "InitialLocation # map Off actions \<in> Prod_TA_Defs.states (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
+      unfolding Prod_TA_Defs.states_def
+      apply (rule CollectI)
+      apply (rule conjI)
+      subgoal
+        unfolding Prod_TA_Defs.n_ps_def fst_conv snd_conv actual_autos_def ntas_def timed_automaton_net_spec_def Let_def prod.case 
+        apply (subst map_map[symmetric])
+        apply (subst map_snd_zip)
+        apply simp
+        by simp
+      using 1 by simp
+    thus ?thesis using ntas_inits_alt by simp
+  qed 
 qed
 end
+
+(* To do: Acutally use ordered lists *)
 
 (* Functions from actions to locations and clocks, and from propositions to variables must be fixed
   later. Renamings like in Munta. *)
