@@ -6,7 +6,9 @@ begin
 (* To do: implement the compilation abstractly or directly using show? *)
 
 (* These must be replaced with arbitrary functions again *)
+section \<open>Abstract definition of reduction\<close>
 
+subsection \<open>Datatypes to identify clocks, variables and locations associated with actions and propositions\<close>
 datatype 'proposition variable =
   PropVar 'proposition |
   PropLock 'proposition |
@@ -116,6 +118,7 @@ locale tp_nta_reduction_spec =
       and distinct_props: "distinct props"
 begin
 
+subsection \<open>Abbreviations for encoding propositions into clocks\<close>
 abbreviation "var_is n v \<equiv> bexp.eq (exp.var v) (exp.const n)"
 abbreviation "inc_var n v \<equiv> (v, exp.binop (+) (exp.var v) (exp.const n))"
 abbreviation "set_var n v \<equiv> (v, exp.const n)"
@@ -166,7 +169,7 @@ definition inc_prop_lock_ab::"
 
 (* What happens when an action has a duration of 0? Should it only be able to start an infinite number
   of times when it does not interfere with itself? *)
-
+subsection \<open>Automata for individual actions\<close>
 abbreviation mutex_effects_spec::"
    'snap_action 
 \<Rightarrow> 'snap_action 
@@ -304,7 +307,7 @@ in
   (init_loc, locs, committed_locs, urgent_locs, edges, invs)"
 
 (* To do: add the conditions on the planning state *)
-
+subsection \<open>Main automaton to initialise problem and check goal satisfactions\<close>
 definition main_auto_init_edge_spec::"'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
 "main_auto_init_edge_spec \<equiv>
 let
@@ -362,6 +365,9 @@ let
 in
   (init_loc, locs, committed_locs, urgent_locs, edges, invs)
 "
+
+subsection \<open>The entire network\<close>
+
 
 definition inv_vars_spec::"'proposition list \<Rightarrow> 'proposition variable set" where
 "inv_vars_spec i \<equiv> 
@@ -2640,6 +2646,76 @@ proof
     unfolding var_set_alt actual_variables_correct
     unfolding form_def timed_automaton_net_spec_def Let_def prod.case vars_of_formula.simps vars_of_sexp.simps ..
 qed
+
+find_theorems name: "abs_renum.sem"
+             
+(* lemma "abs_renum.sem, abs_renum.a\<^sub>0 \<Turnstile> form"
+  sorry *)
+end
+
+section \<open>Equivalence to temporal planning semantics\<close>
+
+locale nta_temp_planning = 
+  finite_props_temp_planning_problem init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions  +
+  unique_snaps_temp_planning_problem init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions 
+    for init::    "'proposition set"
+    and goal::    "'proposition set"
+    and at_start::"'action  \<Rightarrow> 'snap_action"
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and \<epsilon>::       "'time"
+    and props::   "'proposition set"
+    and actions:: "'action set"
+begin 
+
+abbreviation snaps::"'action \<Rightarrow> 'snap_action set" where
+"snaps a \<equiv> {at_start a, at_end a}"
+
+definition snap_actions::"'snap_action set" where
+"snap_actions \<equiv> (at_start ` actions) \<union> (at_end ` actions)"
+
+text \<open>Useful lemmas about the numberings\<close>
+lemma eps_cases: 
+  assumes "\<epsilon> = 0 \<Longrightarrow> thesis"
+      and "0 \<le> \<epsilon> \<Longrightarrow> thesis"
+    shows "thesis"
+  using assms eps_range by blast
+
+end
+
+instance rat::time 
+  apply standard 
+  using dense_order_class.dense apply blast
+  using verit_eq_simplify(24) by blast
+
+context tp_nta_reduction_spec
+begin
+
+term "map_option (map_lower_bound Rat.of_int)"
+
+definition lower_sem where
+"lower_sem \<equiv> (map_option (map_lower_bound Rat.of_int)) o lower"
+
+definition upper_sem where
+"upper_sem \<equiv> (map_option (map_upper_bound Rat.of_int)) o upper"
+
+sublocale planning_sem: nta_temp_planning 
+  "set init" "set goal" 
+  at_start at_end 
+  "set o over_all" 
+  lower_sem upper_sem 
+  "set o pre" "set o adds" "set o dels"
+  "Rat.of_int \<epsilon>"
+  "set props"
+  "set actions"
+  apply standard
+  
+
 end
 
 (* To do: Acutally use ordered lists *)
@@ -2652,14 +2728,6 @@ end
 (* Do the conversion to strings later, as renamings *)
 (* Right now, do the conversion using the actual types as placeholders.
 Propositions and actions are not renamed in variables  *)
-locale ta_net_temp_planning = ta_temp_planning init _ at_start _ _ lower
-  for init::"('proposition::linorder) set"
-  and at_start::"('action::linorder) \<Rightarrow> 'snap_action set"
-  and lower::"'action \<Rightarrow> ('time::time) lower_bound option" +
-fixes name::"'action \<Rightarrow> string"
-begin
-
-end
 
 
 end
