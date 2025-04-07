@@ -45,67 +45,9 @@ abbreviation "sat_dur_bounds \<equiv> satisfies_duration_bounds lower upper"
 
 abbreviation "app_effs \<equiv> apply_effects adds dels"
 
-lemma at_start_inj_on_plan: 
-  assumes "pap_\<pi>"
-  shows "inj_on at_start {a| a t d. (a, t, d) \<in> ran \<pi>}"
-  using assms at_start_inj_on unfolding inj_on_def plan_actions_in_problem_def by blast
-
-lemma at_end_inj_on_plan:
-  assumes "pap_\<pi>"
-  shows "inj_on at_end {a| a t d. (a, t, d) \<in> ran \<pi>}"
-  using assms at_end_inj_on unfolding inj_on_def plan_actions_in_problem_def by blast
-
-lemma snaps_disj_on_plan:
-  assumes "pap_\<pi>"
-  shows "at_start ` {a| a t d. (a, t, d) \<in> ran \<pi>} \<inter> at_end ` {a| a t d. (a, t, d) \<in> ran \<pi>} = {}"
-  using assms snaps_disj unfolding plan_actions_in_problem_def by fast
-
-lemma at_start_in_happ_seqE':
-  assumes a_in_acts: "a \<in> actions"
-      and pap: pap_\<pi>
-      and nso: nso_\<pi>
-      and dp: dp_\<pi>
-      and sn: "(s, at_start a) \<in> plan_happ_seq \<pi> at_start at_end"
-    shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t"
-  using at_start_in_happ_seqE[OF _ at_start_inj_on at_end_inj_on snaps_disj sn a_in_acts nso]
-  using dp[THEN dp_imp_dg0] pap unfolding plan_actions_in_problem_def by auto
-
-lemma at_end_in_happ_seqE':
-  assumes a_in_acts: "a \<in> actions"
-      and pap: pap_\<pi>
-      and nso: nso_\<pi>
-      and dp: dp_\<pi>
-      and sn: "(s, at_end a) \<in> plan_happ_seq \<pi> at_start at_end"
-    shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"
-  using at_end_in_happ_seqE[OF _ at_start_inj_on at_end_inj_on snaps_disj sn a_in_acts nso]
-  using dp[THEN dp_imp_dg0] pap unfolding plan_actions_in_problem_def by auto
-  
 
 subsection \<open>Definitions that connect the plan to the automaton\<close>
 subsubsection \<open>Proposition and execution state\<close>
-abbreviation prop_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> 'proposition \<Rightarrow> bool" where
-"prop_corr W Q prop \<equiv> (W (PropClock prop) = 1 \<longleftrightarrow> prop \<in> Q) \<and> (W (PropClock prop) = 0 \<longleftrightarrow> prop \<notin> Q)"
-
-definition prop_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> bool" where
-"prop_model W Q \<equiv> \<forall>p \<in> props. prop_corr W Q p"
-
-abbreviation delta_prop_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> 'proposition \<Rightarrow> bool" where
-"delta_prop_corr W Q prop \<equiv> (W (PropClock prop) - W Delta = 1 \<longleftrightarrow> prop \<in> Q) \<and> (W (PropClock prop) - W Delta = 0 \<longleftrightarrow> prop \<notin> Q)"
-
-definition delta_prop_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> bool" where
-"delta_prop_model W Q \<equiv> \<forall>p \<in> props. delta_prop_corr W Q p"
-
-abbreviation exec_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> 'action \<Rightarrow> bool" where
-"exec_corr W E a \<equiv> (W (Running a) = 1 \<longleftrightarrow> a \<in> E) \<and> (W (Running a) = 0 \<longleftrightarrow> a \<notin> E)"
-
-definition exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
-"exec_model W E \<equiv> \<forall>a \<in> actions. exec_corr W E a"
-
-abbreviation delta_exec_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> 'action \<Rightarrow> bool" where
-"delta_exec_corr W E a \<equiv> ((W (Running a)) - (W Delta) = 1 \<longleftrightarrow> a \<in> E) \<and> ((W (Running a)) - (W Delta) = 0 \<longleftrightarrow> a \<notin> E)"
-
-definition delta_exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
-"delta_exec_model W E \<equiv> \<forall>a \<in> actions. delta_exec_corr W E a"
 
 definition exec_state_sequence::"('time \<times> 'action) set" where
 "exec_state_sequence \<equiv> {(t, a) |s t a. a \<in> actions \<and> (s, at_start a) \<in> happ_seq \<and> s < t 
@@ -685,6 +627,117 @@ proof -
   with 1
   show ?thesis unfolding exec_time_def pt_def by (auto simp: Let_def)
 qed 
+
+text \<open>Invariants\<close>
+
+lemma invs_of_active_actions: 
+  assumes pap: "pap_\<pi>"
+      and nso: "nso_\<pi>"
+      and dp: "dp_\<pi>" 
+  shows
+  "Inv t = \<Union>(over_all ` (ES t))"
+proof (rule equalityI; rule subsetI)
+  fix x
+  assume "x \<in> Inv t"
+  then obtain a t' d where
+    x: "x \<in> over_all a"
+    "(a, t', d) \<in> ran \<pi>" 
+    "t' < t \<and> t \<le> t' + d" unfolding invs_at_def plan_inv_seq_def by blast
+  hence t': "(t', at_start a) \<in> happ_seq \<and> t' < t" unfolding plan_happ_seq_def by auto 
+  moreover
+  from x
+  have a_in_acts: "a \<in> actions" using pap unfolding plan_actions_in_problem_def by blast
+  have "\<not> (\<exists>s. (s, at_end a) \<in> happ_seq \<and> t' \<le> s \<and> s < t)"
+  proof (rule notI)
+    assume "\<exists>s. (s, at_end a) \<in> happ_seq \<and> t' \<le> s \<and> s < t"
+    then obtain s where
+      s: "(s, at_end a) \<in> happ_seq"
+      "t' \<le> s" "s < t" by blast
+    then obtain s' d' where
+      s': "s = s' + d'"
+      "(a, s', d') \<in> ran \<pi>" using at_end_in_happ_seqE a_in_acts pap nso dp by blast
+    hence "(s', at_start a) \<in> happ_seq" unfolding plan_happ_seq_def by blast
+    show False
+    proof (cases "s' < t'")
+      case True
+      with s(2)[simplified s'(1)]
+      show ?thesis using nso[THEN no_self_overlap_spec, OF s'(2) x(2)] by fastforce
+    next
+      case False
+      from s s'
+      have "s' + d' < t" by simp
+      moreover
+      from x
+      have "t \<le> t' + d" by simp
+      ultimately
+      have "s' + d' < t' + d" by simp
+      moreover
+      from dp[simplified durations_positive_def] s'(2)
+      have "0 < d'" by simp
+      ultimately
+      have "s' < t' + d" by (meson less_add_same_cancel1 order_less_trans)
+      moreover
+      from False
+      have "t' = s' \<longrightarrow> d' \<noteq> d" using s x t' s' by auto
+      ultimately
+      show ?thesis using nso[THEN no_self_overlap_spec, OF x(2) s'(2)] False by fastforce
+    qed
+  qed
+  ultimately
+  have "a \<in> ES t" unfolding exec_state_sequence_def using a_in_acts by blast
+  with x
+  show "x \<in> \<Union> (over_all ` ES t)" by blast
+next 
+  fix x
+  assume "x \<in> \<Union> (over_all ` ES t)"
+  then obtain t' a where
+    x: "x \<in> over_all a"
+    "a \<in> actions"
+    "(t', at_start a) \<in> happ_seq"
+    "t' < t"
+    "\<not>(\<exists>s. (s, at_end a) \<in> happ_seq \<and> t' \<le> s \<and> s < t)"
+    unfolding exec_state_sequence_def by force
+  then obtain d where
+    a: "(a, t', d) \<in> ran \<pi>" using at_start_in_happ_seqE nso dp pap by blast
+  have "t' + d \<ge> t" 
+  proof (rule ccontr)
+    assume "\<not> t \<le> t' + d"
+    hence "t' + d < t" by simp
+    moreover
+    have "(t' + d, at_end a) \<in> happ_seq" using a unfolding plan_happ_seq_def by blast
+    moreover
+    have "t' < t' + d" using dp[simplified durations_positive_def] a by auto
+    ultimately
+    show False using x(5) by simp
+  qed
+  with a x
+  show "x \<in> Inv t" unfolding invs_at_def plan_inv_seq_def by auto
+qed
+
+subsubsection \<open>Clock encodings\<close>
+abbreviation prop_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> 'proposition \<Rightarrow> bool" where
+"prop_corr W Q prop \<equiv> (W (PropClock prop) = 1 \<longleftrightarrow> prop \<in> Q) \<and> (W (PropClock prop) = 0 \<longleftrightarrow> prop \<notin> Q)"
+
+definition prop_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> bool" where
+"prop_model W Q \<equiv> \<forall>p \<in> props. prop_corr W Q p"
+
+abbreviation delta_prop_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> 'proposition \<Rightarrow> bool" where
+"delta_prop_corr W Q prop \<equiv> (W (PropClock prop) - W Delta = 1 \<longleftrightarrow> prop \<in> Q) \<and> (W (PropClock prop) - W Delta = 0 \<longleftrightarrow> prop \<notin> Q)"
+
+definition delta_prop_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'proposition state \<Rightarrow> bool" where
+"delta_prop_model W Q \<equiv> \<forall>p \<in> props. delta_prop_corr W Q p"
+
+abbreviation exec_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> 'action \<Rightarrow> bool" where
+"exec_corr W E a \<equiv> (W (Running a) = 1 \<longleftrightarrow> a \<in> E) \<and> (W (Running a) = 0 \<longleftrightarrow> a \<notin> E)"
+
+definition exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
+"exec_model W E \<equiv> \<forall>a \<in> actions. exec_corr W E a"
+
+abbreviation delta_exec_corr::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> 'action \<Rightarrow> bool" where
+"delta_exec_corr W E a \<equiv> ((W (Running a)) - (W Delta) = 1 \<longleftrightarrow> a \<in> E) \<and> ((W (Running a)) - (W Delta) = 0 \<longleftrightarrow> a \<notin> E)"
+
+definition delta_exec_model::"(('proposition, 'action) clock, 'time) cval \<Rightarrow> 'action state \<Rightarrow> bool" where
+"delta_exec_model W E \<equiv> \<forall>a \<in> actions. delta_exec_corr W E a"
 
 subsubsection \<open>Restricting snap action sets by an upper limit on the index\<close>
 
@@ -2513,91 +2566,6 @@ proof -
       apply (subst (asm) act_pred[symmetric])+
       unfolding exec_model_def by blast
   qed
-
-lemma invs_of_active_actions: 
-  assumes pap: "pap_\<pi>"
-      and nso: "nso_\<pi>"
-      and dp: "dp_\<pi>" 
-  shows
-  "Inv t = \<Union>(over_all ` (ES t))"
-proof (rule equalityI; rule subsetI)
-  fix x
-  assume "x \<in> Inv t"
-  then obtain a t' d where
-    x: "x \<in> over_all a"
-    "(a, t', d) \<in> ran \<pi>" 
-    "t' < t \<and> t \<le> t' + d" unfolding invs_at_def plan_inv_seq_def by blast
-  hence t': "(t', at_start a) \<in> happ_seq \<and> t' < t" unfolding plan_happ_seq_def by auto 
-  moreover
-  from x
-  have a_in_acts: "a \<in> actions" using pap unfolding plan_actions_in_problem_def by blast
-  have "\<not> (\<exists>s. (s, at_end a) \<in> happ_seq \<and> t' \<le> s \<and> s < t)"
-  proof (rule notI)
-    assume "\<exists>s. (s, at_end a) \<in> happ_seq \<and> t' \<le> s \<and> s < t"
-    then obtain s where
-      s: "(s, at_end a) \<in> happ_seq"
-      "t' \<le> s" "s < t" by blast
-    then obtain s' d' where
-      s': "s = s' + d'"
-      "(a, s', d') \<in> ran \<pi>" using at_end_in_happ_seqE a_in_acts pap nso dp by blast
-    hence "(s', at_start a) \<in> happ_seq" unfolding plan_happ_seq_def by blast
-    show False
-    proof (cases "s' < t'")
-      case True
-      with s(2)[simplified s'(1)]
-      show ?thesis using nso[THEN no_self_overlap_spec, OF s'(2) x(2)] by fastforce
-    next
-      case False
-      from s s'
-      have "s' + d' < t" by simp
-      moreover
-      from x
-      have "t \<le> t' + d" by simp
-      ultimately
-      have "s' + d' < t' + d" by simp
-      moreover
-      from dp[simplified durations_positive_def] s'(2)
-      have "0 < d'" by simp
-      ultimately
-      have "s' < t' + d" by (meson less_add_same_cancel1 order_less_trans)
-      moreover
-      from False
-      have "t' = s' \<longrightarrow> d' \<noteq> d" using s x t' s' by auto
-      ultimately
-      show ?thesis using nso[THEN no_self_overlap_spec, OF x(2) s'(2)] False by fastforce
-    qed
-  qed
-  ultimately
-  have "a \<in> ES t" unfolding exec_state_sequence_def using a_in_acts by blast
-  with x
-  show "x \<in> \<Union> (over_all ` ES t)" by blast
-next 
-  fix x
-  assume "x \<in> \<Union> (over_all ` ES t)"
-  then obtain t' a where
-    x: "x \<in> over_all a"
-    "a \<in> actions"
-    "(t', at_start a) \<in> happ_seq"
-    "t' < t"
-    "\<not>(\<exists>s. (s, at_end a) \<in> happ_seq \<and> t' \<le> s \<and> s < t)"
-    unfolding exec_state_sequence_def by force
-  then obtain d where
-    a: "(a, t', d) \<in> ran \<pi>" using at_start_in_happ_seqE nso dp pap by blast
-  have "t' + d \<ge> t" 
-  proof (rule ccontr)
-    assume "\<not> t \<le> t' + d"
-    hence "t' + d < t" by simp
-    moreover
-    have "(t' + d, at_end a) \<in> happ_seq" using a unfolding plan_happ_seq_def by blast
-    moreover
-    have "t' < t' + d" using dp[simplified durations_positive_def] a by auto
-    ultimately
-    show False using x(5) by simp
-  qed
-  with a x
-  show "x \<in> Inv t" unfolding invs_at_def plan_inv_seq_def by auto
-qed
-
 lemma return_to_main:
   assumes prop_model:   "prop_model W (MS (Suc l))"
   and exec_model:       "exec_model W (IES (ti l))"
