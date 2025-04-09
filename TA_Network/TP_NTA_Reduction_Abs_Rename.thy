@@ -2469,8 +2469,8 @@ primcorec goal_run::"
     ('action clock, real) cval) stream" where
 "goal_run s = s ## (goal_run s)"
 
-
-definition "goal_state \<equiv> (GoalLocation # map Off actions, (\<lambda>x. None), (\<lambda>x. 0))"
+(* Just for testing *)
+definition "goal_state \<equiv> (GoalLocation # map Off actions, map_of (zip (map fst nta_vars) (map (fst o snd) nta_vars)), (\<lambda>x. 0))"
 
 definition plan_state_sequence::"('action location list \<times>
     ('proposition variable \<Rightarrow> int option) \<times>
@@ -2484,6 +2484,89 @@ let
         |> (\<lambda>s. ext_seq'' s apply_happs)
         |> (\<lambda>s. ext_seq s [end_planning])
 in Stream.shift seq (goal_run (last seq))"
+
+lemma conv_invs:
+  assumes "p < length (map (automaton_of \<circ> conv_automaton) actual_autos)"
+  shows "snd (snd (snd (map (automaton_of \<circ> conv_automaton) actual_autos ! p))) = conv_cc o (snd (snd (snd (map automaton_of actual_autos ! p))))"
+  apply (subst nth_map)
+  using assms apply simp
+  apply (subst nth_map)
+  using assms apply simp
+  apply (cases "actual_autos ! p")
+  subgoal for _ _ _ d
+    apply (erule ssubst[of "(actual_autos ! p)"])
+    apply (subst comp_apply)
+    apply (subst conv_automaton_def)
+    apply (subst prod.case)+
+    apply (subst automaton_of_def)
+    apply (subst prod.case)+
+    apply (subst snd_conv)+
+    apply (subst automaton_of_def)
+    apply (subst prod.case)+
+    apply (subst snd_conv)+
+    apply (subst comp_def)
+    apply (induction d)
+     apply (subst list.map)
+    unfolding default_map_of_def
+     apply simp
+    subgoal for d ds
+      apply (induction d)
+      subgoal for i c
+        apply (rule ext)
+        subgoal for x
+          apply (subst list.map)
+          apply (subst prod.case)+
+          unfolding map_of_Cons_code
+          apply (subst map_default_def)+
+          apply (cases "i = x")
+           apply (subst if_P, assumption)+
+           apply simp
+          apply (subst if_not_P, assumption)+
+          apply (subst (asm) map_default_def)
+          apply (rule subst[of "FinFun.map_default [] (map_of (map (\<lambda>(s, cc). (s, map conv_ac cc)) ds)) x" "map conv_ac (case map_of ds x of None \<Rightarrow> [] | Some b' \<Rightarrow> b')"])
+           apply simp
+          apply (subst map_default_def)
+          by blast
+        done
+      done
+    done
+  done
+
+lemma no_invs: assumes "p < length actual_autos"
+  shows "snd (snd (snd (automaton_of (actual_autos ! p)))) = (\<lambda>x. [])"
+proof -
+  have 1: "p' < length actions" if "p = Suc p'" for p'
+    using assms that
+    unfolding actual_autos_def ntas_def timed_automaton_net_spec_def Let_def prod.case 
+    by simp+
+  show ?thesis
+  unfolding actual_autos_def  ntas_def timed_automaton_net_spec_def Let_def prod.case
+  apply (subst map_map[symmetric])
+  apply (subst map_snd_zip)
+   apply simp
+  unfolding main_auto_spec_def Let_def action_to_automaton_spec_def
+  unfolding comp_apply
+  apply (subst list.map)
+  apply (subst map_map)
+  unfolding snd_conv comp_def
+  apply (cases p)
+   apply simp
+   apply (subst automaton_of_def)
+   apply (subst prod.case)+
+   apply (subst snd_conv)+
+   apply (subst default_map_of_def) apply simp
+  subgoal for p'
+    apply (rule ssubst[of p])
+     apply assumption
+    apply (subst nth_Cons_Suc)
+    apply (drule 1)
+    apply (subst nth_map)
+     apply assumption
+    unfolding automaton_of_def prod.case snd_conv 
+    apply (subst default_map_of_def)
+    by simp
+  done
+qed
 
 lemma "abs_renum.urge_bisim.A.run (goal_run goal_state)"
 proof (coinduction rule: abs_renum.urge_bisim.A.run.coinduct)
@@ -2508,9 +2591,40 @@ proof (coinduction rule: abs_renum.urge_bisim.A.run.coinduct)
     apply (rule step_u'.intros[of _ _ _ _ _ _ "(\<lambda>x. 0) \<oplus> 0"])
     apply (subst abs_renum.sem_def)
       apply (rule step_t)
-    unfolding Simple_Network_Language.inv_def
+         apply (subst Simple_Network_Language.inv_def)
+         apply (subst TAG_def)
+         apply (rule allI)
+    subgoal for p
+      apply (rule impI)
+      apply (subst conv_invs)
+       apply simp
+      apply (subst clock_val_def)
+      unfolding cval_add_def
+      apply (subst add_0_right)
+      apply (subst nth_map)
+       apply simp
+      using no_invs by auto
+        apply (subst TAG_def)
+        apply simp
+       apply (subst TAG_def)
+       apply simp
+      apply (subst TAG_def)
+    subgoal
+    unfolding bounded_def
+    apply (intro conjI)
+     apply (subst dom_map_of_zip)
+      apply simp
+     apply (subst dom_map_of_conv_image_fst)
+     apply simp
+    apply (rule ballI)
+    subgoal for x
+      apply (subst (asm) dom_map_of_zip)
+       apply simp
+      apply (rule conjI)
+      try
 
-qed
+
+  qed
 
 lemma state_seq_sat_goal: "ev (holds (\<lambda>(L, s, _). check_sexp (sexp.loc 0 GoalLocation) L (the \<circ> s))) plan_state_sequence"
   find_theorems intro name: "ev" sorry
