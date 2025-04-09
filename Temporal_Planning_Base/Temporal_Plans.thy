@@ -221,6 +221,11 @@ definition valid_plan::"bool" where
     \<and> mutex_valid_plan
     \<and> finite_plan"
 
+lemma valid_plan_state_seq: "valid_plan \<Longrightarrow> \<exists>M.  valid_state_sequence M \<and> M 0 = init \<and> goal \<subseteq> M (length htpl)"
+  and valid_plan_durs: "valid_plan \<Longrightarrow> durations_ge_0" "valid_plan \<Longrightarrow> durations_valid"
+  and valid_plan_mutex: "valid_plan \<Longrightarrow> mutex_valid_plan"
+  and valid_plan_finite: "valid_plan \<Longrightarrow> finite_plan" unfolding valid_plan_def by blast+
+
 definition no_self_overlap::"bool" where
 "no_self_overlap \<equiv> \<not>(\<exists>i j a t d u e. i \<noteq> j
   \<and> i \<in> dom \<pi>

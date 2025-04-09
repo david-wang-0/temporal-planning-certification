@@ -2,6 +2,90 @@ theory TP_NTA_Reduction_Abs_Rename
   imports TP_NTA_Reduction_Spec
 begin
 
+section \<open>Renumbering the abstract definition\<close>
+
+subsubsection \<open>Some functions for renumbering\<close>
+
+
+definition mk_renum::"'a list \<Rightarrow> 'a \<Rightarrow> nat" where
+"mk_renum l \<equiv>
+  let
+    nums = [0..<length l];
+    act_nums = zip l nums;
+    f = map_of act_nums
+  in the o f"
+
+definition mk_snd_ord_renum::"'a list list \<Rightarrow> nat \<Rightarrow> 'a \<Rightarrow> nat" where
+"mk_snd_ord_renum \<equiv> (!) o map mk_renum"
+
+lemma map_of_zip_lemma:
+  assumes "x \<in> set as"
+  shows "the (map_of (zip as [n..<n + length as]) x) = n + List_Index.index as x"
+  using assms
+proof (induction as arbitrary: n)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a as n)
+  show ?case 
+  proof (cases "x \<in> set as")
+    case True
+    show ?thesis
+    proof (cases "x = a")
+      case xa: True
+      hence xa: "x = a" using Cons by simp
+      hence "the (map_of (zip (a # as) [n..<n + length (a # as)]) x) = n" by (subst upt_conv_Cons) auto
+      then show ?thesis using xa by simp
+    next
+      case False
+      hence "the (map_of (zip (a # as) [n..<n + length (a # as)]) x) = the (map_of (zip as [Suc n..<n + length (a # as)]) x)"
+        apply (subst upt_conv_Cons)
+         apply simp
+        apply (subst zip_Cons_Cons)
+        apply (subst map_of_Cons_code(2)) 
+        by (metis (full_types))
+      also have "... = the (map_of (zip as [Suc n..<Suc n + length as]) x)"
+        by simp
+      also have "... = Suc n + List_Index.index as x" using Cons.IH[OF True] by blast
+      finally show ?thesis using index_Cons False by auto
+    qed
+  next
+    case False
+    hence xa: "x = a" using Cons by simp
+    hence "the (map_of (zip (a # as) [n..<n + length (a # as)]) x) = n"
+      apply (subst upt_conv_Cons)
+      by auto
+    then show ?thesis 
+      using xa by simp
+  qed
+qed
+    
+
+lemma mk_renum_index: 
+  assumes "x \<in> set xs"
+  shows "mk_renum xs x = List_Index.index xs x"
+  unfolding mk_renum_def
+  using map_of_zip_lemma[OF assms, of 0]
+  by auto
+  
+
+lemma mk_renum_inj: "inj_on (mk_renum xs) (set xs)"
+proof
+  fix x y
+  assume x: "x \<in> set xs"
+     and y: "y \<in> set xs"
+     and rn: "mk_renum xs x = mk_renum xs y"
+  from x mk_renum_index
+  have "mk_renum xs x = List_Index.index xs x" by metis
+  moreover
+  from y mk_renum_index
+  have "mk_renum xs y = List_Index.index xs y" by metis
+  ultimately
+  have "List_Index.index xs x = List_Index.index xs y" using rn by simp
+  thus "x = y" using inj_on_index unfolding inj_on_def using x y by simp
+qed
+
+
 context tp_nta_reduction_spec
 begin
 
@@ -2048,7 +2132,7 @@ proof
     thus ?thesis using ntas_inits_alt by simp
   qed 
 
-  (* initial assignment only assigns values to actual variables *)
+  (* initial assignment assigns values to actual variables *)
   show "fst ` set init_vars = Prod_TA_Defs.var_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)" 
     unfolding var_set_alt actual_variables_correct
     unfolding init_vars_def set_map by auto
@@ -2194,43 +2278,273 @@ definition to_var_asmt::"'proposition set \<Rightarrow> 'proposition set \<Right
 ) |> Some
 "
 
-definition is_starting where
-"is_starting B act \<equiv>
-  at_start act \<in> B"
 
-definition action_state_sequence::"('action location list \<times>
-    ('proposition variable \<Rightarrow> int option) \<times>
-    ('action clock \<Rightarrow> real)) stream" where
-"action_state_sequence \<equiv>
+(* The main automaton is the first automaton, so the index must be incremented *)
+definition enter_start_instant::"
+nat
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
+"enter_start_instant n s \<equiv>
 let 
+  act = actions ! n;
+  (act_locs, var_asmt, clock_asmt) = s;
+  act_locs' = act_locs[Suc n := StartInstant act];
+
+  ds = dels (at_start act) |> map PropVar;
+  as = adds (at_start act) |> map PropVar;
+  var_asmt' = var_asmt(ds [\<mapsto>] (list_of (0::int) (length ds)));
+  var_asmt'' = var_asmt'(as [\<mapsto>] (list_of (0::int) (length as)));
+
+  clock_asmt' = clock_asmt(ActStart act := 0)
+in (act_locs', var_asmt'', clock_asmt')
+"
+
+definition enter_start_instants::"
+nat list
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
+"enter_start_instants ns s \<equiv>
+  seq_apply (map enter_start_instant ns) s
+"
+
+
+(* It is valid to assume that variables have an assignment. Hidden assumption (at this level)
+
+The initial variable assignment has a domain equal to the set of actually occurring variables and
+in no step is a variable unassigned *)
+definition leave_start_instant::"
+nat
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
+"leave_start_instant n s \<equiv>
+let 
+  act = actions ! n;
+  (act_locs, var_asmt, clock_asmt) = s;
+  act_locs' = act_locs[Suc n := Running act];
+  locks = over_all act |> map PropLock;
+  cur_asmt = map (get_default 0 var_asmt) locks;
+  next_asmt = map (\<lambda>x. x + 1) cur_asmt;
+  var_asmt' = var_asmt(locks [\<mapsto>] next_asmt)
+in (act_locs', var_asmt', clock_asmt)
+"
+
+definition leave_start_instants::"
+nat list
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock, real) cval) list" where
+"leave_start_instants ns s \<equiv>
+  seq_apply (map leave_start_instant ns) s
+"
+definition enter_end_instant::"
+nat
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
+"enter_end_instant n s \<equiv>
+let 
+  act = actions ! n;
+  (act_locs, var_asmt, clock_asmt) = s;
+  act_locs' = act_locs[Suc n := EndInstant act];
+
+  locks = over_all act |> map PropLock;
+  cur_asmt = map (get_default 1 var_asmt) locks;
+  next_asmt = map (\<lambda>x. x - 1) cur_asmt;
+  var_asmt' = var_asmt(locks [\<mapsto>] next_asmt);
+  clock_asmt' = clock_asmt(ActEnd act := 0)
+in (act_locs', var_asmt', clock_asmt')
+"
+
+definition "enter_end_instants ns s \<equiv> seq_apply (map enter_end_instant ns) s"
+
+definition leave_end_instant::"
+nat
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
+"leave_end_instant n s \<equiv>
+let 
+  act = actions ! n;
+  (act_locs, var_asmt, clock_asmt) = s;
+  act_locs' = act_locs[Suc n := Off act];
+
   
-in undefined"
+  ds = dels (at_end act) |> map PropVar;
+  as = adds (at_end act) |> map PropVar;
+  var_asmt' = var_asmt(ds [\<mapsto>] (list_of (0::int) (length ds)));
+  var_asmt'' = var_asmt'(as [\<mapsto>] (list_of (0::int) (length as)))
+in (act_locs', var_asmt'', clock_asmt)
+"
+
+definition "leave_end_instants ns s \<equiv> seq_apply (map leave_end_instant ns) s"
+
+(* apply all snap actions of the nth happening in the plan *)
+definition apply_nth_happening::"
+nat
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
+"apply_nth_happening n s \<equiv>
+let
+  h = happ_at planning_sem.happ_seq (time_index \<pi> n);
+  act_indices = [0..<length actions];
+  start_indices = filter (\<lambda>n. at_start (actions ! n) \<in> h) act_indices;
+  end_indices = filter (\<lambda>n. at_end (actions ! n) \<in> h) act_indices
+in 
+  [s] 
+  |> (\<lambda>s. ext_seq s (map enter_end_instant end_indices))
+  |> (\<lambda>s. ext_seq s (map enter_start_instant start_indices))
+  |> (\<lambda>s. ext_seq s (map leave_end_instant end_indices))
+  |> (\<lambda>s. ext_seq s (map leave_start_instant start_indices))
+"
+
+definition pass_time::"
+real
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock, real) cval)" where
+"pass_time t s \<equiv> map_prod id (map_prod id (\<lambda>clock_asmt. clock_asmt \<oplus> t)) s"
+
+
+find_theorems name: "real*of"
+
+definition get_delay::"nat \<Rightarrow> real" where
+"get_delay i \<equiv>
+  if (i < length (htpl \<pi>) - 1) then
+    real_of_rat (htpl \<pi> ! (Suc i) - htpl \<pi> ! i) 
+  else
+    0::real
+"
+
+
+definition apply_and_delay::"
+nat
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
+"apply_and_delay i s \<equiv>
+let
+  delay = get_delay i
+in
+  apply_nth_happening i s
+  |> (\<lambda>s. ext_seq s [pass_time delay])
+"
+
+definition start_planning::"
+('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
+"start_planning s \<equiv>
+let 
+  (locs, var_asmt, clock_asmt) = s;
+  main_auto_index = 0;
+
+  locs' = locs[main_auto_index := Planning];
+  
+  init_props = map PropLock init;
+  var_asmt' = var_asmt(PlanningLock \<mapsto> 1);
+  var_asmt'' = var_asmt'(init_props [\<mapsto>] (list_of (0::int) (length init_props)))
+in (locs', var_asmt'', clock_asmt)"
+
+definition start_and_init_delay::"
+('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
+"start_and_init_delay s \<equiv> [s] |> (\<lambda>s. ext_seq s [start_planning, pass_time \<epsilon>])"
+
+
+definition end_planning::"
+('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
+"end_planning s \<equiv>
+let
+  (locs, var_asmt, clock_asmt) = s;
+  main_auto_index = 0;
+
+  locs' = locs[main_auto_index := GoalLocation];
+  
+  init_props = map PropLock init;
+  var_asmt' = var_asmt(PlanningLock \<mapsto> 2)
+in (locs', var_asmt', clock_asmt)"
+
+
+primcorec goal_run::"
+  ('action location list \<times>
+    ('proposition variable \<rightharpoonup> int) \<times>
+    ('action clock, real) cval) 
+\<Rightarrow> ('action location list \<times>
+    ('proposition variable \<rightharpoonup> int) \<times>
+    ('action clock, real) cval) stream" where
+"goal_run s = s ## (goal_run s)"
+
+
+definition "goal_state \<equiv> (GoalLocation # map Off actions, (\<lambda>x. None), (\<lambda>x. 0))"
 
 definition plan_state_sequence::"('action location list \<times>
     ('proposition variable \<Rightarrow> int option) \<times>
-    ('action clock \<Rightarrow> real)) stream" where
-"plan_state_sequence \<equiv> 
+    ('action clock, real) cval) stream" where
+"plan_state_sequence \<equiv>
 let 
-  happ_seq = planning_sem.happ_seq
-in abs_renum.a\<^sub>0 ## undefined
-"
+  htp_indices = [0..<length (htpl \<pi>)];
+  apply_happs = map apply_and_delay htp_indices;
+  seq = [abs_renum.a\<^sub>0] 
+        |> (\<lambda>s. ext_seq' s start_and_init_delay) 
+        |> (\<lambda>s. ext_seq'' s apply_happs)
+        |> (\<lambda>s. ext_seq s [end_planning])
+in Stream.shift seq (goal_run (last seq))"
 
-lemma "abs_renum.a\<^sub>0 = undefined"
-  unfolding abs_renum.a\<^sub>0_def
-  unfolding ntas_inits_def
+lemma "abs_renum.urge_bisim.A.run (goal_run goal_state)"
+proof (coinduction rule: abs_renum.urge_bisim.A.run.coinduct)
+  case run
+  then show ?case 
+    apply (subst goal_run.ctr)
+    apply (subst goal_run.ctr)
+    apply (rule exI[of _ goal_state])
+    apply (rule exI[of _ goal_state])
+    apply (rule exI[of _ "goal_run goal_state"])
+    apply (rule conjI)
+     apply simp
+    apply (subst goal_state_def)
+    apply (subst prod.case)+
+    apply (subst goal_state_def)
+    apply (subst prod.case)+
+    apply (rule conjI)
+    defer
+     apply (rule disjI1)
+     apply (subst goal_run.ctr[symmetric])
+     apply simp
+    apply (rule step_u'.intros[of _ _ _ _ _ _ "(\<lambda>x. 0) \<oplus> 0"])
+    apply (subst abs_renum.sem_def)
+      apply (rule step_t)
+    unfolding Simple_Network_Language.inv_def
 
-lemma "abs_renum.urge_bisim.A.run (abs_renum.a\<^sub>0 ## xs)"
-  find_theorems intro
-  apply (coinduction rule: abs_renum.urge_bisim.A.run.coinduct)
-  sorry
-find_theorems name: "List*stream"
+qed
+
+lemma state_seq_sat_goal: "ev (holds (\<lambda>(L, s, _). check_sexp (sexp.loc 0 GoalLocation) L (the \<circ> s))) plan_state_sequence"
+  find_theorems intro name: "ev" sorry
+
+find_theorems name: "abs_renum*steps"
+
+lemma state_seq_is_run: "abs_renum.urge_bisim.A.run plan_state_sequence"
+  find_theorems name: "run*con"
+proof (rule abs_renum.urge_bisim.A.extend_run'[where zs = plan_state_sequence])
+proof (coinduction rule: abs_renum.urge_bisim.A.run.coinduct)
+  case run
+  then show ?case sorry
+qed
+
+find_theorems name: "Simple_Network_Language_Model_Checking.step_u'.intros"
 
 lemma "abs_renum.sem, abs_renum.a\<^sub>0 \<Turnstile> form"
 proof -
+  have "abs_renum.urge_bisim.A.run plan_state_sequence"
+  proof (coinduction rule: abs_renum.urge_bisim.A.run.coinduct)
+    case run
+    then show ?case sorry
+  qed
   find_theorems name: "Stream*induc"
   show "?thesis" unfolding form_alt 
     unfolding models_def formula.case
-    unfolding abs_renum.urge_bisim.A.Ex_ev_def sorry
+    find_theorems name: "abs_renumEx_ev"
+    apply (subst abs_renum.urge_bisim.A.Ex_ev_def)
+    find_theorems (200) name: "abs_renum*run"
+    find_theorems name: deadlock
+    apply (rule exI)
+    apply (rule conjI)
+
+     apply (coinduction rule: abs_renum.urge_bisim.A.run.coinduct)
 qed
 
 end

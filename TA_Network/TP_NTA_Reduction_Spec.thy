@@ -1,5 +1,5 @@
 theory TP_NTA_Reduction_Spec
-  imports Temporal_Planning_Base.Temporal_Plans
+  imports NTA_Temp_Planning_Sem
       TA_Code.Simple_Network_Language_Export_Code
 
 begin
@@ -94,7 +94,58 @@ instance location::(countable) countable
     automata obtained by replacing integers with reals (which satisfy the assumptions about the time class)
     To do: Copy the locale structure, so this extends the temporal planning locales. *)
 
-(* Some hard-coding of sets as lists. To do: fix *)
+
+(*  off \<rightarrow> start instant!! \<rightarrow> pass time \<rightarrow> end instant!! \<rightarrow> off
+                  
+                  check invariants hold!
+                  increment mutex vars!
+      check mutex vars!
+
+      apply effects
+      check pres
+
+      update start clock!**
+      check mutex actions**
+
+      
+
+                                    check lower constraint!
+                                    check upper constraint!
+    
+                                    decrement mutex vars!
+                                                  check mutex vars!
+
+                                                  apply effects
+                                                  check pres
+
+                                    update end clock!**
+                                    check mutex actions**
+
+                                    
+                                                            
+
+    Mutual exclusivity is calculated using intersection of additions and deletions. 
+
+    Applying effects is convenient in the same transition as checking the mutex variables, because
+    only deletions "access" invariants (i.e. make them false).
+
+    Incrementing and decrementing the must happen when transitioning out of and into the urgent 
+    locations, to allow simultaneous snap-action execution
+    
+    Start and end clocks must be updated as the instant is entered, so that mutex conditions can be checked.
+    0-separation is hardcoded into this translation.
+
+    Items marked with ! must be scheduled in the order to be correctly applied.
+
+    * and ** mark some relationship
+    
+    Checking preconditions should be done at the start of the instants. Could result in fewer transitions
+    taken while model-checking.
+
+    When the mutex variable is incremented, the invariant propositions has to be checked to be true. 
+    Otherwise, it could be false and never explicitly set to false during action execution, and still not hold.
+    
+  *)
 locale tp_nta_reduction_spec =
   fixes init :: "('proposition::countable) list"
     and goal :: "'proposition list"
@@ -451,87 +502,6 @@ let
 in (automata, clocks, all_vars_spec, formula)"
 (* The id of the main automaton is 0 *)
 end
-
-subsubsection \<open>Some functions for renumbering\<close>
-
-
-definition mk_renum::"'a list \<Rightarrow> 'a \<Rightarrow> nat" where
-"mk_renum l \<equiv>
-  let
-    nums = [0..<length l];
-    act_nums = zip l nums;
-    f = map_of act_nums
-  in the o f"
-
-definition mk_snd_ord_renum::"'a list list \<Rightarrow> nat \<Rightarrow> 'a \<Rightarrow> nat" where
-"mk_snd_ord_renum \<equiv> (!) o map mk_renum"
-
-lemma map_of_zip_lemma:
-  assumes "x \<in> set as"
-  shows "the (map_of (zip as [n..<n + length as]) x) = n + List_Index.index as x"
-  using assms
-proof (induction as arbitrary: n)
-  case Nil
-  then show ?case by simp
-next
-  case (Cons a as n)
-  show ?case 
-  proof (cases "x \<in> set as")
-    case True
-    show ?thesis
-    proof (cases "x = a")
-      case xa: True
-      hence xa: "x = a" using Cons by simp
-      hence "the (map_of (zip (a # as) [n..<n + length (a # as)]) x) = n" by (subst upt_conv_Cons) auto
-      then show ?thesis using xa by simp
-    next
-      case False
-      hence "the (map_of (zip (a # as) [n..<n + length (a # as)]) x) = the (map_of (zip as [Suc n..<n + length (a # as)]) x)"
-        apply (subst upt_conv_Cons)
-         apply simp
-        apply (subst zip_Cons_Cons)
-        apply (subst map_of_Cons_code(2)) 
-        by (metis (full_types))
-      also have "... = the (map_of (zip as [Suc n..<Suc n + length as]) x)"
-        by simp
-      also have "... = Suc n + List_Index.index as x" using Cons.IH[OF True] by blast
-      finally show ?thesis using index_Cons False by auto
-    qed
-  next
-    case False
-    hence xa: "x = a" using Cons by simp
-    hence "the (map_of (zip (a # as) [n..<n + length (a # as)]) x) = n"
-      apply (subst upt_conv_Cons)
-      by auto
-    then show ?thesis 
-      using xa by simp
-  qed
-qed
-    
-
-lemma mk_renum_index: 
-  assumes "x \<in> set xs"
-  shows "mk_renum xs x = List_Index.index xs x"
-  unfolding mk_renum_def
-  using map_of_zip_lemma[OF assms, of 0]
-  by auto
-  
-
-lemma mk_renum_inj: "inj_on (mk_renum xs) (set xs)"
-proof
-  fix x y
-  assume x: "x \<in> set xs"
-     and y: "y \<in> set xs"
-     and rn: "mk_renum xs x = mk_renum xs y"
-  from x mk_renum_index
-  have "mk_renum xs x = List_Index.index xs x" by metis
-  moreover
-  from y mk_renum_index
-  have "mk_renum xs y = List_Index.index xs y" by metis
-  ultimately
-  have "List_Index.index xs x = List_Index.index xs y" using rn by simp
-  thus "x = y" using inj_on_index unfolding inj_on_def using x y by simp
-qed
 
 
 
