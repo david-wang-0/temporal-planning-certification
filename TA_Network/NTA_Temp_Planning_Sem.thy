@@ -20,10 +20,12 @@ locale nta_temp_planning =
     and actions:: "'action set" 
 +  
 fixes \<pi>::"('i, 'action, 'time) temp_plan"
+  and c::'time
 assumes vp: "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon>"
     and pap: "plan_actions_in_problem \<pi> actions"
     and nso: "no_self_overlap \<pi>"
-    
+    and c: "0 < c" (* \<epsilon> + c is an initial delta transition. Necessary to not violate clock constraints
+                      for mutual exclusivity. *)
 begin
 
 lemma at_start_inj_on_plan:
@@ -77,7 +79,9 @@ definition "valid_state_seq \<equiv> valid_state_sequence \<pi> at_start at_end 
 
 definition "invariant_sequence = plan_inv_seq \<pi> over_all"
 
-definition "mutex_valid_happ_seq = nm_happ_seq pre adds dels"
+definition "mutex_snap \<equiv> mutex_snap_action pre adds dels"
+
+definition "mutex_valid_happ_seq = nm_happ_seq pre adds dels \<epsilon> happ_seq"
 
 definition "dur_bounds_sat = satisfies_duration_bounds lower upper"
 
@@ -92,7 +96,10 @@ lemma plan_state_seq_valid: "valid_state_seq plan_state_seq"
   apply -
   apply (rule  Hilbert_Choice.someI_ex[where P = valid_state_seq])
   by blast
-subsubsection \<open>Proposition and execution state\<close>
+
+subsubsection \<open>Execution state\<close>
+
+text \<open>Binary, but could be changed to count the active instances.\<close>
 
 definition exec_state_sequence::"('time \<times> 'action) set" where
 "exec_state_sequence \<equiv> {(t, a) |s t a. a \<in> actions \<and> (s, at_start a) \<in> happ_seq \<and> s < t 
@@ -362,5 +369,318 @@ next
   show "a \<in> ES t" using s unfolding exec_state_sequence_def by blast
 qed
 
+subsubsection \<open>Invariant states\<close>
+
+definition active_count where
+"active_count t a \<equiv> card {s. s < t \<and> (s, at_start a) \<in> happ_seq} - card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
+
+(* Currently the number of active instances is either 0 or 1. I.e. this is equivalent to the sequence of
+  execution states *)
+
+definition "invariant_state t p \<equiv> \<Sum>{active_count t a | a. p \<in> over_all a}"
+
+subsubsection \<open>Execution times\<close>
+
+definition pt::"'snap_action \<Rightarrow> ('time \<Rightarrow> 'time \<Rightarrow> bool) \<Rightarrow> 'time \<Rightarrow> 'time" where
+"pt a co t \<equiv> if (\<exists>t'. co t' t \<and> (t', a) \<in> happ_seq) 
+  then (Greatest (\<lambda>t'. co t' t \<and> (t', a) \<in> happ_seq)) 
+  else (Least (\<lambda>t'. \<exists>a. (t', a) \<in> happ_seq) - (\<epsilon> + c))"
+
+abbreviation last_snap_exec::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
+"last_snap_exec a t \<equiv> pt a (<) t"
+
+definition exec_time::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
+"exec_time a t \<equiv> (let t' = last_snap_exec a t in t - t')"
+
+abbreviation last_snap_exec'::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
+"last_snap_exec' a t \<equiv> pt a (\<le>) t"
+
+definition exec_time'::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
+"exec_time' a t \<equiv> (let t' = last_snap_exec' a t in t - t')"
+
+
+
+
+ 
+lemma a_not_in_b_last_unchanged: "(t, a) \<notin> happ_seq\<Longrightarrow> last_snap_exec' a t = last_snap_exec a t"
+proof -
+  assume "(t, a) \<notin> happ_seq"
+  have 1: "(GREATEST t'. t' < t \<and> (t', a) \<in> happ_seq) = (GREATEST t'. t' \<le> t \<and> (t', a) \<in> happ_seq)"
+    if defined: "\<exists>t'\<le>t. (t', a) \<notin> happ_seq"
+  proof (rule classical)
+    assume "(GREATEST t'. t' < t \<and> (t', a) \<in> happ_seq) \<noteq> (GREATEST t'. t' \<le> t \<and> (t', a) \<in> happ_seq)"
+    then have "\<exists>t'. t' \<le> t \<and> \<not>(t' < t) \<and> (t', a) \<in> happ_seq"
+      using defined
+      by (meson nless_le)
+    then have "(t, a) \<in> happ_seq" by auto
+    with \<open>(t, a) \<notin> happ_seq\<close>
+    have "False" by simp
+    thus "(GREATEST t'. t' < t \<and> (t', a) \<in> happ_seq) = (GREATEST t'. t' \<le> t \<and> (t', a) \<in> happ_seq)"
+      by blast
+  qed
+  from \<open>(t, a) \<notin> happ_seq\<close>
+  have "(\<exists>t'<t. (t', a) \<in> happ_seq) = (\<exists>t'\<le>t. (t', a) \<in> happ_seq)"
+    using nless_le by auto
+  with \<open>(t, a) \<notin> happ_seq\<close> 1
+  show "last_snap_exec' a t = last_snap_exec a t"
+    using pt_def by force
+qed
+
+lemma a_not_in_b_exec_time_unchanged: "(t, a) \<notin> happ_seq \<Longrightarrow> exec_time a t = exec_time' a t"
+  using a_not_in_b_last_unchanged unfolding exec_time_def exec_time'_def by simp
+
+lemma a_in_b_last_now: "(t, a) \<in> happ_seq \<Longrightarrow> last_snap_exec' a t = t"
+  using pt_def
+  by (auto intro: Greatest_equality)
+
+lemma a_in_b_exec_time'_0: "(t, a) \<in> happ_seq \<Longrightarrow> exec_time' a t = 0"
+  using a_in_b_last_now unfolding exec_time'_def by simp
+
+lemma subseq_last_snap_exec:
+  assumes llen: "(Suc l) < length (htpl \<pi>)" 
+shows "last_snap_exec a (time_index \<pi> (Suc l)) = last_snap_exec' a (time_index \<pi> l)"
+proof -
+
+  define t where 
+    "t = last_snap_exec a (time_index \<pi> (Suc l))"    
+
+  define s where
+    "s = last_snap_exec' a (time_index \<pi> l)" 
+  
+  have cl: "length (htpl \<pi>) = card (htps \<pi>)" unfolding htpl_def by simp
+  
+  have tl_ord: "time_index \<pi> l < time_index \<pi> (Suc l)" 
+    using time_index_strict_sorted_list llen by blast
+  
+  from t_def consider "\<exists>t'. t' < (time_index \<pi> (Suc l)) \<and> (t', a) \<in> happ_seq" 
+    | "\<not>(\<exists>t'. t' < (time_index \<pi> (Suc l)) \<and> (t', a) \<in> happ_seq)" by auto
+  hence "t = s"
+  proof cases
+    case 1 
+    hence exsl: "Ex (\<lambda>t'. t' < time_index \<pi> (Suc l) \<and> (t', a) \<in> happ_seq)" (is "Ex ?psl") by blast
+    have "\<forall>t'. t' < time_index \<pi> (Suc l) \<and> (t', a) \<in> happ_seq \<longrightarrow> t' \<le> time_index \<pi> l"
+      using time_index_strict_sorted_list[OF _ llen] time_index_sorted_list[OF _ llen] 
+        no_actions_between_indexed_timepoints[OF vp[THEN valid_plan_finite]] 
+      by (metis happ_seq_def leI llen mem_Collect_eq)
+    moreover
+    have "\<forall>t'. t' \<le> time_index \<pi> l \<and> (t', a) \<in> happ_seq \<longrightarrow> t' < time_index \<pi> (Suc l)" 
+      using time_index_strict_sorted_list[OF _ llen] time_index_sorted_list[OF _ llen] 
+        no_actions_between_indexed_timepoints[OF vp[THEN valid_plan_finite]] by fastforce
+    ultimately 
+    have fa: "\<forall>t'. t' < time_index \<pi> (Suc l) \<and> (t', a) \<in> happ_seq \<longleftrightarrow> t' \<le> time_index \<pi> l \<and> (t', a) \<in> happ_seq" by blast
+    with 1
+    have exl: "Ex (\<lambda>t'. t' \<le> time_index \<pi> l \<and> (t', a) \<in> happ_seq)" (is "Ex ?pl") by blast
+    from fa
+    have "Greatest ?psl = Greatest ?pl" by auto
+    thus "t = s" unfolding t_def s_def pt_def using exl exsl by auto
+  next
+    case 2
+    hence "\<not> (\<exists>t' \<le> time_index \<pi> l. (t', a) \<in> happ_seq)" using tl_ord by force
+    with 2 t_def[simplified pt_def] s_def[simplified pt_def]
+    show ?thesis by auto
+  qed
+  thus "last_snap_exec a (time_index \<pi> (Suc l)) = last_snap_exec' a (time_index \<pi> l)" 
+    using s_def t_def by auto
+  qed
+
+lemma updated_exec_time_and_next: 
+  assumes "Suc l < length (htpl \<pi>)"
+  shows "exec_time a (time_index \<pi> (Suc l)) = (exec_time' a (time_index \<pi> l)) + (time_index \<pi> (Suc l) - time_index \<pi> l)"
+  using subseq_last_snap_exec[OF assms] exec_time_def exec_time'_def by simp
+
+
+lemma exec_time_and_epsilon:
+  assumes nm: "mutex_valid_happ_seq"
+      and s_at_t: "(t, a) \<in> happ_seq"
+      and mutex: "mutex_snap a b"
+      and s_not_b: "a \<noteq> b"
+    shows "exec_time b t \<ge> \<epsilon> \<and> exec_time b t > 0"
+proof (cases "\<exists>u < t. (u, b) \<in> happ_seq")
+  case True
+
+  have "\<forall>u. (u, b) \<in> happ_seq \<longrightarrow> \<not> (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> t \<noteq> u)" using assms unfolding mutex_valid_happ_seq_def nm_happ_seq_def mutex_snap_def[symmetric] by blast
+
+  from s_at_t
+  have "t \<in> timepoint_set" using a_in_B_iff_t_in_htps by fast
+  then obtain j where
+    j: "t = ti j"
+    "j < card timepoint_set" using time_index_img_set[OF fp] by force
+  
+  have P_iff: "(\<lambda>t'. t' < t \<and> b \<in> B t') = (\<lambda>t'. \<exists>i < card timepoint_set. ti i = t' \<and> i < j \<and> b \<in> B (ti i))" (is "?P = ?P'")
+  proof -
+    have "(\<lambda>t'. t' < t \<and> b \<in> B t') = (\<lambda>t'. t' \<in> timepoint_set \<and> t' < t \<and> b \<in> B t')" using a_in_B_iff_t_in_htps by fast
+    also have "... = (\<lambda>t'. \<exists>i < card timepoint_set. ti i = t' \<and> t' < t \<and> b \<in> B (ti i))" using time_index_img_set[OF fp] by force
+    also have "... = (\<lambda>t'. \<exists>i < card timepoint_set. ti i = t' \<and> i < j \<and> b \<in> B (ti i))"
+      unfolding j(1) 
+      using time_index_strict_sorted_set'[where j = j] 
+      using time_index_strict_sorted_set[OF _ j(2)] 
+      by blast
+    finally show ?thesis .
+  qed
+  
+  obtain u where
+    u: "u < t"
+    "b \<in> B u"
+    using True by blast
+  hence "u \<in> timepoint_set" using a_in_B_iff_t_in_htps by fast
+  hence "\<exists>i < card timepoint_set. i < j \<and> b \<in> B (ti i)" (is "Ex ?P2") using P_iff u by meson
+  moreover
+  have P2_int: "\<And>x. ?P2 x \<Longrightarrow> x \<le> j" using time_index_sorted_set' by auto
+  ultimately
+  have P2: "?P2 (Greatest ?P2)" using GreatestI_ex_nat[where P = ?P2] by blast
+
+  have P_1: "?P (ti(Greatest ?P2))" 
+  proof -
+    from P2 time_index_strict_sorted_set[OF _ j(2)] 
+    show ?thesis unfolding j(1) by blast
+  qed
+  
+  have P_max: "x \<le> ti (Greatest ?P2)" if assm: "?P x" for x 
+  proof -
+    from assm P_iff
+    have "\<exists>i<card timepoint_set. ti i = x \<and> i < j \<and> b \<in> B (ti i)" by meson
+    then
+    obtain i where
+      i: "?P2 i"
+      "x = ti i" by auto
+    moreover
+    have "i \<le> Greatest ?P2" using Greatest_le_nat[where P = ?P2] i(1) P2_int by blast
+    moreover
+    have "Greatest ?P2 < card timepoint_set" using P2 ..
+    ultimately
+    show "x \<le> ti(Greatest ?P2)" using time_index_sorted_set by blast
+  qed
+
+  have "?P (Greatest ?P)" 
+    apply (rule GreatestI_time)
+     apply (rule P_1)
+    using P_max by blast
+  moreover
+  have 1: "last_snap_exec b t = (GREATEST t'. t' < t \<and> b \<in> B t')" using True unfolding pt_def by auto
+  ultimately
+  have b_at_t': "(\<lambda>u. u < t \<and> b \<in> B u) (last_snap_exec b t)" (is "?t < t \<and> b \<in> B ?t") by auto
+
+  { assume a: "s \<in> (B t)" "b \<in> (B ?t)"
+
+    have nm_cond: "t - ?t < \<epsilon> \<and> ?t - t < \<epsilon> \<and> (s \<noteq> b \<or> t \<noteq> ?t) \<or> (t = ?t \<and> s \<noteq> b) \<longrightarrow> \<not>msa s b" 
+      using a nm[simplified nm_happ_seq_def] by auto
+    hence "msa s b \<longrightarrow> (t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon> \<or> (s = b \<and> t = ?t)) \<and> (t \<noteq> ?t \<or> s = b)" by auto
+    hence "msa s b \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon> \<or> (s = b \<and> t = ?t)" 
+          "msa s b \<longrightarrow> (t \<noteq> ?t \<or> s = b)" by auto
+
+    hence "\<not>(\<not>(s \<noteq> b \<or> t \<noteq> ?t) \<or> \<not>msa s b)
+      \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>" by auto
+    hence "((s \<noteq> b \<or> t \<noteq> ?t) \<and> msa s b)
+      \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  using s_at_t b_at_t' by blast
+    hence "(s \<noteq> b \<or> t \<noteq> ?t) \<and> msa s b
+      \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  by blast  
+    moreover
+    have "s \<noteq> b \<longrightarrow> msa s b" using mutex by blast
+    ultimately
+    have "s \<noteq> b \<or> (t \<noteq> ?t \<and> msa s b)
+      \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>" by blast
+    moreover
+    have "t \<noteq> ?t" using b_at_t' by auto
+    ultimately
+    consider "t - ?t \<ge> \<epsilon>" | "?t - t \<ge> \<epsilon>" sorry
+  }
+  note c = this
+  
+  have "t > ?t" using b_at_t' by blast
+  moreover
+  have "\<epsilon> \<ge> 0" using eps_range less_le_not_le by fastforce
+  ultimately 
+  have "t - ?t \<ge> \<epsilon>"  apply (cases rule: c) apply blast using order.trans by fastforce 
+  thus ?thesis sorry
+next
+  case False
+  have 1: "ti 0 \<le> u" if "B u \<noteq> {}" for u
+  proof -
+    have "u \<in> set timepoint_list" using that a_in_B_iff_t_in_htps set_htpl_eq_htps[OF fp] by fast
+    hence "\<exists>i. ti i = u \<and> i < length timepoint_list" using time_index_img_list by force
+    thus "ti 0 \<le> u" using time_index_sorted_list by blast
+  qed
+  with s_at_t
+  have 2: "ti 0 \<le> t" by auto
+  
+  have 3: "Least (\<lambda>t. B t \<noteq> {}) = (ti 0)" 
+  proof (rule Least_equality[OF _ 1])
+    have "card timepoint_set > 0" using a_in_B_iff_t_in_htps s_at_t card_gt_0_iff finite_htps fp by fast
+    hence "ti 0 \<in> timepoint_set" using time_index_img_set[OF fp] by blast
+    thus "B (ti 0) \<noteq> {}" using a_in_B_iff_t_in_htps by fast
+  qed
+
+  have "last_snap_exec b t = (LEAST t'. B t' \<noteq> {}) - (\<epsilon> + 1)" using False unfolding pt_def by argo
+  from this[simplified 3]
+  have "last_snap_exec b t = ti 0 - (\<epsilon> + 1)" .
+  hence 4: "t - last_snap_exec b t = \<epsilon> + 1 + t - ti 0" by auto
+  with 2
+  have "0 < 1 + t - ti 0" by (simp add: add_strict_increasing)
+  with 4
+  have "\<epsilon> < t - last_snap_exec b t" unfolding 4
+    by auto
+  thus ?thesis unfolding exec_time_def by simp
+qed
+
+(* 
+lemma exec_time_and_duration:
+  assumes "at_end a \<in> B t"
+      and a_in_actions: "a \<in> actions"
+      and nso: "nso_\<pi>"
+      and dp: "dp_\<pi>"
+      and pap: "pap_\<pi>"
+  shows "\<exists>t' d. (a, t', d) \<in> ran \<pi> \<and> exec_time (at_start a) t = d"
+proof -
+  have "\<exists>!(s,d). (a, s, d) \<in> ran \<pi> \<and> t = s + d" using at_end_in_happ_seqE' assms(1,2) nso dp pap by simp
+  then obtain s d where
+    sd: "(a, s, d) \<in> ran \<pi>" 
+    "t = s + d" by auto
+  with dp
+  have wit: "s < t \<and> at_start a \<in> B s" unfolding plan_happ_seq_def durations_positive_def by force
+  moreover
+  have "t' \<le> s" if "t' < t" "at_start a \<in> B t'" for t'
+  proof (rule ccontr)
+    assume "\<not> t' \<le> s"
+    hence st': "s < t'" by simp
+    from that(2)
+    obtain d' where
+       t'd': "(a, t', d') \<in> ran \<pi>" 
+      using at_start_in_happ_seqE' assms(2,3,4,5)  by blast
+    thus False using that st' sd nso[THEN no_self_overlap_spec] by force
+  qed
+  ultimately
+  have "(GREATEST s. s < t \<and> at_start a \<in> B s) = s" unfolding Greatest_def by fastforce
+  hence "exec_time (at_start a) t = d" using sd(2) wit unfolding exec_time_def pt_def by auto
+  thus ?thesis using sd(1) by blast
+qed
+
+lemma exec_time_sat_dur_const:
+  assumes "at_end a \<in> B t"
+      and a_in_actions: "a \<in> actions"
+      and "nso_\<pi>"
+      and "dp_\<pi>"
+      and "pap_\<pi>"
+      and "dv_\<pi>"
+    shows "sat_dur_bounds a (exec_time (at_start a) t)"
+  using exec_time_and_duration[OF assms(1,2,3,4,5)] \<open>dv_\<pi>\<close>[simplified durations_valid_def]
+  by blast
+
+lemma exec_time_at_init:
+  assumes fp: "fp_\<pi>"
+    and some_happs: "0 < card timepoint_set"
+  shows "exec_time b (ti 0) = \<epsilon> + 1"
+proof -
+  have "\<forall>i < card timepoint_set. ti 0 \<le> ti i" using time_index_sorted_set by blast
+  hence "\<forall>t \<in> timepoint_set. ti 0 \<le> t" using time_index_img_set[OF fp] by force
+  hence "\<not>(\<exists>s \<in> timepoint_set. s < ti 0)" by auto
+  hence 1: "\<not>(\<exists>s < ti 0. B s \<noteq> {})" unfolding plan_happ_seq_def htps_def by blast
+  
+  have "ti 0 \<in> timepoint_set" using time_index_img_set[OF fp]  using some_happs by blast
+  hence "B (ti 0) \<noteq> {}" unfolding plan_happ_seq_def unfolding htps_def by blast
+  with 1
+  have "Least (\<lambda>t'. B t' \<noteq> {}) = ti 0" by (meson Least_equality not_le_imp_less)
+  with 1
+  show ?thesis unfolding exec_time_def pt_def by (auto simp: Let_def)
+qed  *)
 end
 end

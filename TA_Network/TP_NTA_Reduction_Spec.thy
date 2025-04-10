@@ -390,6 +390,11 @@ in
   (Planning, cond, [], Sil (STR ''''), [lock_plan], [], GoalLocation)
 "
 
+definition main_auto_loop_spec::"'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
+"main_auto_loop_spec \<equiv>
+  (GoalLocation, bexp.true, [], Sil (STR ''''), [], [], GoalLocation)
+"
+
 definition main_auto_spec::"
     'action location \<times>
     'action location list \<times>
@@ -417,7 +422,7 @@ let
   locs = [InitialLocation, Planning, GoalLocation];
   committed_locs = [];
   urgent_locs = [InitialLocation, GoalLocation];
-  edges = [main_auto_init_edge_spec, main_auto_goal_edge_spec];
+  edges = [main_auto_init_edge_spec, main_auto_goal_edge_spec, main_auto_loop_spec];
   invs = []
 in
   (init_loc, locs, committed_locs, urgent_locs, edges, invs)

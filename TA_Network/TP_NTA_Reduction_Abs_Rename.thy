@@ -321,15 +321,17 @@ proof -
           unfolding end_edge_spec_def comp_apply Let_def prod.case snd_conv fst_conv by simp
       next
         case main
-        have "trans \<in> set [main_auto_init_edge_spec, main_auto_goal_edge_spec]" 
+        have "trans \<in> set [main_auto_init_edge_spec, main_auto_goal_edge_spec, main_auto_loop_spec]" 
           using t[simplified at' main] unfolding comp_apply main_auto_spec_def Let_def prod.case snd_conv fst_conv .
         with x consider
           "x \<in> set (trans_resets main_auto_init_edge_spec)"|
-          "x \<in> set (trans_resets main_auto_goal_edge_spec)" unfolding comp_apply by auto
+          "x \<in> set (trans_resets main_auto_goal_edge_spec)"|
+          "x \<in> set (trans_resets main_auto_loop_spec)" unfolding comp_apply by auto
         thus ?thesis 
           apply cases
           subgoal unfolding main_auto_init_edge_spec_def comp_apply Let_def prod.case snd_conv fst_conv by simp
-          unfolding main_auto_goal_edge_spec_def comp_apply Let_def prod.case snd_conv fst_conv by simp
+          subgoal unfolding main_auto_goal_edge_spec_def comp_apply Let_def prod.case snd_conv fst_conv by simp
+          unfolding main_auto_loop_spec_def comp_apply Let_def prod.case snd_conv fst_conv by simp
       qed
     next
       case 2
@@ -373,14 +375,16 @@ proof -
         then show ?thesis by blast
       next
         case main
-        have "trans \<in> set [main_auto_init_edge_spec, main_auto_goal_edge_spec]" 
+        have "trans \<in> set [main_auto_init_edge_spec, main_auto_goal_edge_spec, main_auto_loop_spec]" 
           using t[simplified at' main] unfolding comp_apply main_auto_spec_def Let_def prod.case snd_conv fst_conv .
         with x g consider
           "x \<in> fst ` constraint_pair ` set (trans_guards main_auto_init_edge_spec)"|
-          "x \<in> fst ` constraint_pair ` set (trans_guards main_auto_goal_edge_spec)" unfolding comp_apply by auto
+          "x \<in> fst ` constraint_pair ` set (trans_guards main_auto_goal_edge_spec)"|
+          "x \<in> fst ` constraint_pair ` set (trans_guards main_auto_loop_spec)" unfolding comp_apply by auto
         then show ?thesis apply cases
           subgoal unfolding main_auto_init_edge_spec_def Let_def comp_apply fst_conv snd_conv by auto
-          unfolding main_auto_goal_edge_spec_def Let_def comp_apply fst_conv snd_conv by auto
+          subgoal unfolding main_auto_goal_edge_spec_def Let_def comp_apply fst_conv snd_conv by auto
+          unfolding main_auto_loop_spec_def Let_def comp_apply fst_conv snd_conv by auto
       qed
     next
       case 3
@@ -496,7 +500,7 @@ proof (rule equalityI; rule subsetI)
       hence "x \<in> \<Union> (vars_of_bexp ` is_prop_ab 1 ` set (over_all act)) \<union> \<Union> (vars_of_update ` inc_prop_lock_ab 1 ` set (over_all act))" 
         unfolding edge_2_spec_def trans_vars_def Let_def prod.case fold_union' vars_of_bexp_all set_map by blast
       hence x: "x \<in> PropLock ` set (over_all act) \<or> x \<in> PropVar ` set (over_all act)" using update_vars_simps condition_vars_simps by auto
-      have s: "set (over_all act) \<subseteq> set props" using fluent_domain unfolding fluent_domain_def comp_apply using act(1) unfolding act_ref_fluents_def by simp
+      have s: "set (over_all act) \<subseteq> set props" using domain_ref_fluents unfolding fluent_domain_def comp_apply using act(1) unfolding act_ref_fluents_def by auto
       have x': "x \<in> fst ` set (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props)" using x s 
         unfolding set_map set_append by blast
       have x'': "x  \<in> fold (\<union>) (map action_vars_spec actions) {} \<union> set (map PropVar init) \<union> set (map PropVar goal)" 
@@ -515,7 +519,7 @@ proof (rule equalityI; rule subsetI)
       hence "x \<in> \<Union> (vars_of_bexp ` set (map (is_prop_lock_ab 0) (dels (at_end act)) @ map (is_prop_ab 1) (pre (at_end act)))) \<union>
        \<Union> (vars_of_update ` set (map (set_prop_ab 1) (adds (at_end act)) @ map (set_prop_ab 0) (dels (at_end act))))" unfolding trans_vars_def end_edge_spec_def Let_def prod.case fold_union' vars_of_bexp_all set_map .
       hence x: "x \<in> PropLock ` set (dels (at_end act)) \<or> x \<in> PropVar ` (set (pre (at_end act)) \<union> set (dels (at_end act)) \<union> set (adds (at_end act)))" using update_vars_simps condition_vars_simps by auto
-      have s: "set (pre (at_end act)) \<union> set (dels (at_end act)) \<union> set (adds (at_end act)) \<subseteq> set props" using fluent_domain unfolding fluent_domain_def comp_apply act_ref_fluents_def using act(1) by simp
+      have s: "set (pre (at_end act)) \<union> set (dels (at_end act)) \<union> set (adds (at_end act)) \<subseteq> set props" using domain_ref_fluents unfolding fluent_domain_def comp_apply act_ref_fluents_def using act(1) by simp
       have x': "x \<in> fst ` set (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props)" using x s 
         unfolding set_map set_append by blast
       have x'': "x  \<in> fold (\<union>) (map action_vars_spec actions) {} \<union> set (map PropVar init) \<union> set (map PropVar goal)" unfolding action_vars_spec_def using act(1) unfolding fold_union' Let_def using x 
@@ -528,10 +532,11 @@ proof (rule equalityI; rule subsetI)
   next
     case main
     with tr
-    have "tr \<in> {main_auto_init_edge_spec, main_auto_goal_edge_spec}" unfolding main_auto_spec_def Let_def comp_apply snd_conv by auto
+    have "tr \<in> {main_auto_init_edge_spec, main_auto_goal_edge_spec, main_auto_loop_spec}" unfolding main_auto_spec_def Let_def comp_apply snd_conv by auto
     with x consider
       "x \<in> trans_vars (main_auto_init_edge_spec)" |
-      "x \<in> trans_vars (main_auto_goal_edge_spec)" by blast
+      "x \<in> trans_vars (main_auto_goal_edge_spec)" |
+      "x \<in> trans_vars (main_auto_loop_spec)" by blast
     then show ?thesis 
     proof cases
       case 1
@@ -593,9 +598,12 @@ proof (rule equalityI; rule subsetI)
         have "(\<lambda>x.  x \<in> fold (\<union>) (map action_vars_spec actions) {} \<union> PropVar ` set init \<union> PropVar ` set goal) x" using 3 by blast
         ultimately
         show ?thesis unfolding nta_vars_def timed_automaton_net_spec_def all_vars_spec_def Let_def prod.case set_map by auto
-        qed
       qed
+    next
+      case 3
+      then show ?thesis unfolding main_auto_loop_spec_def trans_vars_def by simp
     qed
+  qed
 next
   fix x
   assume "x \<in> set (map fst nta_vars)"
@@ -766,6 +774,9 @@ next
          apply (subst list.set(2))
          apply (subst insert_is_Un)
          apply (rule UnI2)
+         apply (subst list.set)
+         apply (subst insert_is_Un)
+        apply (rule UnI1)
         unfolding list.set
         apply simp
         unfolding prod.case
@@ -1015,7 +1026,7 @@ lemma actual_locs_correct: "set all_ta_states = actual_locs"
         case main
         obtain trs where
           trs: "trs = (\<lambda>x. fst (snd (snd (snd (snd x))))) main_auto_spec" 
-          "trs = [main_auto_init_edge_spec, main_auto_goal_edge_spec]" unfolding main_auto_spec_def Let_def fst_conv snd_conv prod.case Let_def by simp
+          "trs = [main_auto_init_edge_spec, main_auto_goal_edge_spec, main_auto_loop_spec]" unfolding main_auto_spec_def Let_def fst_conv snd_conv prod.case Let_def by simp
         have x: "x \<in> {InitialLocation, Planning, GoalLocation}" using ls x main unfolding main_auto_spec_def Let_def by simp
         then consider "x = InitialLocation" | "x = Planning" | "x = GoalLocation" by blast
         hence "x \<in> trans_to_locs trs"
@@ -1035,6 +1046,7 @@ lemma actual_locs_correct: "set all_ta_states = actual_locs"
       assume "x \<in> \<Union> (trans_to_locs ` (\<lambda>x. fst (snd (snd (snd (snd x))))) ` set (main_auto_spec # map action_to_automaton_spec actions))"
       hence "x \<in> trans_locs main_auto_init_edge_spec
           \<or> x \<in> trans_locs main_auto_goal_edge_spec
+          \<or> x \<in> trans_locs main_auto_loop_spec
           \<or> (\<exists>act \<in> set actions. x \<in> trans_locs (start_edge_spec act))
           \<or> (\<exists>act \<in> set actions. x \<in> trans_locs (edge_2_spec act))
           \<or> (\<exists>act \<in> set actions. x \<in> trans_locs (edge_3_spec act))
@@ -1052,6 +1064,7 @@ lemma actual_locs_correct: "set all_ta_states = actual_locs"
       then consider
         "x \<in> trans_locs main_auto_init_edge_spec" |
         "x \<in> trans_locs main_auto_goal_edge_spec" |
+        "x \<in> trans_locs main_auto_loop_spec" |
         act where "act \<in> set actions" "x \<in> trans_locs (start_edge_spec act)" |
         act where "act \<in> set actions" "x \<in> trans_locs (edge_2_spec act)" |
         act where "act \<in> set actions" "x \<in> trans_locs (edge_3_spec act)" |
@@ -1077,15 +1090,22 @@ lemma actual_locs_correct: "set all_ta_states = actual_locs"
           by simp+
       next
         case 3
-        then show ?thesis unfolding trans_locs_def start_edge_spec_def Let_def prod.case using act_locs by auto
+        hence "x = GoalLocation" unfolding main_auto_loop_spec_def trans_locs_def Let_def prod.case by blast
+        then show ?thesis 
+          apply cases
+          unfolding main_auto_spec_def Let_def prod.case 
+          by simp+
       next
         case 4
-        then show ?thesis unfolding trans_locs_def edge_2_spec_def Let_def prod.case using act_locs by auto
+        then show ?thesis unfolding trans_locs_def start_edge_spec_def Let_def prod.case using act_locs by auto
       next
         case 5
-        then show ?thesis unfolding trans_locs_def edge_3_spec_def Let_def prod.case using act_locs by auto
+        then show ?thesis unfolding trans_locs_def edge_2_spec_def Let_def prod.case using act_locs by auto
       next
         case 6
+        then show ?thesis unfolding trans_locs_def edge_3_spec_def Let_def prod.case using act_locs by auto
+      next
+        case 7
         then show ?thesis unfolding trans_locs_def end_edge_spec_def Let_def prod.case using act_locs by auto
       qed
     qed
@@ -1524,7 +1544,7 @@ lemma actual_acts_correct: "actual_acts \<subseteq> set nta_actions"
            apply simp
           apply (elim imageE)
           subgoal for _ auto
-            unfolding main_auto_init_edge_spec_def main_auto_goal_edge_spec_def Let_def start_edge_spec_def end_edge_spec_def edge_2_spec_def edge_3_spec_def
+            unfolding main_auto_init_edge_spec_def main_auto_goal_edge_spec_def main_auto_loop_spec_def Let_def start_edge_spec_def end_edge_spec_def edge_2_spec_def edge_3_spec_def
             by auto
           done
         done
@@ -2250,6 +2270,8 @@ interpretation planning_sem: nta_temp_planning
   "Rat.of_int \<epsilon>"
   "set props"
   "set actions"
+  \<pi> 
+  1
   apply standard 
   subgoal using some_propositions unfolding List.card_set apply (induction props) by auto
   subgoal using some_actions unfolding List.card_set apply (induction actions) by auto
@@ -2259,9 +2281,10 @@ interpretation planning_sem: nta_temp_planning
   subgoal using domain_ref_fluents using fluent_imp_const_valid_dom by blast
   using domain_ref_fluents init_props goal_props at_start_inj at_end_inj snaps_disj vp pap nso by simp+
 
+
 find_theorems name: "abs_renum.urge_bisim.A.E"
 
-(* A is Graph_Defs for Bisimulation_Invariant of parts of the transition relation 
+(* A is Graph_Defs for the Bisimulation_Invariant of parts of the transition relation.
 A is the original graph combined with semantics. *)
 
 term "\<lambda>(L, s, u) (L', s', u'). step_u' abs_renum.sem L s u L' s' u'"
@@ -2472,10 +2495,10 @@ primcorec goal_run::"
 (* Just for testing *)
 definition "goal_state \<equiv> (GoalLocation # map Off actions, map_of (zip (map fst nta_vars) (map (fst o snd) nta_vars)), (\<lambda>x. 0))"
 
-definition plan_state_sequence::"('action location list \<times>
+definition plan_steps::"('action location list \<times>
     ('proposition variable \<Rightarrow> int option) \<times>
-    ('action clock, real) cval) stream" where
-"plan_state_sequence \<equiv>
+    ('action clock, real) cval) list" where
+"plan_steps \<equiv>
 let 
   htp_indices = [0..<length (htpl \<pi>)];
   apply_happs = map apply_and_delay htp_indices;
@@ -2483,11 +2506,17 @@ let
         |> (\<lambda>s. ext_seq' s start_and_init_delay) 
         |> (\<lambda>s. ext_seq'' s apply_happs)
         |> (\<lambda>s. ext_seq s [end_planning])
-in Stream.shift seq (goal_run (last seq))"
+in seq"
+
+definition plan_state_sequence::"('action location list \<times>
+    ('proposition variable \<Rightarrow> int option) \<times>
+    ('action clock, real) cval) stream" where
+"plan_state_sequence \<equiv> Stream.shift plan_steps (goal_run (last plan_steps))"
 
 lemma conv_invs:
   assumes "p < length (map (automaton_of \<circ> conv_automaton) actual_autos)"
-  shows "snd (snd (snd (map (automaton_of \<circ> conv_automaton) actual_autos ! p))) = conv_cc o (snd (snd (snd (map automaton_of actual_autos ! p))))"
+  shows "Simple_Network_Language.inv (map (automaton_of \<circ> conv_automaton) actual_autos ! p) = (\<lambda>x. map conv_ac (snd (snd (snd (map automaton_of actual_autos ! p))) x))"
+  apply (subst inv_def)
   apply (subst nth_map)
   using assms apply simp
   apply (subst nth_map)
@@ -2504,7 +2533,6 @@ lemma conv_invs:
     apply (subst automaton_of_def)
     apply (subst prod.case)+
     apply (subst snd_conv)+
-    apply (subst comp_def)
     apply (induction d)
      apply (subst list.map)
     unfolding default_map_of_def
@@ -2532,7 +2560,7 @@ lemma conv_invs:
     done
   done
 
-lemma no_invs: assumes "p < length actual_autos"
+lemma no_invs': assumes "p < length actual_autos"
   shows "snd (snd (snd (automaton_of (actual_autos ! p)))) = (\<lambda>x. [])"
 proof -
   have 1: "p' < length actions" if "p = Suc p'" for p'
@@ -2568,63 +2596,78 @@ proof -
   done
 qed
 
-lemma "abs_renum.urge_bisim.A.run (goal_run goal_state)"
-proof (coinduction rule: abs_renum.urge_bisim.A.run.coinduct)
-  case run
-  then show ?case 
-    apply (subst goal_run.ctr)
-    apply (subst goal_run.ctr)
-    apply (rule exI[of _ goal_state])
-    apply (rule exI[of _ goal_state])
-    apply (rule exI[of _ "goal_run goal_state"])
-    apply (rule conjI)
-     apply simp
-    apply (subst goal_state_def)
-    apply (subst prod.case)+
-    apply (subst goal_state_def)
-    apply (subst prod.case)+
-    apply (rule conjI)
-    defer
-     apply (rule disjI1)
-     apply (subst goal_run.ctr[symmetric])
-     apply simp
-    apply (rule step_u'.intros[of _ _ _ _ _ _ "(\<lambda>x. 0) \<oplus> 0"])
-    apply (subst abs_renum.sem_def)
-      apply (rule step_t)
-         apply (subst Simple_Network_Language.inv_def)
-         apply (subst TAG_def)
-         apply (rule allI)
-    subgoal for p
-      apply (rule impI)
-      apply (subst conv_invs)
-       apply simp
-      apply (subst clock_val_def)
-      unfolding cval_add_def
-      apply (subst add_0_right)
-      apply (subst nth_map)
-       apply simp
-      using no_invs by auto
-        apply (subst TAG_def)
-        apply simp
-       apply (subst TAG_def)
-       apply simp
-      apply (subst TAG_def)
-    subgoal
-    unfolding bounded_def
-    apply (intro conjI)
-     apply (subst dom_map_of_zip)
-      apply simp
-     apply (subst dom_map_of_conv_image_fst)
-     apply simp
-    apply (rule ballI)
-    subgoal for x
-      apply (subst (asm) dom_map_of_zip)
-       apply simp
-      apply (rule conjI)
-      try
+lemma no_invs: assumes "p < length (map (automaton_of \<circ> conv_automaton) actual_autos)"
+  shows "Simple_Network_Language.inv (map (automaton_of \<circ> conv_automaton) actual_autos ! p) = (\<lambda>x. [])"
+  apply (subst conv_invs[OF assms])
+  apply (subst nth_map)
+  using assms apply simp
+  apply (subst no_invs')
+  using assms by auto
 
 
-  qed
+lemma cval_add_0: "z\<oplus>(0::real) = z" unfolding cval_add_def 
+  by simp
+
+lemma step_t_possible:
+  assumes "Simple_Network_Language.bounded (map_of nta_vars) y"
+  shows "abs_renum.sem \<turnstile> \<langle>x, y, z\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>x, y, z\<rangle>"
+  apply (subst (2) cval_add_0[symmetric])
+  unfolding abs_renum.sem_def
+  apply (rule step_t)
+  subgoal unfolding TAG_def using no_invs by simp
+  subgoal unfolding TAG_def by simp
+  subgoal unfolding TAG_def by blast
+  subgoal unfolding TAG_def using assms by simp
+  done
+
+lemmas non_t_step_intro = step_t_possible[THEN step_u'.intros, rotated, rotated]
+
+find_theorems name: "steps_append"
+
+definition exec_state_to_loc_list::"'action set \<Rightarrow> 'action location list" where
+"exec_state_to_loc_list S \<equiv> 
+let es_to_loc = (\<lambda>a. if a \<in> S then Running a else Off a)
+in (Planning # map es_to_loc actions)"
+
+definition prop_state_to_var_asmt::"'proposition set \<Rightarrow> ('proposition \<Rightarrow> nat) \<Rightarrow> 'proposition variable \<Rightarrow> int option" where
+"prop_state_to_var_asmt P PI p \<equiv> case p of
+  PropVar p \<Rightarrow> if (p \<in> P) then Some 1 else Some 0
+| PropLock p \<Rightarrow> Some (PI p)"
+
+
+lemma apply_happening_steps: 
+  assumes "n < length (htpl \<pi>)"
+      and "t = timed_index \<pi> n"
+      and "L = exec_state_to_loc_list (planning_sem.ES t)"
+      and "v = prop_state_to_var_asmt (planning_sem.plan_state_seq n) (planning_sem.invariant_state t)"
+      and "c = undefined"
+    shows "abs_renum.urge_bisim.A.steps (apply_nth_happening n (L, v, c))"
+  sorry
+
+lemma "abs_renum.urge_bisim.A.steps ((undefined, undefined, undefined) # (undefined, undefined, undefined) # undefined)"
+  apply (rule abs_renum.urge_bisim.A.steps.intros)
+   apply (subst prod.case)+
+  apply (rule non_t_step_intro)
+  sorry
+
+
+lemma plan_steps_are_steps: "abs_renum.urge_bisim.A.steps plan_steps"
+  unfolding plan_steps_def Let_def
+  sorry
+
+
+lemma end_of_steps_is_run: "abs_renum.urge_bisim.A.run (goal_run (last plan_steps))" sorry
+
+lemma "abs_renum.urge_bisim.A.run (goal_run goal_state)" sorry
+
+
+qed
+
+lemma "abs_renum.urge_bisim.A.steps (undefined # undefined # undefined)"
+  find_theorems intro name: "steps"
+  apply (rule abs_renum.urge_bisim.A.stepsI)
+  using abs_renum.urge_bisim.A.steps.intros
+  sorry
 
 lemma state_seq_sat_goal: "ev (holds (\<lambda>(L, s, _). check_sexp (sexp.loc 0 GoalLocation) L (the \<circ> s))) plan_state_sequence"
   find_theorems intro name: "ev" sorry
@@ -2633,22 +2676,14 @@ find_theorems name: "abs_renum*steps"
 
 lemma state_seq_is_run: "abs_renum.urge_bisim.A.run plan_state_sequence"
   find_theorems name: "run*con"
-proof (rule abs_renum.urge_bisim.A.extend_run'[where zs = plan_state_sequence])
-proof (coinduction rule: abs_renum.urge_bisim.A.run.coinduct)
-  case run
-  then show ?case sorry
-qed
+  apply (rule abs_renum.urge_bisim.A.extend_run'[where zs = plan_state_sequence])
+  unfolding plan_state_sequence_def
+  sorry
 
 find_theorems name: "Simple_Network_Language_Model_Checking.step_u'.intros"
 
 lemma "abs_renum.sem, abs_renum.a\<^sub>0 \<Turnstile> form"
 proof -
-  have "abs_renum.urge_bisim.A.run plan_state_sequence"
-  proof (coinduction rule: abs_renum.urge_bisim.A.run.coinduct)
-    case run
-    then show ?case sorry
-  qed
-  find_theorems name: "Stream*induc"
   show "?thesis" unfolding form_alt 
     unfolding models_def formula.case
     find_theorems name: "abs_renumEx_ev"
