@@ -167,6 +167,7 @@ locale tp_nta_reduction_spec =
       and infinite_actions: "infinite (UNIV::'action set)"
       and infinite_propositions: "infinite (UNIV::'proposition set)"
       and distinct_props: "distinct props"
+      and distinct_actions: "distinct actions"
       and some_actions: "0 < length actions"
       and some_propositions: "0 < length props"
       and eps_range: "0 \<le> \<epsilon>"
@@ -466,7 +467,7 @@ let
   prop_var_var_defs = map (\<lambda>p . (PropVar p, 0::int, 1::int)) props;
 
   prop_var_defs = (prop_lock_var_defs @ prop_var_var_defs) |> filter (\<lambda>x. fst x \<in> vars_occ);
-  acts_active_var = (ActsActive, 0, from_nat (length actions)::int);
+  acts_active_var = (ActsActive, 0, int (length actions));
   planning_lock_var = (PlanningLock, 0, 2::int)
 in
   [acts_active_var, planning_lock_var] @ prop_var_defs"

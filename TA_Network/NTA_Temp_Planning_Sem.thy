@@ -402,7 +402,7 @@ definition exec_time'::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" wh
 
 
  
-lemma a_not_in_b_last_unchanged: "(t, a) \<notin> happ_seq\<Longrightarrow> last_snap_exec' a t = last_snap_exec a t"
+lemma a_not_in_b_last_unchanged: "(t, a) \<notin> happ_seq \<Longrightarrow> last_snap_exec' a t = last_snap_exec a t"
 proof -
   assume "(t, a) \<notin> happ_seq"
   have 1: "(GREATEST t'. t' < t \<and> (t', a) \<in> happ_seq) = (GREATEST t'. t' \<le> t \<and> (t', a) \<in> happ_seq)"
