@@ -981,13 +981,24 @@ definition "ta_locs \<equiv> map trans_to_locs ta_trans"
 definition actual_locs where
 "actual_locs \<equiv> fold (\<union>) ta_locs {}"
 
+lemma some_actual_autos: "0 < length actual_autos"
+  unfolding actual_autos_def ntas_def timed_automaton_net_spec_def by simp
 
-lemma actual_autos_alt: "set actual_autos = (\<lambda>a. snd (snd a)) ` set (main_auto_spec # map action_to_automaton_spec actions)"
+lemma actual_autos_alt: "actual_autos = map (snd o snd) (main_auto_spec # map action_to_automaton_spec actions)"
+  unfolding actual_autos_def ntas_def Let_def timed_automaton_net_spec_def prod.case
+  apply -
+  apply (subst map_map[symmetric])
+  apply (subst map_snd_zip)
+   apply simp
+  by simp
+
+lemma actual_autos_alt_set: "set actual_autos = (\<lambda>a. snd (snd a)) ` set (main_auto_spec # map action_to_automaton_spec actions)"
   unfolding actual_autos_def ntas_def Let_def timed_automaton_net_spec_def prod.case comp_apply set_map 
     apply -
     apply (subst image_image[symmetric, of _ snd])
     apply (subst zip_range_id, simp)
   by simp
+
 
 lemma actual_locs_correct: "set all_ta_states = actual_locs" 
   proof -
@@ -2507,7 +2518,9 @@ in seq"
 definition plan_state_sequence::"('action location list \<times>
     ('proposition variable \<Rightarrow> int option) \<times>
     ('action clock, real) cval) stream" where
-"plan_state_sequence \<equiv> Stream.shift plan_steps (goal_run (last plan_steps))"
+"plan_state_sequence \<equiv> plan_steps @- (goal_run (last plan_steps))"
+
+
 
 (* To do: move *)
 
@@ -2548,12 +2561,34 @@ proof -
     apply (subst 1)
     unfolding set_map ..
 qed
-  
+
+lemma conv_committed: assumes "p < length (map (automaton_of o conv_automaton) actual_autos)"
+  shows "committed (map (automaton_of \<circ> conv_automaton) actual_autos ! p) = committed (map automaton_of actual_autos ! p)"
+  apply (subst nth_map)
+  using assms apply simp
+  apply (subst nth_map)
+  using assms apply simp
+  apply (cases "actual_autos ! p")
+  subgoal for a b c d
+    apply (rule ssubst[of "actual_autos ! p"])
+     apply simp
+    unfolding comp_apply
+    unfolding conv_automaton_def automaton_of_def committed_def prod.case fst_conv ..
+  done
+
+lemma no_committed: 
+  assumes "p < length actual_autos"
+  shows "committed (map automaton_of actual_autos ! p) = {}"
+  using assms
+  unfolding actual_autos_alt automaton_of_def committed_def main_auto_spec_def Let_def action_to_automaton_spec_def
+  apply (subst list.map)
+  apply (subst map_map)
+  unfolding comp_apply unfolding 
 
 lemma conv_invs:
   assumes "p < length (map (automaton_of \<circ> conv_automaton) actual_autos)"
-  shows "Simple_Network_Language.inv (map (automaton_of \<circ> conv_automaton) actual_autos ! p) = (\<lambda>x. map conv_ac (snd (snd (snd (map automaton_of actual_autos ! p))) x))"
-  apply (subst inv_def)
+  shows "Simple_Network_Language.inv (map (automaton_of \<circ> conv_automaton) actual_autos ! p) = (\<lambda>x. map conv_ac (inv (map automaton_of actual_autos ! p) x))"
+  apply (subst inv_def)+
   apply (subst nth_map)
   using assms apply simp
   apply (subst nth_map)
@@ -2598,7 +2633,7 @@ lemma conv_invs:
   done
 
 lemma no_invs': assumes "p < length actual_autos"
-  shows "snd (snd (snd (automaton_of (actual_autos ! p)))) = (\<lambda>x. [])"
+  shows "inv (automaton_of (actual_autos ! p)) = (\<lambda>x. [])"
 proof -
   have 1: "p' < length actions" if "p = Suc p'" for p'
     using assms that
@@ -2613,7 +2648,7 @@ proof -
   unfolding comp_apply
   apply (subst list.map)
   apply (subst map_map)
-  unfolding snd_conv comp_def
+  unfolding snd_conv comp_def inv_def
   apply (cases p)
    apply simp
    apply (subst automaton_of_def)
@@ -2634,10 +2669,11 @@ proof -
 qed
 
 lemma no_invs: assumes "p < length (map (automaton_of \<circ> conv_automaton) actual_autos)"
-  shows "Simple_Network_Language.inv (map (automaton_of \<circ> conv_automaton) actual_autos ! p) = (\<lambda>x. [])"
+  shows "inv (map (automaton_of \<circ> conv_automaton) actual_autos ! p) = (\<lambda>x. [])"
   apply (subst conv_invs[OF assms])
   apply (subst nth_map)
   using assms apply simp
+  using no_invs'
   apply (subst no_invs')
   using assms by auto
 
@@ -2854,7 +2890,7 @@ qed
       
 lemma main_auto_init_edge_spec_simp: "main_auto_init_edge_spec = (InitialLocation, Simple_Expressions.bexp.eq (var PlanningLock) (exp.const 0), [], Sil STR '''', (PlanningLock, exp.const 1) # (ActsActive, exp.const 0) # map (set_prop_ab 1) init, [], Planning)"
   unfolding main_auto_init_edge_spec_def Let_def ..
-
+(* 
 lemma step_int_simp: "x = (l, b, g, Sil a, f, r, l') \<Longrightarrow>
   TRANS ''silent'' \<bar> (l, b, g, Sil a, f, r, l') \<in> Simple_Network_Language.trans (N ! p) \<Longrightarrow>
   ''committed'' \<bar> l \<in> committed (N ! p) \<or> (\<forall>p<length N. L ! p \<notin> committed (N ! p)) \<Longrightarrow>
@@ -2865,7 +2901,7 @@ lemma step_int_simp: "x = (l, b, g, Sil a, f, r, l') \<Longrightarrow>
   ''range'' \<bar> p < length L \<Longrightarrow> ''new loc'' \<bar> L' = L[p := l'] \<Longrightarrow>
   ''new valuation'' \<bar> u' = [r\<rightarrow>0]u \<Longrightarrow> ''is_upd'' \<bar> is_upds s f s' \<Longrightarrow>
   ''bounded'' \<bar> Simple_Network_Language.bounded B s' \<Longrightarrow> 
-  (broadcast, N, B) \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow>\<^bsub>Internal a\<^esub> \<langle>L', s', u'\<rangle>" using step_int[no_vars]
+  (broadcast, N, B) \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow>\<^bsub>Internal a\<^esub> \<langle>L', s', u'\<rangle>" apply (rule step_int) *)
 
 lemma initial_steps_are_steps: "abs_renum.urge_bisim.A.steps (ext_seq' [abs_renum.a\<^sub>0] start_and_init_delay)"
 proof -
@@ -2890,7 +2926,52 @@ proof -
         show "abs_renum.sem \<turnstile> \<langle>l, v, c\<rangle> \<rightarrow>\<^bsub>Internal (STR '''')\<^esub> \<langle>l1, v1, c1\<rangle>"
           unfolding abs_renum.sem_def
         proof (rule step_u.step_int)
-          show "TRANS ''silent'' \<bar> (InitialLocation, Simple_Expressions.bexp.eq (var PlanningLock) (exp.const 0), [], Sil STR '''', (PlanningLock, exp.const 1) # (ActsActive, exp.const 0) # map (set_prop_ab 1) init, [], Planning) \<in> Simple_Network_Language.trans (map (automaton_of \<circ> conv_automaton) actual_autos ! 0)" sorry
+          show "TRANS ''silent'' \<bar> (InitialLocation, Simple_Expressions.bexp.eq (var PlanningLock) (exp.const 0), [], Sil STR '''', (PlanningLock, exp.const 1) # (ActsActive, exp.const 0) # map (set_prop_ab 1) init, [], Planning) \<in> Simple_Network_Language.trans (map (automaton_of \<circ> conv_automaton) actual_autos ! 0)" 
+            apply (subst TAG_def)
+            apply (subst nth_map)
+             apply (subst actual_autos_def)
+             apply (subst ntas_def)
+            apply (subst timed_automaton_net_spec_def)
+            unfolding Let_def prod.case
+             apply simp
+             apply (subst actual_autos_def)
+             apply (subst ntas_def)
+            apply (subst timed_automaton_net_spec_def)
+            unfolding Let_def prod.case
+            apply (subst nth_map)
+             apply simp
+            find_theorems name: "List.upt_"
+            apply (subst upt_conv_Cons)
+             apply simp
+            apply (subst nth_zip)
+              apply simp
+             apply simp
+            apply (subst nth_Cons_0)+
+            unfolding main_auto_spec_def Let_def prod.case comp_apply snd_conv
+            unfolding conv_automaton_def prod.case
+            unfolding automaton_of_def prod.case
+            unfolding Simple_Network_Language.trans_def fst_conv snd_conv
+            unfolding set_map
+            apply (subst list.set)
+            apply (subst image_insert)
+            apply (subst main_auto_init_edge_spec_def)
+            unfolding Let_def prod.case
+            by simp
+            
+          show "''committed'' \<bar> InitialLocation \<in> committed (map (automaton_of \<circ> conv_automaton) actual_autos ! 0) \<or> (\<forall>p<length (map (automaton_of \<circ> conv_automaton) actual_autos). l ! p \<notin> committed (map (automaton_of \<circ> conv_automaton) actual_autos ! p))"
+            apply (subst TAG_def)
+            apply (subst conv_committed)
+            using some_actual_autos apply simp
+            apply (rule disjI2)
+            apply (intro allI impI)
+            subgoal for p
+            apply (subst conv_committed)
+            using some_actual_autos apply simp
+      
+            apply (subst nth_map)
+            using some_actual_autos apply simp
+            using actual_autos_alt
+
         qed sorry
         show "Simple_Network_Language.bounded (map_of nta_vars) v"
           using arc unfolding abs_renum.a\<^sub>0_def

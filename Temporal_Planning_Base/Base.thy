@@ -359,6 +359,16 @@ lemma ext_seq'_seq_apply_is_ext_seq: "ext_seq' xs (seq_apply fs) = ext_seq xs fs
     done
   done
 
+lemma ext_seq''_alt: "ext_seq'' xs fs = foldl ext_seq' xs fs"
+  apply (induction fs arbitrary: xs)
+   apply (induction xs)
+    apply simp
+  apply simp
+  subgoal for f fs xs
+    apply (subst foldl.simps)
+    apply (subst ext_seq''.simps)
+    by simp
+  done
 (* 
 lemma ext_seq'_assoc: "ext_seq' (ext_seq' xs f) g = ext_seq' xs (\<lambda>x. ext_seq' (f x) g)"
   apply (induction xs)
