@@ -137,6 +137,63 @@ lemma set_list_of:
   "set (list_of x 0) = {}"
   unfolding list_of_def set_list_of' by auto
 
+lemma nth_list_of: 
+  assumes "n < m"
+  shows "list_of x m ! n = x"
+proof -
+  find_theorems name: "set*nth"
+  from assms
+  have "0 < m" by simp
+  hence "set (list_of x m) = {x}" using set_list_of by simp
+  hence "\<forall>y \<in> set (list_of x m). y = x" by blast
+  with all_set_conv_all_nth
+  have "\<forall>i<length (list_of x m). (list_of x m ! i) = x" 
+    by simp
+  with assms 
+  show ?thesis unfolding length_list_of by simp 
+qed
+
+lemma list_of'_append: "(list_of' x n xs) @ ys = list_of' x n (xs @ ys)"
+  apply (induction n arbitrary: xs ys)
+   apply simp
+  subgoal for n xs ys
+    by simp
+  done
+
+find_theorems "Suc ?x + ?y"
+
+lemma list_of'_Suc': "list_of' x (Suc n) [] = (list_of' x n []) @ [x]"
+    apply (subst list_of'.simps)
+    apply (subst (2) append_Nil[symmetric])
+    apply (subst list_of'_append)
+  by (rule HOL.refl)
+
+lemma list_of'_1: "list_of' x 1 [] = [x]"
+  by simp
+
+lemma list_of'_append_same: "list_of' x n [] @ list_of' x m [] = list_of' x (n + m) []"
+proof (induction m arbitrary: n)
+  case 0
+  then show ?case by simp
+next
+  case (Suc m)
+  show ?case 
+    apply (subst add_Suc_shift[symmetric])
+    apply (subst add_Suc)
+    apply (subst list_of'_Suc')
+    apply (subst list_of'_Suc')
+    apply (subst Suc.IH[symmetric])
+    by simp
+qed
+
+lemma list_of_Suc: "list_of x (Suc n) = x # list_of x n"
+proof -
+  have "list_of' x (Suc n) [] = list_of' x 1 [] @ list_of' x n []"
+    apply (subst list_of'_append_same)
+    by simp
+  thus ?thesis unfolding list_of_def list_of'_1
+    by simp
+qed
 
 (* needs a different name *)
 (* Turns a list into a list of functions, by applying a function with two arguments to each member. 
