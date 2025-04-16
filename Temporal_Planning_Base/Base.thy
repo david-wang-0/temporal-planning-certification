@@ -381,12 +381,12 @@ lemma fold_map_is_seq_apply: "fold_map f ys xs = seq_apply (map f ys) xs"
     by blast
   done
 
+
 fun ext_seq::"'a list \<Rightarrow> ('a \<Rightarrow> 'a) list \<Rightarrow> 'a list" where
 "ext_seq xs [] = xs" |
 "ext_seq [] fs = []" |
 "ext_seq [x] fs = x # seq_apply fs x" |
 "ext_seq (x#xs) fs = x # ext_seq xs fs"
-
 
 fun ext_seq'::"'s list \<Rightarrow> ('s \<Rightarrow> 's list) \<Rightarrow> 's list" where
 "ext_seq' [] f = []" |
@@ -396,6 +396,36 @@ fun ext_seq'::"'s list \<Rightarrow> ('s \<Rightarrow> 's list) \<Rightarrow> 's
 fun ext_seq''::"'s list \<Rightarrow> ('s \<Rightarrow> 's list) list \<Rightarrow> 's list" where
 "ext_seq'' s [] = s" |
 "ext_seq'' s (f#fs) = ext_seq'' (ext_seq' s f) fs"
+
+fun seq_apply''::"('a \<Rightarrow> 'a list) list \<Rightarrow> 'a \<Rightarrow> 'a list" where
+"seq_apply'' [] x = []" |
+"seq_apply'' (f#fs) x = ext_seq'' (f x) fs" 
+
+lemma ext_seq_alt: 
+  assumes "\<exists>x' xs'. xs = x' # xs'"
+shows "ext_seq (xs::'x list) fs = xs @ seq_apply fs (last xs)"
+  using assms
+  apply (induction xs)
+   apply simp
+  subgoal for x xs'
+    apply (induction xs')
+     apply (cases fs)
+      apply simp
+    apply simp
+    subgoal for x' xs''
+      apply (cases fs)
+       apply simp
+      subgoal for f fs'
+        apply (induction xs'')
+         apply simp
+        subgoal for x'' xs'''
+          by simp
+        done
+      done
+    done
+  done
+
+
 
 lemma ext_seq'_seq_apply_is_ext_seq: "ext_seq' xs (seq_apply fs) = ext_seq xs fs"
   apply (induction xs)
@@ -426,6 +456,12 @@ lemma ext_seq''_alt: "ext_seq'' xs fs = foldl ext_seq' xs fs"
     apply (subst ext_seq''.simps)
     by simp
   done
+
+lemma seq_apply''_alt:
+  "seq_apply'' [] x = []"
+  "seq_apply'' (f#fs) x = foldl ext_seq' (f x) fs"
+  by (simp add: ext_seq''_alt)+
+
 (* 
 lemma ext_seq'_assoc: "ext_seq' (ext_seq' xs f) g = ext_seq' xs (\<lambda>x. ext_seq' (f x) g)"
   apply (induction xs)

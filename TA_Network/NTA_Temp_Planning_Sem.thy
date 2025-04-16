@@ -379,6 +379,8 @@ definition active_count where
 
 definition "invariant_state t p \<equiv> \<Sum>{active_count t a | a. p \<in> over_all a}"
 
+definition "all_active_count t \<equiv> \<Sum>{active_count t a|a. True}"
+
 subsubsection \<open>Execution times\<close>
 
 definition pt::"'snap_action \<Rightarrow> ('time \<Rightarrow> 'time \<Rightarrow> bool) \<Rightarrow> 'time \<Rightarrow> 'time" where
@@ -488,7 +490,7 @@ lemma updated_exec_time_and_next:
   shows "exec_time a (time_index \<pi> (Suc l)) = (exec_time' a (time_index \<pi> l)) + (time_index \<pi> (Suc l) - time_index \<pi> l)"
   using subseq_last_snap_exec[OF assms] exec_time_def exec_time'_def by simp
 
-
+(* 
 lemma exec_time_and_epsilon:
   assumes nm: "mutex_valid_happ_seq"
       and s_at_t: "(t, a) \<in> happ_seq"
@@ -620,15 +622,12 @@ next
   have "\<epsilon> < t - last_snap_exec b t" unfolding 4
     by auto
   thus ?thesis unfolding exec_time_def by simp
-qed
+qed *)
 
-(* 
+
 lemma exec_time_and_duration:
-  assumes "at_end a \<in> B t"
+  assumes "(t, at_end a) \<in> happ_seq"
       and a_in_actions: "a \<in> actions"
-      and nso: "nso_\<pi>"
-      and dp: "dp_\<pi>"
-      and pap: "pap_\<pi>"
   shows "\<exists>t' d. (a, t', d) \<in> ran \<pi> \<and> exec_time (at_start a) t = d"
 proof -
   have "\<exists>!(s,d). (a, s, d) \<in> ran \<pi> \<and> t = s + d" using at_end_in_happ_seqE' assms(1,2) nso dp pap by simp
@@ -681,6 +680,6 @@ proof -
   have "Least (\<lambda>t'. B t' \<noteq> {}) = ti 0" by (meson Least_equality not_le_imp_less)
   with 1
   show ?thesis unfolding exec_time_def pt_def by (auto simp: Let_def)
-qed  *)
+qed  
 end
 end
