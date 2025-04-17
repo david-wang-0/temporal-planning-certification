@@ -2,6 +2,7 @@ theory Temporal_Plans
   imports Base "Difference_Bound_Matrices.DBM"
 begin
 
+
 datatype ('t) lower_bound =
   GT 't |
   GE 't

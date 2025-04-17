@@ -174,6 +174,7 @@ locale tp_nta_reduction_spec =
       and at_start_inj: "inj_on at_start (set actions)"
       and at_end_inj: "inj_on at_end (set actions)"
       and snaps_disj: "at_start ` (set actions) \<inter> at_end ` (set actions) = {}"
+      and over_all_distinct: "\<forall>a \<in> set actions. distinct (over_all a)"
 begin
 
 subsection \<open>Abbreviations for encoding propositions into clocks\<close>
@@ -255,7 +256,7 @@ let
 
   start_snap = at_start a;
   
-  guard = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec start_snap);
+  guard = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec start_snap) @ map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec start_snap);
   
   not_locked_check = map (is_prop_lock_ab 0) (dels start_snap);
   pre_check = map (is_prop_ab 1) (pre start_snap);
@@ -299,7 +300,7 @@ definition edge_3_spec::"'action \<Rightarrow> 'action location \<times> ('propo
 let
   end_snap = at_end a;
   
-  int_clocks = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec end_snap);
+  int_clocks = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec end_snap) @ map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec end_snap);
 
   u_dur_const = u_dur_spec a;
   guard = l_dur_spec a @ u_dur_spec a @ int_clocks;
@@ -308,7 +309,7 @@ let
   
   resets = [ActEnd a]
 in 
-  (Running a, bexp.true, guard, Sil (STR ''''), [], resets, EndInstant a)
+  (Running a, bexp.true, guard, Sil (STR ''''), unlock_invs, resets, EndInstant a)
 "
 
 definition end_edge_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where

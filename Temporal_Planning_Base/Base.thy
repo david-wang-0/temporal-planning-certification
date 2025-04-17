@@ -497,5 +497,4 @@ fun get_or_default::"'a option \<Rightarrow> 'a \<Rightarrow> 'a" where
 "get_or_default (Some x) _ = x"
 
 
-
 end
