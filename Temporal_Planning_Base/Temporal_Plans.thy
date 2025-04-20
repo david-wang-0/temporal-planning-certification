@@ -1251,6 +1251,30 @@ proof (rule notI)
   show "False" by simp
 qed
 
+subsubsection \<open>Finite Plans\<close>
+
+text \<open>Finite happening sequences\<close>
+
+lemma finite_acts_imp_finite_happ_seq:
+  assumes "finite (ran \<pi>)"
+    shows "finite (plan_happ_seq)"
+proof -
+ have 1: "finite ((\<lambda>(a, t, d). (t, at_start a)) ` (ran \<pi>))" 
+    "finite ((\<lambda>(a, t, d). (t + d, at_end a)) ` (ran \<pi>))"
+   using assms by simp+
+  moreover
+  have "(\<lambda>(a, t, d). (t, at_start a)) ` (ran \<pi>) = {(t, at_start a) |a t d. (a, t, d) \<in> ran \<pi>}" by force
+  moreover
+  have " (\<lambda>(a, t, d). (t + d, at_end a)) ` (ran \<pi>)  = {(t + d, at_end a) |a t d. (a, t, d) \<in> ran \<pi>}" by force
+  ultimately
+  show "finite plan_happ_seq" unfolding plan_happ_seq_def by auto
+qed
+
+
+lemma finite_happ_seq:
+  assumes finite_plan
+  shows "finite plan_happ_seq"
+  using finite_acts_imp_finite_happ_seq assms finite_ran finite_plan_def by blast
 
 text \<open>Indexing of timepoints and such with respect to a finite plan\<close>
 

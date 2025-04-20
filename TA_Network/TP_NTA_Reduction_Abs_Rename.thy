@@ -2293,13 +2293,11 @@ interpretation planning_sem: nta_temp_planning
 (* Invariants of actions whose index is lower than n and are scheduled at t 
     have been deactivated. In other words, the parts of their end snap-actions that
     deactivate invariants have been executed *)
-definition "invariant_state' t p n \<equiv> planning_sem.invariant_state t p 
+definition "partially_updated_locked_before t p n \<equiv> planning_sem.locked_before t p 
 - \<Sum>{i | i a. i < n \<and> a = actions ! i 
             \<and> p \<in> set (over_all a) \<and> (t, at_end a) \<in> planning_sem.happ_seq 
             \<and> (t, at_start a) \<notin> planning_sem.happ_seq}"
 
-(* Starts of actions ... activated *)
-definition "invariant_state'' t p n \<equiv> undefined"
 
 find_theorems name: "abs_renum.urge_bisim.A.E"
 
@@ -3526,17 +3524,19 @@ lemma enter_end_instant_okay:
       and "t = htpl \<pi> ! l"
       and end_scheduled: "(t, at_end (actions ! n)) \<in> planning_sem.happ_seq"
       and start_not_scheduled: "(t, at_start (actions ! n)) \<notin> planning_sem.happ_seq"
+
       and true_props: "\<forall>p \<in> set props. p \<in> M l \<and> PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (1::int)"
       and false_props: "\<forall>p \<in> set props. p \<notin> M l \<and> PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some 0"
-      and locked_props: "\<forall>p \<in> set props. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> (\<exists>x. v (PropLock p) = Some (int_of_nat (invariant_state' t p n)))"
+      and locked_props: "\<forall>p \<in> set props. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> (\<exists>x. v (PropLock p) = Some (int_of_nat (partially_updated_locked_before t p n)))"
       and active_count: "v ActsActive = Some (int_of_nat (planning_sem.all_active_count t))"
       and v_bounded: "bounded (map_of nta_vars) v"
       and planning_state: "v PlanningLock = Some 1"
 
-      and end_snap_executed_time: "\<forall>i < n. 
-            (t, at_end (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq 
+      and end_snap_executed_time: 
+          "\<forall>i < n. (t, at_end (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq 
             \<longrightarrow> c (ActEnd (actions ! i)) = (0::real)"
-      and end_snap_not_executed_time: "\<forall>i < length actions. n \<le> i \<or> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<or> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      and end_snap_not_executed_time: 
+          "\<forall>i < length actions. n \<le> i \<or> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<or> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
             \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
       and start_snap_time: "\<forall>i < length actions. c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
 
@@ -3770,7 +3770,7 @@ lemma enter_end_instants_okay:
       and "s = (L, v, c)"
       and "\<forall>p \<in> set props. p \<in> M n \<longrightarrow> v (PropVar p) = Some 1"
       and "\<forall>p \<in> set props. p \<notin> M n \<longrightarrow> v (PropVar p) = Some 0"
-      and "\<forall>p \<in> set props. \<exists>x. v (PropLock p) = Some (planning_sem.invariant_state t p)"
+      and "\<forall>p \<in> set props. \<exists>x. v (PropLock p) = Some (planning_sem.locked_before t p)"
       and "end_indices = filter (\<lambda>n. at_end (actions ! n) \<in> h \<and> at_start (actions ! n) \<notin> h) [0..<length actions]"
     shows "abs_renum.urge_bisim.A.steps (s # enter_end_instants end_indices s)"
   sorry
