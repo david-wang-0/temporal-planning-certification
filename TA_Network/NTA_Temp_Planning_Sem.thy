@@ -96,7 +96,19 @@ definition "dur_bounds_sat = satisfies_duration_bounds lower upper"
 
 definition "app_effs \<equiv> apply_effects adds dels"
 
+definition "inv_seq \<equiv> plan_inv_seq \<pi> over_all"
+
+definition "plan_invs_before t \<equiv> invs_at inv_seq t"
+
 definition "plan_state_seq \<equiv> SOME MS. valid_state_seq MS"
+
+definition "action_list \<equiv> SOME xs. set xs = actions \<and> distinct xs"
+
+lemma set_action_list: "set action_list = actions"
+  unfolding action_list_def using finite_actions[THEN finite_distinct_list, THEN someI_ex] by blast
+
+lemma distinct_action_list: "distinct action_list"
+  unfolding action_list_def using finite_actions[THEN finite_distinct_list, THEN someI_ex] by blast
 
 lemma plan_state_seq_valid: "valid_state_seq plan_state_seq"
   using vp unfolding valid_plan_def Let_def  valid_state_seq_def 
@@ -105,6 +117,8 @@ lemma plan_state_seq_valid: "valid_state_seq plan_state_seq"
   apply -
   apply (rule  Hilbert_Choice.someI_ex[where P = valid_state_seq])
   by blast
+
+lemmas plan_state_seq_props = plan_state_seq_valid[simplified valid_state_seq_def valid_state_sequence_def]
 
 
 lemma at_start_in_happ_seqE'':
@@ -432,31 +446,6 @@ qed
 
 subsubsection \<open>Invariant states\<close>
 
-definition locked_by where
-"locked_by p \<equiv> {a \<in> actions. p \<in> over_all a}"
-
-(* Move to other locale *)
-definition open_active_count where
-"open_active_count t a \<equiv> card {s. s < t \<and> (s, at_start a) \<in> happ_seq} - card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
-
-(* Currently the number of active instances is either 0 or 1. I.e. this is equivalent to the sequence of
-  execution states *)
-
-definition "locked_before t p \<equiv> \<Sum>(open_active_count t ` locked_by p)"        
-
-definition open_closed_active_count where
-"open_closed_active_count t a \<equiv> card {s. s < t \<and> (s, at_start a) \<in> happ_seq} - (card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq} - (if (t, at_start a) \<in> happ_seq then 1 else 0))"
-
-definition "locked_in_instant t p \<equiv> \<Sum>(open_closed_active_count t ` locked_by p)"              
-
-definition closed_active_count where
-"closed_active_count t a \<equiv> card {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq} - card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}"
-
-definition "locked_after t p \<equiv> \<Sum>(closed_active_count t ` locked_by p)"        
-
-definition "all_open_active_count t \<equiv> \<Sum>{open_active_count t a|a. True}"
-
-find_theorems name: "Set*size"
 
 lemma finite_htps: "finite (htps \<pi>)"
   using finite_htps valid_plan_finite[OF vp] by blast
@@ -483,389 +472,476 @@ qed
 lemma plan_durations: "(a, t, d) \<in> ran \<pi> \<Longrightarrow> 0 \<le> d" using valid_plan_durs[OF vp] unfolding durations_ge_0_def by blast
 lemmas plan_overlap_cond = nso[THEN no_self_overlap_ran]
 
-lemma open_active_count_ran:
-  assumes a_in_acts: "a \<in> actions" 
-  shows "open_active_count t a \<in> {0, 1}"
+context
+  fixes t::'time
+    and a::'action
+  assumes a_in_acts: "a \<in> actions"
+begin
+
+lemma finite_open_started: "finite {s'. s' < t \<and> (s', at_start a) \<in> happ_seq}" using finite_start_tps by auto
+lemma finite_closed_started: "finite {s'. s' \<le> t \<and> (s', at_start a) \<in> happ_seq}" using finite_start_tps by auto
+lemma finite_open_ended: "finite {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" using finite_end_tps by auto
+lemma finite_closed_ended: "finite {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}" using finite_end_tps by auto
+(* Maybe it is a bad idea to put these definitions into a block with the "a \<in> actions" assumption *)
+subsection \<open>Counting the various sets of active actions\<close>
+definition open_active_count where
+"open_active_count \<equiv> card {s. s < t \<and> (s, at_start a) \<in> happ_seq} - card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
+
+definition closed_active_count where
+"closed_active_count \<equiv> card {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq} - card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}"
+
+definition open_closed_active_count where
+"open_closed_active_count \<equiv> open_active_count + (if (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq then 1 else 0)"
+
+subsubsection \<open>Properties of these sets\<close>
+
+definition open_start_list where "open_start_list \<equiv> sorted_list_of_set {s. s < t \<and> (s, at_start a) \<in> happ_seq}"
+definition closed_start_list where "closed_start_list \<equiv> sorted_list_of_set {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq}"
+
+definition open_end_list where "open_end_list \<equiv> sorted_list_of_set {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
+definition closed_end_list where "closed_end_list \<equiv> sorted_list_of_set {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}"
+   
+lemma open_start_list_len: "length (open_start_list) = card {s. s < t \<and> (s, at_start a) \<in> happ_seq}" unfolding open_start_list_def length_sorted_list_of_set by blast
+lemma open_start_list_sorted: "sorted (open_start_list)" using sorted_sorted_list_of_set open_start_list_def by simp
+lemma open_start_list_distinct: "distinct (open_start_list)" using distinct_sorted_list_of_set open_start_list_def by auto
+lemma set_open_start_list: "set (open_start_list) = {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using open_start_list_def set_sorted_list_of_set finite_open_started by auto
+
+lemma open_start_list_nth_happ_seqE: "((open_start_list) ! i, at_start a) \<in> happ_seq" if "i < length (open_start_list)" for i 
 proof -
-  have finite_started: "finite {s'. s' < t \<and> (s', at_start a) \<in> happ_seq}" using finite_start_tps by auto
-  have finite_ended: "finite {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" using finite_end_tps by auto
-  have "\<not>(1 < open_active_count t a)"
+  have "(open_start_list) ! i \<in> set (open_start_list)" using that by auto
+  hence "(open_start_list) ! i \<in> {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using set_sorted_list_of_set finite_open_started open_start_list_def by simp
+  thus ?thesis by blast
+qed
+
+lemma open_start_list_nth_planE: "\<exists>!(t', d). (a, t', d) \<in> ran \<pi> \<and> (open_start_list) ! i = t'" if "i < length (open_start_list)" for i 
+  using open_start_list_nth_happ_seqE[OF that, THEN at_start_in_happ_seqE''[OF a_in_acts]] by simp
+
+lemma open_start_list_nth_ran: "(open_start_list) ! i < t" if "i < length (open_start_list)" for i
+proof -
+  have "(open_start_list) ! i \<in> set (open_start_list)" using that by auto
+  hence "(open_start_list) ! i \<in> {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using set_sorted_list_of_set finite_open_started open_start_list_def by auto
+  thus ?thesis by simp
+qed
+
+lemma open_start_list_planI: "\<exists>n < length (open_start_list). (open_start_list) ! n = t'" if "(a, t', d') \<in> ran \<pi>" "t' < t" for t' d'
+proof -
+  have "t' \<in> {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using that happ_seq_def plan_happ_seq_def by fast
+  hence "t' \<in> set (open_start_list)" using open_start_list_def finite_open_started set_sorted_list_of_set by simp
+  thus ?thesis using in_set_conv_nth by metis
+qed
+   
+lemma closed_start_list_len: "length (closed_start_list) = card {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq}" unfolding closed_start_list_def length_sorted_list_of_set by blast
+lemma closed_start_list_sorted: "sorted (closed_start_list)" using sorted_sorted_list_of_set closed_start_list_def by simp
+lemma closed_start_list_distinct: "distinct (closed_start_list)" using distinct_sorted_list_of_set closed_start_list_def by auto
+lemma set_closed_start_list: "set (closed_start_list) = {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq}" using closed_start_list_def set_sorted_list_of_set finite_closed_started by auto
+
+lemma closed_start_list_nth_happ_seqE: "((closed_start_list) ! i, at_start a) \<in> happ_seq" if "i < length (closed_start_list)" for i 
+proof -
+  have "(closed_start_list) ! i \<in> set (closed_start_list)" using that by auto
+  hence "(closed_start_list) ! i \<in> {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq}" using set_sorted_list_of_set finite_closed_started closed_start_list_def by simp
+  thus ?thesis by blast
+qed
+
+lemma closed_start_list_nth_planE: "\<exists>!(t', d). (a, t', d) \<in> ran \<pi> \<and> (closed_start_list) ! i = t'" if "i < length (closed_start_list)" for i 
+  using closed_start_list_nth_happ_seqE[OF that, THEN at_start_in_happ_seqE''[OF a_in_acts]] by simp
+
+lemma closed_start_list_nth_ran: "(closed_start_list) ! i \<le> t" if "i < length (closed_start_list)" for i
+proof -
+  have "(closed_start_list) ! i \<in> set (closed_start_list)" using that by auto
+  hence "(closed_start_list) ! i \<in> {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq}" using set_sorted_list_of_set finite_closed_started closed_start_list_def by auto
+  thus ?thesis by simp
+qed
+
+lemma closed_start_list_planI: "\<exists>n < length (closed_start_list). (closed_start_list) ! n = t'" if "(a, t', d') \<in> ran \<pi>" "t' \<le> t" for t' d'
+proof -
+  have "t' \<in> {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq}" using that happ_seq_def plan_happ_seq_def by fast
+  hence "t' \<in> set (closed_start_list)" using closed_start_list_def finite_closed_started set_sorted_list_of_set by simp
+  thus ?thesis using in_set_conv_nth by metis
+qed
+
+lemma open_end_list_len: "length (open_end_list) = card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" unfolding open_end_list_def length_sorted_list_of_set by blast
+lemma open_end_list_sorted: "sorted (open_end_list)" using sorted_sorted_list_of_set open_end_list_def by auto
+lemma open_end_list_distinct: "distinct (open_end_list)" using distinct_sorted_list_of_set open_end_list_def by auto
+lemma set_open_end_list: "set (open_end_list) = {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" using open_end_list_def set_sorted_list_of_set finite_open_ended by auto
+
+lemma open_end_list_nth_happ_seqE: "((open_end_list) ! i, at_end a) \<in> happ_seq" if "i < length (open_end_list)" for i 
+proof -
+  have "(open_end_list) ! i \<in> set (open_end_list)" using that by auto
+  hence "(open_end_list) ! i \<in> {s. s < t \<and> (s, at_end a) \<in> happ_seq}" using set_sorted_list_of_set finite_open_ended open_end_list_def by simp
+  thus ?thesis by blast
+qed
+
+lemma open_end_list_nth_planE: "\<exists>!(t', d). (a, t', d) \<in> ran \<pi> \<and> (open_end_list) ! i = t' + d" if "i < length (open_end_list)" for i 
+  using open_end_list_nth_happ_seqE[OF that] at_end_in_happ_seqE''[OF a_in_acts] by simp
+
+lemma open_end_list_nth_ran: "(open_end_list) ! i < t" if "i < length (open_end_list)" for i
+proof -
+  from that
+  have "(open_end_list) ! i \<in> set (open_end_list)" using that by auto
+  hence "(open_end_list) ! i \<in> {s. s < t \<and> (s, at_end a) \<in> happ_seq}" using set_sorted_list_of_set finite_open_ended open_end_list_def by auto
+  thus ?thesis by simp
+qed
+
+lemma open_end_list_planI: "\<exists>n < length (open_end_list). (open_end_list) ! n = t' + d'" if "(a, t', d') \<in> ran \<pi>" "t' + d' < t" for t' d'
+proof -
+  have "t' + d'\<in> {s. s < t \<and> (s, at_end a) \<in> happ_seq}" using that happ_seq_def plan_happ_seq_def by fast
+  hence "t' + d' \<in> set (open_end_list)" using open_end_list_def finite_open_ended set_sorted_list_of_set by simp
+  thus ?thesis using in_set_conv_nth by metis
+qed
+
+lemma closed_end_list_len: "length (closed_end_list) = card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}" unfolding closed_end_list_def length_sorted_list_of_set by blast
+lemma closed_end_list_sorted: "sorted (closed_end_list)" using sorted_sorted_list_of_set closed_end_list_def by auto
+lemma closed_end_list_distinct: "distinct (closed_end_list)" using distinct_sorted_list_of_set closed_end_list_def by auto
+lemma set_closed_end_list: "set (closed_end_list) = {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}" using closed_end_list_def set_sorted_list_of_set finite_closed_ended by auto
+
+lemma closed_end_list_nth_happ_seqE: "((closed_end_list) ! i, at_end a) \<in> happ_seq" if "i < length (closed_end_list)" for i 
+proof -
+  have "(closed_end_list) ! i \<in> set (closed_end_list)" using that by auto
+  hence "(closed_end_list) ! i \<in> {s. s \<le> t \<and> (s, at_end a) \<in> happ_seq}" using set_sorted_list_of_set finite_closed_ended closed_end_list_def by simp
+  thus ?thesis by blast
+qed
+
+lemma closed_end_list_nth_planE: "\<exists>!(t', d). (a, t', d) \<in> ran \<pi> \<and> (closed_end_list) ! i = t' + d" if "i < length (closed_end_list)" for i 
+  using closed_end_list_nth_happ_seqE[OF that] at_end_in_happ_seqE''[OF a_in_acts] by simp
+
+lemma closed_end_list_nth_ran: "(closed_end_list) ! i \<le> t" if "i < length (closed_end_list)" for i
+proof -
+  from that
+  have "(closed_end_list) ! i \<in> set (closed_end_list)" using that by auto
+  hence "(closed_end_list) ! i \<in> {s. s \<le> t \<and> (s, at_end a) \<in> happ_seq}" using set_sorted_list_of_set finite_closed_ended closed_end_list_def by auto
+  thus ?thesis by simp
+qed
+
+lemma closed_end_list_planI: "\<exists>n < length (closed_end_list). (closed_end_list) ! n = t' + d'" if "(a, t', d') \<in> ran \<pi>" "t' + d' \<le> t" for t' d'
+proof -
+  have "t' + d'\<in> {s. s \<le> t \<and> (s, at_end a) \<in> happ_seq}" using that happ_seq_def plan_happ_seq_def by fast
+  hence "t' + d' \<in> set (closed_end_list)" using closed_end_list_def finite_closed_ended set_sorted_list_of_set by simp
+  thus ?thesis using in_set_conv_nth by metis
+qed
+
+subsubsection \<open>Properties\<close>
+
+lemma open_start_open_end_paired: "\<forall>n \<le> i. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! n = t \<and> open_end_list ! n = t + d) 
+          \<and> (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_start_list ! n = t \<longrightarrow> open_end_list ! n = t + d)
+          \<and> (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_end_list ! n = t + d \<longrightarrow> open_start_list ! n = t)" if iel: "i < length open_end_list" and isl: "i < length open_start_list" for i
+  using that
+proof (induction i)
+  case 0
+  from open_start_list_nth_planE 0 
+  have tsds': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! 0 = t" by blast 
+  then obtain ts ds where
+    tsds: "open_start_list ! 0 = ts"
+    "(a, ts, ds) \<in> ran \<pi>" by blast
+  with tsds'
+  have tsds'': "\<forall>ts' ds'. (a, ts', ds') \<in> ran \<pi> \<longrightarrow> open_start_list ! 0 = ts' \<longrightarrow> ts' = ts \<and> ds' = ds" by blast
+
+  have tsds_t: "ts < t" using open_start_list_nth_ran tsds 0 by auto
+
+  from open_end_list_nth_planE 0
+  have tede': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_end_list ! 0 = t + d" by blast
+  then obtain te de where
+    tede: "open_end_list ! 0 = te + de"
+    "(a, te, de) \<in> ran \<pi>" by blast
+  with tede'
+  have tede'': "\<forall>te' de'. (a, te', de') \<in> ran \<pi> \<longrightarrow> open_end_list ! 0 = te' + de' \<longrightarrow> te' = te \<and> de' = de" by blast
+
+  have tede_t: "te + de < t" using open_end_list_nth_ran tede 0 by metis
+  hence "te \<le> te + de" using plan_durations[OF tede(2)] by auto
+  note tede_t = tede_t this
+  hence "te < t" by order
+  note tede_t = tede_t this
+
+  from nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)]
+  have "ts = te \<and> ds = de \<or> te < ts \<or> ts + ds < te" by blast
+  moreover
+  from nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+  have "ts = te \<and> ds = de \<or> ts < te \<or> te + de < ts" by blast
+  ultimately
+  consider "ts = te \<and> ds = de" | "te < ts" | "ts + ds < te" | "ts < te" | "te + de < ts" by blast
+  thus ?case 
+  proof cases
+    case 1
+    then show ?thesis using tede tsds tede'' tsds'' by blast
+  next
+    case 2
+    from tede(1) 0 open_start_list_planI[OF tede(2)]
+    have "\<exists>n < length open_start_list. open_start_list ! n = te" using tede_t by simp
+    with 2 tsds
+    show ?thesis using open_start_list_sorted sorted_nth_mono by fastforce
+  next
+    case 3
+    hence "ts + ds < t" using tede_t by simp
+    with open_end_list_planI[OF tsds(2)]
+    obtain n where
+      n: "n<length open_end_list" "open_end_list ! n = ts + ds" by auto
+    have "ts + ds < te + de" using tede_t(2) 3 by order
+    thus ?thesis using open_end_list_sorted[THEN sorted_nth_mono, OF _ n(1), of 0] n(2) tede(1) by simp
+  next
+    case 4
+    show ?thesis 
+    proof (cases "ts + ds < te")
+      case True
+      with tede_t open_end_list_planI[OF tsds(2)]
+      obtain n where
+        n: "n<length open_end_list" "open_end_list ! n = ts + ds" by fastforce
+      with tede_t(2) True
+      have "ts + ds < te + de" by order
+      thus ?thesis using open_end_list_sorted[THEN sorted_nth_mono] n tede by fastforce
+    next
+      case False
+      hence "te \<le> ts + ds" by simp
+      with nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)] 4 
+      show ?thesis by fastforce
+    qed
+  next
+    case 5
+    hence "te < t" using tede_t by auto
+    with open_start_list_planI[OF tede(2)]
+    obtain n where
+      n: "n<length open_start_list" "open_start_list ! n = te" by blast
+    have "te < ts" using 5 tede_t by order
+    with n tsds(1)
+    show ?thesis using open_start_list_sorted[THEN sorted_nth_mono] by fastforce
+  qed
+next
+  case (Suc i)
+  have IH1: "\<forall>n\<le>i. \<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! n = t \<and> open_end_list ! n = t + d" using Suc by auto
+  have IH2: "\<forall>n\<le>i. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_start_list ! n = t \<longrightarrow> open_end_list ! n = t + d)" using Suc by auto
+  have IH3: "\<forall>n\<le>i. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_end_list ! n = t + d \<longrightarrow> open_start_list ! n = t)" using Suc by auto
+
+  from open_start_list_nth_planE Suc(3)
+  have tsds': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! (Suc i) = t" by blast 
+  then obtain ts ds where
+    tsds: "open_start_list ! (Suc i) = ts"
+    "(a, ts, ds) \<in> ran \<pi>" by blast
+  with tsds'
+  have tsds': "\<forall>ts' ds'. (a, ts', ds') \<in> ran \<pi> \<longrightarrow> open_start_list ! Suc i = ts' \<longrightarrow> ts' = ts \<and> ds' = ds" by blast
+
+  have tsds_t: "ts < t" using open_start_list_nth_ran tsds Suc by auto
+  have "ts \<le> ts + ds" using plan_durations[OF tsds(2)] by auto
+  note tsds_t = tsds_t this
+
+  from open_end_list_nth_planE Suc(2)
+  have tede': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_end_list ! (Suc i) = t + d" by blast
+  then obtain te de where
+    tede: "open_end_list ! (Suc i) = te + de"
+    "(a, te, de) \<in> ran \<pi>" by blast
+  with tede'
+  have tede': "\<forall>te' de'. (a, te', de') \<in> ran \<pi> \<longrightarrow> open_end_list ! Suc i = te' + de' \<longrightarrow> te' = te \<and> de' = de" by blast
+
+  have tede_t: "te + de < t" using open_end_list_nth_ran tede Suc by metis
+  hence "te \<le> te + de" using plan_durations[OF tede(2)] by auto
+  note tede_t = tede_t this
+  hence "te < t" by order
+  note tede_t = tede_t this
+
+  from nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)]
+  have "ts = te \<and> ds = de \<or> te < ts \<or> ts + ds < te" by blast
+  moreover
+  from nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+  have "ts = te \<and> ds = de \<or> ts < te \<or> te + de < ts" by blast
+  ultimately
+  consider "ts = te \<and> ds = de" | "te < ts" | "ts + ds < te" | "ts < te" | "te + de < ts" by blast
+  hence step: "(\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! Suc i = t \<and> open_end_list ! Suc i = t + d) \<and> 
+          (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_start_list ! Suc i = t \<longrightarrow> open_end_list ! Suc i = t + d) \<and> 
+          (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_end_list ! Suc i = t + d \<longrightarrow> open_start_list ! Suc i = t)" 
+  proof cases
+    case 1
+    then show ?thesis using tede tsds tede' tsds' by blast
+  next
+    case 2
+    show ?thesis
+    proof (cases "te + de < ts")
+      case True
+      from tede open_start_list_planI tede_t
+      obtain n where 
+        n: "n < length open_start_list" "open_start_list ! n = te" by auto
+      with 2 tsds 
+      have "open_start_list ! n < open_start_list ! (Suc i)" by auto
+      hence "\<not>open_start_list ! (Suc i) \<le> open_start_list ! n" by simp
+      with sorted_nth_mono[OF open_start_list_sorted, OF _ n(1)]
+      have "\<not> Suc i \<le> n" by auto
+      hence n_Suc: "n < Suc i" by simp
+      hence "n \<le> i" by simp
+      with IH2 n tede(2)
+      have "open_end_list ! n = te + de" by blast
+      with tede(1) 
+      have "open_end_list ! n = open_end_list ! Suc i" by simp
+      with open_end_list_distinct 
+      have False using Suc(2) n_Suc unfolding distinct_conv_nth by simp 
+      thus ?thesis by auto 
+    next
+      case False
+      hence "ts \<le> te + de" by simp
+      with 2 nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+      show ?thesis by fastforce
+    qed
+  next
+    case 3
+    hence tsds_tede: "ts + ds < te + de"  using tede_t by order
+    with tsds(2)[THEN open_end_list_planI] tede_t 
+    obtain n where
+      n: "n<length open_end_list" "open_end_list ! n = ts + ds" by fastforce
+
+    from sorted_nth_mono[OF open_end_list_sorted, OF _ n(1)] 
+    have "\<forall>i. \<not>(open_end_list ! i \<le> open_end_list ! n) \<longrightarrow> \<not>i \<le> n" by blast
+    with tede(1) n(2) tsds_tede
+    have "\<not>Suc i \<le> n" by simp
+    hence n_Suc_i: "n < Suc i" by auto
+    hence "n \<le> i" by simp
+    with IH3 n tsds(2)
+    have "open_start_list ! n = ts" by simp
+    with tsds(1)
+    have "open_start_list ! n = open_start_list ! Suc i" by simp
+    hence False using Suc(3) n_Suc_i open_start_list_distinct[simplified distinct_conv_nth] by auto
+    thus ?thesis by simp
+  next
+    case 4
+    show ?thesis 
+    proof (cases "ts + ds < te")
+      case True
+      hence tsds_tede: "ts + ds < te + de"  using tede_t by order
+      with tsds(2)[THEN open_end_list_planI] tede_t 
+      obtain n where
+        n: "n<length open_end_list" "open_end_list ! n = ts + ds" by fastforce
+
+      from sorted_nth_mono[OF open_end_list_sorted, OF _ n(1)] 
+      have "\<forall>i. \<not>(open_end_list ! i \<le> open_end_list ! n) \<longrightarrow> \<not>i \<le> n" by blast
+      with tede(1) n(2) tsds_tede
+      have "\<not>Suc i \<le> n" by simp
+      hence n_Suc_i: "n < Suc i" by auto
+      hence "n \<le> i" by simp
+      with IH3 n tsds(2)
+      have "open_start_list ! n = ts" by simp
+      with tsds(1)
+      have "open_start_list ! n = open_start_list ! Suc i" by simp
+      hence False using Suc(3) n_Suc_i open_start_list_distinct[simplified distinct_conv_nth] by auto
+      thus ?thesis by simp
+    next
+      case False
+      hence "te \<le> ts + ds" by simp
+      with nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)] 4
+      show ?thesis by fastforce
+    qed
+  next
+    case 5
+    from tede open_start_list_planI tede_t
+    obtain n where 
+      n: "n < length open_start_list" "open_start_list ! n = te" by auto
+    with 5 tsds tede_t
+    have "open_start_list ! n < open_start_list ! (Suc i)" by order
+    hence "\<not>open_start_list ! (Suc i) \<le> open_start_list ! n" by simp
+    with sorted_nth_mono[OF open_start_list_sorted, OF _ n(1)]
+    have "\<not> Suc i \<le> n" by auto
+    hence n_Suc: "n < Suc i" by simp
+    hence "n \<le> i" by simp
+    with IH2 n tede(2)
+    have "open_end_list ! n = te + de" by blast
+    with tede(1) 
+    have "open_end_list ! n = open_end_list ! Suc i" by simp
+    with open_end_list_distinct 
+    have False using Suc(2) n_Suc unfolding distinct_conv_nth by simp 
+    thus ?thesis by auto 
+  qed
+  show ?case 
+    apply (intro allI impI)
+    subgoal for n
+      apply (cases "n < Suc i")
+      apply (intro conjI)
+      using IH1 apply simp
+      using IH2 apply simp
+      using IH3 apply simp
+      using step by simp
+    done
+qed
+
+lemma open_active_count_ran:
+  shows "open_active_count \<in> {0, 1}"
+proof -
+  have "\<not>1 < open_active_count"
   proof 
-    assume "1 < open_active_count t a"
+    assume "1 < open_active_count"
     hence 1: "2 \<le> card {s'. s' < t \<and> (s', at_start a) \<in> happ_seq} - card {s. s < t \<and> (s, at_end a) \<in> happ_seq}" 
-      using finite_ended finite_started unfolding open_active_count_def by simp
+      using finite_open_ended finite_open_started using open_active_count_def by auto
 
     define n where "n = card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
     hence n1: "n + 2 \<le> card {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using 1 by simp
-      
-    define start_list where "start_list = sorted_list_of_set {s. s < t \<and> (s, at_start a) \<in> happ_seq}"
-    have start_list_len: "length start_list = card {s. s < t \<and> (s, at_start a) \<in> happ_seq}" unfolding start_list_def length_sorted_list_of_set by blast
-    have n_start_list: "n + 2 \<le> length start_list" using n1 unfolding length_sorted_list_of_set using start_list_def by simp
-    have start_list_sorted: "sorted start_list" using sorted_sorted_list_of_set start_list_def by blast
-    have start_list_distinct: "distinct start_list" using distinct_sorted_list_of_set start_list_def by blast
-    have set_start_list: "set start_list = {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using start_list_def set_sorted_list_of_set finite_started by blast
-
-    define end_list where "end_list = sorted_list_of_set {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
-    have end_list_len: "length end_list = card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" unfolding end_list_def length_sorted_list_of_set by blast
-    have n_end_list: "n = length end_list" using n_def unfolding length_sorted_list_of_set[symmetric] using end_list_def by blast
-    have end_list_sorted: "sorted end_list" using sorted_sorted_list_of_set end_list_def by blast
-    have end_list_distinct: "distinct end_list" using distinct_sorted_list_of_set end_list_def by blast
-    have set_end_list: "set end_list = {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" using end_list_def set_sorted_list_of_set finite_ended by blast
     
-    have start_list_end_list_len: "length end_list + 2 \<le> length start_list" using n_end_list n_start_list by blast
+    have open_start_list_len: "length open_start_list = card {s. s < t \<and> (s, at_start a) \<in> happ_seq}" unfolding open_start_list_def length_sorted_list_of_set by blast
+    have n_open_start_list: "n + 2 \<le> length open_start_list" using n1 unfolding length_sorted_list_of_set using open_start_list_def by simp
 
-    have start_list_nth_happ_seqE: "(start_list ! i, at_start a) \<in> happ_seq" if "i < length start_list" for i 
-    proof -
-      have "start_list ! i \<in> set start_list" using that by auto
-      hence "start_list ! i \<in> {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using set_sorted_list_of_set finite_started start_list_def by blast
-      thus ?thesis by blast
-    qed
-
-    have start_list_nth_planE: "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> start_list ! i = t" if "i < length start_list" for i 
-      using start_list_nth_happ_seqE[OF that] at_start_in_happ_seqE''[OF a_in_acts] by simp
-
-    have start_list_nth_ran: "start_list ! i < t" if "i < length start_list" for i
-    proof -
-      have "start_list ! i \<in> set start_list" using that by auto
-      hence "start_list ! i \<in> {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using set_sorted_list_of_set finite_started start_list_def by blast
-      thus ?thesis by simp
-    qed
-
-    have start_list_planI: "\<exists>n < length start_list. start_list ! n = t'" if "(a, t', d') \<in> ran \<pi>" "t' < t" for t' d'
-    proof -
-      have "t' \<in> {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using that happ_seq_def plan_happ_seq_def by fast
-      hence "t' \<in> set start_list" using start_list_def finite_started set_sorted_list_of_set by simp
-      thus ?thesis using in_set_conv_nth by metis
-    qed
+    have open_end_list_len: "length open_end_list = card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" unfolding open_end_list_def length_sorted_list_of_set by blast
+    have n_open_end_list: "n = length open_end_list" using n_def unfolding length_sorted_list_of_set[symmetric] using open_end_list_def by simp
     
-    have end_list_nth_happ_seqE: "(end_list ! i, at_end a) \<in> happ_seq" if "i < length end_list" for i 
-    proof -
-      have "end_list ! i \<in> set end_list" using that by auto
-      hence "end_list ! i \<in> {s. s < t \<and> (s, at_end a) \<in> happ_seq}" using set_sorted_list_of_set finite_ended end_list_def by blast
-      thus ?thesis by blast
-    qed
+    have open_start_list_open_end_list_len: "length open_end_list + 2 \<le> length open_start_list" using n_open_end_list n_open_start_list by blast
 
-    have end_list_nth_planE: "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> end_list ! i = t + d" if "i < length end_list" for i 
-      using end_list_nth_happ_seqE[OF that] at_end_in_happ_seqE''[OF a_in_acts] by simp
-
-    have end_list_nth_ran: "end_list ! i < t" if "i < length end_list" for i
-    proof -
-      from that
-      have "end_list ! i \<in> set end_list" using that by auto
-      hence "end_list ! i \<in> {s. s < t \<and> (s, at_end a) \<in> happ_seq}" using set_sorted_list_of_set finite_ended end_list_def by blast
-      thus ?thesis by simp
-    qed
-
-    have end_list_planI: "\<exists>n < length end_list. end_list ! n = t' + d'" if "(a, t', d') \<in> ran \<pi>" "t' + d' < t" for t' d'
-    proof -
-      have "t' + d'\<in> {s. s < t \<and> (s, at_end a) \<in> happ_seq}" using that happ_seq_def plan_happ_seq_def by fast
-      hence "t' + d' \<in> set end_list" using end_list_def finite_ended set_sorted_list_of_set by simp
-      thus ?thesis using in_set_conv_nth by metis
-    qed
-
-    have "\<forall>n \<le> i. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> start_list ! n = t \<and> end_list ! n = t + d) 
-                \<and> (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> start_list ! n = t \<longrightarrow> end_list ! n = t + d)
-                \<and> (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> end_list ! n = t + d \<longrightarrow> start_list ! n = t)" if iel: "i < length end_list" for i
-    proof -
-      have isl: "i < length start_list" using start_list_end_list_len that by auto
-      with iel
-      show ?thesis
-      proof (induction i)
-        case 0
-        from start_list_nth_planE 0 
-        have tsds': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> start_list ! 0 = t" by blast 
-        then obtain ts ds where
-          tsds: "start_list ! 0 = ts"
-          "(a, ts, ds) \<in> ran \<pi>" by blast
-        with tsds'
-        have tsds'': "\<forall>ts' ds'. (a, ts', ds') \<in> ran \<pi> \<longrightarrow> start_list ! 0 = ts' \<longrightarrow> ts' = ts \<and> ds' = ds" by blast
-
-        have tsds_t: "ts < t" using start_list_nth_ran tsds 0 by auto
-
-        from end_list_nth_planE 0
-        have tede': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> end_list ! 0 = t + d" by blast
-        then obtain te de where
-          tede: "end_list ! 0 = te + de"
-          "(a, te, de) \<in> ran \<pi>" by blast
-        with tede'
-        have tede'': "\<forall>te' de'. (a, te', de') \<in> ran \<pi> \<longrightarrow> end_list ! 0 = te' + de' \<longrightarrow> te' = te \<and> de' = de" by blast
-
-        have tede_t: "te + de < t" using end_list_nth_ran tede 0 by metis
-        hence "te \<le> te + de" using plan_durations[OF tede(2)] by auto
-        note tede_t = tede_t this
-        hence "te < t" by order
-        note tede_t = tede_t this
-
-        from nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)]
-        have "ts = te \<and> ds = de \<or> te < ts \<or> ts + ds < te" by blast
-        moreover
-        from nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
-        have "ts = te \<and> ds = de \<or> ts < te \<or> te + de < ts" by blast
-        ultimately
-        consider "ts = te \<and> ds = de" | "te < ts" | "ts + ds < te" | "ts < te" | "te + de < ts" by blast
-        thus ?case 
-        proof cases
-          case 1
-          then show ?thesis using tede tsds tede'' tsds'' by blast
-        next
-          case 2
-          from tede(1) 0 start_list_planI[OF tede(2)]
-          have "\<exists>n < length start_list. start_list ! n = te" using tede_t by simp
-          with 2 tsds
-          show ?thesis using start_list_sorted sorted_nth_mono by fastforce
-        next
-          case 3
-          hence "ts + ds < t" using tede_t by simp
-          with end_list_planI[OF tsds(2)]
-          obtain n where
-            n: "n<length end_list" "end_list ! n = ts + ds" by auto
-          have "ts + ds < te + de" using tede_t(2) 3 by order
-          thus ?thesis using end_list_sorted[THEN sorted_nth_mono, OF _ n(1), of 0] n(2) tede(1) by simp
-        next
-          case 4
-          show ?thesis 
-          proof (cases "ts + ds < te")
-            case True
-            with tede_t end_list_planI[OF tsds(2)]
-            obtain n where
-              n: "n<length end_list" "end_list ! n = ts + ds" by fastforce
-            with tede_t(2) True
-            have "ts + ds < te + de" by order
-            thus ?thesis using end_list_sorted[THEN sorted_nth_mono] n tede by fastforce
-          next
-            case False
-            hence "te \<le> ts + ds" by simp
-            with nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)] 4 
-            show ?thesis by fastforce
-          qed
-        next
-          case 5
-          hence "te < t" using tede_t by auto
-          with start_list_planI[OF tede(2)]
-          obtain n where
-            n: "n<length start_list" "start_list ! n = te" by blast
-          have "te < ts" using 5 tede_t by order
-          with n tsds(1)
-          show ?thesis using start_list_sorted[THEN sorted_nth_mono] by fastforce
-        qed
-      next
-        case (Suc i)
-        have IH1: "\<forall>n\<le>i. \<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> start_list ! n = t \<and> end_list ! n = t + d" using Suc by auto
-        have IH2: "\<forall>n\<le>i. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> start_list ! n = t \<longrightarrow> end_list ! n = t + d)" using Suc by auto
-        have IH3: "\<forall>n\<le>i. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> end_list ! n = t + d \<longrightarrow> start_list ! n = t)" using Suc by auto
-
-        from start_list_nth_planE Suc(3)
-        have tsds': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> start_list ! (Suc i) = t" by blast 
-        then obtain ts ds where
-          tsds: "start_list ! (Suc i) = ts"
-          "(a, ts, ds) \<in> ran \<pi>" by blast
-        with tsds'
-        have tsds': "\<forall>ts' ds'. (a, ts', ds') \<in> ran \<pi> \<longrightarrow> start_list ! Suc i = ts' \<longrightarrow> ts' = ts \<and> ds' = ds" by blast
-
-        have tsds_t: "ts < t" using start_list_nth_ran tsds Suc by auto
-        have "ts \<le> ts + ds" using plan_durations[OF tsds(2)] by auto
-        note tsds_t = tsds_t this
-
-        from end_list_nth_planE Suc(2)
-        have tede': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> end_list ! (Suc i) = t + d" by blast
-        then obtain te de where
-          tede: "end_list ! (Suc i) = te + de"
-          "(a, te, de) \<in> ran \<pi>" by blast
-        with tede'
-        have tede': "\<forall>te' de'. (a, te', de') \<in> ran \<pi> \<longrightarrow> end_list ! Suc i = te' + de' \<longrightarrow> te' = te \<and> de' = de" by blast
-
-        have tede_t: "te + de < t" using end_list_nth_ran tede Suc by metis
-        hence "te \<le> te + de" using plan_durations[OF tede(2)] by auto
-        note tede_t = tede_t this
-        hence "te < t" by order
-        note tede_t = tede_t this
-
-        from nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)]
-        have "ts = te \<and> ds = de \<or> te < ts \<or> ts + ds < te" by blast
-        moreover
-        from nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
-        have "ts = te \<and> ds = de \<or> ts < te \<or> te + de < ts" by blast
-        ultimately
-        consider "ts = te \<and> ds = de" | "te < ts" | "ts + ds < te" | "ts < te" | "te + de < ts" by blast
-        hence step: "(\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> start_list ! Suc i = t \<and> end_list ! Suc i = t + d) \<and> 
-                (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> start_list ! Suc i = t \<longrightarrow> end_list ! Suc i = t + d) \<and> 
-                (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> end_list ! Suc i = t + d \<longrightarrow> start_list ! Suc i = t)" 
-        proof cases
-          case 1
-          then show ?thesis using tede tsds tede' tsds' by blast
-        next
-          case 2
-          show ?thesis
-          proof (cases "te + de < ts")
-            case True
-            from tede start_list_planI tede_t
-            obtain n where 
-              n: "n < length start_list" "start_list ! n = te" by auto
-            with 2 tsds 
-            have "start_list ! n < start_list ! (Suc i)" by auto
-            hence "\<not>start_list ! (Suc i) \<le> start_list ! n" by simp
-            with sorted_nth_mono[OF start_list_sorted, OF _ n(1)]
-            have "\<not> Suc i \<le> n" by auto
-            hence n_Suc: "n < Suc i" by simp
-            hence "n \<le> i" by simp
-            with IH2 n tede(2)
-            have "end_list ! n = te + de" by blast
-            with tede(1) 
-            have "end_list ! n = end_list ! Suc i" by simp
-            with end_list_distinct 
-            have False using Suc(2) n_Suc unfolding distinct_conv_nth by simp 
-            thus ?thesis by auto 
-          next
-            case False
-            hence "ts \<le> te + de" by simp
-            with 2 nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
-            show ?thesis by fastforce
-          qed
-        next
-          case 3
-          hence tsds_tede: "ts + ds < te + de"  using tede_t by order
-          with tsds(2)[THEN end_list_planI] tede_t 
-          obtain n where
-            n: "n<length end_list" "end_list ! n = ts + ds" by fastforce
-
-          from sorted_nth_mono[OF end_list_sorted, OF _ n(1)] 
-          have "\<forall>i. \<not>(end_list ! i \<le> end_list ! n) \<longrightarrow> \<not>i \<le> n" by blast
-          with tede(1) n(2) tsds_tede
-          have "\<not>Suc i \<le> n" by simp
-          hence n_Suc_i: "n < Suc i" by auto
-          hence "n \<le> i" by simp
-          with IH3 n tsds(2)
-          have "start_list ! n = ts" by simp
-          with tsds(1)
-          have "start_list ! n = start_list ! Suc i" by simp
-          hence False using Suc(3) n_Suc_i start_list_distinct[simplified distinct_conv_nth] by auto
-          thus ?thesis by simp
-        next
-          case 4
-          show ?thesis 
-          proof (cases "ts + ds < te")
-            case True
-            hence tsds_tede: "ts + ds < te + de"  using tede_t by order
-            with tsds(2)[THEN end_list_planI] tede_t 
-            obtain n where
-              n: "n<length end_list" "end_list ! n = ts + ds" by fastforce
-  
-            from sorted_nth_mono[OF end_list_sorted, OF _ n(1)] 
-            have "\<forall>i. \<not>(end_list ! i \<le> end_list ! n) \<longrightarrow> \<not>i \<le> n" by blast
-            with tede(1) n(2) tsds_tede
-            have "\<not>Suc i \<le> n" by simp
-            hence n_Suc_i: "n < Suc i" by auto
-            hence "n \<le> i" by simp
-            with IH3 n tsds(2)
-            have "start_list ! n = ts" by simp
-            with tsds(1)
-            have "start_list ! n = start_list ! Suc i" by simp
-            hence False using Suc(3) n_Suc_i start_list_distinct[simplified distinct_conv_nth] by auto
-            thus ?thesis by simp
-          next
-            case False
-            hence "te \<le> ts + ds" by simp
-            with nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)] 4
-            show ?thesis by fastforce
-          qed
-        next
-          case 5
-          from tede start_list_planI tede_t
-          obtain n where 
-            n: "n < length start_list" "start_list ! n = te" by auto
-          with 5 tsds tede_t
-          have "start_list ! n < start_list ! (Suc i)" by order
-          hence "\<not>start_list ! (Suc i) \<le> start_list ! n" by simp
-          with sorted_nth_mono[OF start_list_sorted, OF _ n(1)]
-          have "\<not> Suc i \<le> n" by auto
-          hence n_Suc: "n < Suc i" by simp
-          hence "n \<le> i" by simp
-          with IH2 n tede(2)
-          have "end_list ! n = te + de" by blast
-          with tede(1) 
-          have "end_list ! n = end_list ! Suc i" by simp
-          with end_list_distinct 
-          have False using Suc(2) n_Suc unfolding distinct_conv_nth by simp 
-          thus ?thesis by auto 
-        qed
-        show ?case 
-          apply (intro allI impI)
-          subgoal for n
-            apply (cases "n < Suc i")
-            apply (intro conjI)
-            using IH1 apply simp
-            using IH2 apply simp
-            using IH3 apply simp
-            using step by simp
-          done
-      qed
-    qed
     hence end_start_paired: 
-      "\<forall>n < length end_list. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> start_list ! n = t \<and> end_list ! n = t + d)" 
-      "\<forall>n < length end_list.(\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> start_list ! n = t \<longrightarrow> end_list ! n = t + d)" 
-      "\<forall>n < length end_list. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> end_list ! n = t + d \<longrightarrow> start_list ! n = t)" by simp_all
+      "\<forall>n < length open_end_list. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! n = t \<and> open_end_list ! n = t + d)" 
+      "\<forall>n < length open_end_list.(\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_start_list ! n = t \<longrightarrow> open_end_list ! n = t + d)" 
+      "\<forall>n < length open_end_list. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_end_list ! n = t + d \<longrightarrow> open_start_list ! n = t)" 
+      using open_start_open_end_paired by simp_all
     
-    have n_ord: "\<forall>i < n. start_list ! i < start_list ! n"
+    have n_ord: "\<forall>i < n. open_start_list ! i < open_start_list ! n"
     proof -
-      have "\<forall>i < n. start_list ! i \<le> start_list ! n" using start_list_sorted sorted_nth_mono n_start_list by fastforce
+      have "\<forall>i < n. open_start_list ! i \<le> open_start_list ! n" using open_start_list_sorted sorted_nth_mono n_open_start_list by fastforce
       moreover
-      have "\<forall>i < n. start_list ! i \<noteq> start_list ! n" using start_list_distinct unfolding distinct_conv_nth using n_start_list by simp
+      have "\<forall>i < n. open_start_list ! i \<noteq> open_start_list ! n" using open_start_list_distinct unfolding distinct_conv_nth using n_open_start_list by simp
       ultimately
       show ?thesis by force
     qed
 
-    have n_starts_after: "\<forall>i < n. end_list ! i < start_list ! n"
+    have n_starts_after: "\<forall>i < n. open_end_list ! i < open_start_list ! n"
     proof -
       {fix i
         assume i: "i < n"
-        hence sisn: "start_list ! i < start_list ! n" using n_ord by simp
-        with end_start_paired(1) end_list_len n_def i
+        hence sisn: "open_start_list ! i < open_start_list ! n" using n_ord by simp
+        with end_start_paired(1) open_end_list_len n_def i
         obtain ti di where
           tidi: "(a, ti, di) \<in> ran \<pi> " 
-          "start_list ! i = ti" 
-          "end_list ! i = ti + di" by auto
-        from start_list_nth_planE[of n] n_start_list
+          "open_start_list ! i = ti" 
+          "open_end_list ! i = ti + di" by auto
+        from open_start_list_nth_planE[of n] n_open_start_list
         obtain tn dn where
           tndn: "(a, tn, dn) \<in> ran \<pi>" 
-          "start_list ! n = tn" by auto
+          "open_start_list ! n = tn" by auto
       
-        assume "end_list ! i \<ge> start_list ! n"
+        assume "open_end_list ! i \<ge> open_start_list ! n"
         with nso[THEN no_self_overlap_ran, OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
         have "False" by fastforce
       }
       thus ?thesis by fastforce
     qed
 
-    have n_Suc_n: "start_list ! n < start_list ! Suc n" 
+    have n_Suc_n: "open_start_list ! n < open_start_list ! Suc n" 
     proof -
-      have "start_list ! n \<le> start_list ! Suc n" using start_list_sorted sorted_nth_mono n_start_list by fastforce
+      have "open_start_list ! n \<le> open_start_list ! Suc n" using open_start_list_sorted sorted_nth_mono n_open_start_list by fastforce
       moreover
-      have "start_list ! n \<noteq> start_list ! Suc n" using start_list_distinct unfolding distinct_conv_nth using n_start_list by simp
+      have "open_start_list ! n \<noteq> open_start_list ! Suc n" using open_start_list_distinct unfolding distinct_conv_nth using n_open_start_list by simp
       ultimately
       show ?thesis by force
     qed
 
-    have sn_t: "start_list ! Suc n < t" using start_list_nth_ran n_start_list by simp
+    have sn_t: "open_start_list ! Suc n < t" using open_start_list_nth_ran n_open_start_list by simp
 
     obtain tn dn where
       tndn: "(a, tn, dn) \<in> ran \<pi>"
-      "start_list ! n = tn" using start_list_nth_planE[of n] n_start_list by auto
+      "open_start_list ! n = tn" using open_start_list_nth_planE[of n] n_open_start_list by auto
 
     obtain tsn dsn where
       tsndsn: "(a, tsn, dsn) \<in> ran \<pi>"
-      "start_list ! Suc n = tsn" using start_list_nth_planE[of "Suc n"] n_start_list by auto
+      "open_start_list ! Suc n = tsn" using open_start_list_nth_planE[of "Suc n"] n_open_start_list by auto
 
     show False 
     proof (cases "tn + dn < t")
       case True
       with tndn
-      have "tn + dn \<in> set end_list" using set_end_list unfolding happ_seq_def plan_happ_seq_def by fast
+      have "tn + dn \<in> set open_end_list" using set_open_end_list unfolding happ_seq_def plan_happ_seq_def by fast
       then obtain n' where
-        "end_list ! n' = tn + dn" 
-        "n' < length end_list" unfolding in_set_conv_nth by blast
-      hence "tn + dn < start_list ! n" using n_starts_after n_end_list by metis
+        "open_end_list ! n' = tn + dn" 
+        "n' < length open_end_list" unfolding in_set_conv_nth by blast
+      hence "tn + dn < open_start_list ! n" using n_starts_after n_open_end_list by metis
       moreover
-      have "start_list ! n \<le> tn + dn" using tndn plan_durations by simp
+      have "open_start_list ! n \<le> tn + dn" using tndn plan_durations by simp
       ultimately
       show ?thesis by simp
     next
@@ -876,227 +952,621 @@ proof -
   thus ?thesis by fastforce
 qed
 
+lemma closed_start_closed_end_paired: "\<forall>n \<le> i. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! n = t \<and> closed_end_list ! n = t + d) 
+          \<and> (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! n = t \<longrightarrow> closed_end_list ! n = t + d)
+          \<and> (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_end_list ! n = t + d \<longrightarrow> closed_start_list ! n = t)" 
+  if iel: "i < length closed_end_list" and isl: "i < length closed_start_list" for i
+  using that
+proof (induction i)
+  case 0
+  from closed_start_list_nth_planE 0 
+  have tsds': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! 0 = t" by blast 
+  then obtain ts ds where
+    tsds: "closed_start_list ! 0 = ts"
+    "(a, ts, ds) \<in> ran \<pi>" by blast
+  with tsds'
+  have tsds'': "\<forall>ts' ds'. (a, ts', ds') \<in> ran \<pi> \<longrightarrow> closed_start_list ! 0 = ts' \<longrightarrow> ts' = ts \<and> ds' = ds" by blast
 
-    (* have "start_list ! i \<le> end_list ! i \<and> end_list ! i < start_list ! (Suc i)" if "i < length end_list" for i
-      using that
-    proof (induction i)
-      case 0
-      have s0_le_e0: "start_list ! 0 \<le> end_list ! 0" 
-      proof (rule ccontr)
-        assume "\<not> start_list ! 0 \<le> end_list ! 0"
-        hence t_ord: "end_list ! 0 < start_list ! 0" by simp
-        
-        have st_0: "0 < length start_list" using 0 start_list_end_list_len by auto
+  have tsds_t: "ts \<le> t" using closed_start_list_nth_ran tsds 0 by auto
 
-        have "end_list ! 0 \<in> set end_list" using 0 by simp
-        hence 1: "end_list ! 0 \<in> {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" unfolding set_sorted_list_of_set[OF finite_ended] end_list_def by blast
-        hence "(end_list ! 0, at_end a) \<in> happ_seq" by simp
-        then obtain d t' where
-          atd: "end_list ! 0 = t' + d"
-          "(a, t', d) \<in> ran \<pi>" using at_end_in_happ_seqE' a_in_acts unfolding happ_seq_def by blast
-        hence t'_start: "(t', at_start a) \<in> happ_seq" unfolding happ_seq_def plan_happ_seq_def by auto
+  from closed_end_list_nth_planE 0
+  have tede': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_end_list ! 0 = t + d" by blast
+  then obtain te de where
+    tede: "closed_end_list ! 0 = te + de"
+    "(a, te, de) \<in> ran \<pi>" by blast
+  with tede'
+  have tede'': "\<forall>te' de'. (a, te', de') \<in> ran \<pi> \<longrightarrow> closed_end_list ! 0 = te' + de' \<longrightarrow> te' = te \<and> de' = de" by blast
 
-        have t': "t' \<le> end_list ! 0" using atd valid_plan_durs(1)[OF vp, simplified durations_ge_0_def] by simp
-        hence t'_t: "t' < t" using 1 by auto
-        
-        have "t' < start_list ! 0" using t_ord atd valid_plan_durs(1)[OF vp, simplified durations_ge_0_def]
-          by (metis add.commute add_less_cancel_left add_strict_increasing2)
+  have tede_t: "te + de \<le> t" using closed_end_list_nth_ran tede 0 by metis
+  hence "te \<le> te + de" using plan_durations[OF tede(2)] by auto
+  note tede_t = tede_t this
+  hence "te \<le> t" by order
+  note tede_t = tede_t this
 
-        have "t' \<in> {s'. s' < t \<and> (s', at_start a) \<in> happ_seq}" using t'_start t'_t by simp
-        hence "t' \<in> set start_list" using start_list_def set_sorted_list_of_set finite_started by blast
-        then obtain n' where
-          "start_list ! n' = t'" 
-          "n' < length start_list" unfolding in_set_conv_nth by blast
-        hence "start_list ! 0 \<le> t'" using sorted_nth_mono[OF start_list_sorted, of 0 n'] by simp
-        with t' t_ord
-        show False by simp
-      qed
-      moreover
-      have "end_list ! 0 < start_list ! Suc 0"
-      proof (rule ccontr)
-        assume "\<not> end_list ! 0 < start_list ! Suc 0"
-        hence t_ord: "start_list ! 1 \<le> end_list ! 0" by simp
-
-        
-        have 1: "1 < length start_list" using 0 start_list_end_list_len by auto
-        hence "start_list ! 1 \<in> {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using set_sorted_list_of_set[OF finite_started]
-          unfolding start_list_def using in_set_conv_nth by auto
-        hence "(start_list ! 1, at_start a) \<in> happ_seq" by simp
-        from at_start_in_happ_seqE'[OF a_in_acts this[simplified happ_seq_def]]
-        obtain d where
-          d: "(a, start_list ! 1, d) \<in> ran \<pi>" by auto
-        hence "0 \<le> d" using valid_plan_durs vp durations_ge_0_def by fast
-        note d = d this
-
-        hence end_of_start: "(start_list ! 1 + d, at_end a) \<in> happ_seq" unfolding plan_happ_seq_def happ_seq_def by blast
-
-        have e: "end_list ! 0 \<in> set end_list" using 0 by simp
-        hence e_0: "end_list ! 0 < t" unfolding set_sorted_list_of_set[OF finite_ended] end_list_def by simp
-  
-        show False
-        proof (cases "start_list ! 1 + d < end_list ! 0")
-          case True
-          
-          hence st_t: "start_list ! 1 + d < t" using e_0 by simp
-          hence "start_list ! 1 + d \<in> set end_list" unfolding set_sorted_list_of_set[OF finite_ended] end_list_def 
-            using end_of_start by simp
-          then obtain n' where
-            n': "end_list ! n' = start_list ! 1 + d" 
-            "n' < length end_list" unfolding in_set_conv_nth by blast
-          with True
-          have "n' < 0" using end_list_sorted sorted_nth_mono by fastforce
-          thus ?thesis by auto 
-        next
-          case False
-          hence r: "end_list ! 0 \<le> start_list ! 1 + d" by auto
-
-          have "(end_list ! 0, at_end a) \<in> happ_seq" using e set_sorted_list_of_set finite_ended unfolding end_list_def by blast
-          from at_end_in_happ_seqE''[OF a_in_acts this] 
-          obtain t' d' where
-            t'd': "(a, t', d') \<in> ran \<pi>"
-            "end_list ! 0 = t' + d'" by auto
-          with r
-          have r': "t' + d' \<le> start_list ! 1 + d" by simp
-
-          show ?thesis 
-          proof (cases "start_list ! 1 = t'"; cases "d = d'")
-            assume "start_list ! 1 = t'" "d = d'"
-            have "start_list ! 0 \<le> start_list ! 1"  using 0 start_list_end_list_len 
-              apply -
-              apply (rule sorted_nth_mono[OF start_list_sorted])
-              by auto
-            moreover
-            have "start_list ! 0 \<noteq> start_list ! 1" using start_list_distinct
-              by (metis \<open>1 < length start_list\<close> less_numeral_extra(1) order.strict_iff_order sorted_wrt_nth_less start_list_sorted strict_sorted_iff)
-            ultimately
-            have "start_list ! 0 < start_list ! 1" by simp
-            from start_list_nthE 0 start_list_end_list_len
-            obtain t0 d0 where
-              t0d0: "(a, t0, d0) \<in> ran \<pi>"
-                "start_list ! 0 = t0" by fastforce
-            show False
-            proof (cases "t0 + d0 < end_list ! 0")
-              case True
-              with e_0
-              have "t0 + d0 \<in> {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" using t0d0 unfolding happ_seq_def plan_happ_seq_def by auto
-              hence "t0 + d0 \<in> set end_list" using set_sorted_list_of_set finite_ended end_list_def by blast
-              then obtain n0 where
-                "end_list ! n0 = t0 + d0" 
-                "n0 < length end_list" using in_set_conv_nth by metis
-              hence "end_list ! 0 \<le> t0 + d0" using sorted_nth_mono[OF end_list_sorted] by fastforce 
-              thus False using True by simp
-            next
-              case False
-              hence t0d0': "end_list ! 0 \<le> t0 + d0" by simp
-              from s0_le_e0 t0d0
-              have "t0 \<le> end_list ! 0" by simp
-              with nso[THEN no_self_overlap_spec, OF t0d0(1) t'd'(1)] \<open>start_list ! 1 = t'\<close> \<open>start_list ! 0 < start_list ! 1\<close> t0d0
-              have "\<not> (t0 \<le> t' \<and> t' \<le> t0 + d0)" by fastforce
-              with \<open>start_list ! 1 = t'\<close> \<open>start_list ! 0 < start_list ! 1\<close> \<open>start_list ! 0 = t0\<close>
-              have "t0 + d0 < t'" by auto
-              with False t'd' \<open>start_list ! 1 = t'\<close> t_ord
-              show ?thesis by order
-            qed
-          next
-            assume "start_list ! 1 = t'" "d \<noteq> d'"
-            with r nso[THEN no_self_overlap_spec, OF d(1) t'd'(1)] t'd'(2)
-            have "\<not> (t' \<le> start_list ! 1 + d)" by blast
-            with d \<open>start_list ! 1 = t'\<close> valid_plan_durs(1)[OF vp, simplified durations_ge_0_def]
-            show ?thesis by simp
-          next
-            assume a: "start_list ! 1 \<noteq> t'" "d = d'"
-            with r nso[THEN no_self_overlap_spec, OF d(1) t'd'(1)] t'd'(2)
-            have "\<not> (start_list ! 1 \<le> t' \<and> t' \<le> start_list ! 1 + d)" by simp
-            thus ?thesis by (metis a(2) add_le_cancel_right d(1) no_self_overlap_spec nso r' t'd'(1,2) t_ord)
-          next
-            assume a: "start_list ! 1 \<noteq> t'" "d \<noteq> d'"
-            with nso[THEN no_self_overlap_spec, OF d(1) t'd'(1)]
-            have "\<not> (start_list ! 1 \<le> t' \<and> t' \<le> start_list ! 1 + d)" by simp
-            then consider "start_list ! 1 > t'" | "start_list ! 1 + d < t'" by auto
-            
-            thus ?thesis
-              apply cases
-              using r  t_ord unfolding t'd' d
-               apply (metis d(1) nless_le no_self_overlap_spec nso t'd'(1))
-              by (metis durations_ge_0_def leD le_add_same_cancel1 order.trans r t'd'(1,2) valid_plan_def vp)
-          qed
-        qed
-      qed
-      ultimately show ?case by simp
-    next
-      case (Suc i)
-
-      then show ?case sorry
-    qed *)
-
-lemma open_closed_active_count_alt:
-  assumes "a \<in> actions"
-  shows "open_closed_active_count t a = (open_active_count t a - (if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0))"
-proof -
-  have finite_ending: "finite {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}" using finite_end_tps by auto
-  have finite_ended: "finite {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" using finite_end_tps by auto
-  
-  
-
-  show ?thesis
-  proof (cases "(t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq")
-    case True
-    have "{s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq} = insert t {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" using True by auto
-    hence "card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq} = card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq} + 1" using True finite_ending finite_ended by simp
-    then show ?thesis using True unfolding open_closed_active_count_def open_active_count_def by auto
-  next
-    case False
-    then consider
-      "(t, at_start a) \<in> happ_seq" | "(t, at_end a) \<notin> happ_seq" by blast
-    thus ?thesis 
-    proof cases
-      case 1
-      then show ?thesis sorry
-    next
-      case 2
-      hence "{s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq} = {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" 
-        apply -
-        apply (rule equalityI)
-         apply (rule subsetI)
-        subgoal for x
-          apply (cases "x < t")
-           apply simp
-          by auto
-        by auto
-      thus ?thesis unfolding open_closed_active_count_def open_active_count_def using 2 
-    qed
-    then show ?thesis sorry
-  qed
-qed
-lemma open_closed_active_count_ran:
-  assumes "a \<in> actions" 
-  shows "open_closed_active_count t a \<in> {0, 1}"
-proof -
-  have "\<not>(1 < open_closed_active_count t a)" sorry
+  from nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)]
+  have "ts = te \<and> ds = de \<or> te < ts \<or> ts + ds < te" by blast
   moreover
-  have "\<not>(open_active_count t a < 0)" sorry
+  from nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+  have "ts = te \<and> ds = de \<or> ts < te \<or> te + de < ts" by blast
   ultimately
-  show ?thesis by fastforce
+  consider "ts = te \<and> ds = de" | "te < ts" | "ts + ds < te" | "ts < te" | "te + de < ts" by blast
+  thus ?case 
+  proof cases
+    case 1
+    then show ?thesis using tede tsds tede'' tsds'' by blast
+  next
+    case 2
+    from tede(1) 0 closed_start_list_planI[OF tede(2)]
+    have "\<exists>n < length closed_start_list. closed_start_list ! n = te" using tede_t by simp
+    with 2 tsds
+    show ?thesis using closed_start_list_sorted sorted_nth_mono by fastforce
+  next
+    case 3
+    hence "ts + ds \<le> t" using tede_t by simp
+    with closed_end_list_planI[OF tsds(2)]
+    obtain n where
+      n: "n<length closed_end_list" "closed_end_list ! n = ts + ds" by auto
+    have "ts + ds < te + de" using tede_t(2) 3 by order
+    thus ?thesis using closed_end_list_sorted[THEN sorted_nth_mono, OF _ n(1), of 0] n(2) tede(1) by simp
+  next
+    case 4
+    show ?thesis 
+    proof (cases "ts + ds < te")
+      case True
+      with tede_t closed_end_list_planI[OF tsds(2)]
+      obtain n where
+        n: "n<length closed_end_list" "closed_end_list ! n = ts + ds" by fastforce
+      with tede_t(2) True
+      have "ts + ds < te + de" by order
+      thus ?thesis using closed_end_list_sorted[THEN sorted_nth_mono] n tede by fastforce
+    next
+      case False
+      hence "te \<le> ts + ds" by simp
+      with nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)] 4 
+      show ?thesis by fastforce
+    qed
+  next
+    case 5
+    hence "te \<le> t" using tede_t by auto
+    with closed_start_list_planI[OF tede(2)]
+    obtain n where
+      n: "n<length closed_start_list" "closed_start_list ! n = te" by blast
+    have "te < ts" using 5 tede_t by order
+    with n tsds(1)
+    show ?thesis using closed_start_list_sorted[THEN sorted_nth_mono] by fastforce
+  qed
+next
+  case (Suc i)
+  have IH1: "\<forall>n\<le>i. \<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! n = t \<and> closed_end_list ! n = t + d" using Suc by auto
+  have IH2: "\<forall>n\<le>i. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! n = t \<longrightarrow> closed_end_list ! n = t + d)" using Suc by auto
+  have IH3: "\<forall>n\<le>i. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_end_list ! n = t + d \<longrightarrow> closed_start_list ! n = t)" using Suc by auto
+
+  from closed_start_list_nth_planE Suc(3)
+  have tsds': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! (Suc i) = t" by blast 
+  then obtain ts ds where
+    tsds: "closed_start_list ! (Suc i) = ts"
+    "(a, ts, ds) \<in> ran \<pi>" by blast
+  with tsds'
+  have tsds': "\<forall>ts' ds'. (a, ts', ds') \<in> ran \<pi> \<longrightarrow> closed_start_list ! Suc i = ts' \<longrightarrow> ts' = ts \<and> ds' = ds" by blast
+
+  have tsds_t: "ts \<le> t" using closed_start_list_nth_ran tsds Suc by auto
+  have "ts \<le> ts + ds" using plan_durations[OF tsds(2)] by auto
+  note tsds_t = tsds_t this
+
+  from closed_end_list_nth_planE Suc(2)
+  have tede': "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_end_list ! (Suc i) = t + d" by blast
+  then obtain te de where
+    tede: "closed_end_list ! (Suc i) = te + de"
+    "(a, te, de) \<in> ran \<pi>" by blast
+  with tede'
+  have tede': "\<forall>te' de'. (a, te', de') \<in> ran \<pi> \<longrightarrow> closed_end_list ! Suc i = te' + de' \<longrightarrow> te' = te \<and> de' = de" by blast
+
+  have tede_t: "te + de \<le> t" using closed_end_list_nth_ran tede Suc by metis
+  hence "te \<le> te + de" using plan_durations[OF tede(2)] by auto
+  note tede_t = tede_t this
+  hence "te \<le> t" by order
+  note tede_t = tede_t this
+
+  from nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)]
+  have "ts = te \<and> ds = de \<or> te < ts \<or> ts + ds < te" by blast
+  moreover
+  from nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+  have "ts = te \<and> ds = de \<or> ts < te \<or> te + de < ts" by blast
+  ultimately
+  consider "ts = te \<and> ds = de" | "te < ts" | "ts + ds < te" | "ts < te" | "te + de < ts" by blast
+  hence step: "(\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! Suc i = t \<and> closed_end_list ! Suc i = t + d) \<and> 
+          (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! Suc i = t \<longrightarrow> closed_end_list ! Suc i = t + d) \<and> 
+          (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_end_list ! Suc i = t + d \<longrightarrow> closed_start_list ! Suc i = t)" 
+  proof cases
+    case 1
+    then show ?thesis using tede tsds tede' tsds' by blast
+  next
+    case 2
+    show ?thesis
+    proof (cases "te + de < ts")
+      case True
+      from tede closed_start_list_planI tede_t
+      obtain n where 
+        n: "n < length closed_start_list" "closed_start_list ! n = te" by auto
+      with 2 tsds 
+      have "closed_start_list ! n < closed_start_list ! (Suc i)" by auto
+      hence "\<not>closed_start_list ! (Suc i) \<le> closed_start_list ! n" by simp
+      with sorted_nth_mono[OF closed_start_list_sorted, OF _ n(1)]
+      have "\<not> Suc i \<le> n" by auto
+      hence n_Suc: "n < Suc i" by simp
+      hence "n \<le> i" by simp
+      with IH2 n tede(2)
+      have "closed_end_list ! n = te + de" by blast
+      with tede(1) 
+      have "closed_end_list ! n = closed_end_list ! Suc i" by simp
+      with closed_end_list_distinct 
+      have False using Suc(2) n_Suc unfolding distinct_conv_nth by simp 
+      thus ?thesis by auto 
+    next
+      case False
+      hence "ts \<le> te + de" by simp
+      with 2 nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+      show ?thesis by fastforce
+    qed
+  next
+    case 3
+    hence tsds_tede: "ts + ds < te + de"  using tede_t by order
+    with tsds(2)[THEN closed_end_list_planI] tede_t 
+    obtain n where
+      n: "n<length closed_end_list" "closed_end_list ! n = ts + ds" by fastforce
+
+    from sorted_nth_mono[OF closed_end_list_sorted, OF _ n(1)] 
+    have "\<forall>i. \<not>(closed_end_list ! i \<le> closed_end_list ! n) \<longrightarrow> \<not>i \<le> n" by blast
+    with tede(1) n(2) tsds_tede
+    have "\<not>Suc i \<le> n" by simp
+    hence n_Suc_i: "n < Suc i" by auto
+    hence "n \<le> i" by simp
+    with IH3 n tsds(2)
+    have "closed_start_list ! n = ts" by simp
+    with tsds(1)
+    have "closed_start_list ! n = closed_start_list ! Suc i" by simp
+    hence False using Suc(3) n_Suc_i closed_start_list_distinct[simplified distinct_conv_nth] by auto
+    thus ?thesis by simp
+  next
+    case 4
+    show ?thesis 
+    proof (cases "ts + ds < te")
+      case True
+      hence tsds_tede: "ts + ds < te + de"  using tede_t by order
+      with tsds(2)[THEN closed_end_list_planI] tede_t 
+      obtain n where
+        n: "n<length closed_end_list" "closed_end_list ! n = ts + ds" by fastforce
+
+      from sorted_nth_mono[OF closed_end_list_sorted, OF _ n(1)] 
+      have "\<forall>i. \<not>(closed_end_list ! i \<le> closed_end_list ! n) \<longrightarrow> \<not>i \<le> n" by blast
+      with tede(1) n(2) tsds_tede
+      have "\<not>Suc i \<le> n" by simp
+      hence n_Suc_i: "n < Suc i" by auto
+      hence "n \<le> i" by simp
+      with IH3 n tsds(2)
+      have "closed_start_list ! n = ts" by simp
+      with tsds(1)
+      have "closed_start_list ! n = closed_start_list ! Suc i" by simp
+      hence False using Suc(3) n_Suc_i closed_start_list_distinct[simplified distinct_conv_nth] by auto
+      thus ?thesis by simp
+    next
+      case False
+      hence "te \<le> ts + ds" by simp
+      with nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)] 4
+      show ?thesis by fastforce
+    qed
+  next
+    case 5
+    from tede closed_start_list_planI tede_t
+    obtain n where 
+      n: "n < length closed_start_list" "closed_start_list ! n = te" by auto
+    with 5 tsds tede_t
+    have "closed_start_list ! n < closed_start_list ! (Suc i)" by order
+    hence "\<not>closed_start_list ! (Suc i) \<le> closed_start_list ! n" by simp
+    with sorted_nth_mono[OF closed_start_list_sorted, OF _ n(1)]
+    have "\<not> Suc i \<le> n" by auto
+    hence n_Suc: "n < Suc i" by simp
+    hence "n \<le> i" by simp
+    with IH2 n tede(2)
+    have "closed_end_list ! n = te + de" by blast
+    with tede(1) 
+    have "closed_end_list ! n = closed_end_list ! Suc i" by simp
+    with closed_end_list_distinct 
+    have False using Suc(2) n_Suc unfolding distinct_conv_nth by simp 
+    thus ?thesis by auto 
+  qed
+  show ?case 
+    apply (intro allI impI)
+    subgoal for n
+      apply (cases "n < Suc i")
+      apply (intro conjI)
+      using IH1 apply simp
+      using IH2 apply simp
+      using IH3 apply simp
+      using step by simp
+    done
 qed
 
 lemma closed_active_count_ran:
-  assumes "a \<in> actions" 
-  shows "closed_active_count t a \<in> {0, 1}"
-  sorry
-
-lemma locked_before_and_in_instant:
-  "locked_before t p - card {a \<in> actions. (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq} = locked_in_instant t p"
+  shows "closed_active_count \<in> {0, 1}"
 proof -
-  have "locked_before t p - locked_in_instant t p = \<Sum>((\<lambda>a. card {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq}) ` locked_by p) - \<Sum>((\<lambda>a. card {s. s < t \<and> (s, at_start a) \<in> happ_seq}) ` locked_by p)" 
-    unfolding locked_before_def locked_in_instant_def open_active_count_def open_closed_active_count_def 
-    unfolding image_iff
+  have "\<not>1 < closed_active_count"
+  proof 
+    assume "1 < closed_active_count"
+    hence 1: "2 \<le> card {s'. s' \<le> t \<and> (s', at_start a) \<in> happ_seq} - card {s. s \<le> t \<and> (s, at_end a) \<in> happ_seq}" 
+      using finite_closed_ended finite_closed_started using closed_active_count_def by auto
+
+    define n where "n = card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}"
+    hence n1: "n + 2 \<le> card {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq}" using 1 by simp
+    
+    have closed_start_list_len: "length closed_start_list = card {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq}" unfolding closed_start_list_def length_sorted_list_of_set by blast
+    have n_closed_start_list: "n + 2 \<le> length closed_start_list" using n1 unfolding length_sorted_list_of_set using closed_start_list_def by simp
+
+    have closed_end_list_len: "length closed_end_list = card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}" unfolding closed_end_list_def length_sorted_list_of_set by blast
+    have n_closed_end_list: "n = length closed_end_list" using n_def unfolding length_sorted_list_of_set[symmetric] using closed_end_list_def by simp
+    
+    have closed_start_list_closed_end_list_len: "length closed_end_list + 2 \<le> length closed_start_list" using n_closed_end_list n_closed_start_list by blast
+
+    hence end_start_paired: 
+      "\<forall>n < length closed_end_list. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! n = t \<and> closed_end_list ! n = t + d)" 
+      "\<forall>n < length closed_end_list.(\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! n = t \<longrightarrow> closed_end_list ! n = t + d)" 
+      "\<forall>n < length closed_end_list. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_end_list ! n = t + d \<longrightarrow> closed_start_list ! n = t)" 
+      using closed_start_closed_end_paired by simp_all
+    
+    have n_ord: "\<forall>i < n. closed_start_list ! i < closed_start_list ! n"
+    proof -
+      have "\<forall>i < n. closed_start_list ! i \<le> closed_start_list ! n" using closed_start_list_sorted sorted_nth_mono n_closed_start_list by fastforce
+      moreover
+      have "\<forall>i < n. closed_start_list ! i \<noteq> closed_start_list ! n" using closed_start_list_distinct unfolding distinct_conv_nth using n_closed_start_list by simp
+      ultimately
+      show ?thesis by force
+    qed
+
+    have n_starts_after: "\<forall>i < n. closed_end_list ! i < closed_start_list ! n"
+    proof -
+      {fix i
+        assume i: "i < n"
+        hence sisn: "closed_start_list ! i < closed_start_list ! n" using n_ord by simp
+        with end_start_paired(1) closed_end_list_len n_def i
+        obtain ti di where
+          tidi: "(a, ti, di) \<in> ran \<pi> " 
+          "closed_start_list ! i = ti" 
+          "closed_end_list ! i = ti + di" by auto
+        from closed_start_list_nth_planE[of n] n_closed_start_list
+        obtain tn dn where
+          tndn: "(a, tn, dn) \<in> ran \<pi>" 
+          "closed_start_list ! n = tn" by auto
+      
+        assume "closed_end_list ! i \<ge> closed_start_list ! n"
+        with nso[THEN no_self_overlap_ran, OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
+        have "False" by fastforce
+      }
+      thus ?thesis by fastforce
+    qed
+
+    have n_Suc_n: "closed_start_list ! n < closed_start_list ! Suc n" 
+    proof -
+      have "closed_start_list ! n \<le> closed_start_list ! Suc n" using closed_start_list_sorted sorted_nth_mono n_closed_start_list by fastforce
+      moreover
+      have "closed_start_list ! n \<noteq> closed_start_list ! Suc n" using closed_start_list_distinct unfolding distinct_conv_nth using n_closed_start_list by simp
+      ultimately
+      show ?thesis by force
+    qed
+
+    have sn_t: "closed_start_list ! Suc n \<le> t" using closed_start_list_nth_ran n_closed_start_list by simp
+
+    obtain tn dn where
+      tndn: "(a, tn, dn) \<in> ran \<pi>"
+      "closed_start_list ! n = tn" using closed_start_list_nth_planE[of n] n_closed_start_list by auto
+
+    obtain tsn dsn where
+      tsndsn: "(a, tsn, dsn) \<in> ran \<pi>"
+      "closed_start_list ! Suc n = tsn" using closed_start_list_nth_planE[of "Suc n"] n_closed_start_list by auto
+
+    show False 
+    proof (cases "tn + dn \<le> t")
+      case True
+      with tndn
+      have "tn + dn \<in> set closed_end_list" using set_closed_end_list unfolding happ_seq_def plan_happ_seq_def by fast
+      then obtain n' where
+        "closed_end_list ! n' = tn + dn" 
+        "n' < length closed_end_list" unfolding in_set_conv_nth by blast
+      hence "tn + dn < closed_start_list ! n" using n_starts_after n_closed_end_list by metis
+      moreover
+      have "closed_start_list ! n \<le> tn + dn" using tndn plan_durations by simp
+      ultimately
+      show ?thesis by simp
+    next
+      case False
+      thus ?thesis using plan_overlap_cond[OF tndn(1) tsndsn(1)] sn_t n_Suc_n tndn(2) tsndsn(2) by fastforce
+    qed
+  qed
+  thus ?thesis by fastforce
 qed
 
-lemma locked_in_instant_and_after:
-  "locked_in_instant t p + card {a \<in> actions. (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq} = locked_after t p"
-  sorry
+lemma open_closed_active_count_ran:
+  shows "open_closed_active_count \<in> {0, 1}"
+proof -
+  have "\<not>open_closed_active_count > 1"
+  proof 
+    assume a: "1 < open_closed_active_count"
+    hence "open_active_count = 1 \<and> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq" unfolding open_closed_active_count_def
+      using open_active_count_ran apply (cases "(t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq") by auto
+    hence oac: "open_active_count = 1"
+      and ts: "(t, at_start a) \<in> happ_seq"
+      and nte: "(t, at_end a) \<notin> happ_seq" by simp+
 
-subsubsection \<open>Execution times\<close>
+    define n where "n = card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
+
+    have nos: "n + 1 = card {s'. s' < t \<and> (s', at_start a) \<in> happ_seq}" using n_def oac open_active_count_def by linarith
+
+    have nce: "n = card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}" 
+    proof -
+    have "{s'. s' < t \<and> (s', at_end a) \<in> happ_seq} = {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}" using nte 
+      apply -
+      apply (intro equalityI subsetI)
+      subgoal by auto
+      subgoal for s'
+        apply (cases "s' < t")
+        by auto
+      done
+      thus ?thesis using n_def finite_open_ended finite_closed_ended by simp
+    qed 
+
+    have ncs: "n + 2 = card {s'. s' \<le> t \<and> (s', at_start a) \<in> happ_seq}" 
+    proof -
+      have 1: "insert t {s'. s' < t \<and> (s', at_start a) \<in> happ_seq} = {s'. s' \<le> t \<and> (s', at_start a) \<in> happ_seq}" using ts
+        apply -
+        apply (intro equalityI subsetI)
+        subgoal by auto
+        subgoal for s'
+          apply (cases "s' < t")
+          by auto
+        done
+      show ?thesis 
+        apply (subst 1[symmetric])
+        apply (subst card_insert_if)
+        using finite_open_started apply simp
+        apply (subst nos[symmetric])+
+        by simp+
+    qed 
+
+    from nce ncs
+    show False using closed_active_count_ran unfolding closed_active_count_def by auto
+  qed
+  thus ?thesis by auto
+qed
+
+lemma open_active_count_1E:
+  assumes "open_active_count = 1"
+  shows "\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' < t \<and> t \<le> t' + d'"
+proof -
+  define n where "n = card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
+  have open_end_list_n: "length open_end_list = n" using n_def open_end_list_len by simp
+  have open_start_list_n: "length open_start_list = n + 1" using n_def assms open_start_list_len open_active_count_def by linarith
+
+  have end_start_paired: "\<forall>i<n. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! i = t \<and> open_end_list ! i = t + d)" 
+       "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_start_list ! i = t \<longrightarrow> open_end_list ! i = t + d)" 
+       "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_end_list ! i = t + d \<longrightarrow> open_start_list ! i = t)" 
+    using open_start_list_n open_end_list_n open_start_open_end_paired by auto  
+
+  from open_start_list_nth_planE[of n] open_start_list_n
+  obtain tn dn where
+    tndn: "(a, tn, dn) \<in> ran \<pi>" 
+    "open_start_list ! n = tn" by auto
+
+  have n_ord: "\<forall>i < n. open_start_list ! i < open_start_list ! n"
+  proof -
+    have "\<forall>i < n. open_start_list ! i \<le> open_start_list ! n" using open_start_list_sorted sorted_nth_mono open_start_list_n by fastforce
+    moreover
+    have "\<forall>i < n. open_start_list ! i \<noteq> open_start_list ! n" using open_start_list_distinct unfolding distinct_conv_nth using open_start_list_n by simp
+    ultimately
+    show ?thesis by force
+  qed
+
+  have n_starts_after: "\<forall>i < n. open_end_list ! i < open_start_list ! n"
+  proof -
+    {fix i
+      assume i: "i < n"
+      hence sisn: "open_start_list ! i < open_start_list ! n" using n_ord by simp
+      with end_start_paired(1) open_end_list_len n_def i
+      obtain ti di where
+        tidi: "(a, ti, di) \<in> ran \<pi> " 
+        "open_start_list ! i = ti" 
+        "open_end_list ! i = ti + di" by auto
+    
+      assume "open_end_list ! i \<ge> open_start_list ! n"
+      with nso[THEN no_self_overlap_ran, OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
+      have "False" by fastforce
+    }
+    thus ?thesis by fastforce
+  qed
+
+  { assume "tn + dn < t"
+    from open_end_list_planI[OF tndn(1) this] open_end_list_n
+    obtain i where "i < n" "open_end_list ! i = tn + dn" by blast
+    moreover
+    have "tn \<le> tn + dn" using plan_durations tndn by simp
+    ultimately
+    have False using n_starts_after tndn by auto
+  }
+  thus ?thesis using tndn open_start_list_nth_ran[of n] open_start_list_n by force
+qed
+
+lemma ended_le_started: "card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq} \<le> card {s. s < t \<and> (s, at_start a) \<in> happ_seq}"
+proof -
+  {
+    assume a: "card {s. s < t \<and> (s, at_start a) \<in> happ_seq} < card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
+    define n where "n = card {s'. s' < t \<and> (s', at_start a) \<in> happ_seq}"
+    have open_start_list_n: "length open_start_list = n" unfolding open_start_list_len n_def open_active_count_def by blast
+    have open_end_list_n: "length open_end_list > n" using n_def open_end_list_len a by argo
+    
+    have end_start_paired: "\<forall>i<n. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! i = t \<and> open_end_list ! i = t + d)" 
+         "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_start_list ! i = t \<longrightarrow> open_end_list ! i = t + d)" 
+         "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_end_list ! i = t + d \<longrightarrow> open_start_list ! i = t)" 
+      using open_start_list_n open_end_list_n open_start_open_end_paired by auto
+
+    have n_ord: "\<forall>i < n. open_end_list ! i < open_end_list ! n"
+    proof -
+      have "\<forall>i < n. open_end_list ! i \<le> open_end_list ! n" using open_end_list_sorted sorted_nth_mono open_end_list_n by fastforce
+      moreover
+      have "\<forall>i < n. open_end_list ! i \<noteq> open_end_list ! n" using open_end_list_distinct unfolding distinct_conv_nth using open_end_list_n by simp
+      ultimately
+      show ?thesis by force
+    qed
+
+    from open_end_list_nth_planE[of n] open_end_list_n
+    obtain tn dn where
+      tndn: "(a, tn, dn) \<in> ran \<pi>" 
+      "open_end_list ! n = tn + dn" by blast
+    {
+      have 1: "tn + dn < t" using open_end_list_nth_ran tndn open_end_list_n by force
+      moreover 
+      have 2: "0 \<le> dn" using plan_durations tndn by simp
+      moreover
+      have 3: "tn < t" using 1 2 by (meson add_increasing2 leD leI)
+      ultimately
+      have "tn + dn < t" "0 \<le> dn" "tn < t" by auto
+    } note tndn_ord = this
+    
+    from open_start_list_planI[OF tndn(1)] tndn_ord
+    obtain i where
+      i: "i<length open_start_list" "open_start_list ! i = tn" by blast
+    with end_start_paired(2) tndn(1) open_start_list_n
+    have "open_end_list ! i = tn + dn" by blast
+    with tndn(2) n_ord i(1) open_start_list_n
+    have False by auto
+  }
+  thus ?thesis by fastforce
+qed
+
+lemma open_active_count_0E:
+  assumes "open_active_count = 0"
+  shows "\<not>(\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' < t \<and> t \<le> t' + d')"
+proof 
+  assume "\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' < t \<and> t \<le> t' + d'"
+  then obtain t' d' where
+    td: "(a, t', d') \<in> ran \<pi>"
+    "t' < t"
+    "t \<le> t' + d'" by auto
+
+  define n where "n = card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
+  have open_end_list_n: "length open_end_list = n" using n_def open_end_list_len by simp
+  have open_start_list_n: "length open_start_list = n" using assms unfolding open_start_list_len n_def open_active_count_def le_imp_diff_is_add[OF ended_le_started] by simp
+
+  have end_start_paired: "\<forall>i<n. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! i = t \<and> open_end_list ! i = t + d)" 
+       "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_start_list ! i = t \<longrightarrow> open_end_list ! i = t + d)" 
+       "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_end_list ! i = t + d \<longrightarrow> open_start_list ! i = t)" 
+    using open_start_list_n open_end_list_n open_start_open_end_paired by auto
+
+  from open_start_list_planI td open_start_list_n
+  obtain i where
+    i: "i < length open_start_list" "open_start_list ! i = t'" by blast
+
+  with open_start_list_n td(1) end_start_paired(2)
+  have "open_end_list ! i = t' + d'" by blast
+  hence "t' + d' < t" using open_end_list_nth_ran i(1) unfolding open_start_list_n open_end_list_n by fastforce
+
+  with td(3)
+  show False by simp
+qed
+
+lemma open_active_count_1_iff:
+  "open_active_count = 1 \<longleftrightarrow> (\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' < t \<and> t \<le> t' + d')"
+  using open_active_count_1E open_active_count_ran open_active_count_0E by blast
+
+lemma open_active_count_0_iff:
+  "open_active_count = 0 \<longleftrightarrow> \<not>(\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' < t \<and> t \<le> t' + d')"
+  using open_active_count_1E open_active_count_ran open_active_count_0E by blast
+  
+
+end
+thm open_active_count_ran
+thm open_closed_active_count_ran
+thm closed_active_count_ran
+
+subsubsection \<open>Counting how many actions have locked a proposition\<close>
+
+definition locked_by where
+"locked_by p \<equiv> filter (\<lambda>a. p \<in> over_all a) action_list"
+
+definition "locked_before t p \<equiv> sum_list (map (open_active_count t) (locked_by p))"
+
+definition "locked_in_instant t p \<equiv> sum_list (map (open_closed_active_count t) (locked_by p))"              
+
+definition "locked_after t p \<equiv> sum_list (map (closed_active_count t) (locked_by p))"        
+
+definition "all_open_active_count t \<equiv> sum_list (map (open_active_count t) action_list)"
+
+subsubsection \<open>Alternative Definition\<close>
+
+lemma locked_by_alt: "{a \<in> actions. p \<in> over_all a} = set (locked_by p)"
+  unfolding locked_by_def set_filter set_action_list by blast
+
+
+
+
+subsubsection \<open>Relating the invariant sequence to the number of locks\<close>
+
+definition invs_during::"('proposition, 'time) invariant_sequence" where
+"invs_during \<equiv>
+  {(t', over_all a) | a t d t'. (a, t, d) \<in> ran \<pi> \<and> (t < t' \<and> t' < t + d)}"
+
+lemma "p \<in> plan_invs_before t \<longleftrightarrow> 0 < locked_before t p"
+proof (rule iffI)
+  assume "p \<in> plan_invs_before t"
+  then obtain a ta da where 
+    tada: "(a, ta, da) \<in> ran \<pi>" 
+    "p \<in> over_all a" 
+    "ta < t" 
+    "t \<le> ta + da" 
+    unfolding plan_invs_before_def inv_seq_def invs_at_def plan_inv_seq_def by blast
+  from tada(1) pap plan_actions_in_problem_def
+  have a_in_acts: "a \<in> actions" by fast
+  with tada
+  have a_locks: "a \<in> set (locked_by p)" using locked_by_alt by blast
+  have a_count: "open_active_count t a = 1" using open_active_count_1_iff tada a_in_acts by auto
+
+  from a_count a_locks
+  have e: "\<exists>x. x \<in> set (map (open_active_count t) (locked_by p)) \<and> 0 < x" by fastforce
+  show "0 < locked_before t p" 
+  proof -
+    { assume "locked_before t p = 0"
+      hence "\<forall>x \<in> set (map (open_active_count t) (locked_by p)). x = 0" 
+        unfolding locked_before_def sum_list_eq_0_iff by blast
+      with e
+      have False by auto
+    }
+    thus ?thesis by blast
+  qed
+next
+  assume a: "0 < locked_before t p" 
+  have "\<exists>x. x \<in> set (map (open_active_count t) (locked_by p)) \<and> 0 < x"
+  proof -
+    { assume "\<forall>x \<in> set (map (open_active_count t) (locked_by p)). 0 = x"
+      hence "0 = locked_before t p" unfolding locked_before_def sum_list_eq_0_iff by simp
+      with a 
+      have False by simp
+    }
+    thus ?thesis by fastforce
+  qed
+  then obtain a where
+    a_in_actions[simp]: 
+      "a \<in> actions"
+    and a: 
+      "p \<in> over_all a" 
+      "0 < open_active_count t a"
+    using locked_by_alt by auto
+  hence "open_active_count t a = 1" using open_active_count_ran by force
+  with open_active_count_1_iff
+  obtain ta da where
+    tada: "(a, ta, da) \<in> ran \<pi>" "ta < t" "t \<le> ta + da" by auto  
+  show "p \<in> plan_invs_before t" unfolding plan_invs_before_def invs_at_def inv_seq_def plan_inv_seq_def using tada a(1) by auto
+qed
+
+thm plan_state_seq_props[simplified Let_def]
+
+subsection \<open>Execution times\<close>
 
 definition pt::"'snap_action \<Rightarrow> ('time \<Rightarrow> 'time \<Rightarrow> bool) \<Rightarrow> 'time \<Rightarrow> 'time" where
 "pt a co t \<equiv> if (\<exists>t'. co t' t \<and> (t', a) \<in> happ_seq) 
@@ -1114,9 +1584,6 @@ abbreviation last_snap_exec'::"'snap_action \<Rightarrow> 'time \<Rightarrow> 't
 
 definition exec_time'::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
 "exec_time' a t \<equiv> (let t' = last_snap_exec' a t in t - t')"
-
-
-
 
  
 lemma a_not_in_b_last_unchanged: "(t, a) \<notin> happ_seq \<Longrightarrow> last_snap_exec' a t = last_snap_exec a t"
@@ -1411,6 +1878,160 @@ proof -
   with 1
   show ?thesis unfolding exec_time_def pt_def by (auto simp: Let_def)
 qed
+
+
+
+    (* have "start_list ! i \<le> end_list ! i \<and> end_list ! i < start_list ! (Suc i)" if "i < length end_list" for i
+      using that
+    proof (induction i)
+      case 0
+      have s0_le_e0: "start_list ! 0 \<le> end_list ! 0" 
+      proof (rule ccontr)
+        assume "\<not> start_list ! 0 \<le> end_list ! 0"
+        hence t_ord: "end_list ! 0 < start_list ! 0" by simp
+        
+        have st_0: "0 < length start_list" using 0 start_list_end_list_len by auto
+
+        have "end_list ! 0 \<in> set end_list" using 0 by simp
+        hence 1: "end_list ! 0 \<in> {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" unfolding set_sorted_list_of_set[OF finite_open_ended] end_list_def by blast
+        hence "(end_list ! 0, at_end a) \<in> happ_seq" by simp
+        then obtain d t' where
+          atd: "end_list ! 0 = t' + d"
+          "(a, t', d) \<in> ran \<pi>" using at_end_in_happ_seqE' a_in_acts unfolding happ_seq_def by blast
+        hence t'_start: "(t', at_start a) \<in> happ_seq" unfolding happ_seq_def plan_happ_seq_def by auto
+
+        have t': "t' \<le> end_list ! 0" using atd valid_plan_durs(1)[OF vp, simplified durations_ge_0_def] by simp
+        hence t'_t: "t' < t" using 1 by auto
+        
+        have "t' < start_list ! 0" using t_ord atd valid_plan_durs(1)[OF vp, simplified durations_ge_0_def]
+          by (metis add.commute add_less_cancel_left add_strict_increasing2)
+
+        have "t' \<in> {s'. s' < t \<and> (s', at_start a) \<in> happ_seq}" using t'_start t'_t by simp
+        hence "t' \<in> set start_list" using start_list_def set_sorted_list_of_set finite_open_started by blast
+        then obtain n' where
+          "start_list ! n' = t'" 
+          "n' < length start_list" unfolding in_set_conv_nth by blast
+        hence "start_list ! 0 \<le> t'" using sorted_nth_mono[OF start_list_sorted, of 0 n'] by simp
+        with t' t_ord
+        show False by simp
+      qed
+      moreover
+      have "end_list ! 0 < start_list ! Suc 0"
+      proof (rule ccontr)
+        assume "\<not> end_list ! 0 < start_list ! Suc 0"
+        hence t_ord: "start_list ! 1 \<le> end_list ! 0" by simp
+
+        
+        have 1: "1 < length start_list" using 0 start_list_end_list_len by auto
+        hence "start_list ! 1 \<in> {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using set_sorted_list_of_set[OF finite_open_started]
+          unfolding start_list_def using in_set_conv_nth by auto
+        hence "(start_list ! 1, at_start a) \<in> happ_seq" by simp
+        from at_start_in_happ_seqE'[OF a_in_acts this[simplified happ_seq_def]]
+        obtain d where
+          d: "(a, start_list ! 1, d) \<in> ran \<pi>" by auto
+        hence "0 \<le> d" using valid_plan_durs vp durations_ge_0_def by fast
+        note d = d this
+
+        hence end_of_start: "(start_list ! 1 + d, at_end a) \<in> happ_seq" unfolding plan_happ_seq_def happ_seq_def by blast
+
+        have e: "end_list ! 0 \<in> set end_list" using 0 by simp
+        hence e_0: "end_list ! 0 < t" unfolding set_sorted_list_of_set[OF finite_open_ended] end_list_def by simp
+  
+        show False
+        proof (cases "start_list ! 1 + d < end_list ! 0")
+          case True
+          
+          hence st_t: "start_list ! 1 + d < t" using e_0 by simp
+          hence "start_list ! 1 + d \<in> set end_list" unfolding set_sorted_list_of_set[OF finite_open_ended] end_list_def 
+            using end_of_start by simp
+          then obtain n' where
+            n': "end_list ! n' = start_list ! 1 + d" 
+            "n' < length end_list" unfolding in_set_conv_nth by blast
+          with True
+          have "n' < 0" using end_list_sorted sorted_nth_mono by fastforce
+          thus ?thesis by auto 
+        next
+          case False
+          hence r: "end_list ! 0 \<le> start_list ! 1 + d" by auto
+
+          have "(end_list ! 0, at_end a) \<in> happ_seq" using e set_sorted_list_of_set finite_open_ended unfolding end_list_def by blast
+          from at_end_in_happ_seqE''[OF a_in_acts this] 
+          obtain t' d' where
+            t'd': "(a, t', d') \<in> ran \<pi>"
+            "end_list ! 0 = t' + d'" by auto
+          with r
+          have r': "t' + d' \<le> start_list ! 1 + d" by simp
+
+          show ?thesis 
+          proof (cases "start_list ! 1 = t'"; cases "d = d'")
+            assume "start_list ! 1 = t'" "d = d'"
+            have "start_list ! 0 \<le> start_list ! 1"  using 0 start_list_end_list_len 
+              apply -
+              apply (rule sorted_nth_mono[OF start_list_sorted])
+              by auto
+            moreover
+            have "start_list ! 0 \<noteq> start_list ! 1" using start_list_distinct
+              by (metis \<open>1 < length start_list\<close> less_numeral_extra(1) order.strict_iff_order sorted_wrt_nth_less start_list_sorted strict_sorted_iff)
+            ultimately
+            have "start_list ! 0 < start_list ! 1" by simp
+            from start_list_nthE 0 start_list_end_list_len
+            obtain t0 d0 where
+              t0d0: "(a, t0, d0) \<in> ran \<pi>"
+                "start_list ! 0 = t0" by fastforce
+            show False
+            proof (cases "t0 + d0 < end_list ! 0")
+              case True
+              with e_0
+              have "t0 + d0 \<in> {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" using t0d0 unfolding happ_seq_def plan_happ_seq_def by auto
+              hence "t0 + d0 \<in> set end_list" using set_sorted_list_of_set finite_open_ended end_list_def by blast
+              then obtain n0 where
+                "end_list ! n0 = t0 + d0" 
+                "n0 < length end_list" using in_set_conv_nth by metis
+              hence "end_list ! 0 \<le> t0 + d0" using sorted_nth_mono[OF end_list_sorted] by fastforce 
+              thus False using True by simp
+            next
+              case False
+              hence t0d0': "end_list ! 0 \<le> t0 + d0" by simp
+              from s0_le_e0 t0d0
+              have "t0 \<le> end_list ! 0" by simp
+              with nso[THEN no_self_overlap_spec, OF t0d0(1) t'd'(1)] \<open>start_list ! 1 = t'\<close> \<open>start_list ! 0 < start_list ! 1\<close> t0d0
+              have "\<not> (t0 \<le> t' \<and> t' \<le> t0 + d0)" by fastforce
+              with \<open>start_list ! 1 = t'\<close> \<open>start_list ! 0 < start_list ! 1\<close> \<open>start_list ! 0 = t0\<close>
+              have "t0 + d0 < t'" by auto
+              with False t'd' \<open>start_list ! 1 = t'\<close> t_ord
+              show ?thesis by order
+            qed
+          next
+            assume "start_list ! 1 = t'" "d \<noteq> d'"
+            with r nso[THEN no_self_overlap_spec, OF d(1) t'd'(1)] t'd'(2)
+            have "\<not> (t' \<le> start_list ! 1 + d)" by blast
+            with d \<open>start_list ! 1 = t'\<close> valid_plan_durs(1)[OF vp, simplified durations_ge_0_def]
+            show ?thesis by simp
+          next
+            assume a: "start_list ! 1 \<noteq> t'" "d = d'"
+            with r nso[THEN no_self_overlap_spec, OF d(1) t'd'(1)] t'd'(2)
+            have "\<not> (start_list ! 1 \<le> t' \<and> t' \<le> start_list ! 1 + d)" by simp
+            thus ?thesis by (metis a(2) add_le_cancel_right d(1) no_self_overlap_spec nso r' t'd'(1,2) t_ord)
+          next
+            assume a: "start_list ! 1 \<noteq> t'" "d \<noteq> d'"
+            with nso[THEN no_self_overlap_spec, OF d(1) t'd'(1)]
+            have "\<not> (start_list ! 1 \<le> t' \<and> t' \<le> start_list ! 1 + d)" by simp
+            then consider "start_list ! 1 > t'" | "start_list ! 1 + d < t'" by auto
+            
+            thus ?thesis
+              apply cases
+              using r  t_ord unfolding t'd' d
+               apply (metis d(1) nless_le no_self_overlap_spec nso t'd'(1))
+              by (metis durations_ge_0_def leD le_add_same_cancel1 order.trans r t'd'(1,2) valid_plan_def vp)
+          qed
+        qed
+      qed
+      ultimately show ?case by simp
+    next
+      case (Suc i)
+
+      then show ?case sorry
+    qed *)
 
 
 end

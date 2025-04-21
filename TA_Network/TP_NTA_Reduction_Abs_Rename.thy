@@ -3526,9 +3526,9 @@ lemma enter_end_instant_okay:
       and start_not_scheduled: "(t, at_start (actions ! n)) \<notin> planning_sem.happ_seq"
 
       and true_props: "\<forall>p \<in> set props. p \<in> M l \<and> PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (1::int)"
-      and false_props: "\<forall>p \<in> set props. p \<notin> M l \<and> PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some 0"
+      and false_props: "\<forall>p \<in> set props. p \<notin> M l \<and> PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some 0"                       
       and locked_props: "\<forall>p \<in> set props. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> (\<exists>x. v (PropLock p) = Some (int_of_nat (partially_updated_locked_before t p n)))"
-      and active_count: "v ActsActive = Some (int_of_nat (planning_sem.all_active_count t))"
+      and active_count: "v ActsActive = Some (int_of_nat (planning_sem.all_open_active_count t))"
       and v_bounded: "bounded (map_of nta_vars) v"
       and planning_state: "v PlanningLock = Some 1"
 
