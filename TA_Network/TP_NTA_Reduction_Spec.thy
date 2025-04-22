@@ -311,7 +311,7 @@ let
 in 
   (Running a, bexp.true, guard, Sil (STR ''''), unlock_invs, resets, EndInstant a)
 "
-
+(* To do: The not-locked check should only apply to those deletions which are not immediately overwritten by additions *)
 definition end_edge_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
 "end_edge_spec a \<equiv> 
 let 

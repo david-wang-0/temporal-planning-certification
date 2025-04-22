@@ -120,12 +120,22 @@ lemma plan_state_seq_valid: "valid_state_seq plan_state_seq"
 
 lemmas plan_state_seq_props = plan_state_seq_valid[simplified valid_state_seq_def valid_state_sequence_def]
 
+lemma at_start_in_happ_seqI:
+  assumes "(a, t, d) \<in> ran \<pi>"
+  shows "(t, at_start a) \<in> happ_seq"
+  using assms unfolding happ_seq_def plan_happ_seq_def by blast
 
 lemma at_start_in_happ_seqE'':
   assumes a_in_acts: "a \<in> actions"
       and sn: "(s, at_start a) \<in> happ_seq"
     shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t"
   using assms at_start_in_happ_seqE' happ_seq_def by simp
+
+lemma at_end_in_happ_seqI:
+  assumes "(a, t, d) \<in> ran \<pi>"
+  shows "(t + d, at_end a) \<in> happ_seq"
+  using assms unfolding happ_seq_def plan_happ_seq_def by blast
+  
 
 lemma at_end_in_happ_seqE'':
   assumes a_in_acts: "a \<in> actions"
@@ -475,7 +485,6 @@ lemmas plan_overlap_cond = nso[THEN no_self_overlap_ran]
 context
   fixes t::'time
     and a::'action
-  assumes a_in_acts: "a \<in> actions"
 begin
 
 lemma finite_open_started: "finite {s'. s' < t \<and> (s', at_start a) \<in> happ_seq}" using finite_start_tps by auto
@@ -491,7 +500,7 @@ definition closed_active_count where
 "closed_active_count \<equiv> card {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq} - card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}"
 
 definition open_closed_active_count where
-"open_closed_active_count \<equiv> open_active_count + (if (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq then 1 else 0)"
+"open_closed_active_count \<equiv> open_active_count - (if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0)"
 
 subsubsection \<open>Properties of these sets\<close>
 
@@ -505,6 +514,9 @@ lemma open_start_list_len: "length (open_start_list) = card {s. s < t \<and> (s,
 lemma open_start_list_sorted: "sorted (open_start_list)" using sorted_sorted_list_of_set open_start_list_def by simp
 lemma open_start_list_distinct: "distinct (open_start_list)" using distinct_sorted_list_of_set open_start_list_def by auto
 lemma set_open_start_list: "set (open_start_list) = {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using open_start_list_def set_sorted_list_of_set finite_open_started by auto
+context 
+  assumes a_in_acts: "a \<in> actions"
+begin
 
 lemma open_start_list_nth_happ_seqE: "((open_start_list) ! i, at_start a) \<in> happ_seq" if "i < length (open_start_list)" for i 
 proof -
@@ -1290,49 +1302,8 @@ proof -
   have "\<not>open_closed_active_count > 1"
   proof 
     assume a: "1 < open_closed_active_count"
-    hence "open_active_count = 1 \<and> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq" unfolding open_closed_active_count_def
-      using open_active_count_ran apply (cases "(t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq") by auto
-    hence oac: "open_active_count = 1"
-      and ts: "(t, at_start a) \<in> happ_seq"
-      and nte: "(t, at_end a) \<notin> happ_seq" by simp+
-
-    define n where "n = card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
-
-    have nos: "n + 1 = card {s'. s' < t \<and> (s', at_start a) \<in> happ_seq}" using n_def oac open_active_count_def by linarith
-
-    have nce: "n = card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}" 
-    proof -
-    have "{s'. s' < t \<and> (s', at_end a) \<in> happ_seq} = {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}" using nte 
-      apply -
-      apply (intro equalityI subsetI)
-      subgoal by auto
-      subgoal for s'
-        apply (cases "s' < t")
-        by auto
-      done
-      thus ?thesis using n_def finite_open_ended finite_closed_ended by simp
-    qed 
-
-    have ncs: "n + 2 = card {s'. s' \<le> t \<and> (s', at_start a) \<in> happ_seq}" 
-    proof -
-      have 1: "insert t {s'. s' < t \<and> (s', at_start a) \<in> happ_seq} = {s'. s' \<le> t \<and> (s', at_start a) \<in> happ_seq}" using ts
-        apply -
-        apply (intro equalityI subsetI)
-        subgoal by auto
-        subgoal for s'
-          apply (cases "s' < t")
-          by auto
-        done
-      show ?thesis 
-        apply (subst 1[symmetric])
-        apply (subst card_insert_if)
-        using finite_open_started apply simp
-        apply (subst nos[symmetric])+
-        by simp+
-    qed 
-
-    from nce ncs
-    show False using closed_active_count_ran unfolding closed_active_count_def by auto
+    hence "1 < open_active_count" unfolding open_closed_active_count_def by simp
+    thus False using open_active_count_ran by auto
   qed
   thus ?thesis by auto
 qed
@@ -1393,7 +1364,7 @@ proof -
   thus ?thesis using tndn open_start_list_nth_ran[of n] open_start_list_n by force
 qed
 
-lemma ended_le_started: "card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq} \<le> card {s. s < t \<and> (s, at_start a) \<in> happ_seq}"
+lemma open_ended_le_open_started: "card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq} \<le> card {s. s < t \<and> (s, at_start a) \<in> happ_seq}"
 proof -
   {
     assume a: "card {s. s < t \<and> (s, at_start a) \<in> happ_seq} < card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
@@ -1452,7 +1423,7 @@ proof
 
   define n where "n = card {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
   have open_end_list_n: "length open_end_list = n" using n_def open_end_list_len by simp
-  have open_start_list_n: "length open_start_list = n" using assms unfolding open_start_list_len n_def open_active_count_def le_imp_diff_is_add[OF ended_le_started] by simp
+  have open_start_list_n: "length open_start_list = n" using assms unfolding open_start_list_len n_def open_active_count_def le_imp_diff_is_add[OF open_ended_le_open_started] by simp
 
   have end_start_paired: "\<forall>i<n. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! i = t \<and> open_end_list ! i = t + d)" 
        "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_start_list ! i = t \<longrightarrow> open_end_list ! i = t + d)" 
@@ -1471,6 +1442,142 @@ proof
   show False by simp
 qed
 
+lemma closed_active_count_1E:
+  assumes "closed_active_count = 1"
+  shows "\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' \<le> t \<and> t < t' + d'"
+proof -
+  define n where "n = card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}"
+  have closed_end_list_n: "length closed_end_list = n" using n_def closed_end_list_len by simp
+  have closed_start_list_n: "length closed_start_list = n + 1" using n_def assms closed_start_list_len closed_active_count_def by linarith
+
+  have end_start_paired: "\<forall>i<n. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! i = t \<and> closed_end_list ! i = t + d)" 
+       "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! i = t \<longrightarrow> closed_end_list ! i = t + d)" 
+       "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_end_list ! i = t + d \<longrightarrow> closed_start_list ! i = t)" 
+    using closed_start_list_n closed_end_list_n closed_start_closed_end_paired by auto  
+
+  from closed_start_list_nth_planE[of n] closed_start_list_n
+  obtain tn dn where
+    tndn: "(a, tn, dn) \<in> ran \<pi>" 
+    "closed_start_list ! n = tn" by auto
+
+  have n_ord: "\<forall>i < n. closed_start_list ! i < closed_start_list ! n"
+  proof -
+    have "\<forall>i < n. closed_start_list ! i \<le> closed_start_list ! n" using closed_start_list_sorted sorted_nth_mono closed_start_list_n by fastforce
+    moreover
+    have "\<forall>i < n. closed_start_list ! i \<noteq> closed_start_list ! n" using closed_start_list_distinct unfolding distinct_conv_nth using closed_start_list_n by simp
+    ultimately
+    show ?thesis by force
+  qed
+
+  have n_starts_after: "\<forall>i < n. closed_end_list ! i < closed_start_list ! n"
+  proof -
+    {fix i
+      assume i: "i < n"
+      hence sisn: "closed_start_list ! i < closed_start_list ! n" using n_ord by simp
+      with end_start_paired(1) closed_end_list_len n_def i
+      obtain ti di where
+        tidi: "(a, ti, di) \<in> ran \<pi> " 
+        "closed_start_list ! i = ti" 
+        "closed_end_list ! i = ti + di" by auto
+    
+      assume "closed_end_list ! i \<ge> closed_start_list ! n"
+      with nso[THEN no_self_overlap_ran, OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
+      have "False" by fastforce
+    }
+    thus ?thesis by fastforce
+  qed
+
+  { assume "tn + dn \<le> t"
+    from closed_end_list_planI[OF tndn(1) this] closed_end_list_n
+    obtain i where "i < n" "closed_end_list ! i = tn + dn" by blast
+    moreover
+    have "tn \<le> tn + dn" using plan_durations tndn by simp
+    ultimately
+    have False using n_starts_after tndn by auto
+  }
+  thus ?thesis using tndn closed_start_list_nth_ran[of n] closed_start_list_n by force
+qed
+
+lemma closed_ended_le_closed_started: "card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq} \<le> card {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq}"
+proof -
+  {
+    assume a: "card {s. s \<le> t \<and> (s, at_start a) \<in> happ_seq} < card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}"
+    define n where "n = card {s'. s' \<le> t \<and> (s', at_start a) \<in> happ_seq}"
+    have closed_start_list_n: "length closed_start_list = n" unfolding closed_start_list_len n_def closed_active_count_def by blast
+    have closed_end_list_n: "length closed_end_list > n" using n_def closed_end_list_len a by argo
+    
+    have end_start_paired: "\<forall>i<n. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! i = t \<and> closed_end_list ! i = t + d)" 
+         "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! i = t \<longrightarrow> closed_end_list ! i = t + d)" 
+         "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_end_list ! i = t + d \<longrightarrow> closed_start_list ! i = t)" 
+      using closed_start_list_n closed_end_list_n closed_start_closed_end_paired by auto
+
+    have n_ord: "\<forall>i < n. closed_end_list ! i < closed_end_list ! n"
+    proof -
+      have "\<forall>i < n. closed_end_list ! i \<le> closed_end_list ! n" using closed_end_list_sorted sorted_nth_mono closed_end_list_n by fastforce
+      moreover
+      have "\<forall>i < n. closed_end_list ! i \<noteq> closed_end_list ! n" using closed_end_list_distinct unfolding distinct_conv_nth using closed_end_list_n by simp
+      ultimately
+      show ?thesis by force
+    qed
+
+    from closed_end_list_nth_planE[of n] closed_end_list_n
+    obtain tn dn where
+      tndn: "(a, tn, dn) \<in> ran \<pi>" 
+      "closed_end_list ! n = tn + dn" by blast
+    {
+      have 1: "tn + dn \<le> t" using closed_end_list_nth_ran tndn closed_end_list_n by force
+      moreover 
+      have 2: "0 \<le> dn" using plan_durations tndn by simp
+      moreover
+      have 3: "tn \<le> t" using 1 2
+        by (meson dual_order.trans le_add_same_cancel1)
+      ultimately
+      have "tn + dn \<le> t" "0 \<le> dn" "tn \<le> t" by auto
+    } note tndn_ord = this
+    
+    from closed_start_list_planI[OF tndn(1)] tndn_ord
+    obtain i where
+      i: "i<length closed_start_list" "closed_start_list ! i = tn" by blast
+    with end_start_paired(2) tndn(1) closed_start_list_n
+    have "closed_end_list ! i = tn + dn" by blast
+    with tndn(2) n_ord i(1) closed_start_list_n
+    have False by auto
+  }
+  thus ?thesis by fastforce
+qed
+
+lemma closed_active_count_0E:
+  assumes "closed_active_count = 0"
+  shows "\<not>(\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' \<le> t \<and> t < t' + d')"
+proof 
+  assume "\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' \<le> t \<and> t < t' + d'"
+  then obtain t' d' where
+    td: "(a, t', d') \<in> ran \<pi>"
+    "t'\<le> t"
+    "t < t' + d'" by auto
+
+  define n where "n = card {s'. s' \<le> t \<and> (s', at_end a) \<in> happ_seq}"
+  have closed_end_list_n: "length closed_end_list = n" using n_def closed_end_list_len by simp
+  have closed_start_list_n: "length closed_start_list = n" using assms unfolding closed_start_list_len n_def closed_active_count_def le_imp_diff_is_add[OF closed_ended_le_closed_started] by simp
+
+  have end_start_paired: "\<forall>i<n. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! i = t \<and> closed_end_list ! i = t + d)" 
+       "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! i = t \<longrightarrow> closed_end_list ! i = t + d)" 
+       "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_end_list ! i = t + d \<longrightarrow> closed_start_list ! i = t)" 
+    using closed_start_list_n closed_end_list_n closed_start_closed_end_paired by auto
+
+  from closed_start_list_planI td closed_start_list_n
+  obtain i where
+    i: "i < length closed_start_list" "closed_start_list ! i = t'" by blast
+
+  with closed_start_list_n td(1) end_start_paired(2)
+  have "closed_end_list ! i = t' + d'" by blast
+  hence "t' + d' \<le> t" using closed_end_list_nth_ran i(1) unfolding closed_start_list_n closed_end_list_n by fastforce
+
+  with td(3)
+  show False by simp
+qed
+  
+
 lemma open_active_count_1_iff:
   "open_active_count = 1 \<longleftrightarrow> (\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' < t \<and> t \<le> t' + d')"
   using open_active_count_1E open_active_count_ran open_active_count_0E by blast
@@ -1478,8 +1585,101 @@ lemma open_active_count_1_iff:
 lemma open_active_count_0_iff:
   "open_active_count = 0 \<longleftrightarrow> \<not>(\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' < t \<and> t \<le> t' + d')"
   using open_active_count_1E open_active_count_ran open_active_count_0E by blast
-  
 
+lemma open_active_count_1_if_ending:
+  assumes "(t, at_end a) \<in> happ_seq"
+      and "(t, at_start a) \<notin> happ_seq"
+  shows "open_active_count = 1" 
+  apply (subst open_active_count_1_iff)
+  using at_end_in_happ_seqE''[OF a_in_acts assms(1)]
+  apply -
+  apply (drule ex1_implies_ex)
+  apply (elim exE)
+  subgoal for x
+    apply (induction x)
+    subgoal for t' d
+      apply (subst (asm) prod.case)+
+      apply (cases "t' < t")
+       apply blast
+      apply (erule conjE)
+      apply (frule at_start_in_happ_seqI)
+      using assms plan_durations by fastforce
+    done
+  done
+
+lemma open_active_count_0_if_start_scheduled:
+  assumes "(t, at_start a) \<in> happ_seq"
+    shows "open_active_count = 0"
+proof -
+  have "open_active_count \<noteq> 1"
+  proof
+    assume "open_active_count = 1"
+    then obtain t' d' where
+      "(a, t', d') \<in> ran \<pi>" "t' < t" "t \<le> t' + d'" 
+      using open_active_count_1_iff by auto
+    moreover
+    obtain d'' where
+      "(a, t, d'') \<in> ran \<pi>" using assms(1) at_start_in_happ_seqE'' a_in_acts by blast 
+    ultimately
+    show False using nso[THEN no_self_overlap_ran] by fastforce
+  qed
+  thus ?thesis using open_active_count_ran by simp
+qed
+
+
+lemma closed_active_count_1_iff:
+  "closed_active_count = 1 \<longleftrightarrow> (\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' \<le> t \<and> t < t' + d')"
+  using closed_active_count_1E closed_active_count_ran closed_active_count_0E by blast
+
+lemma closed_active_count_0_iff:
+  "closed_active_count = 0 \<longleftrightarrow> \<not>(\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' \<le> t \<and> t < t' + d')"
+  using closed_active_count_1E closed_active_count_ran closed_active_count_0E by blast
+
+lemma closed_active_count_0_if_end_scheduled:
+  assumes "(t, at_end a) \<in> happ_seq"
+    shows "closed_active_count = 0" 
+proof -
+  have "closed_active_count \<noteq> 1"
+  proof
+    assume "closed_active_count = 1"
+    with closed_active_count_1_iff
+    obtain ta da where
+      tada: "(a, ta, da) \<in> ran \<pi>" 
+        "ta \<le> t" 
+        "t < ta + da" by blast
+    moreover
+    obtain te de where
+      tede: "(a, te, de) \<in> ran \<pi>" 
+        "te + de = t" using assms(1) at_end_in_happ_seqE'' a_in_acts by blast
+    have "te \<le> te + de" using plan_durations tede by auto
+    hence  "te \<le> t" using at_start_in_happ_seqI[OF tede(1)] tede(2) assms apply (cases "te = te + de") by auto
+    ultimately
+    have "te + de < ta \<or> ta + da < te"  using nso_double_act_spec[OF nso valid_plan_durs(1)[OF vp] tada(1) tede(1)] tada(3) tede(2) by auto
+    then consider "te + de < ta" | "ta + da < te" by auto
+    thus False using \<open>t < ta + da\<close> \<open>te + de = t\<close> \<open>ta \<le> t\<close> \<open>te \<le> t\<close> apply cases by auto
+  qed
+  thus ?thesis using closed_active_count_ran by simp
+qed
+
+lemma closed_active_count_1_if_starting:
+  assumes "(t, at_start a) \<in> happ_seq"
+      and "(t, at_end a) \<notin> happ_seq"
+    shows "closed_active_count = 1"
+proof -
+  from assms(1)
+  obtain d where
+    d: "(a, t, d) \<in> ran \<pi>" using at_start_in_happ_seqE'' a_in_acts by blast
+  hence "0 \<le> d" using plan_durations by simp
+  moreover
+  have "(t + d, at_end a) \<in> happ_seq" using at_end_in_happ_seqI d by simp
+  ultimately
+  have "t < t + d" using assms(2) apply (cases "d = 0") by auto
+  with d
+  show ?thesis using closed_active_count_1_iff by blast
+qed
+
+
+end
 end
 thm open_active_count_ran
 thm open_closed_active_count_ran
@@ -1492,9 +1692,9 @@ definition locked_by where
 
 definition "locked_before t p \<equiv> sum_list (map (open_active_count t) (locked_by p))"
 
-definition "locked_in_instant t p \<equiv> sum_list (map (open_closed_active_count t) (locked_by p))"              
+definition "locked_during t p \<equiv> sum_list (map (open_closed_active_count t) (locked_by p))"
 
-definition "locked_after t p \<equiv> sum_list (map (closed_active_count t) (locked_by p))"        
+definition "locked_after t p \<equiv> sum_list (map (closed_active_count t) (locked_by p))"
 
 definition "all_open_active_count t \<equiv> sum_list (map (open_active_count t) action_list)"
 
@@ -1503,16 +1703,89 @@ subsubsection \<open>Alternative Definition\<close>
 lemma locked_by_alt: "{a \<in> actions. p \<in> over_all a} = set (locked_by p)"
   unfolding locked_by_def set_filter set_action_list by blast
 
+lemma locked_during_before: "locked_during t p = locked_before t p - sum_list (map (\<lambda>a. (if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0)) (locked_by p))"
+proof -
+  have 1:"(\<Sum>a\<leftarrow>xs. if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0) \<le> sum_list (map (open_active_count t) xs)" if "set xs \<subseteq> actions" for xs
+    using that 
+    apply (induction xs)
+     apply simp
+    subgoal for x xs
+      apply (subst sum_list.eq_foldr)+
+      apply (subst list.map)+
+      apply (subst foldr.simps)+
+      apply (subst comp_apply)+
+      apply (subst sum_list.eq_foldr[symmetric])+
+      apply (cases "(t, at_start x) \<notin> happ_seq \<and> (t, at_end x) \<in> happ_seq")
+      using open_active_count_1_if_ending apply simp
+      using open_active_count_ran by auto
+    done
 
+  have 2: "sum_list (map (open_closed_active_count t) xs) = sum_list (map (open_active_count t) xs) - (\<Sum>a\<leftarrow>xs. if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0)" if "set xs \<subseteq> actions" for xs
+    using that
+  proof (induction xs)
+    case Nil
+    then show ?case by simp
+  next
+    case (Cons x xs)
+    then show ?case apply (subst sum_list.eq_foldr)+
+      apply (subst list.map)+
+      apply (subst foldr.simps)+
+      apply (subst comp_apply)+
+      apply (subst sum_list.eq_foldr[symmetric])+
+      apply (subst open_closed_active_count_def)
+      apply (cases "(t, at_start x) \<notin> happ_seq \<and> (t, at_end x) \<in> happ_seq")
+      subgoal
+        apply simp
+        apply (subst add_diff_assoc2)
+         using open_active_count_1_if_ending
+         apply simp
+        apply (subst add_diff_assoc)
+        using 1 apply simp
+        by simp
+      subgoal
+        apply (subst if_not_P)
+         apply assumption
+        apply (subst if_not_P)
+         apply assumption
+        apply simp
+        apply (subst add_diff_assoc[symmetric]) 
+        using 1 apply simp
+        by simp
+      done
+  qed
+  have "set (locked_by p) \<subseteq> actions" using locked_by_alt by auto
+  thus ?thesis unfolding locked_during_def locked_before_def using 2 by simp
+qed
 
+lemma locked_during_and_after: "locked_after t p = locked_during t p + sum_list (map (\<lambda>a. (if (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq then 1 else 0)) (locked_by p))"
+proof -
+  have "sum_list (map (closed_active_count t) xs) =
+        sum_list (map (open_active_count t) xs) - (\<Sum>a\<leftarrow>xs. if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0) + (\<Sum>a\<leftarrow>xs. if (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq then 1 else 0)" if "set xs \<subseteq> actions" for xs 
+    using that
+    apply (induction xs)
+     apply simp
+    subgoal for x xs 
+      apply (subst sum_list.eq_foldr)+
+      apply (subst list.map)+
+      apply (subst foldr.simps)+
+      apply (subst comp_apply)+
+      apply (subst sum_list.eq_foldr[symmetric])+
+      apply (cases "(t, at_start x) \<in> happ_seq"; cases "(t, at_end x) \<in> happ_seq")
+      apply simp
+      using open_active_count_0_if_start_scheduled closed_active_count_0_if_end_scheduled apply simp
+  moreover
+  have "set (locked_by p) \<subseteq> actions" using locked_by_alt by auto
+  ultimately
+  show ?thesis unfolding locked_during_before locked_after_def locked_before_def by simp
+qed
 
 subsubsection \<open>Relating the invariant sequence to the number of locks\<close>
 
 definition invs_during::"('proposition, 'time) invariant_sequence" where
 "invs_during \<equiv>
-  {(t', over_all a) | a t d t'. (a, t, d) \<in> ran \<pi> \<and> (t < t' \<and> t' < t + d)}"
+  {(s, over_all a) | a t d s. (a, t, d) \<in> ran \<pi> \<and> (t < s \<and> s < t + d)}"
 
-lemma "p \<in> plan_invs_before t \<longleftrightarrow> 0 < locked_before t p"
+lemma in_invs_before_iff_locked: "p \<in> plan_invs_before t \<longleftrightarrow> 0 < locked_before t p"
 proof (rule iffI)
   assume "p \<in> plan_invs_before t"
   then obtain a ta da where 
@@ -1564,7 +1837,7 @@ next
   show "p \<in> plan_invs_before t" unfolding plan_invs_before_def invs_at_def inv_seq_def plan_inv_seq_def using tada a(1) by auto
 qed
 
-thm plan_state_seq_props[simplified Let_def]
+
 
 subsection \<open>Execution times\<close>
 
