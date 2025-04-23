@@ -1380,6 +1380,28 @@ proof -
   thus "card (ran \<pi>) = 0" by blast
 qed
 
+lemma no_actions_after_final_timepoint:
+  assumes finite_plan
+    "0 < length htpl"
+    "time_index (length htpl - 1) < t"
+  shows "happ_at plan_happ_seq t = {}"
+proof -
+  { assume "happ_at plan_happ_seq t \<noteq> {}"
+    then obtain h where
+      "(t, h) \<in> plan_happ_seq"
+      "t \<in> htps" using a_in_B_iff_t_in_htps by blast
+    hence "t \<in> set htpl" using set_htpl_eq_htps assms by blast
+    then obtain l where
+      "l < length htpl"
+      "time_index l = t" using time_index_img_list by force
+    with time_index_sorted_list
+    have "t \<le> time_index (length htpl - 1)" using assms by auto
+    with assms
+    have False by simp
+  }
+  thus ?thesis by blast
+qed
+  
 subsection \<open>Fluents and Constants in a Plan\<close>
 
 text \<open>Actions only refer to fluent propositions. The entire problem is fluent.\<close>

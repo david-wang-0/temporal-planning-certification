@@ -311,7 +311,7 @@ let
 in 
   (Running a, bexp.true, guard, Sil (STR ''''), unlock_invs, resets, EndInstant a)
 "
-(* To do: The not-locked check should only apply to those deletions which are not immediately overwritten by additions *)
+(* To do!!!: The not-locked check should only apply to those deletions which are not immediately overwritten by additions *)
 definition end_edge_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
 "end_edge_spec a \<equiv> 
 let 
@@ -330,7 +330,7 @@ in
   (end_instant, check, [], Sil (STR ''''), adds @ dels, [], off)
 "
 
-  (* To do: Implement abstract definition later *)
+(* To do: Make it optional to check invariants for some actions by adding another edge from starting to ending. *)
   (* This reduction has a different definition of no self overlap. Ends can interfere.
      Actions can also have a duration of 0, if this matters. *)
 definition action_to_automaton_spec::"'action \<Rightarrow> 
