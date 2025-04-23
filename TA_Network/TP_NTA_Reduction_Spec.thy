@@ -258,7 +258,7 @@ let
   
   guard = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec start_snap) @ map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec start_snap);
   
-  not_locked_check = map (is_prop_lock_ab 0) (dels start_snap);
+  not_locked_check = map (is_prop_lock_ab 0) (filter (\<lambda>p. p \<notin> set (adds start_snap)) (dels start_snap));
   pre_check = map (is_prop_ab 1) (pre start_snap);
   var_check = bexp_and_all (not_locked_check @ pre_check);
   
@@ -302,7 +302,6 @@ let
   
   int_clocks = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec end_snap) @ map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec end_snap);
 
-  u_dur_const = u_dur_spec a;
   guard = l_dur_spec a @ u_dur_spec a @ int_clocks;
 
   unlock_invs = map (inc_prop_lock_ab (-1)) (over_all a);
@@ -311,6 +310,26 @@ let
 in 
   (Running a, bexp.true, guard, Sil (STR ''''), unlock_invs, resets, EndInstant a)
 "
+
+(* Checking that no interfering snap-action is starting is done using the clock constraints. 
+It is sufficient to check that the end does not interfere with the start, because interference is
+reflexive and the start clock has been reset already *)
+definition instant_trans_edge_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
+"instant_trans_edge_spec a \<equiv>
+let
+  end_snap = at_end a;
+  start_snap = at_start a;
+  
+  int_clocks = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec start_snap) @ map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec start_snap) 
+              @ map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec end_snap) @ map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec end_snap);
+
+  guard = l_dur_spec a @ u_dur_spec a @ int_clocks;
+
+  resets = [ActEnd a]
+in 
+  (StartInstant a, bexp.true, guard, Sil (STR ''''), [], resets, EndInstant a)
+"
+
 (* To do!!!: The not-locked check should only apply to those deletions which are not immediately overwritten by additions *)
 definition end_edge_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
 "end_edge_spec a \<equiv> 
@@ -320,7 +339,7 @@ let
 
   end_snap = at_end a;
 
-  not_locked_check = map (is_prop_lock_ab 0) (dels end_snap);
+  not_locked_check = map (is_prop_lock_ab 0) (filter (\<lambda>p. p \<notin> set (adds end_snap)) (dels end_snap));
   pre_check = map (is_prop_ab 1) (pre end_snap);
   check = bexp_and_all (not_locked_check @ pre_check);
   
@@ -360,7 +379,7 @@ let
   locs = [Off a, StartInstant a, Running a, EndInstant a];
   committed_locs = (Nil::'action location list);
   urgent_locs = [StartInstant a, EndInstant a];
-  edges = [start_edge_spec a, edge_2_spec a, edge_3_spec a, end_edge_spec a];
+  edges = [start_edge_spec a, edge_2_spec a, edge_3_spec a, end_edge_spec a, instant_trans_edge_spec a];
   invs = []
 in 
   (init_loc, locs, committed_locs, urgent_locs, edges, invs)"
@@ -444,7 +463,7 @@ definition snap_vars_spec::"'snap_action \<Rightarrow> 'proposition variable set
 let
   pre_vars = map PropVar (pre s);
   add_vars = map PropVar (adds s);  
-  del_vars = map PropLock (dels s) @ map PropVar (dels s);
+  del_vars = map PropLock (filter (\<lambda>p. p \<notin> set (adds s)) (dels s)) @ map PropVar (dels s);
   vars = pre_vars @ add_vars @ del_vars
 in set vars
 "
