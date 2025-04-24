@@ -1894,6 +1894,36 @@ proof -
 qed
 
 lemma locked_before_and_during: "locked_before t p = locked_during t p + sum_list (map (\<lambda>a. (if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0)) (locked_by p))"
+proof -
+  have 2: "sum_list (map (open_active_count t) xs) = sum_list (map (open_closed_active_count t) xs) + (\<Sum>a\<leftarrow>xs. if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0)" if "set xs \<subseteq> actions" for xs
+    using that
+  proof (induction xs)
+    case Nil
+    then show ?case by simp
+  next
+    case (Cons x xs)
+    then show ?case apply (subst sum_list.eq_foldr)+
+      apply (subst list.map)+
+      apply (subst foldr.simps)+
+      apply (subst comp_apply)+
+      apply (subst sum_list.eq_foldr[symmetric])+
+      apply (subst open_closed_active_count_def)
+      apply (cases "(t, at_start x) \<notin> happ_seq \<and> (t, at_end x) \<in> happ_seq")
+      subgoal
+        apply simp
+        using open_active_count_1_if_ending
+        by simp
+      subgoal
+        apply (subst if_not_P)
+         apply assumption
+        apply (subst if_not_P)
+         apply assumption
+        by simp
+      done
+  qed
+  have "set (locked_by p) \<subseteq> actions" using locked_by_alt by auto
+  thus ?thesis unfolding locked_during_def locked_before_def using 2 by simp
+qed
 
 lemma locked_after_and_during: "locked_after t p = locked_during t p + sum_list (map (\<lambda>a. (if (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq then 1 else 0)) (locked_by p))"
 proof -
