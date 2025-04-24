@@ -110,6 +110,10 @@ lemma set_action_list: "set action_list = actions"
 lemma distinct_action_list: "distinct action_list"
   unfolding action_list_def using finite_actions[THEN finite_distinct_list, THEN someI_ex] by blast
 
+
+lemma length_action_list: "length action_list = card actions" 
+  using set_action_list distinct_action_list distinct_card by metis
+
 lemma plan_state_seq_valid: "valid_state_seq plan_state_seq"
   using vp unfolding valid_plan_def Let_def  valid_state_seq_def 
     plan_state_seq_def 
@@ -1889,6 +1893,8 @@ proof -
   thus ?thesis unfolding locked_during_def locked_before_def using 2 by simp
 qed
 
+lemma locked_before_and_during: "locked_before t p = locked_during t p + sum_list (map (\<lambda>a. (if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0)) (locked_by p))"
+
 lemma locked_after_and_during: "locked_after t p = locked_during t p + sum_list (map (\<lambda>a. (if (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq then 1 else 0)) (locked_by p))"
 proof -
   have "sum_list (map (closed_active_count t) xs) =
@@ -1930,6 +1936,92 @@ proof -
   ultimately
   show ?thesis unfolding locked_during_and_before locked_after_def locked_before_def by simp
 qed
+
+text \<open>Range\<close>
+
+lemma sum_list_max: 
+  assumes "\<forall>x \<in> set xs. x \<le> n"
+  shows "sum_list xs \<le> length xs * n"
+  using assms 
+  unfolding sum_list.eq_foldr 
+  apply (induction xs)
+  by auto
+
+
+
+lemma locked_before_ran: "locked_before t p \<le> card actions"
+proof -
+  have "\<forall>x \<in> set (map (open_active_count t) (locked_by p)). x \<le> 1"
+    unfolding locked_by_def
+    unfolding set_map set_filter set_action_list 
+    apply (rule ballI)
+    subgoal for x
+      apply (erule imageE)
+      apply (erule CollectE)
+      subgoal for a
+        apply (erule conjE)
+        apply (drule open_active_count_ran[ where t = t])
+        by auto
+      done
+    done
+  from sum_list_max[OF this]
+  show ?thesis unfolding locked_before_def 
+    apply -
+    apply (subst (asm) length_map)
+    apply (subst (asm) (2) locked_by_def)
+    apply (insert length_filter_le[where xs = action_list, simplified length_action_list])
+    using order_trans by auto
+qed
+
+lemma locked_during_ran: "locked_during t p \<le> card actions"
+proof -
+  have "\<forall>x \<in> set (map (open_closed_active_count t) (locked_by p)). x \<le> 1"
+    unfolding locked_by_def
+    unfolding set_map set_filter set_action_list 
+    apply (rule ballI)
+    subgoal for x
+      apply (erule imageE)
+      apply (erule CollectE)
+      subgoal for a
+        apply (erule conjE)
+        apply (drule open_closed_active_count_ran[ where t = t])
+        by auto
+      done
+    done
+  from sum_list_max[OF this]
+  show ?thesis unfolding locked_during_def 
+    apply -
+    apply (subst (asm) length_map)
+    apply (subst (asm) (2) locked_by_def)
+    apply (insert length_filter_le[where xs = action_list, simplified length_action_list])
+    using order_trans by auto
+qed
+
+lemma locked_after_ran: "locked_after t p \<le> card actions"
+proof -
+  have "\<forall>x \<in> set (map (closed_active_count t) (locked_by p)). x \<le> 1"
+    unfolding locked_by_def
+    unfolding set_map set_filter set_action_list 
+    apply (rule ballI)
+    subgoal for x
+      apply (erule imageE)
+      apply (erule CollectE)
+      subgoal for a
+        apply (erule conjE)
+        apply (drule closed_active_count_ran[ where t = t])
+        by auto
+      done
+    done
+  from sum_list_max[OF this]
+  show ?thesis unfolding locked_after_def 
+    apply -
+    apply (subst (asm) length_map)
+    apply (subst (asm) (2) locked_by_def)
+    apply (insert length_filter_le[where xs = action_list, simplified length_action_list])
+    using order_trans by auto
+qed
+
+  
 
 subsubsection \<open>Relating the invariant sequence to the number of locks\<close>
 

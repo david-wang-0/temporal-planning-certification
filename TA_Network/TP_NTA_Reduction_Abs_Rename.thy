@@ -2374,6 +2374,84 @@ proof -
   by auto
 qed
 
+lemma partially_updated_locked_before_inv_mono: "partially_updated_locked_before t p n \<ge> partially_updated_locked_before t p (Suc n)"
+  unfolding partially_updated_locked_before_def by simp
+
+
+lemma partially_updated_locked_before_inv_mono': assumes "n \<le> m"
+  shows "partially_updated_locked_before t p n \<ge> partially_updated_locked_before t p m"
+  using assms
+  apply (induction m arbitrary: n)
+  subgoal for n
+   apply (induction n)
+    using partially_updated_locked_before_inv_mono apply blast
+    using partially_updated_locked_before_inv_mono order_trans by blast
+  subgoal for m n
+    apply (subst (asm) le_Suc_eq)
+    apply (erule disjE)
+    apply (rule partially_updated_locked_before_inv_mono[THEN order_trans])
+     apply blast
+    by blast
+  done
+
+lemma partially_updated_locked_before_by_none_is_locked_before:
+  "partially_updated_locked_before t p 0 = planning_sem.locked_before t p"
+  unfolding partially_updated_locked_before_def
+  by simp
+
+lemma partially_updated_locked_before_ran: "partially_updated_locked_before t p n \<le> length actions" 
+  using planning_sem.locked_before_ran unfolding distinct_card[OF distinct_actions]
+  using partially_updated_locked_before_inv_mono'[of 0 n] unfolding partially_updated_locked_before_by_none_is_locked_before 
+  using order_trans by blast
+
+lemma foldr_assoc: "foldr (+) xs (n + 0::nat) = (foldr (+) xs 0) + n"
+  apply (induction xs)
+   apply simp
+  subgoal for x xs
+    by auto
+  done
+
+lemma partially_updated_locked_before_alt: assumes "n < length actions"
+  shows "partially_updated_locked_before t p n = planning_sem.locked_during t p 
++ sum_list (map 
+      (\<lambda>a. (if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then (1::nat) else 0)) 
+      (filter 
+        (\<lambda>a. p \<in> set (over_all a)) 
+        (map (\<lambda>n. actions ! n) [n..<length actions])))"
+proof -
+  have 1: "foldr (+) (map (\<lambda>a. if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then (1::nat) else 0) (filter (\<lambda>a. p \<in> set (over_all a)) (map ((!) actions) [0..<n]))) 0 +
+  foldr (+) (map (\<lambda>a. if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then 1 else 0) (filter (\<lambda>a. p \<in> set (over_all a)) (map ((!) actions) [n..<length actions]))) 0 =
+  foldr (+) (map (\<lambda>a. if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then 1 else 0) (filter (\<lambda>a. p \<in> set (over_all a)) (map ((!) actions) [0..<n])))
+   (foldr (+) (map (\<lambda>a. if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then 1 else 0) (filter (\<lambda>a. p \<in> set (over_all a)) (map ((!) actions) [n..<length actions]))) 0)"
+    using foldr_assoc[symmetric, where xs = "(map (\<lambda>a. if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then 1 else 0) (filter (\<lambda>a. p \<in> set (over_all a)) (map ((!) actions) [0..<n])))" and n = "foldr (+) (map (\<lambda>a. if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then 1 else 0) (filter (\<lambda>a. p \<in> set (over_all a)) (map ((!) actions) [n..<length actions]))) 0"]
+    by simp
+  have d1: "distinct (filter (\<lambda>a. p \<in> set (over_all a)) actions)" using distinct_actions by auto
+  have d2: "distinct (filter (\<lambda>a. p \<in> set (over_all a)) planning_sem.action_list)" using planning_sem.distinct_action_list by simp
+  have s: "set (filter (\<lambda>a. p \<in> set (over_all a)) actions) = set (filter (\<lambda>a. p \<in> set (over_all a)) planning_sem.action_list)" using planning_sem.set_action_list by auto
+
+
+  have "(\<Sum>a\<leftarrow>planning_sem.locked_by p. if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then (1::nat) else 0) 
+      = (\<Sum>a\<leftarrow>filter (\<lambda>a. p \<in> set (over_all a)) (map ((!) actions) [0..<n]). if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then 1 else 0) 
+      + (\<Sum>a\<leftarrow>filter (\<lambda>a. p \<in> set (over_all a)) (map ((!) actions) [n..<length actions]). if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then 1 else 0)"
+    apply (subst (2) sum_list.eq_foldr)+
+    apply (subst 1)
+    apply (subst foldr_append[symmetric])
+    apply (subst map_append[symmetric])
+    apply (subst filter_append[symmetric])
+    apply (subst map_append[symmetric])
+    apply (subst upt_append)
+    using assms
+     apply simp
+    apply (subst sum_list.eq_foldr[symmetric])
+    apply (subst List.map_nth)
+    apply (subst sum_list_eq[OF d1 d2 s])
+    using planning_sem.locked_by_def unfolding comp_def
+    by simp
+  thus ?thesis 
+    apply (subst partially_updated_locked_before_def)  
+    apply (subst planning_sem.locked_before_and_during)
+    by linarith
+qed
 
 (* A is Graph_Defs for the Bisimulation_Invariant of parts of the transition relation.
 A is the original graph combined with semantics. *)
@@ -3179,8 +3257,73 @@ next
     by simp+
   thus ?case unfolding ys'(1) by simp
 qed
-  
 
+lemma updated_bounded:
+  assumes previous: "bounded M v"
+      and l: "length xs = length ys"
+      and v': "v' = v(xs [\<mapsto>] ys)"
+      and bounds: "\<forall>x \<in> set xs. (\<exists>l u. M x = Some (l, u) \<and> l \<le> the (v' x) \<and> the (v' x) \<le> u)"   
+    shows "bounded M v'"
+  unfolding bounded_def
+proof (rule conjI)
+  show 1: "dom v' = dom M"
+    apply (intro equalityI subsetI)
+    subgoal for x
+      unfolding v'
+      apply (subst (asm) dom_map_upds)
+      apply (subst (asm) assms(2)[symmetric])
+      apply (subst (asm) take_all, simp)
+      apply (erule UnE)
+      subgoal using bounds by blast
+      subgoal using previous unfolding bounded_def by argo
+      done
+    subgoal for x
+      unfolding v'
+      apply (subst dom_map_upds)
+      using previous unfolding bounded_def by blast
+    done
+  show "\<forall>x\<in>dom v'. fst (the (M x)) \<le> the (v' x) \<and> the (v' x) \<le> snd (the (M x))"
+    apply (rule ballI)
+    subgoal for x
+      apply (subst (asm) v')
+      apply (subst (asm) dom_map_upds)
+      apply (subst (asm) assms(2)[symmetric])
+      apply (subst (asm) take_all, simp)
+      apply (erule UnE)
+      subgoal using bounds by auto
+      apply (cases "x \<in> set xs")
+      subgoal using bounds by auto
+      unfolding v'
+      apply (subst map_upds_apply_nontin)
+      apply simp
+      apply (subst map_upds_apply_nontin)
+       apply simp
+      using previous unfolding bounded_def by simp
+    done
+qed
+
+find_theorems name: "upd*Some"
+
+lemma distinct_map_upds:
+  assumes "x \<in> set xs"
+      and "distinct xs"
+    shows "(v(xs [\<mapsto>] (map f xs))) x = Some (f x)"
+  using assms 
+  unfolding map_upds_def
+  apply (subst map_add_find_right)
+   apply (subst zip_rev[symmetric])
+    apply simp
+   apply (rule map_of_is_SomeI[where y = "f x"])
+    apply simp
+   apply (subst zip_rev)
+    apply simp
+   apply (subst set_rev)
+   apply (subst in_set_zip)
+   apply (subst (asm) in_set_conv_nth)
+  by auto
+
+  
+text \<open>The bounds of nta_vars\<close>
 lemma map_of_nta_vars_init_goal:
   assumes "v \<in> set (map PropVar init) \<union> set (map PropVar goal)"
   shows "map_of nta_vars v = Some (0, 1)"
@@ -3228,6 +3371,45 @@ proof-
       apply (subst 4)
       apply (subst 2)
       by simp
+qed
+
+
+lemma map_of_nta_vars_action_inv:
+  assumes "a \<in> set actions"
+    "v \<in> set (map PropLock (over_all a))"
+  shows "map_of nta_vars v = Some (0, length actions)"
+proof -
+  from assms local.planning_sem.finite_props_domain
+  obtain p where
+    p: "p \<in> set (over_all a)"
+    "p \<in> set props"
+    "v = PropLock p" unfolding fluent_domain_def act_ref_fluents_def by auto
+  hence 1: "p \<in> set (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props)" 
+    unfolding action_vars_spec_def Let_def inv_vars_spec_def set_map using assms
+    by auto
+
+  have 2: "map_of (map (\<lambda>p. (PropLock p, y)) (filter (\<lambda>x. PropLock x \<in> S) props)) (PropLock p) 
+    = (map_of (map (\<lambda>p. (p, y)) (filter (\<lambda>x. PropLock x \<in> S) props)) p)" for S y 
+    apply (subst (2) map_of_map_inj_fst[symmetric, where f = PropLock])
+    unfolding inj_def apply simp
+    apply (subst map_map)
+    apply (subst comp_def)
+    unfolding prod.case
+    by blast
+
+
+  show ?thesis
+    apply (subst map_of_nta_vars_exact)
+    apply (subst p)
+    apply (subst map_add_find_left)
+     apply simp
+    apply (subst map_add_find_right)
+     apply (subst 2)
+     apply (rule map_of_is_SomeI)
+    using distinct_props unfolding map_map comp_apply apply simp
+    using 1 apply fastforce
+    by simp
+
 qed
 
 
@@ -3437,9 +3619,31 @@ lemma steps_extend: "abs_renum.urge_bisim.A.steps xs \<Longrightarrow> abs_renum
   subgoal for x xs by auto
   by simp
 
-thm apply_nth_happening_def[no_vars]
+find_theorems name: "abs_re*urge*steps*intro"
 
-lemma enter_end_instant_updates: undefined sorry
+lemma length_seq_apply[simp]: "length (seq_apply fs s) = length fs"
+  apply (induction fs arbitrary: s)
+  by auto
+
+lemma seq_apply_steps_induct:
+  assumes "\<forall>i \<le> length fs. abs_renum.urge_bisim.A.steps [last (take i (s # seq_apply fs s)), last (take (Suc i) (s # seq_apply fs s))]"
+  shows "abs_renum.urge_bisim.A.steps (s#seq_apply fs s)"
+proof -
+
+  have "(s#seq_apply fs s) = take (Suc (length fs)) (s#seq_apply fs s)" apply (subst take_all) by auto
+   
+  have "abs_renum.urge_bisim.A.steps (ext_seq [s] fs)" sorry
+  thus ?thesis 
+    apply -
+    apply (subst ext_seq'.simps[symmetric])
+    apply (subst ext_seq'_seq_apply_is_ext_seq)
+    by blast
+  from assms abs_renum.urge_bisim.A.steps.induct
+  apply (induction fs)
+  apply simp 
+   apply (rule abs_renum.urge_bisim.A.steps.intros)
+  subgoal for f fs
+qed
 
 schematic_goal nth_auto_trans:
   assumes "n < length actions"
@@ -3591,19 +3795,23 @@ proof -
     by auto
 qed 
 
-lemma enter_end_instant_okay:
-  assumes "l < length (htpl \<pi>)"
+context 
+  fixes l n M t L v c
+ assumes "l < length (htpl \<pi>)"
       and n: "n < length actions"
       and "M = planning_sem.plan_state_seq"
       and "t = htpl \<pi> ! l"
       and end_scheduled: "(t, at_end (actions ! n)) \<in> planning_sem.happ_seq"
       and start_not_scheduled: "(t, at_start (actions ! n)) \<notin> planning_sem.happ_seq"
 
-      and true_props: "\<forall>p \<in> set props. p \<in> M l \<and> PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (1::int)"
-      and false_props: "\<forall>p \<in> set props. p \<notin> M l \<and> PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some 0"                       
-      and locked_props: "\<forall>p \<in> set props. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> (\<exists>x. v (PropLock p) = Some (int_of_nat (partially_updated_locked_before t p n)))"
-      and active_count: "v ActsActive = Some (int_of_nat (planning_sem.all_open_active_count t))"
+      and "\<forall>p \<in> set props. p \<in> M l \<and> PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (1::int)"
+      and "\<forall>p \<in> set props. p \<notin> M l \<and> PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some 0"  
+
+      and locked_before: "\<forall>p \<in> set props. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (partially_updated_locked_before t p n))"
+      and "v ActsActive = Some (int_of_nat (planning_sem.all_open_active_count t))"
+
       and v_bounded: "bounded (map_of nta_vars) v"
+
       and planning_state: "v PlanningLock = Some 1"
 
       and end_snap_executed_time: 
@@ -3614,20 +3822,138 @@ lemma enter_end_instant_okay:
             \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
       and start_snap_time: "\<forall>i < length actions. c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
 
-      and "\<forall>i < n. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and  "\<forall>i < n. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq 
+              \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
           \<longrightarrow> L ! Suc i = (EndInstant (actions ! i))"
-      and running_locs: "\<forall>i < length actions. n \<le> i \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and still_running: "\<forall>i < length actions. n \<le> i 
+              \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq 
+              \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
           \<longrightarrow> L ! Suc i = (Running (actions ! i))"
-      and "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<longrightarrow> L ! Suc i = Off (actions ! i)"
       and L_len: "length L = Suc (length actions)"
+begin
+
+definition "L' \<equiv> fst (enter_end_instant n (L, v, c))"
+definition "v' \<equiv> fst (snd (enter_end_instant n (L, v, c)))"
+definition "c' \<equiv> snd (snd (enter_end_instant n (L, v, c)))" 
+
+lemma s': "enter_end_instant n (L, v, c) = (L', v', c')" using L'_def v'_def c'_def by simp
+
+
+lemma L': "L' = L[Suc n := EndInstant (actions ! n)]" 
+  and v': "v' = v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. x - 1) (map (the o v) (map PropLock (over_all (actions ! n)))))" 
+  and c': "c' = c(ActEnd (actions ! n) := 0)"
+  apply (cases "enter_end_instant n (L, v, c)") using s' unfolding enter_end_instant_def Let_def prod.case by auto
+
+
+lemma partially_updated_locked_before_lower: 
+  assumes "p \<in> set (over_all (actions ! n))"
+  shows "0 < partially_updated_locked_before t p n" 
+proof -
+  have "0 < (\<Sum>a\<leftarrow>filter (\<lambda>a. p \<in> set (over_all a)) (map ((!) actions) [n..<length actions]). if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then (1::nat) else 0)"
+  proof -
+    { assume "0 = (\<Sum>a\<leftarrow>filter (\<lambda>a. p \<in> set (over_all a)) (map ((!) actions) [n..<length actions]). if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then (1::nat) else 0)"
+      hence "\<forall>n \<in> set (map 
+        (\<lambda>a. (if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then (1::nat) else 0)) 
+        (filter 
+          (\<lambda>a. p \<in> set (over_all a)) 
+          (map (\<lambda>n. actions ! n) [n..<length actions]))). n = 0"  apply (subst sum_list_eq_0_iff[symmetric])
+        by metis
+      moreover
+      {
+        have "(if (t, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! n)) \<in> planning_sem.happ_seq then (1::nat) else 0) = 1" using start_not_scheduled end_scheduled by simp
+        moreover
+        have "n \<in> set [n..<length actions]" using n by simp
+        ultimately
+        have "\<exists>n \<in> set (map 
+          (\<lambda>a. (if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then (1::nat) else 0)) 
+          (filter 
+            (\<lambda>a. p \<in> set (over_all a)) 
+            (map (\<lambda>n. actions ! n) [n..<length actions]))). n > 0" using assms n end_scheduled start_not_scheduled
+          apply -
+          apply (rule bexI)
+          defer
+           apply (subst set_map)
+           apply (rule imageI[of "actions ! n"])
+          using assms apply simp
+          by simp
+      }
+      ultimately
+      have False by fast
+    }
+    thus ?thesis 
+      apply (cases "0 = (\<Sum>a\<leftarrow>filter (\<lambda>a. p \<in> set (over_all a)) (map ((!) actions) [n..<length actions]). if (t, at_start a) \<notin> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq then (1::nat) else 0)")
+       apply blast
+      by linarith
+  qed
+  thus ?thesis using partially_updated_locked_before_alt[OF n] by presburger
+qed
+
+
+lemma locked_after:
+  assumes p_in_props: "p \<in> set props" 
+      and p_has_lock: "PropLock p \<in> dom (map_of nta_vars)" 
+    shows "v' (PropLock p) = Some (int_of_nat (partially_updated_locked_before t p (Suc n)))"
+proof (cases "p \<in> set (over_all (actions ! n))")
+  case True
+  have 1: "v' (PropLock p) = Some (the (v (PropLock p)) - 1)"
+    unfolding v' 
+    apply (subst map_map)
+    apply (subst distinct_map_upds)
+    using True n apply simp
+    apply (rule distinct_inj_map)
+    using over_all_distinct[THEN bspec[of _ _ "actions ! n"]] n apply simp
+    unfolding inj_def apply simp
+    unfolding comp_def by simp
+  
+  have 2: "partially_updated_locked_before t p (Suc n) = partially_updated_locked_before t p n - 1"
+    unfolding partially_updated_locked_before_def 
+    apply (subst sum_list.eq_foldr)
+    apply (subst upt_Suc_append, simp)
+    apply (subst map_append)
+    apply (subst filter_append)
+    apply (subst map_append)
+    apply (subst foldr_append)
+    apply (subst list.map)+
+    apply (subst filter.simps)
+    apply (subst (3) if_P)
+     apply (rule True)
+    apply (subst filter.simps)
+    apply (subst list.map)+
+    apply (subst foldr.simps)
+    unfolding comp_def
+    apply (subst foldr.simps)
+    apply (subst (2) if_P)
+    using start_not_scheduled end_scheduled
+     apply simp
+    apply (subst id_def)
+    apply (subst sum_list.eq_foldr)
+    apply (subst foldr_assoc)
+    by linarith
+
+  show ?thesis 
+    apply (subst 1)
+    apply (subst locked_before[THEN bspec, THEN mp, OF assms])
+    apply (subst 2)
+    apply simp
+    using partially_updated_locked_before_lower[OF True] 
+    unfolding int_of_nat_def by auto
+next
+  case False
+  have "partially_updated_locked_before t p (Suc n) = partially_updated_locked_before t p n" 
+    unfolding partially_updated_locked_before_def using False by simp
+  moreover
+  have "v' (PropLock p) = v (PropLock p)"
+    unfolding v' 
+    apply (subst map_upds_apply_nontin)
+    using n False by auto
+  ultimately
+  show ?thesis using locked_before assms by simp
+qed
+  
+
+lemma enter_end_instant_okay:
     shows "abs_renum.urge_bisim.A.steps [(L, v, c), enter_end_instant n (L, v, c)]"
 proof (rule single_step_intro)
-
-  obtain L' v' c' where
-    s': "enter_end_instant n (L, v, c) = (L', v', c')"
-    and L'_v'_c': "(L', v', c') = (L[Suc n := EndInstant (actions ! n)], v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. x - 1) (map (the o v) (map PropLock (over_all (actions ! n))))), c(ActEnd (actions ! n) := 0))"
-    apply (cases "enter_end_instant n (L, v, c)") unfolding enter_end_instant_def Let_def prod.case by blast
-
 
   obtain l b g a f r l' where
     t: "(l, b, g, a, f, r, l') = (\<lambda>(l, b, g, a, f, r, l'). (l, b, map conv_ac g, a, f, r, l')) (edge_3_spec (actions ! n))" 
@@ -3788,30 +4114,29 @@ proof (rule single_step_intro)
         apply (intro allI impI)
         apply (subst no_invs)
         by simp+
-      show "''loc'' \<bar> L ! Suc n = l" unfolding TAG_def t' using running_locs[THEN spec, THEN mp, OF n] using start_not_scheduled end_scheduled by blast
+      show "''loc'' \<bar> L ! Suc n = l" unfolding TAG_def t' using still_running[THEN spec, THEN mp, OF n] using start_not_scheduled end_scheduled by blast
       show "''range'' \<bar> Suc n < length L" unfolding TAG_def using n L_len by simp
-      show "''new loc'' \<bar> L' = L[Suc n := l']" unfolding TAG_def t' using L'_v'_c' by simp
-      show "''new valuation'' \<bar> c' = [r\<rightarrow>0]c" unfolding TAG_def t' using L'_v'_c' by simp
+      show "''new loc'' \<bar> L' = L[Suc n := l']" unfolding TAG_def t' using L' by simp
+      show "''new valuation'' \<bar> c' = [r\<rightarrow>0]c" unfolding TAG_def t' using c' by simp
+
+      have locks_in_dom: "set (map PropLock (over_all (actions ! n))) \<subseteq> dom (map_of nta_vars)" 
+          unfolding dom_map_of_nta_vars set_map action_vars_spec_def Let_def inv_vars_spec_def
+          apply -
+          apply (rule subsetI)
+          apply (rule UnI2)
+          apply (rule UnI1)+ 
+          using n
+          by auto
+
       show "''is_upd'' \<bar> is_upds v f v'" 
       proof (subst TAG_def)
-        have v': "v' = v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. x - 1) (map (the o v) (map PropLock (over_all (actions ! n)))))" using L'_v'_c' by simp
+        have v': "v' = v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. x - 1) (map (the o v) (map PropLock (over_all (actions ! n)))))" using v' by simp
         have x: "map (\<lambda>prop. (PropLock prop, binop plus_int (var (PropLock prop)) (exp.const (- 1)))) xs = map (inc_var (-1)) (map PropLock xs)" for xs unfolding comp_apply map_map by simp
         show "is_upds v f v'" unfolding v' t'
           unfolding inc_prop_lock_ab_def x
         proof (rule is_upds_inc_vars)
           show "set (map PropLock (over_all (actions ! n))) \<subseteq> dom v"
-          proof -
-            have "set (map PropLock (over_all (actions ! n))) \<subseteq> dom (map_of nta_vars)" 
-              unfolding dom_map_of_nta_vars set_map action_vars_spec_def Let_def inv_vars_spec_def
-              apply -
-              apply (rule subsetI)
-              apply (rule UnI2)
-              apply (rule UnI1)+ 
-              using n
-              by auto
-            with v_bounded
-            show ?thesis unfolding bounded_def by argo
-          qed
+            using locks_in_dom v_bounded bounded_def by metis
           show "distinct (map PropLock (over_all (actions ! n)))" using n over_all_distinct
             unfolding distinct_map
             unfolding inj_on_def by simp
@@ -3819,35 +4144,70 @@ proof (rule single_step_intro)
       qed
       show "''bounded'' \<bar> Simple_Network_Language.bounded (map_of nta_vars) v'" unfolding TAG_def
       proof -
-        have v': "v' = v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. x - 1) (map (the \<circ> v) (map PropLock (over_all (actions ! n)))))" using L'_v'_c' by simp
+        have v': "v' = v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. x - 1) (map (the \<circ> v) (map PropLock (over_all (actions ! n)))))" using L' v' c' by simp
+        have invs_in_props: "set (over_all a) \<subseteq> set props" if "a \<in> set actions" for a using that planning_sem.finite_props_domain unfolding fluent_domain_def act_ref_fluents_def by simp
+
         show "Simple_Network_Language.bounded (map_of nta_vars) v'"
-          unfolding v'
-        proof (rule upds_bounded[OF v_bounded])
+        proof (rule updated_bounded[OF v_bounded _ v'])
           show "length (map PropLock (over_all (actions ! n))) = length (map (\<lambda>x. x - 1) (map (the \<circ> v) (map PropLock (over_all (actions ! n)))))" by simp
-          show "\<forall>na<length (map PropLock (over_all (actions ! n))). \<exists>l u. map_of nta_vars (map PropLock (over_all (actions ! n)) ! na) = Some (l, u) \<and> l \<le> map (\<lambda>x. x - 1) (map (the \<circ> v) (map PropLock (over_all (actions ! n)))) ! na \<and> map (\<lambda>x. x - 1) (map (the \<circ> v) (map PropLock (over_all (actions ! n)))) ! na \<le> u"
-          proof (intro allI impI)
-            fix pn
-            assume "pn < length (map PropLock (over_all (actions ! n)))"
-            from locked_props
-            show "\<exists>l u. map_of nta_vars (map PropLock (over_all (actions ! n)) ! pn) = Some (l, u) \<and> l \<le> map (\<lambda>x. x - 1) (map (the \<circ> v) (map PropLock (over_all (actions ! n)))) ! pn \<and> map (\<lambda>x. x - 1) (map (the \<circ> v) (map PropLock (over_all (actions ! n)))) ! pn \<le> u"
-              sorry
+          show "\<forall>x\<in>set (map PropLock (over_all (actions ! n))). \<exists>l u. map_of nta_vars x = Some (l, u) \<and> l \<le> the (v' x) \<and> the (v' x) \<le> u"
+            apply (rule ballI)
+            subgoal for x
+              unfolding set_map
+              apply (erule imageE)
+              subgoal for p
+                apply (intro exI conjI)
+                  apply (subst map_of_nta_vars_action_inv[of "actions ! n"])
+                using n
+                    apply simp
+                   apply simp
+                  apply simp
+                 apply (erule ssubst[of x])
+                 apply (subst locked_after)
+                   apply (rule invs_in_props[THEN set_mp, of "actions ! n"])
+                using n apply simp
+                   apply simp
+                using locks_in_dom apply auto[1]
+                 apply (subst option.the_def)
+                apply (subst int_of_nat_def)
+                 apply simp
+                 apply (erule ssubst[of x])
+                 apply (subst locked_after)
+                   apply (rule invs_in_props[THEN set_mp, of "actions ! n"])
+                using n apply simp
+                   apply simp
+                using locks_in_dom apply auto[1]
+                 apply (subst option.the_def)
+                apply (subst int_of_nat_def)
+                using partially_updated_locked_before_ran by simp
+              done
+            done
           qed
-        qed
       qed
     qed
   qed
 qed
+end 
 
-lemma enter_end_instants_okay:
-  assumes "n < length (htpl \<pi>)"
+lemma enter_remaining_end_instants_okay:
+  assumes "l < length (htpl \<pi>)"
       and "M = plan_state_seq \<pi>"
       and "s = (L, v, c)"
-      and "\<forall>p \<in> set props. p \<in> M n \<longrightarrow> v (PropVar p) = Some 1"
-      and "\<forall>p \<in> set props. p \<notin> M n \<longrightarrow> v (PropVar p) = Some 0"
+      and "\<forall>p \<in> set props. p \<in> M l \<longrightarrow> v (PropVar p) = Some 1"
+      and "\<forall>p \<in> set props. p \<notin> M l \<longrightarrow> v (PropVar p) = Some 0"
       and "\<forall>p \<in> set props. \<exists>x. v (PropLock p) = Some (planning_sem.locked_before t p)"
       and "end_indices = filter (\<lambda>n. at_end (actions ! n) \<in> h \<and> at_start (actions ! n) \<notin> h) [0..<length actions]"
     shows "abs_renum.urge_bisim.A.steps (s # enter_end_instants end_indices s)"
-  sorry
+proof -
+
+  have "abs_renum.urge_bisim.A.steps [last (seq_apply (take i (map enter_end_instant end_indices)) s), last (seq_apply (take (Suc i) (map enter_end_instant end_indices)) s)]"
+    if "i < length end_indices" for i sorry
+  thus ?thesis unfolding enter_end_instants_def 
+qed
+
+
+lemma enter_end_instants_okay: undefined sorry
+
 
 lemma apply_happening:
   assumes "n < length (htpl \<pi>)"
