@@ -3619,31 +3619,37 @@ lemma steps_extend: "abs_renum.urge_bisim.A.steps xs \<Longrightarrow> abs_renum
   subgoal for x xs by auto
   by simp
 
-find_theorems name: "abs_re*urge*steps*intro"
-
 lemma length_seq_apply[simp]: "length (seq_apply fs s) = length fs"
   apply (induction fs arbitrary: s)
   by auto
 
-lemma seq_apply_steps_induct:
-  assumes "\<forall>i \<le> length fs. abs_renum.urge_bisim.A.steps [last (take i (s # seq_apply fs s)), last (take (Suc i) (s # seq_apply fs s))]"
-  shows "abs_renum.urge_bisim.A.steps (s#seq_apply fs s)"
+lemma steps_extend_induct:
+  assumes "\<forall>i < length xs. abs_renum.urge_bisim.A.steps [xs!i, xs!Suc i]"
+      and "0 < length xs"
+  shows "abs_renum.urge_bisim.A.steps xs"
 proof -
-
-  have "(s#seq_apply fs s) = take (Suc (length fs)) (s#seq_apply fs s)" apply (subst take_all) by auto
-   
-  have "abs_renum.urge_bisim.A.steps (ext_seq [s] fs)" sorry
-  thus ?thesis 
-    apply -
-    apply (subst ext_seq'.simps[symmetric])
-    apply (subst ext_seq'_seq_apply_is_ext_seq)
-    by blast
-  from assms abs_renum.urge_bisim.A.steps.induct
-  apply (induction fs)
-  apply simp 
-   apply (rule abs_renum.urge_bisim.A.steps.intros)
-  subgoal for f fs
+  have "abs_renum.urge_bisim.A.steps (take n xs @ [xs ! n])" if "n < length xs" "0 < length xs" for n
+    using that
+  proof (induction n)
+    case 0
+    then show ?case by auto
+  next
+    case (Suc n)
+    have 1: "abs_renum.urge_bisim.A.steps (take n xs @ [xs ! n])" using Suc by simp
+    have 2: "abs_renum.urge_bisim.A.steps ([xs ! n, xs ! Suc n])" using assms Suc by simp
+    
+    have "abs_renum.urge_bisim.A.steps (take n xs @ [xs ! n] @ [xs ! Suc n])" using abs_renum.urge_bisim.A.steps_append[OF 1 2] by force
+    thus ?case 
+        apply (subst take_Suc_conv_app_nth)
+      using Suc by auto
+  qed
+  from this[of "length xs - 1", OF _ assms(2)]
+  show ?thesis using take_Suc_conv_app_nth[of "length xs - 1" xs] take_all[of xs "length xs"] assms(2) by auto
 qed
+
+lemma seq_apply_steps_induct:
+  assumes "\<forall>i < length (s#seq_apply fs s). abs_renum.urge_bisim.A.steps [(s#seq_apply fs s) ! i, (s#seq_apply fs s) ! Suc i]"
+  shows "abs_renum.urge_bisim.A.steps (s # seq_apply fs s)" using assms steps_extend_induct by blast
 
 schematic_goal nth_auto_trans:
   assumes "n < length actions"
@@ -3796,55 +3802,37 @@ proof -
 qed 
 
 context 
-  fixes l n M t L v c
- assumes "l < length (htpl \<pi>)"
-      and n: "n < length actions"
-      and "M = planning_sem.plan_state_seq"
-      and "t = htpl \<pi> ! l"
+  fixes n t L v c L' v' c'
+ assumes n: "n < length actions"
       and end_scheduled: "(t, at_end (actions ! n)) \<in> planning_sem.happ_seq"
       and start_not_scheduled: "(t, at_start (actions ! n)) \<notin> planning_sem.happ_seq"
 
-      and "\<forall>p \<in> set props. p \<in> M l \<and> PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (1::int)"
-      and "\<forall>p \<in> set props. p \<notin> M l \<and> PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some 0"  
-
-      and locked_before: "\<forall>p \<in> set props. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (partially_updated_locked_before t p n))"
-      and "v ActsActive = Some (int_of_nat (planning_sem.all_open_active_count t))"
+      and locked_before: "\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (partially_updated_locked_before t p n))"
 
       and v_bounded: "bounded (map_of nta_vars) v"
 
       and planning_state: "v PlanningLock = Some 1"
 
-      and end_snap_executed_time: 
+      and ending_executed_clock: 
           "\<forall>i < n. (t, at_end (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq 
             \<longrightarrow> c (ActEnd (actions ! i)) = (0::real)"
-      and end_snap_not_executed_time: 
+      and ending_not_executed_clock: 
           "\<forall>i < length actions. n \<le> i \<or> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<or> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
             \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
       and start_snap_time: "\<forall>i < length actions. c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
 
-      and  "\<forall>i < n. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq 
+      and ending_executed_loc: "\<forall>i < n. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq 
               \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
           \<longrightarrow> L ! Suc i = (EndInstant (actions ! i))"
-      and still_running: "\<forall>i < length actions. n \<le> i 
+      and ending_not_executed_loc: "\<forall>i < length actions. n \<le> i 
               \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq 
               \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
           \<longrightarrow> L ! Suc i = (Running (actions ! i))"
       and L_len: "length L = Suc (length actions)"
+      and s': "enter_end_instant n (L, v, c) = (L', v', c')"
 begin
 
-definition "L' \<equiv> fst (enter_end_instant n (L, v, c))"
-definition "v' \<equiv> fst (snd (enter_end_instant n (L, v, c)))"
-definition "c' \<equiv> snd (snd (enter_end_instant n (L, v, c)))" 
-
-lemma s': "enter_end_instant n (L, v, c) = (L', v', c')" using L'_def v'_def c'_def by simp
-
-
-lemma L': "L' = L[Suc n := EndInstant (actions ! n)]" 
-  and v': "v' = v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. x - 1) (map (the o v) (map PropLock (over_all (actions ! n)))))" 
-  and c': "c' = c(ActEnd (actions ! n) := 0)"
-  apply (cases "enter_end_instant n (L, v, c)") using s' unfolding enter_end_instant_def Let_def prod.case by auto
-
-
+text \<open>Properties of current state\<close>
 lemma partially_updated_locked_before_lower: 
   assumes "p \<in> set (over_all (actions ! n))"
   shows "0 < partially_updated_locked_before t p n" 
@@ -3888,10 +3876,16 @@ proof -
   thus ?thesis using partially_updated_locked_before_alt[OF n] by presburger
 qed
 
+text \<open>Definition and properties of next state\<close>
 
-lemma locked_after:
-  assumes p_in_props: "p \<in> set props" 
-      and p_has_lock: "PropLock p \<in> dom (map_of nta_vars)" 
+lemma L': "L' = L[Suc n := EndInstant (actions ! n)]" 
+  and v': "v' = v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. x - 1) (map (the o v) (map PropLock (over_all (actions ! n)))))" 
+  and c': "c' = c(ActEnd (actions ! n) := 0)"
+  apply (cases "enter_end_instant n (L, v, c)") using s' unfolding enter_end_instant_def Let_def prod.case by blast+
+
+
+lemma variables_locked_after:
+  assumes p_has_lock: "PropLock p \<in> dom (map_of nta_vars)" 
     shows "v' (PropLock p) = Some (int_of_nat (partially_updated_locked_before t p (Suc n)))"
 proof (cases "p \<in> set (over_all (actions ! n))")
   case True
@@ -3932,11 +3926,11 @@ proof (cases "p \<in> set (over_all (actions ! n))")
 
   show ?thesis 
     apply (subst 1)
-    apply (subst locked_before[THEN bspec, THEN mp, OF assms])
+    apply (subst locked_before[THEN spec, THEN mp, OF assms])
     apply (subst 2)
     apply simp
     using partially_updated_locked_before_lower[OF True] 
-    unfolding int_of_nat_def by auto
+    unfolding int_of_nat_def by simp
 next
   case False
   have "partially_updated_locked_before t p (Suc n) = partially_updated_locked_before t p n" 
@@ -3949,7 +3943,57 @@ next
   ultimately
   show ?thesis using locked_before assms by simp
 qed
-  
+
+lemma variables_same_after:
+  assumes "x \<notin> set (map PropLock (over_all (actions ! n)))"
+  shows "v' x = v x"
+  unfolding v' using assms map_upds_apply_nontin by simp
+
+lemma ending_executed_clock':
+  assumes "i \<le> n" 
+    "(t, at_end (actions ! i)) \<in> planning_sem.happ_seq" 
+    "(t, at_start (actions ! i)) \<notin> planning_sem.happ_seq" 
+    shows "c' (ActEnd (actions ! i)) = (0::real)"
+  apply (cases "i = n")
+  subgoal unfolding c' by simp
+  using assms ending_executed_clock unfolding c' by auto
+
+lemma ending_not_executed_clock': 
+  assumes "n < i"
+    "i < length actions"
+    "(t, at_end (actions ! i)) \<in> planning_sem.happ_seq" 
+    "(t, at_start (actions ! i)) \<notin> planning_sem.happ_seq" 
+  shows "c' (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
+  unfolding c'
+  apply (subst fun_upd_other)
+  using assms(1,2) distinct_actions distinct_conv_nth apply fastforce
+  using ending_not_executed_clock assms by simp
+
+lemma clocks_same_after:
+  assumes "x \<noteq> ActEnd (actions ! n)"
+  shows "c' x = c x"
+  unfolding c' using fun_upd_other assms by simp
+
+lemma ending_executed_loc':
+  assumes "i \<le> n" "(t, at_start (actions ! i)) \<notin> planning_sem.happ_seq" "(t, at_end (actions ! i)) \<in> planning_sem.happ_seq"
+    shows "L' ! Suc i = (EndInstant (actions ! i))"
+  apply (cases "i = n")
+  subgoal unfolding L' using n nth_list_update_eq L_len by auto
+  unfolding L' using nth_list_update_neq assms ending_executed_loc L_len n by simp
+
+lemma ending_not_executed_loc':
+  assumes "i < length actions" 
+    "n < i"
+    "(t, at_start (actions ! i)) \<notin> planning_sem.happ_seq"
+    "(t, at_end (actions ! i)) \<in> planning_sem.happ_seq"
+  shows "L' ! Suc i = (Running (actions ! i))"
+  unfolding L' using assms ending_not_executed_loc nth_list_update_neq by auto
+
+lemma locs_same_after:
+  assumes "i < length actions"
+      and "i \<noteq> Suc n"
+    shows "L' ! i = L ! i"
+  using assms unfolding L' using nth_list_update_neq by simp
 
 lemma enter_end_instant_okay:
     shows "abs_renum.urge_bisim.A.steps [(L, v, c), enter_end_instant n (L, v, c)]"
@@ -3965,8 +4009,6 @@ proof (rule single_step_intro)
      "r = [ActEnd (actions ! n)]"
      "l' = EndInstant (actions ! n)"
     unfolding edge_3_spec_def Let_def prod.case by simp
-
-  find_theorems name: "local.conv"
     
   show "(case (L, v, c) of (L, s, u) \<Rightarrow> \<lambda>(L', s', u'). abs_renum.sem \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow> \<langle>L', s', u'\<rangle>) (enter_end_instant n (L, v, c))"
     unfolding s' prod.case
@@ -4078,7 +4120,7 @@ proof (rule single_step_intro)
             by blast
           show "c (ActEnd a) = real_of_rat (planning_sem.exec_time (at_end a) t)" 
             unfolding i(1)
-          proof (rule end_snap_not_executed_time[THEN spec, THEN mp, OF i(2), THEN mp]) 
+          proof (rule ending_not_executed_clock[THEN spec, THEN mp, OF i(2), THEN mp]) 
             from a(2)
             consider "(t, at_end a) \<notin> planning_sem.happ_seq" | "at_end (actions ! n) = at_end a" by auto
             thus "n \<le> i \<or> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<or> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq"
@@ -4114,7 +4156,7 @@ proof (rule single_step_intro)
         apply (intro allI impI)
         apply (subst no_invs)
         by simp+
-      show "''loc'' \<bar> L ! Suc n = l" unfolding TAG_def t' using still_running[THEN spec, THEN mp, OF n] using start_not_scheduled end_scheduled by blast
+      show "''loc'' \<bar> L ! Suc n = l" unfolding TAG_def t' using ending_not_executed_loc[THEN spec, THEN mp, OF n] using start_not_scheduled end_scheduled by blast
       show "''range'' \<bar> Suc n < length L" unfolding TAG_def using n L_len by simp
       show "''new loc'' \<bar> L' = L[Suc n := l']" unfolding TAG_def t' using L' by simp
       show "''new valuation'' \<bar> c' = [r\<rightarrow>0]c" unfolding TAG_def t' using c' by simp
@@ -4163,19 +4205,13 @@ proof (rule single_step_intro)
                    apply simp
                   apply simp
                  apply (erule ssubst[of x])
-                 apply (subst locked_after)
-                   apply (rule invs_in_props[THEN set_mp, of "actions ! n"])
-                using n apply simp
-                   apply simp
+                 apply (subst variables_locked_after)
                 using locks_in_dom apply auto[1]
                  apply (subst option.the_def)
                 apply (subst int_of_nat_def)
                  apply simp
                  apply (erule ssubst[of x])
-                 apply (subst locked_after)
-                   apply (rule invs_in_props[THEN set_mp, of "actions ! n"])
-                using n apply simp
-                   apply simp
+                 apply (subst variables_locked_after)
                 using locks_in_dom apply auto[1]
                  apply (subst option.the_def)
                 apply (subst int_of_nat_def)
@@ -4188,25 +4224,82 @@ proof (rule single_step_intro)
   qed
 qed
 end 
+thm ending_not_executed_loc'
+(* Context to apply every snap action placed at a timepoint *)
+context
+  fixes M t
+    end_indices
+    L v c
+  assumes l: "l < length (htpl \<pi>)"
+      and p_locked_before: "\<forall>p. PropLock p \<in> set (map fst nta_vars) \<longrightarrow>  v (PropLock p) = Some (planning_sem.locked_before t p)"
+      and v_bounded: "bounded (map_of nta_vars) v"
+      and planning_state: "v PlanningLock = Some 1"
+      and ending_clock: "\<forall>i < length actions. c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
+      and starting_clock: "\<forall>i < length actions. c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
+      and ending_loc: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+          \<longrightarrow> L' ! Suc i = (Running (actions ! i))"
+  defines "M \<equiv> planning_sem.plan_state_seq"
+      and "t \<equiv> time_index \<pi> l"
+      and "end_indices \<equiv> filter (\<lambda>n. (t, at_end (actions ! n)) \<in> planning_sem.happ_seq \<and> (t, at_start (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]"
+begin 
 
-lemma enter_remaining_end_instants_okay:
+lemma enter_end_instants_take_n_pre:
+  fixes L' v' c' i
   assumes "l < length (htpl \<pi>)"
-      and "M = plan_state_seq \<pi>"
+      and "i \<le> length end_indices"
+      and "n = end_indices ! i"
+      and "(s#enter_end_instants end_indices s) ! i = (L', v', c')"
+    shows "\<forall>p. PropLock p \<in> dom (map_of nta_vars) 
+            \<longrightarrow> v' (PropLock p) = Some (int_of_nat (partially_updated_locked_before t p n))"
+      "bounded (map_of nta_vars) v'"
+     "v' PlanningLock = Some 1"
+      "\<forall>i < n. (t, at_end (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq 
+            \<longrightarrow> c' (ActEnd (actions ! i)) = (0::real)"
+      "\<forall>i < length actions. n \<le> i \<or> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<or> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+            \<longrightarrow> c' (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
+      "\<forall>i < length actions. c' (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
+      "\<forall>i < n. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq 
+              \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+          \<longrightarrow> L' ! Suc i = (EndInstant (actions ! i))"
+     "\<forall>i < length actions. n \<le> i 
+              \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq 
+              \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+          \<longrightarrow> L' ! Suc i = (Running (actions ! i))"
+  subgoal sorry
+  subgoal sorry
+  subgoal sorry
+  subgoal sorry
+  subgoal sorry
+  subgoal sorry
+  subgoal sorry
+  subgoal sorry
+  done
+(* proof -
+  show ?thesis sorry
+qed
+ *)
+lemma enter_end_instants_okay:
+  assumes "l < length (htpl \<pi>)"
+      and "M = planning_sem.plan_state_seq"
       and "s = (L, v, c)"
-      and "\<forall>p \<in> set props. p \<in> M l \<longrightarrow> v (PropVar p) = Some 1"
-      and "\<forall>p \<in> set props. p \<notin> M l \<longrightarrow> v (PropVar p) = Some 0"
-      and "\<forall>p \<in> set props. \<exists>x. v (PropLock p) = Some (planning_sem.locked_before t p)"
-      and "end_indices = filter (\<lambda>n. at_end (actions ! n) \<in> h \<and> at_start (actions ! n) \<notin> h) [0..<length actions]"
+      and "\<forall>p. PropVar p \<in> set (map fst nta_vars) \<and> p \<in> M l \<longrightarrow> v (PropVar p) = Some 1"
+      and "\<forall>p. PropVar p \<in> set (map fst nta_vars) \<and> p \<notin> M l \<longrightarrow> v (PropVar p) = Some 0"
+      and "\<forall>p. PropLock p \<in> set (map fst nta_vars) \<longrightarrow>  v (PropLock p) = Some (planning_sem.locked_before t p)"
     shows "abs_renum.urge_bisim.A.steps (s # enter_end_instants end_indices s)"
 proof -
-
-  have "abs_renum.urge_bisim.A.steps [last (seq_apply (take i (map enter_end_instant end_indices)) s), last (seq_apply (take (Suc i) (map enter_end_instant end_indices)) s)]"
-    if "i < length end_indices" for i sorry
-  thus ?thesis unfolding enter_end_instants_def 
+  show ?thesis unfolding enter_end_instants_def
+  proof (intro seq_apply_steps_induct allI impI)
+    fix i
+    assume "i < length (s # seq_apply (map enter_end_instant end_indices) s)"
+    
+    show "abs_renum.urge_bisim.A.steps [(s # seq_apply (map enter_end_instant end_indices) s) ! i, (s # seq_apply (map enter_end_instant end_indices) s) ! Suc i]"
+    proof (rule single_step_intro)
+      show ?thesis sorry
+    qed
+  qed
 qed
 
-
-lemma enter_end_instants_okay: undefined sorry
+end
 
 
 lemma apply_happening:
@@ -4233,8 +4326,6 @@ lemma end_of_steps_is_run: "abs_renum.urge_bisim.A.run (goal_run (last plan_step
 
 lemma "abs_renum.urge_bisim.A.run (goal_run goal_state)" sorry
 
-
-qed
 
 lemma "abs_renum.urge_bisim.A.steps (undefined # undefined # undefined)"
   find_theorems intro name: "steps"
@@ -4266,15 +4357,8 @@ proof -
     find_theorems name: deadlock
     apply (rule exI)
     apply (rule conjI)
-
-     apply (coinduction rule: abs_renum.urge_bisim.A.run.coinduct)
-qed
-
-end
-
-end
-
-(* To do: Acutally use ordered lists *)
+     apply (coinduction rule: abs_renum.urge_bisim.A.run.coinduct) sorry
+  qed
 
 (* Functions from actions to locations and clocks, and from propositions to variables must be fixed
   later. Renamings like in Munta. *)
@@ -4284,4 +4368,5 @@ end
 (* Do the conversion to strings later, as renamings *)
 (* Right now, do the conversion using the actual types as placeholders.
 Propositions and actions are not renamed in variables  *)
+
 end
