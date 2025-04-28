@@ -3654,7 +3654,7 @@ lemma length_seq_apply[simp]: "length (seq_apply fs s) = length fs"
   by auto
 
 lemma steps_extend_induct:
-  assumes "\<forall>i < length xs. abs_renum.urge_bisim.A.steps [xs!i, xs!Suc i]"
+  assumes "\<forall>i. Suc i < length xs \<longrightarrow> abs_renum.urge_bisim.A.steps [xs!i, xs!Suc i]"
       and "0 < length xs"
   shows "abs_renum.urge_bisim.A.steps xs"
 proof -
@@ -3678,7 +3678,7 @@ proof -
 qed
 
 lemma seq_apply_steps_induct:
-  assumes "\<forall>i < length (s#seq_apply fs s). abs_renum.urge_bisim.A.steps [(s#seq_apply fs s) ! i, (s#seq_apply fs s) ! Suc i]"
+  assumes "\<forall>i. Suc i < length (s#seq_apply fs s) \<longrightarrow> abs_renum.urge_bisim.A.steps [(s#seq_apply fs s) ! i, (s#seq_apply fs s) ! Suc i]"
   shows "abs_renum.urge_bisim.A.steps (s # seq_apply fs s)" using assms steps_extend_induct by blast
 
 lemma seq_apply_nth_Suc:
@@ -4370,15 +4370,14 @@ lemma "dom (map_of MM) = set (map fst MM)" unfolding set_map dom_map_of_conv_ima
 
 lemma enter_end_instants_ith_pre:
   fixes L' v' c'
-  assumes "l < length (htpl \<pi>)"
-      and "ei < length end_indices"
+  assumes "ei < length end_indices"
       and "n = end_indices ! ei"
       and "((L, v, c)#enter_end_instants end_indices (L, v, c)) ! ei = (L', v', c')"
-    shows " length L' = Suc (length actions)
+    shows "length L' = Suc (length actions)
           \<and> bounded (map_of nta_vars) v' 
           \<and> v' PlanningLock = Some 1
-          \<and> (\<forall>i < length actions. n \<le> i \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq  \<longrightarrow> L' ! Suc i = (Running (actions ! i)))
           \<and> (\<forall>i < n. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq  \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq \<longrightarrow> L' ! Suc i = (EndInstant (actions ! i)))
+          \<and> (\<forall>i < length actions. n \<le> i \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq  \<longrightarrow> L' ! Suc i = (Running (actions ! i)))
           \<and> (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v' (PropLock p) = Some (int_of_nat (partially_updated_locked_before t p n))) 
           \<and> (\<forall>i < n. (t, at_end (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<longrightarrow> c' (ActEnd (actions ! i)) = (0::real))
           \<and> (\<forall>i < length actions. n \<le> i \<or> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<or> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq \<longrightarrow> c' (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t))
@@ -4452,7 +4451,7 @@ next
   have n: "n = end_indices ! Suc i" 
           "Suc i < length end_indices" using Suc by linarith+
 
-  have n_set: "n \<in> set end_indices" using Suc(3,4) by auto
+  have n_set: "n \<in> set end_indices" using Suc(2, 3) by auto
   hence n_len: "n < length actions" unfolding end_indices by auto
   
 
@@ -4482,7 +4481,7 @@ next
     "(\<forall>i<n1. (t, at_end (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<longrightarrow> c1 (ActEnd (actions ! i)) = 0)"
     "(\<forall>i<length actions. n1 \<le> i \<or> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<or> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq \<longrightarrow> c1 (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t))"
     "(\<forall>i<length actions. c1 (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t))"
-    unfolding HOL.atomize_conj using Suc.IH[OF Suc(2)  _ n1(1) Lvc1] Suc(3) by fastforce
+    using Suc.IH[OF n1(2,1) Lvc1] by blast+
 
   have nothing_between: "\<not> ((t, at_end (actions ! x)) \<in> planning_sem.happ_seq \<and> (t, at_start (actions ! x)) \<notin> planning_sem.happ_seq)" 
     if i_ran: "Suc n1 \<le> x" "x < n" 
@@ -4508,7 +4507,7 @@ next
     unfolding Lvc1[symmetric] enter_end_instants_def 
     apply (subst seq_apply_nth_Suc) 
     using Suc apply linarith ..
-  hence Lvc': "(L', v', c') = enter_end_instant (end_indices ! i) (L1, v1, c1)" using Suc(5) by simp
+  hence Lvc': "(L', v', c') = enter_end_instant (end_indices ! i) (L1, v1, c1)" using Suc(4) by simp
 
   show ?case 
   proof (intro conjI)
@@ -4592,28 +4591,45 @@ next
       done
   qed
 qed
-(* proof -
-  show ?thesis sorry
-qed
- *)
-lemma enter_end_instants_okay:
-  assumes "l < length (htpl \<pi>)"
-      and "\<forall>p. PropVar p \<in> set (map fst nta_vars) \<and> p \<in> M l \<longrightarrow> v (PropVar p) = Some 1"
-      and "\<forall>p. PropVar p \<in> set (map fst nta_vars) \<and> p \<notin> M l \<longrightarrow> v (PropVar p) = Some 0"
-      and "\<forall>p. PropLock p \<in> set (map fst nta_vars) \<longrightarrow>  v (PropLock p) = Some (int (planning_sem.locked_before t p))"
-    shows "abs_renum.urge_bisim.A.steps ((L, v, c) # enter_end_instants end_indices (L, v, c))"
-proof -
-  show ?thesis unfolding enter_end_instants_def
-  proof (intro seq_apply_steps_induct allI impI)
+
+
+lemma enter_end_instants_valid_steps:
+ "abs_renum.urge_bisim.A.steps ((L, v, c)#enter_end_instants end_indices (L, v, c))"
+  unfolding enter_end_instants_def
+proof (rule seq_apply_steps_induct)
+  show "\<forall>i. Suc i < length ((L, v, c) # seq_apply (map enter_end_instant end_indices) (L, v, c)) \<longrightarrow> abs_renum.urge_bisim.A.steps [((L, v, c) # seq_apply (map enter_end_instant end_indices) (L, v, c)) ! i, ((L, v, c) # seq_apply (map enter_end_instant end_indices) (L, v, c)) ! Suc i]"
+  proof (intro allI impI)
     fix i
-    assume "i < length (s # seq_apply (map enter_end_instant end_indices) s)"
-    
-    show "abs_renum.urge_bisim.A.steps [(s # seq_apply (map enter_end_instant end_indices) s) ! i, (s # seq_apply (map enter_end_instant end_indices) s) ! Suc i]"
-    proof (rule single_step_intro)
-      show ?thesis sorry
-    qed
+    assume "Suc i < length ((L, v, c) # seq_apply (map enter_end_instant end_indices) (L, v, c))"
+    hence i: "i < length end_indices" unfolding enter_end_instants_def by simp
+    obtain n where
+      n: "n = end_indices ! i" by simp
+    have n_in_set: "n \<in> set end_indices" using i n  in_set_conv_nth by simp
+    hence n_len: "n < length actions" unfolding end_indices by simp
+    have ending: "(t, at_end (actions ! n)) \<in> planning_sem.happ_seq" "(t, at_start (actions ! n)) \<notin> planning_sem.happ_seq" using n_in_set unfolding end_indices by simp+
+    obtain L' v' c' where
+      Lvc': "((L, v, c) # enter_end_instants end_indices (L, v, c)) ! i = (L', v', c')" using prod_cases3 by blast
+  
+    from enter_end_instants_ith_pre[OF i n Lvc']
+    have i_pres: "length L' = Suc (length actions)" 
+      "Simple_Network_Language.bounded (map_of nta_vars) v' "
+      "v' PlanningLock = Some 1 "
+      "\<forall>i<n. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq \<longrightarrow> L' ! Suc i = EndInstant (actions ! i) "
+      "(\<forall>i<length actions. n \<le> i \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq \<longrightarrow> L' ! Suc i = Running (actions ! i))"
+      "\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v' (PropLock p) = Some (int_of_nat (partially_updated_locked_before t p n)) "
+      "\<forall>i<n. (t, at_end (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<longrightarrow> c' (ActEnd (actions ! i)) = 0"
+      "\<forall>i<length actions. n \<le> i \<or> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<or> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq \<longrightarrow> c' (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t) "
+      "\<forall>i<length actions. c' (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)" by blast+
+    have "abs_renum.urge_bisim.A.steps [(L', v', c'), enter_end_instant (end_indices ! i) (L', v', c')]"
+      using enter_end_instant_okay[OF n_len ending i_pres(1,2,3,4,5,6,7,8,9)] unfolding n by blast
+    thus "abs_renum.urge_bisim.A.steps [((L, v, c) # seq_apply (map enter_end_instant end_indices) (L, v, c)) ! i, ((L, v, c) # seq_apply (map enter_end_instant end_indices) (L, v, c)) ! Suc i]" 
+      apply (subst seq_apply_nth_Suc) using i apply simp
+      apply (subst Lvc'[simplified enter_end_instants_def])+
+      by blast
   qed
 qed
+
+(* to do: post-conditions *)
 
 end
 
