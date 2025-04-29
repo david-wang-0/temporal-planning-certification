@@ -221,13 +221,6 @@ definition inc_prop_lock_ab::"
   
 
 
-(* How do we handle actions with 0 duration and invariants?
-  Can a start interfere with an end? Yes
-  If the start and end execute in the same instance, will it allow a snap-action that is mutex with one
-  of the two to execute? No, because that is excluded by the start and end clocks. *)
-
-(* What happens when an action has a duration of 0? Should it only be able to start an infinite number
-  of times when it does not interfere with itself? *)
 subsection \<open>Automata for individual actions\<close>
 abbreviation mutex_effects_spec::"
    'snap_action 

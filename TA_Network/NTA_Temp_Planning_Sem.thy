@@ -124,6 +124,12 @@ lemma plan_state_seq_valid: "valid_state_seq plan_state_seq"
 
 lemmas plan_state_seq_props = plan_state_seq_valid[simplified valid_state_seq_def valid_state_sequence_def]
 
+lemma plan_state_seq_happ_pres:
+  assumes "i < length (htpl \<pi>)"
+  shows "\<Union> (pre ` happ_at happ_seq (time_index \<pi> i)) \<subseteq> plan_state_seq i"
+  using assms plan_state_seq_props 
+  unfolding Let_def unfolding happ_seq_def by blast
+
 lemma at_start_in_happ_seqI:
   assumes "(a, t, d) \<in> ran \<pi>"
   shows "(t, at_start a) \<in> happ_seq"
@@ -190,6 +196,8 @@ subsubsection \<open>Execution state\<close>
 
 text \<open>Binary, but could be changed to count the active instances.\<close>
 
+text \<open>Superseded by active count\<close>
+
 definition exec_state_sequence::"('time \<times> 'action) set" where
 "exec_state_sequence \<equiv> {(t, a) |s t a. a \<in> actions \<and> (s, at_start a) \<in> happ_seq \<and> s < t 
                   \<and> \<not>(\<exists>s'. (s', at_end a) \<in> happ_seq \<and> s \<le> s' \<and> s' < t)}"
@@ -201,8 +209,6 @@ definition exec_state_sequence'::"('time \<times> 'action) set" where
 abbreviation "ES t \<equiv> {a. (t, a) \<in> exec_state_sequence}"
 
 abbreviation "IES t \<equiv> {a. (t, a) \<in> exec_state_sequence'}"
-
-abbreviation "PES t \<equiv> {a. (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<in> happ_seq}" 
 
 
 lemma inc_es_is_next_es:
@@ -2712,160 +2718,105 @@ proof -
   show ?thesis unfolding exec_time_def pt_def by (auto simp: Let_def)
 qed
 
+subsection \<open>Propositional states, updates, and commutativity\<close>
 
+lemma prop_state_upd_combine_if:                        
+  assumes "\<And>a b. a \<in> h \<Longrightarrow> b \<in> h \<Longrightarrow> a \<noteq> b \<Longrightarrow> \<not> mutex_snap a b"
+      and "h1 \<union> h2 = h"
+  shows "app_effs (app_effs M h1) h2 = app_effs M h"
+proof -
+  from assms
+  have ab_not_int: "\<And>a b. a \<in> h \<Longrightarrow> b \<in> h \<Longrightarrow> a \<noteq> b \<Longrightarrow> adds a \<inter> dels b = {}" unfolding mutex_snap_def mutex_snap_action_def by simp
+  have not_int: "\<Union> (adds ` h1) \<inter> (\<Union> (dels ` h2) - \<Union> (adds ` h2)) = {}"
+  proof -
+    { fix p 
+      assume a1: "p \<in> \<Union> (adds ` h1)" 
+      assume a2: "p \<in> \<Union> (dels ` h2)" "p \<notin> \<Union> (adds ` h2)"
 
-    (* have "start_list ! i \<le> end_list ! i \<and> end_list ! i < start_list ! (Suc i)" if "i < length end_list" for i
-      using that
-    proof (induction i)
-      case 0
-      have s0_le_e0: "start_list ! 0 \<le> end_list ! 0" 
-      proof (rule ccontr)
-        assume "\<not> start_list ! 0 \<le> end_list ! 0"
-        hence t_ord: "end_list ! 0 < start_list ! 0" by simp
-        
-        have st_0: "0 < length start_list" using 0 start_list_end_list_len by auto
-
-        have "end_list ! 0 \<in> set end_list" using 0 by simp
-        hence 1: "end_list ! 0 \<in> {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" unfolding set_sorted_list_of_set[OF finite_open_ended] end_list_def by blast
-        hence "(end_list ! 0, at_end a) \<in> happ_seq" by simp
-        then obtain d t' where
-          atd: "end_list ! 0 = t' + d"
-          "(a, t', d) \<in> ran \<pi>" using at_end_in_happ_seqE' a_in_acts unfolding happ_seq_def by blast
-        hence t'_start: "(t', at_start a) \<in> happ_seq" unfolding happ_seq_def plan_happ_seq_def by auto
-
-        have t': "t' \<le> end_list ! 0" using atd valid_plan_durs(1)[OF vp, simplified durations_ge_0_def] by simp
-        hence t'_t: "t' < t" using 1 by auto
-        
-        have "t' < start_list ! 0" using t_ord atd valid_plan_durs(1)[OF vp, simplified durations_ge_0_def]
-          by (metis add.commute add_less_cancel_left add_strict_increasing2)
-
-        have "t' \<in> {s'. s' < t \<and> (s', at_start a) \<in> happ_seq}" using t'_start t'_t by simp
-        hence "t' \<in> set start_list" using start_list_def set_sorted_list_of_set finite_open_started by blast
-        then obtain n' where
-          "start_list ! n' = t'" 
-          "n' < length start_list" unfolding in_set_conv_nth by blast
-        hence "start_list ! 0 \<le> t'" using sorted_nth_mono[OF start_list_sorted, of 0 n'] by simp
-        with t' t_ord
-        show False by simp
-      qed
+      from a1 obtain a1 where
+        a1: "a1 \<in> h1"
+        "p \<in> adds a1" by blast
+      hence a1h: "a1 \<in> h" using assms by blast
       moreover
-      have "end_list ! 0 < start_list ! Suc 0"
-      proof (rule ccontr)
-        assume "\<not> end_list ! 0 < start_list ! Suc 0"
-        hence t_ord: "start_list ! 1 \<le> end_list ! 0" by simp
+      from a2 obtain a2 where
+        a2: "a2 \<in> h2"
+        "p \<in> dels a2"
+        "p \<notin> adds a2" by blast
+      hence a2h: "a2 \<in> h" using assms by blast
+      moreover
+      have "a1 \<noteq> a2" using a1 a2 by blast
+      ultimately
+      have "adds a1 \<inter> dels a2 = {}" using ab_not_int by simp
+      with a1 a2
+      have False by blast
+    }
+    thus ?thesis by blast
+  qed
 
-        
-        have 1: "1 < length start_list" using 0 start_list_end_list_len by auto
-        hence "start_list ! 1 \<in> {s. s < t \<and> (s, at_start a) \<in> happ_seq}" using set_sorted_list_of_set[OF finite_open_started]
-          unfolding start_list_def using in_set_conv_nth by auto
-        hence "(start_list ! 1, at_start a) \<in> happ_seq" by simp
-        from at_start_in_happ_seqE'[OF a_in_acts this[simplified happ_seq_def]]
-        obtain d where
-          d: "(a, start_list ! 1, d) \<in> ran \<pi>" by auto
-        hence "0 \<le> d" using valid_plan_durs vp durations_ge_0_def by fast
-        note d = d this
+  have "app_effs (app_effs M h1) h2 = M - \<Union> (dels ` h1) \<union> \<Union> (adds ` h1) - \<Union> (dels ` h2) \<union> \<Union> (adds ` h2)" unfolding app_effs_def apply_effects_def by blast
+  also have "... = M - \<Union> (dels ` h1) \<union> \<Union> (adds ` h1) - (\<Union> (dels ` h2) - \<Union> (adds ` h2)) \<union> \<Union> (adds ` h2)" by blast
+  also have "... = M - \<Union> (dels ` h1) - (\<Union> (dels ` h2) - \<Union> (adds ` h2)) \<union> \<Union> (adds ` h1) \<union> \<Union> (adds ` h2)" using not_int by blast
+  also have "... = M - (\<Union> (dels ` h1) \<union> \<Union> (dels ` h2)) \<union> \<Union> (adds ` h1) \<union> \<Union> (adds ` h2)" by blast
+  also have "... = M - \<Union> (dels ` h) \<union> \<Union> (adds ` h)" using assms(2) by blast
+  finally show ?thesis unfolding app_effs_def apply_effects_def by blast
+qed
 
-        hence end_of_start: "(start_list ! 1 + d, at_end a) \<in> happ_seq" unfolding plan_happ_seq_def happ_seq_def by blast
+lemma mutex_pre_app: 
+  assumes "(t, a) \<in> happ_seq"
+      and "(t, b) \<in> happ_seq"
+      and "a \<noteq> b"
+    shows "pre a \<inter> (dels b \<union> adds b) = {}"
+  using nm assms unfolding mutex_valid_happ_seq_def nm_happ_seq_def
+  unfolding mutex_snap_def mutex_snap_action_def by blast
 
-        have e: "end_list ! 0 \<in> set end_list" using 0 by simp
-        hence e_0: "end_list ! 0 < t" unfolding set_sorted_list_of_set[OF finite_open_ended] end_list_def by simp
-  
-        show False
-        proof (cases "start_list ! 1 + d < end_list ! 0")
-          case True
-          
-          hence st_t: "start_list ! 1 + d < t" using e_0 by simp
-          hence "start_list ! 1 + d \<in> set end_list" unfolding set_sorted_list_of_set[OF finite_open_ended] end_list_def 
-            using end_of_start by simp
-          then obtain n' where
-            n': "end_list ! n' = start_list ! 1 + d" 
-            "n' < length end_list" unfolding in_set_conv_nth by blast
-          with True
-          have "n' < 0" using end_list_sorted sorted_nth_mono by fastforce
-          thus ?thesis by auto 
-        next
-          case False
-          hence r: "end_list ! 0 \<le> start_list ! 1 + d" by auto
+lemma happ_combine:
+  assumes "h1 \<union> h2 \<subseteq> happ_at happ_seq t"
+  shows "app_effs (app_effs M h1) h2 = app_effs M (h1 \<union> h2)"
+  apply (rule prop_state_upd_combine_if)
+  using nm assms unfolding mutex_valid_happ_seq_def nm_happ_seq_def
+  unfolding mutex_snap_def
+  by blast+
 
-          have "(end_list ! 0, at_end a) \<in> happ_seq" using e set_sorted_list_of_set finite_open_ended unfolding end_list_def by blast
-          from at_end_in_happ_seqE''[OF a_in_acts this] 
-          obtain t' d' where
-            t'd': "(a, t', d') \<in> ran \<pi>"
-            "end_list ! 0 = t' + d'" by auto
-          with r
-          have r': "t' + d' \<le> start_list ! 1 + d" by simp
+definition instant_actions_at where
+"instant_actions_at t \<equiv> {a \<in> actions. (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<in> happ_seq}"
 
-          show ?thesis 
-          proof (cases "start_list ! 1 = t'"; cases "d = d'")
-            assume "start_list ! 1 = t'" "d = d'"
-            have "start_list ! 0 \<le> start_list ! 1"  using 0 start_list_end_list_len 
-              apply -
-              apply (rule sorted_nth_mono[OF start_list_sorted])
-              by auto
-            moreover
-            have "start_list ! 0 \<noteq> start_list ! 1" using start_list_distinct
-              by (metis \<open>1 < length start_list\<close> less_numeral_extra(1) order.strict_iff_order sorted_wrt_nth_less start_list_sorted strict_sorted_iff)
-            ultimately
-            have "start_list ! 0 < start_list ! 1" by simp
-            from start_list_nthE 0 start_list_end_list_len
-            obtain t0 d0 where
-              t0d0: "(a, t0, d0) \<in> ran \<pi>"
-                "start_list ! 0 = t0" by fastforce
-            show False
-            proof (cases "t0 + d0 < end_list ! 0")
-              case True
-              with e_0
-              have "t0 + d0 \<in> {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}" using t0d0 unfolding happ_seq_def plan_happ_seq_def by auto
-              hence "t0 + d0 \<in> set end_list" using set_sorted_list_of_set finite_open_ended end_list_def by blast
-              then obtain n0 where
-                "end_list ! n0 = t0 + d0" 
-                "n0 < length end_list" using in_set_conv_nth by metis
-              hence "end_list ! 0 \<le> t0 + d0" using sorted_nth_mono[OF end_list_sorted] by fastforce 
-              thus False using True by simp
-            next
-              case False
-              hence t0d0': "end_list ! 0 \<le> t0 + d0" by simp
-              from s0_le_e0 t0d0
-              have "t0 \<le> end_list ! 0" by simp
-              with nso[THEN no_self_overlap_spec, OF t0d0(1) t'd'(1)] \<open>start_list ! 1 = t'\<close> \<open>start_list ! 0 < start_list ! 1\<close> t0d0
-              have "\<not> (t0 \<le> t' \<and> t' \<le> t0 + d0)" by fastforce
-              with \<open>start_list ! 1 = t'\<close> \<open>start_list ! 0 < start_list ! 1\<close> \<open>start_list ! 0 = t0\<close>
-              have "t0 + d0 < t'" by auto
-              with False t'd' \<open>start_list ! 1 = t'\<close> t_ord
-              show ?thesis by order
-            qed
-          next
-            assume "start_list ! 1 = t'" "d \<noteq> d'"
-            with r nso[THEN no_self_overlap_spec, OF d(1) t'd'(1)] t'd'(2)
-            have "\<not> (t' \<le> start_list ! 1 + d)" by blast
-            with d \<open>start_list ! 1 = t'\<close> valid_plan_durs(1)[OF vp, simplified durations_ge_0_def]
-            show ?thesis by simp
-          next
-            assume a: "start_list ! 1 \<noteq> t'" "d = d'"
-            with r nso[THEN no_self_overlap_spec, OF d(1) t'd'(1)] t'd'(2)
-            have "\<not> (start_list ! 1 \<le> t' \<and> t' \<le> start_list ! 1 + d)" by simp
-            thus ?thesis by (metis a(2) add_le_cancel_right d(1) no_self_overlap_spec nso r' t'd'(1,2) t_ord)
-          next
-            assume a: "start_list ! 1 \<noteq> t'" "d \<noteq> d'"
-            with nso[THEN no_self_overlap_spec, OF d(1) t'd'(1)]
-            have "\<not> (start_list ! 1 \<le> t' \<and> t' \<le> start_list ! 1 + d)" by simp
-            then consider "start_list ! 1 > t'" | "start_list ! 1 + d < t'" by auto
-            
-            thus ?thesis
-              apply cases
-              using r  t_ord unfolding t'd' d
-               apply (metis d(1) nless_le no_self_overlap_spec nso t'd'(1))
-              by (metis durations_ge_0_def leD le_add_same_cancel1 order.trans r t'd'(1,2) valid_plan_def vp)
-          qed
-        qed
-      qed
-      ultimately show ?case by simp
-    next
-      case (Suc i)
+definition ending_actions_at where
+"ending_actions_at t \<equiv> {a \<in> actions. (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq}"
 
-      then show ?case sorry
-    qed *)
+definition starting_actions_at where
+"starting_actions_at t \<equiv> {a \<in> actions. (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq}"
+(* technically a \<in> actions not necessary *)
 
+definition "instant_snaps_at t = at_start ` instant_actions_at t \<union> at_end ` instant_actions_at t"
 
-end
+definition "starting_snaps_at t = at_start ` starting_actions_at t"
+
+definition "ending_snaps_at t =  at_end ` ending_actions_at t"
+
+lemma acts_in_prob: "(a, t, d) \<in> ran \<pi> \<Longrightarrow> a \<in> actions" using pap unfolding plan_actions_in_problem_def by auto
+
+lemma happ_at_is_union_of_starting_ending_instant:
+  "happ_at happ_seq t = instant_snaps_at t \<union> ending_snaps_at t \<union> starting_snaps_at t"
+  apply (intro equalityI subsetI)
+  subgoal for x
+    apply (drule in_happ_atD)
+    unfolding happ_seq_def
+    apply (drule in_happ_seqE')
+    apply (elim exE)
+    subgoal for a t d
+      apply (elim conjE disjE)
+      subgoal  
+        apply (frule at_start_in_happ_seqI)
+        apply (frule acts_in_prob)
+        apply (cases "(t, at_end a) \<in> happ_seq")
+        unfolding instant_snaps_at_def instant_actions_at_def starting_snaps_at_def starting_actions_at_def by auto
+        apply (frule at_end_in_happ_seqI)
+        apply (frule acts_in_prob)
+      apply (cases "(t + d, at_start a) \<in> happ_seq")
+      unfolding instant_snaps_at_def instant_actions_at_def ending_snaps_at_def ending_actions_at_def by auto
+        done
+      apply (elim UnE)
+    unfolding instant_snaps_at_def instant_actions_at_def starting_snaps_at_def starting_actions_at_def ending_snaps_at_def ending_actions_at_def by auto
+
+end                       
 end

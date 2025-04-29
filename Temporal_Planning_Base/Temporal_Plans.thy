@@ -71,6 +71,17 @@ definition plan_happ_seq::"('time \<times> 'snap_action) set" where
 abbreviation happ_at::"('time \<times> 'snap_action) set \<Rightarrow> 'time \<Rightarrow> 'snap_action set" where
 "happ_at B t \<equiv> {s. (t, s) \<in> B}"
 
+lemma in_happ_atD:
+  assumes "x \<in> happ_at B t"
+  shows "(t, x) \<in> B"
+  using assms by (rule CollectD)
+
+
+lemma in_happ_atI:
+  assumes "(t, x) \<in> B"
+  shows "x \<in> happ_at B t"
+  using assms by (rule CollectI)
+
 lemma a_in_B_iff_t_in_htps: "(\<exists>a. a \<in> happ_at plan_happ_seq t) \<longleftrightarrow> (t \<in> htps)"
 proof
   assume "\<exists>a. a \<in> happ_at plan_happ_seq t"
