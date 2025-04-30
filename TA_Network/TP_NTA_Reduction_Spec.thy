@@ -257,7 +257,7 @@ let
   
   add_upds = map (set_prop_ab 1) (adds start_snap);
   del_upds = map (set_prop_ab 0) (dels start_snap);
-  upds = add_upds @ del_upds;
+  upds = (inc_var 1 ActsActive) # del_upds @ add_upds;
 
   resets = [ActStart a]
 in (off, var_check, guard, Sil (STR ''''), upds, resets, start_inst)"
@@ -336,10 +336,10 @@ let
   pre_check = map (is_prop_ab 1) (pre end_snap);
   check = bexp_and_all (not_locked_check @ pre_check);
   
-  adds = map (set_prop_ab 1) (adds end_snap);
-  dels = map (set_prop_ab 0) (dels end_snap)
+  add_upds = map (set_prop_ab 1) (adds end_snap);
+  del_upds = map (set_prop_ab 0) (dels end_snap)
 in
-  (end_instant, check, [], Sil (STR ''''), adds @ dels, [], off)
+  (end_instant, check, [], Sil (STR ''''), (inc_var (-1) ActsActive) # del_upds @ add_upds, [], off)
 "
 
 (* To do: Make it optional to check invariants for some actions by adding another edge from starting to ending. *)

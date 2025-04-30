@@ -1,5 +1,6 @@
 theory NTA_Temp_Planning_Sem
   imports Temporal_Planning_Base.Temporal_Plans
+          "HOL-Library.Multiset"
 begin
 
 lemma GreatestI_time: "P (k::'t::time) \<Longrightarrow> (\<And>y. P y \<Longrightarrow> y \<le> k) \<Longrightarrow> P (Greatest P)"
@@ -70,6 +71,7 @@ lemma eps_cases:
       and "0 \<le> \<epsilon> \<Longrightarrow> thesis"
     shows "thesis"
   using assms eps_range by blast
+
 
 abbreviation snaps::"'action \<Rightarrow> 'snap_action set" where
 "snaps a \<equiv> {at_start a, at_end a}"
@@ -152,6 +154,10 @@ lemma at_end_in_happ_seqE'':
       and sn: "(s, at_end a) \<in> happ_seq"
     shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"
   using assms at_end_in_happ_seqE' happ_seq_def by simp
+
+lemma a_in_plan_is_in_actions:
+  assumes "(a, t, d) \<in> ran \<pi>"
+  shows "a \<in> actions" using assms pap unfolding plan_actions_in_problem_def by blast
 
 subsubsection \<open>Mutual exclusivity on the happening sequence\<close>
 
@@ -375,65 +381,6 @@ proof (rule notI)
   from started as_in_plan t_sd at_in_plan
   show False using nso[THEN no_self_overlap_spec] by fastforce
 qed
-
-(* Not correct, because the action could have a duration of 0 *)
-(* lemma executing_when_ending:
-  assumes snap_in_B: "(t, at_end a) \<in> happ_seq"
-      and a_in_actions: "a \<in> actions"
-    shows "a \<in> ES t"
-proof -
-  from snap_in_B
-  obtain s d where
-    s: "(a, s, d) \<in> ran \<pi>"   
-    "t = s + d"
-    using at_end_in_happ_seqE' snap_in_B a_in_actions unfolding happ_seq_def by blast
-  hence "(s, at_start a) \<in> happ_seq \<and> s \<le> t" using vp[THEN valid_plan_durs(1)] 
-    unfolding durations_ge_0_def plan_happ_seq_def happ_seq_def by auto
-  moreover
-  have "\<not>(\<exists>s'. (s', at_end a) \<in> happ_seq \<and> s \<le> s' \<and> s' < t)"
-  proof (rule notI)
-    assume "\<exists>s'. (s', at_end a) \<in> happ_seq \<and> s \<le> s' \<and> s' < t"
-    then obtain s' where
-      s': "(s', at_end a) \<in> happ_seq" 
-      "s \<le> s' \<and> s' < t" by auto
-  
-    then obtain \<tau> \<epsilon> where
-      \<tau>: "(a, \<tau>, \<epsilon>) \<in> ran \<pi>"
-      "s' = \<tau> + \<epsilon>"
-      using at_end_in_happ_seqE' assms unfolding happ_seq_def by blast
-
-    hence "(\<tau>, at_start a) \<in> happ_seq" unfolding plan_happ_seq_def happ_seq_def by blast
-
-    consider "\<tau> \<le> s" | "s \<le> \<tau>" by fastforce
-    thus False
-    proof cases
-      case 1
-      with s'(2) s(2) \<tau>(2)
-      have "\<tau> = s \<longrightarrow> \<epsilon> \<noteq> d" by blast
-      with nso[THEN no_self_overlap_spec, OF \<tau>(1) s(1)] 1 s'(2) \<tau>(2) 
-      show ?thesis by blast
-    next
-      case 2
-      from \<open>s \<le> s' \<and> s' < t\<close>[simplified \<open>t = s + d\<close> \<open>s' = \<tau> + \<epsilon>\<close>] 
-        vp[THEN valid_plan_durs(1), simplified durations_ge_0_def] \<open>(a, \<tau>, \<epsilon>) \<in> ran \<pi>\<close>
-      have "\<tau> \<le> s + d" by (meson dual_order.strict_trans2 le_add_same_cancel1 order.strict_iff_not)
-      moreover
-      from 2 s'(2) s(2) \<tau>(2)
-      have "\<tau> = s \<longrightarrow> \<epsilon> \<noteq> d" by blast
-      ultimately 
-      show ?thesis using 2 nso[THEN no_self_overlap_spec, OF s(1) \<tau>(1)] by blast
-    qed
-  qed
-  ultimately
-  show ?thesis unfolding exec_state_sequence_def happ_seq_def using a_in_actions
-    apply simp unfolding happ_seq_def[symmetric]
-
-    apply (rule exI)
-    apply (rule conjI)
-     apply blast
-
-
-qed *)
 
 lemma execution_state_unchanging:
   assumes not_starting: "(t, at_start a) \<notin> happ_seq"
@@ -1834,7 +1781,6 @@ definition "locked_during t p \<equiv> sum_list (map (open_closed_active_count t
 
 definition "locked_after t p \<equiv> sum_list (map (closed_active_count t) (locked_by p))"
 
-definition "all_open_active_count t \<equiv> sum_list (map (open_active_count t) action_list)"
 
 subsubsection \<open>Alternative Definition\<close>
 
@@ -1983,8 +1929,6 @@ lemma sum_list_max:
   apply (induction xs)
   by auto
 
-
-
 lemma locked_before_ran: "locked_before t p \<le> card actions"
 proof -
   have "\<forall>x \<in> set (map (open_active_count t) (locked_by p)). x \<le> 1"
@@ -2057,7 +2001,91 @@ proof -
     using order_trans by auto
 qed
 
+subsubsection \<open>Counting the number of active actions in total\<close>
+
+definition "active_before t \<equiv> sum_list (map (open_active_count t) action_list)"
+
+definition "active_after t \<equiv> sum_list (map (closed_active_count t) action_list)"
+
+
+lemma assumes "\<forall>x \<in> set xs. x = 1"
+  shows "sum_list xs = length xs"
+  using assms 
+  apply (induction xs)
+  by simp+
+
+lemma sum_list_binary_less_than_length_if:
+  assumes "\<forall>x \<in> set xs. x \<in> ({0, 1}::nat set)"
+          and "\<exists>x \<in> set xs. x = 0"
+        shows "sum_list xs < length xs"
+proof (cases "0 < length xs")
+  case True
+  obtain x0 where
+    "x0 \<in> set xs" "x0 = 0" using assms by auto
+  hence "x0 \<in> set_mset (mset xs)" by auto
+
+  have set_sort_key: "set (sort_key id xs) = set xs" by simp
+  have length_sort_key: "length (sort_key id xs) = length xs" by simp
+  with True
+  have not_empty_sort_key: "sort_key id xs \<noteq> []" by fastforce
+  hence hd_tl_sort_key: "hd (sort_key id xs) # (tl (sort_key id xs)) = sort_key id xs" by simp
   
+  have "\<exists>y \<in> set (sort_key id xs). y = 0" using assms set_sort_key by auto
+  have set_sort_key_ran: "\<forall>y \<in> set (sort_key id xs). y \<in> {0, 1}" using assms(1) set_sort_key by blast
+  have tl_sort_key_ran: "\<forall>y \<in> set (tl (sort_key id xs)). y \<in> {0, 1}" using  set_sort_key_ran 
+    apply (subst (asm) hd_tl_sort_key[symmetric]) by auto
+
+  have hd_sort_key_0: "hd (sort_key id xs) = 0" 
+  proof (rule ccontr)
+    assume a: "hd (sort_key id xs) \<noteq> 0"
+    
+    have "hd (sort_key id xs) \<in> set xs" using hd_in_set set_sort_key not_empty_sort_key by blast
+    hence 1: "hd (sort_key id xs) = 1" using assms(1) a by fastforce
+
+    have "sorted (sort_key id xs)" by (metis eq_id_iff sorted_sort)
+    hence "\<forall>y \<in> set (tl (sort_key id xs)). hd (sort_key id xs) \<le> y" by (metis ball_empty list.collapse list.sel(2) list.set(1) sorted_wrt.simps(2))
+    hence "\<forall>y \<in> set (tl (sort_key id xs)). y = 1" using 1 tl_sort_key_ran by auto
+    with 1
+    have "\<forall>y \<in> set (sort_key id xs). y = 1" apply (subst hd_tl_sort_key[symmetric]) by simp
+    with set_sort_key assms(2)
+    show False by auto
+  qed
+  
+  have mset_sort_key: "mset (sort_key id xs) = mset xs" by simp
+  hence "sum_list xs = sum_list (sort_key id xs)" unfolding sum_list.eq_foldr
+    apply (subst foldr_fold)
+     apply force
+    apply (subst foldr_fold)
+    apply force
+    apply (rule fold_permuted_eq[where P = "\<lambda>_. True" and f = "(+)"])
+    by simp+
+  hence "sum_list xs = sum_list (hd (sort_key id xs) # tl (sort_key id xs))" using hd_tl_sort_key by auto
+  also have "... = 0 + sum_list (tl (sort_key id xs))" using hd_sort_key_0 by auto
+  also have "... \<le> length (tl (sort_key id xs))" using tl_sort_key_ran sum_list_max by fastforce
+  also have "... < length (sort_key id xs)" apply (subst (2) hd_tl_sort_key[symmetric]) by simp
+  finally
+  show ?thesis using length_sort_key by simp
+next 
+  case False
+  thus ?thesis using assms(2) by simp
+qed
+
+lemma active_before_less_if_scheduled:
+  assumes "(t, at_start a) \<in> happ_seq"
+      and "a \<in> actions"
+  shows "active_before t < card actions"
+proof -
+  have "open_active_count t a = 0" using assms open_active_count_0_if_start_scheduled by blast
+  moreover
+  have "open_active_count t a \<in> set (map (open_active_count t) action_list)" using set_action_list assms by simp
+  moreover
+  have "\<forall>x \<in> set (map (open_active_count t) action_list). x \<in> {0, 1}" using open_active_count_ran set_action_list by auto
+  ultimately
+  show ?thesis
+    unfolding active_before_def
+    using sum_list_binary_less_than_length_if[where xs = "map (open_active_count t) action_list"] length_action_list[symmetric]
+    by simp
+qed
 
 subsubsection \<open>Relating the invariant sequence to the number of locks\<close>
 
