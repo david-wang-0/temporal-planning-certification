@@ -5254,7 +5254,7 @@ proof (rule set_vars_bounded[OF set_vars_bounded[OF single_upd_bounded[OF v_boun
       apply (subst map_add_find_left)
        apply (subst map_of_eq_None_iff)
       subgoal unfolding set_map image_image fst_conv by auto
-      find_theorems name: "map_of*Some"
+      
       
 qed
 
