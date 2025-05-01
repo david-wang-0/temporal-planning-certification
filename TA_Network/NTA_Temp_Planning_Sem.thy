@@ -2721,7 +2721,42 @@ lemma exec_time_sat_dur_const:
       and ending: "(t, at_end a) \<in> happ_seq"
       and not_starting: "(t, at_start a) \<notin> happ_seq"
     shows "satisfies_duration_bounds lower upper a (exec_time (at_start a) t)"
-  using exec_time_when_ending[OF assms(1, 2, 3)] valid_plan_durs(2)[OF vp]
+  using exec_time_when_ending[OF assms] valid_plan_durs(2)[OF vp]
+  unfolding durations_valid_def by blast
+
+lemma instant_act_in_happ_seqE:
+  assumes a_in_actions: "a \<in> actions"
+      and ending: "(t, at_end a) \<in> happ_seq"
+      and starting: "(t, at_start a) \<in> happ_seq"
+    shows "(a, t, 0) \<in> ran \<pi>"
+proof -
+  from at_start_in_happ_seqE''  assms
+  have "\<exists>!ds. (a, t, ds) \<in> ran \<pi>" by blast
+  then obtain ds where
+    tds: "(a, t, ds) \<in> ran \<pi>"
+    "\<forall>d. (a, t, d) \<in> ran \<pi> \<longrightarrow> d = ds" by blast
+
+  have ds_ran: "0 \<le> ds" using plan_durations tds by blast
+
+  from at_end_in_happ_seqE'' assms
+  have "\<exists>!(te, de). (a, te, de) \<in> ran \<pi> \<and> t = te + de" by simp
+  then obtain te de where
+    tede: "(a, te, de) \<in> ran \<pi>"
+    "t = te + de"
+    "\<forall>t' d'. (a, t', d') \<in> ran \<pi> \<and> t = t' + d' \<longrightarrow> (t' = te \<and> d' = de)" by blast
+
+  have de_ran: "0 \<le> de" using plan_durations tede by blast
+
+  have "t = te \<and> de = 0" by (metis add_cancel_right_right nso nso_start_end prod.inject tds(1) tede(1,2) valid_plan_durs(1) vp)
+  thus ?thesis using tede by blast
+qed
+
+lemma instant_acts_sat_dur_const:
+  assumes a_in_actions: "a \<in> actions"
+      and ending: "(t, at_end a) \<in> happ_seq"
+      and starting: "(t, at_start a) \<in> happ_seq"
+    shows "satisfies_duration_bounds lower upper a 0"
+  using valid_plan_durs(2)[OF vp] instant_act_in_happ_seqE[OF assms]
   unfolding durations_valid_def by blast
   
 

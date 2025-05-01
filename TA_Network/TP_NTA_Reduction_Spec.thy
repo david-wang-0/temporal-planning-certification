@@ -313,8 +313,7 @@ let
   end_snap = at_end a;
   start_snap = at_start a;
   
-  int_clocks = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec start_snap) @ map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec start_snap) 
-              @ map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec end_snap) @ map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec end_snap);
+  int_clocks =  map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec end_snap) @ map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec end_snap);
 
   guard = l_dur_spec a @ u_dur_spec a @ int_clocks;
 
