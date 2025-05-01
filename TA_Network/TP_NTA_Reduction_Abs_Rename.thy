@@ -4222,6 +4222,10 @@ qed
 
 subsubsection \<open>Rules for constructing a run\<close>
 
+lemma steps_prepend: "abs_renum.urge_bisim.A.steps (y#ys) \<Longrightarrow> abs_renum.urge_bisim.A.steps [x, y] \<Longrightarrow> abs_renum.urge_bisim.A.steps (x#y#ys)"
+  using abs_renum.urge_bisim.A.steps_append'[where as = "[x, y]" and bs = "y#ys"]
+  by auto
+
 lemma steps_extend: "abs_renum.urge_bisim.A.steps xs \<Longrightarrow> abs_renum.urge_bisim.A.steps (last xs # seq_apply fs (last xs)) \<Longrightarrow> abs_renum.urge_bisim.A.steps (ext_seq xs fs)"
   apply (frule abs_renum.urge_bisim.A.steps_append'[where bs = "last xs # seq_apply fs (last xs)"])
      apply simp
@@ -4233,6 +4237,7 @@ lemma steps_extend: "abs_renum.urge_bisim.A.steps xs \<Longrightarrow> abs_renum
   subgoal for x by blast
   subgoal for x xs by auto
   by simp
+
 
 lemma length_seq_apply[simp]: "length (seq_apply fs s) = length fs"
   apply (induction fs arbitrary: s)
@@ -5993,6 +5998,8 @@ proof (rule single_step_intro)
   thus "(case (L_started, v_started, c_started) of (L, s, u) \<Rightarrow> \<lambda>(L', s', u'). abs_renum.sem \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow> \<langle>L', s', u'\<rangle>) (L_ending, v_ending, c_ending)" by simp
 qed
 
+subsubsection \<open>Third transition\<close>
+
 lemma steps_end: "abs_renum.urge_bisim.A.steps [(L_ending, v_ending, c_ending), (L', v', c')]"
 proof (rule single_step_intro)
   obtain l b g a f r l' where
@@ -6084,11 +6091,18 @@ proof (rule single_step_intro)
   thus "(case (L_ending, v_ending, c_ending) of (L, s, u) \<Rightarrow> \<lambda>(L', s', u'). abs_renum.sem \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow> \<langle>L', s', u'\<rangle>) (L', v', c')" by force
 qed
 
-lemma steps: "abs_renum.urge_bisim.A.steps ((L, v, c) # apply_snap_action n (L, v, c))"
-  unfolding apply_snap_action_def  
-proof (rule seq_apply_steps_induct, intro allI impI)
-qed
-
+lemma instant_action_steps_if: "abs_renum.urge_bisim.A.steps ((L, v, c) # apply_snap_action n (L, v, c))"
+  unfolding apply_snap_action_def seq_apply.simps
+  apply (subst s')
+  apply (subst Lvc_ending)
+  apply (subst Lvc_started)
+  apply (rule steps_prepend)
+  apply (rule steps_prepend)
+  apply (rule steps_prepend)
+     apply (rule)
+    apply (rule steps_end)
+   apply (rule steps_ending)
+  by (rule steps_starting)
 end
 
 
