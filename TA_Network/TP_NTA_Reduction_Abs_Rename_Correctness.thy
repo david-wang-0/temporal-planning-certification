@@ -293,6 +293,7 @@ qed
 
 definition "prop_state_before i p \<equiv> if (p \<in> planning_sem.plan_state_seq i) then 1 else (0::int)"
 
+
 definition "instant_actions_before t n \<equiv> 
   let 
     actions_before = map ((!) actions) [0..<n];
@@ -327,6 +328,21 @@ lemma instant_snaps_before_0_is_none: "instant_snaps_before t 0 = {}"
 
 lemma apply_instant_snaps_before_0_is_id: "apply_instant_snaps_before t 0 s = s"
   unfolding apply_instant_snaps_before_def instant_snaps_before_0_is_none by simp
+
+
+definition "instant_indices_before t n \<equiv>
+  let 
+    indices_before = [0..<n];
+    instant_indices_before = filter (\<lambda>n. (t, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! n)) \<in> planning_sem.happ_seq) indices_before
+  in instant_indices_before"
+
+lemma instant_actions_before_alt: "instant_actions_before t n = set (map ((!) actions) (instant_indices_before t n))"
+  unfolding instant_actions_before_def instant_indices_before_def Let_def set_map 
+  apply (subst filter_map)
+  apply (subst set_map)
+  apply (subst comp_def)
+  by blast
+
 
 lemma instant_snaps_before_is_in_happ_seq: 
   assumes "n < length actions"
@@ -437,7 +453,59 @@ lemma pre_val_in_instant_prev_updated_prop_state_if:
       and p: "p \<in> set (pre h)"
     shows "instant_prev_updated_prop_state i p n = 1"
   using assms pre_sat_by_upd_state_seq[THEN subsetD, OF assms] unfolding instant_prev_updated_prop_state_def by argo
-  
+
+lemma set_upt_Suc_alt: "{0..<Suc n} = {0..<n} \<union> {n}" by auto
+
+lemma instant_snaps_before_Suc:
+  assumes starting: "(t, (at_start (actions ! n))) \<in> planning_sem.happ_seq"
+      and ending: "(t, (at_end (actions ! n))) \<in> planning_sem.happ_seq"
+    shows "instant_snaps_before t (Suc n) = instant_snaps_before t n \<union> {at_start (actions ! n)} \<union>  {at_end (actions ! n)}"
+  unfolding instant_snaps_before_def Let_def instant_actions_before_def
+set_filter set_map set_upt  set_upt_Suc_alt
+   image_Un image_insert image_empty 
+    using starting ending by blast
+
+lemma apply_instant_snaps_before_Suc:
+  assumes starting: "(t, (at_start (actions ! n))) \<in> planning_sem.happ_seq"
+      and ending: "(t, (at_end (actions ! n))) \<in> planning_sem.happ_seq"
+      and n: "n < length actions"
+    shows "apply_instant_snaps_before t (Suc n) s = 
+  apply_instant_snaps_before t n s
+  - set (dels (at_start (actions ! n)))
+  \<union> set (adds (at_start (actions ! n)))
+  - set (dels (at_end (actions ! n)))
+  \<union> set (adds (at_end (actions ! n)))"
+proof -
+  have "planning_sem.app_effs (planning_sem.app_effs s (instant_snaps_before t n)) (planning_sem.snaps (actions ! n)) = planning_sem.app_effs s (instant_snaps_before t n \<union> planning_sem.snaps (actions ! n))"
+    using planning_sem.happ_combine[of "(instant_snaps_before t n)" "{at_start (actions ! n), at_end (actions ! n)}"] starting ending instant_snaps_before_is_in_happ_seq[OF n] by blast
+  hence 1: " s - \<Union> ((set \<circ> dels) ` (instant_snaps_before t n \<union> planning_sem.snaps (actions ! n))) \<union> \<Union> ((set \<circ> adds) ` (instant_snaps_before t n \<union> planning_sem.snaps (actions ! n))) 
+    = s - \<Union> ((set \<circ> dels) ` instant_snaps_before t n) \<union> \<Union> ((set \<circ> adds) ` instant_snaps_before t n) - \<Union> ((set \<circ> dels) ` planning_sem.snaps (actions ! n)) \<union> \<Union> ((set \<circ> adds) ` planning_sem.snaps (actions ! n))" unfolding planning_sem.app_effs_def apply_effects_def by argo
+
+  have "planning_sem.app_effs (planning_sem.app_effs M {at_start (actions ! n)}) {at_end (actions ! n)} = planning_sem.app_effs M ({at_start (actions ! n)} \<union> {at_end (actions ! n)})" for M using planning_sem.happ_combine[of "{at_start (actions ! n)}" "{at_end (actions ! n)}"] starting ending by blast
+  hence 2: "M - \<Union> ((set \<circ> dels) ` ({at_start (actions ! n), at_end (actions ! n)})) \<union> \<Union> ((set \<circ> adds) ` ({at_start (actions ! n), at_end (actions ! n)})) = 
+  M - \<Union> ((set \<circ> dels) ` {at_start (actions ! n)}) \<union> \<Union> ((set \<circ> adds) ` {at_start (actions ! n)}) - \<Union> ((set \<circ> dels) ` {at_end (actions ! n)}) \<union> \<Union> ((set \<circ> adds) ` {at_end (actions ! n)})"
+    for M unfolding planning_sem.app_effs_def apply_effects_def by auto
+
+  have "apply_instant_snaps_before t (Suc n) s =  s - \<Union> ((set \<circ> dels) ` instant_snaps_before t (Suc n)) \<union> \<Union> ((set \<circ> adds) ` instant_snaps_before t (Suc n))" unfolding apply_instant_snaps_before_def Let_def by simp
+  also have "... = s - \<Union> ((set \<circ> dels) ` (instant_snaps_before t n \<union> {at_start (actions ! n), at_end (actions ! n)})) \<union> \<Union> ((set \<circ> adds) ` (instant_snaps_before t n \<union> {at_start (actions ! n), at_end (actions ! n)}))" using instant_snaps_before_Suc[OF starting ending] by auto
+  also have "... = s - \<Union> ((set \<circ> dels) ` instant_snaps_before t n) \<union> \<Union> ((set \<circ> adds) ` instant_snaps_before t n) - \<Union> ((set \<circ> dels) ` {at_start (actions ! n), at_end (actions ! n)}) \<union> \<Union> ((set \<circ> adds) ` {at_start (actions ! n), at_end (actions ! n)})" apply (subst 1) by blast
+  also have "... = apply_instant_snaps_before t n s - \<Union> ((set \<circ> dels) ` {at_start (actions ! n), at_end (actions ! n)}) \<union> \<Union> ((set \<circ> adds) ` {at_start (actions ! n), at_end (actions ! n)})" unfolding apply_instant_snaps_before_def Let_def by blast
+  also have "... = apply_instant_snaps_before t n s - \<Union> ((set \<circ> dels) ` {at_start (actions ! n)}) \<union> \<Union> ((set \<circ> adds) ` {at_start (actions ! n)}) - \<Union> ((set \<circ> dels) ` {at_end (actions ! n)}) \<union> \<Union> ((set \<circ> adds) ` {at_end (actions ! n)})" apply (subst 2) by blast
+  finally
+  show ?thesis by simp
+qed
+
+lemma instant_prev_updated_prop_state_Suc:
+  assumes t: "t = time_index \<pi> i"
+      and starting: "(t, (at_start (actions ! n))) \<in> planning_sem.happ_seq"
+      and ending: "(t, (at_end (actions ! n))) \<in> planning_sem.happ_seq"
+      and n: "n < length actions"
+    shows "instant_prev_updated_prop_state i p (Suc n) = (if p \<in> apply_instant_snaps_before t n (planning_sem.plan_state_seq i) - set (dels (at_start (actions ! n))) \<union> set (adds (at_start (actions ! n))) - set (dels (at_end (actions ! n))) \<union> set (adds (at_end (actions ! n))) then 1 else 0)"
+  unfolding instant_prev_updated_prop_state_def instant_prev_updated_plan_state_seq_def 
+  apply (subst t[symmetric])
+  apply (subst apply_instant_snaps_before_Suc[OF assms(2,3,4)])
+  by simp
+
 
 (* To do: locked_during *)
 
@@ -2985,12 +3053,16 @@ Let_def upper_sem_def comp_def
     done
   done
 
-
-context 
-  fixes i t n L v c L' v' c'
-  assumes i: "i < length (htpl \<pi>)"
+context (* For a timepoint and its snap actions *)
+  fixes i t
+assumes i: "i < length (htpl \<pi>)"
       and t: "t = time_index \<pi> i"
-      and n: "n < length actions"
+begin (* To do: extend to include above contexts *)
+
+
+context (* for a single instant action n *)
+  fixes n L v c L' v' c'
+   assumes n: "n < length actions"
       and end_scheduled: "(t, at_end (actions ! n)) \<in> planning_sem.happ_seq"
       and start_scheduled: "(t, at_start (actions ! n)) \<in> planning_sem.happ_seq"
 
@@ -2998,7 +3070,10 @@ context
       and v_bounded: "bounded (map_of nta_vars) v"
       and planning_state: "v PlanningLock = Some 1"
 
-      and instant_loc: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and instant_executed_loc: "\<forall>i < n. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+          \<longrightarrow> L ! Suc i = (Off (actions ! i))"
+
+      and instant_not_executed_loc: "\<forall>i < length actions. n \<le> i \<and> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
           \<longrightarrow> L ! Suc i = (Off (actions ! i))"
 
       and locked: "\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p))"
@@ -3405,10 +3480,156 @@ proof (rule set_vars_bounded[OF set_vars_bounded[OF single_upd_bounded[OF v_endi
       by simp+
   show "\<forall>x\<in>set (map PropVar (adds (at_end (actions ! n)))). \<exists>l u. map_of nta_vars x = Some (l, u) \<and> l \<le> 1 \<and> 1 \<le> u"
     apply (intro ballI exI conjI)
-        apply (rule map_of_nta_vars_action_end_add)
-         apply (rule act_n_in_actions)
-      by simp+
+      apply (rule map_of_nta_vars_action_end_add)
+       apply (rule act_n_in_actions)
+    by simp+
 qed
+
+
+subsubsection \<open>Post-conditions\<close>
+
+lemma L_ended_len: "length L' = Suc (length actions)" using L_instant_ended L_len by auto
+
+lemma v_ended_planning_state: "v' PlanningLock = Some 1" unfolding v_instant_ended' using planning_state 
+  apply (subst map_upds_apply_nontin, fastforce)+
+  by blast
+
+lemma v_ended_instant_executed_loc: "\<forall>i \<le> n. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+          \<longrightarrow> L' ! Suc i = (Off (actions ! i))" 
+  apply (intro allI impI, elim conjE)
+  subgoal for i
+    apply (cases "i = n")
+    unfolding L_instant_ended
+    subgoal apply simp using nth_list_update_eq[of "Suc n" L] L_len n by simp
+    using instant_executed_loc by auto
+  done
+
+lemma v_ended_locked: "\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v' (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p))"
+  apply (intro allI impI)
+  unfolding v_instant_ended'
+  apply (subst map_upds_apply_nontin, fastforce)+
+  using locked by simp
+
+lemma v_ended_prop_state: "\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v' (PropVar p) = Some (instant_prev_updated_prop_state i p (Suc n))"
+proof (intro allI impI)                                                                                                    
+  fix p
+  assume p: "PropVar p \<in> dom (map_of nta_vars)" 
+  show "v' (PropVar p) = Some (instant_prev_updated_prop_state i p (Suc n))"
+    unfolding v_instant_ended'
+    apply (subst instant_prev_updated_prop_state_Suc[OF t start_scheduled end_scheduled n])
+    apply (subst t)
+    apply (subst instant_prev_updated_plan_state_seq_def[symmetric])
+    apply (cases "p \<in> set (adds (at_end (actions !n)))")
+     apply (subst map_upds_with_list_of)
+      apply simp
+     apply simp
+    apply (subst map_upds_apply_nontin)
+     apply fastforce
+    apply (cases "p \<in> set (dels (at_end (actions ! n)))")
+     apply (subst map_upds_with_list_of)
+      apply simp
+     apply simp
+    apply (subst map_upds_apply_nontin)
+    apply fastforce
+    apply (cases "p \<in> set (adds (at_start (actions !n)))")
+     apply (subst map_upds_with_list_of)
+      apply simp
+     apply simp
+    apply (subst map_upds_apply_nontin)
+     apply fastforce
+    apply (cases "p \<in> set (dels (at_start (actions ! n)))")
+     apply (subst map_upds_with_list_of)
+      apply simp
+     apply simp
+    apply (subst map_upds_apply_nontin)
+     apply fastforce
+    apply (subst prop_state[THEN spec, THEN mp, OF p, simplified instant_prev_updated_prop_state_def])
+    by auto
+qed
+
+
+lemma v_ended_acts_active: "v' ActsActive = Some (planning_sem.active_before t)" unfolding v_instant_ended' using active
+  apply (subst map_upds_apply_nontin, fastforce)+
+  by blast
+
+lemma c_ended_instant_executed_time: "\<forall>i < Suc n. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      \<longrightarrow> c' (ActEnd (actions ! i)) = 0 \<and> c' (ActStart (actions ! i)) = 0"
+  apply (intro allI impI, elim conjE)
+  subgoal for i
+    apply (erule less_SucE)
+    unfolding c_instant_ended
+    using nth_starts_unique[OF _ n] n
+    using instant_executed_time a apply simp
+    by simp
+  done
+
+
+lemma c_ended_instant_not_executed_time:  "\<forall>i < length actions. (Suc n) \<le> i \<and> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      \<longrightarrow> c' (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
+        \<and> c' (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
+  apply (intro allI impI, elim conjE)
+  apply (drule Suc_le_lessD)
+  unfolding c_instant_ended 
+  subgoal for i
+  using instant_not_executed_time 
+  using nth_starts_unique[of i, OF _ n]
+  by auto
+done
+
+lemma c_ended_ending_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      \<longrightarrow> c' (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
+  apply (intro allI impI)
+  subgoal for i
+    unfolding c_instant_ended
+    using ending_start_time start_scheduled end_scheduled
+    by auto
+  done
+
+lemma c_ended_ending_end_time:  "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      \<longrightarrow> c' (ActEnd (actions ! i)) = (0::real)"
+  apply (intro allI impI)
+  subgoal for i
+    unfolding c_instant_ended
+    using ending_end_time start_scheduled end_scheduled
+    by auto
+  done
+
+lemma c_ended_starting_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      \<longrightarrow>  c' (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
+  apply (intro allI impI)
+  subgoal for i
+    unfolding c_instant_ended
+    using starting_start_time start_scheduled end_scheduled
+    by auto
+  done
+
+lemma c_ended_starting_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      \<longrightarrow>  c' (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
+  apply (intro allI impI)
+  subgoal for i
+    unfolding c_instant_ended
+    using starting_end_time start_scheduled end_scheduled
+    by auto
+  done
+
+lemma c_ended_other_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      \<longrightarrow> c' (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
+  apply (intro allI impI)
+  subgoal for i
+    unfolding c_instant_ended
+    using other_start_time start_scheduled end_scheduled
+    by auto
+  done
+
+
+lemma c_ended_other_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      \<longrightarrow> c' (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
+  apply (intro allI impI)
+  subgoal for i
+    unfolding c_instant_ended
+    using other_end_time start_scheduled end_scheduled
+    by auto
+  done
 
 subsubsection \<open>First transition\<close>
 lemma steps_starting: "abs_renum.urge_bisim.A.steps [(L, v, c), (L_started, v_started, c_started)]"
@@ -3475,8 +3696,8 @@ proof (rule single_step_intro)
           consider "(t, at_start a) \<in> planning_sem.happ_seq" | "(t, at_start a) \<notin> planning_sem.happ_seq" by blast
           thus "c (ActEnd a) = real_of_rat (planning_sem.exec_time (at_end a) t)" 
             apply cases
-            subgoal using starting_end_time a in_set_conv_nth by metis
-            subgoal using other_end_time a in_set_conv_nth by metis
+            subgoal using starting_end_time a unfolding in_set_conv_nth by blast
+            subgoal using other_end_time a unfolding in_set_conv_nth by blast
             done
         next
           fix a
@@ -3487,14 +3708,14 @@ proof (rule single_step_intro)
           using mutex_0_constraint_sat start_scheduled s_corr e_corr by blast
         moreover
         have "c \<turnstile> map conv_ac (map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec (at_start (actions ! n))))"
-          using mutex_eps_constraint_sat  start_scheduled s_corr e_corr by blast
+          using mutex_eps_constraint_sat start_scheduled s_corr e_corr by blast
         ultimately
         show ?thesis unfolding t' 
           unfolding map_append
           by (auto intro: guard_append)
       qed
       show "\<forall>p<length (map (automaton_of \<circ> conv_automaton) actual_autos). c(ActStart (actions ! n) := 0) \<turnstile> Simple_Network_Language.inv (map (automaton_of \<circ> conv_automaton) actual_autos ! p) (L[Suc n := StartInstant (actions ! n)] ! p)" using conv_invs no_invs by simp
-      show "L ! Suc n = l" unfolding t' using instant_loc n start_scheduled end_scheduled by blast
+      show "L ! Suc n = l" unfolding t' using instant_not_executed_loc n start_scheduled end_scheduled by blast
       show "Suc n < length L" using L_len n by simp
       show "L[Suc n := StartInstant (actions ! n)] = L[Suc n := l']" unfolding t' by blast
       show "c(ActStart (actions ! n) := 0) = [r\<rightarrow>0]c" unfolding t' by simp
@@ -3758,8 +3979,49 @@ lemma instant_action_steps_if: "abs_renum.urge_bisim.A.steps ((L, v, c) # apply_
     apply (rule steps_end)
    apply (rule steps_ending)
   by (rule steps_starting)
+end (* for a single instant-action n *)
+
+(* to do: other locations *)
+
+context fixes L v c 
+  assumes L_len: "length L = Suc (length actions)"
+      and v_bounded: "bounded (map_of nta_vars) v"
+      and planning_state: "v PlanningLock = Some 1"
+
+      and instant_loc: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+          \<longrightarrow> L ! Suc i = (Off (actions ! i))"
+
+      and locked: "\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p))"
+      and prop_state: "\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_prev_updated_prop_state i p n)"
+      and active: "v ActsActive = Some (planning_sem.active_before t)"
+
+      and instant_time:  "\<forall>i < length actions.  (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+            \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
+              \<and> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
+
+      and ending_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+            \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
+      and ending_end_time:  "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+            \<longrightarrow> c (ActEnd (actions ! i)) = (0::real)"
+
+      and starting_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+            \<longrightarrow>  c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
+      and starting_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+            \<longrightarrow>  c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
+
+      and other_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+            \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
+      and other_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+            \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
+begin
+term "apply_instant_actions (filter (\<lambda>n. at_start (actions ! n) \<in> h \<and> at_end (actions ! n) \<in> h) [0..<length actions]) (L, v, c)"
+term instant_actions_before
 end
 
+
+
+
+end (* context for a timepoint t and its snap-actions *)
 
 
 lemma apply_happening:

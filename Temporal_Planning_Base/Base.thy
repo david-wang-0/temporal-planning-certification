@@ -711,14 +711,73 @@ proof -
     by simp
 qed
 
-lemma seq_apply''_pre_post_induct:
+lemma seq_apply''_pre_post_induct_pre:
   fixes fs::"('a \<Rightarrow> 'a list) list"
   assumes fs_len: "0 < length fs"
       and f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
       and P0: "P s 0"
       and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) (Suc i))"
       and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s i"
-    shows "Q (last (seq_apply'' fs s)) (length fs)"
+      and i: "0 < i" "i < length fs" 
+    shows "P (last (seq_apply'' (take i fs) s)) i"
+proof -
+  from assms(1)
+  obtain f' fs' where
+    fs: "fs = f'#fs'" by (cases fs, auto)
+
+  have "Q (last (seq_apply'' (take i fs) s)) i" if "0 < i" "i < length fs" for i
+    using that
+  proof (induction i)
+    case 0
+    then show ?case by blast
+  next
+    case i: (Suc i)
+    show ?case 
+    proof (cases i)
+      case 0
+      then have "seq_apply'' (take (Suc i) fs) s = seq_apply'' [(fs ! 0)] s" using fs by simp
+      hence "seq_apply'' (take (Suc i) fs) s = (fs ! 0) s" by simp
+      moreover
+      have "Q (last ((fs ! 0) s)) (Suc i)" using P0 PQ 0 i by force
+      ultimately
+      show ?thesis by simp
+    next
+      case i'[simp]: (Suc i')
+      have 1: "seq_apply'' (take (Suc i) fs) s = seq_apply'' (take i fs) s @ (fs ! i) (last (seq_apply'' (take i fs) s))" (is "?seq = ?seq1 @ (fs ! i) ?s")
+        apply (subst seq_apply''_take_n_nth_Suc)
+        using i' apply simp
+        using i(3) apply simp
+        using f_wf apply simp
+        by blast
+
+      have "Q ?s i" 
+        apply (rule i(1))
+        using i' i by simp+
+      hence "P ?s i" using QP i i' by simp
+      hence 2: "Q (last ((fs ! i) ?s)) (Suc i)" using PQ i i' by fastforce
+
+      have 3: "(fs ! i) (last (seq_apply'' (take i fs) s)) \<noteq> []" using f_wf i by auto
+
+      show ?thesis 
+        apply (subst 1)
+        apply (subst last_append)
+        apply (subst if_not_P)
+         apply (rule 3)
+        using 2 by blast
+    qed
+  qed
+  thus ?thesis using i QP by blast
+qed
+
+lemma seq_apply''_pre_post_induct_post:
+  fixes fs::"('a \<Rightarrow> 'a list) list"
+  assumes fs_len: "0 < length fs"
+      and f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
+      and P0: "P s 0"
+      and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) (Suc i))"
+      and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s i"
+      and i: "0 < i" "i \<le> length fs" 
+    shows "Q (last (seq_apply'' (take i fs) s)) i"
 proof -
   from assms(1)
   obtain f' fs' where
@@ -765,8 +824,37 @@ proof -
         using 2 by blast
     qed
   qed
-  thus ?thesis using fs_len take_all by fastforce
+  thus ?thesis using i PQ by blast
 qed
+
+lemma seq_apply''_pre_post_induct':
+  fixes fs::"('a \<Rightarrow> 'a list) list"
+  assumes fs_len: "0 < length fs"
+      and f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
+      and P0: "P s 0"
+      and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) (Suc i))"
+      and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s i"
+      and i: "0 < i" "i < length fs" 
+    shows "P (last (seq_apply'' (take i fs) s)) i" "Q (last (seq_apply'' (take (Suc i) fs) s)) (Suc i)"
+  subgoal 
+   apply (rule seq_apply''_pre_post_induct_pre)
+    using assms by simp+
+  apply (rule seq_apply''_pre_post_induct_post[where P = P])
+   using assms by simp+
+
+lemma seq_apply''_pre_post_induct:
+  fixes fs::"('a \<Rightarrow> 'a list) list"
+  assumes fs_len: "0 < length fs"
+      and f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
+      and P0: "P s 0"
+      and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) (Suc i))"
+      and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s i"
+    shows "Q (last (seq_apply'' fs s)) (length fs)"
+  apply (subst take_all[of fs "length fs", symmetric])
+  apply simp
+  apply (rule seq_apply''_pre_post_induct_post[where P = P])
+  using assms 
+  by simp_all
 
 text \<open>Obtaining a unique name by appending underscores\<close>
 
