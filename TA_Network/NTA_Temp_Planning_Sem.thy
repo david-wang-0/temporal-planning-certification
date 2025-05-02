@@ -2846,8 +2846,6 @@ lemma happ_combine:
 
 (* end is happening *)
 
-lemma mutex_commute: undefined
-  using happ_combine unfolding app_effs_def
 
 definition instant_actions_at where
 "instant_actions_at t \<equiv> {a \<in> actions. (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<in> happ_seq}"
