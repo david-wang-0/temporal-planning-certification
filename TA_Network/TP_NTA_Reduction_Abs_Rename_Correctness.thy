@@ -1983,63 +1983,6 @@ lemma seq_apply_steps_induct:
   assumes "\<forall>i. Suc i < length (s#seq_apply fs s) \<longrightarrow> abs_renum.urge_bisim.A.steps [(s#seq_apply fs s) ! i, (s#seq_apply fs s) ! Suc i]"
   shows "abs_renum.urge_bisim.A.steps (s # seq_apply fs s)" using assms steps_extend_induct by blast
 
-lemma seq_apply_nth_Suc:
-  assumes "i < length fs"
-  shows "(s#seq_apply fs s) ! Suc i = (fs ! i) ((s#seq_apply fs s) ! i)"
-  using assms
-proof  (induction i arbitrary: s fs)
-  case 0
-  then show ?case apply (cases fs) by auto
-next
-  case (Suc i)
-  then obtain f' fs' where
-    fs': "fs = f'#fs'" apply (cases fs) by auto
-  hence 1: "(f' s # seq_apply fs' (f' s)) ! Suc i = (fs' ! i) ((f' s # seq_apply  fs' (f' s)) ! i)" using Suc by simp
-  
-  show ?case 
-    apply (subst nth_Cons_Suc)
-    apply (subst nth_Cons_Suc)
-    apply (subst fs')+
-    apply (subst seq_apply.simps)+
-    apply (subst 1)
-    apply (subst nth_Cons_Suc)
-    by blast
-qed
-
-lemma seq_apply_pre_post:
-  assumes "\<forall>s. \<forall>i < length fs. P s i \<longrightarrow> Q ((fs ! i) s) (Suc i)"
-      and "\<forall>s. \<forall>i < length fs. Q s (Suc i) \<longrightarrow> P s (Suc i)"
-      and "P s 0"
-    shows "(\<forall>i < length fs. P ((s#seq_apply fs s) ! i) i \<and> Q ((s#seq_apply fs s) ! (Suc i)) (Suc i))"
-proof -
-  have "P ((s # seq_apply fs s) ! i) i \<and> Q ((s # seq_apply fs s) ! Suc i) (Suc i)" if "i < length fs" for i
-    using that proof (induction i)
-    case 0
-    have "P ((s # seq_apply fs s) ! 0) 0" using assms(3) by simp
-    moreover
-    from 0 
-    obtain f fs' where
-      fs: "fs = f#fs'" 
-      "f = fs!0" apply (cases fs) by auto
-    have "((s # seq_apply fs s) ! Suc 0) = (fs!0) s" using fs by fastforce
-    with assms(1,3) 0
-    have "Q ((s # seq_apply fs s) ! Suc 0) (Suc 0)" by auto
-    ultimately
-    show ?case by simp
-  next
-    case (Suc i)
-    have Pi: "P ((s # seq_apply fs s) ! i) i"
-     and Qi: "Q ((s # seq_apply fs s) ! Suc i) (Suc i)" using Suc by simp+
-    have Si: "Suc i < length fs" using Suc by blast
-    from assms(2) Si Qi
-    have PSi: "P ((s # seq_apply fs s) ! Suc i) (Suc i)" by auto
-    have "(s # seq_apply fs s) ! Suc (Suc i) = (fs ! Suc i) ((s # seq_apply fs s) ! Suc i)" using seq_apply_nth_Suc[OF Si] by blast
-    hence "Q ((s # seq_apply fs s) ! Suc (Suc i)) (Suc (Suc i))" using PSi assms(1) Si by simp
-    thus "P ((s # seq_apply fs s) ! Suc i) (Suc i) \<and> Q ((s # seq_apply fs s) ! Suc (Suc i)) (Suc (Suc i))" using PSi by simp
-  qed
-  thus "\<forall>i<length fs. P ((s # seq_apply fs s) ! i) i \<and> Q ((s # seq_apply fs s) ! Suc i) (Suc i)" 
-    by auto
-qed
 
 
 schematic_goal nth_auto_trans:
