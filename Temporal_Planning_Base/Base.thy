@@ -388,9 +388,12 @@ fun ext_seq::"'a list \<Rightarrow> ('a \<Rightarrow> 'a) list \<Rightarrow> 'a 
 "ext_seq [x] fs = x # seq_apply fs x" |
 "ext_seq (x#xs) fs = x # ext_seq xs fs"
 
+fun seq_apply'::"('s \<Rightarrow> 's list) \<Rightarrow> 's \<Rightarrow> 's list" where
+"seq_apply' f x = f x" (* Hmm *)
+
 fun ext_seq'::"'s list \<Rightarrow> ('s \<Rightarrow> 's list) \<Rightarrow> 's list" where
 "ext_seq' [] f = []" |
-"ext_seq' [s] f = s # f s" |
+"ext_seq' [s] f = s # (seq_apply' f s)" |
 "ext_seq' (x#xs) f = x # (ext_seq' xs f)"
 
 fun ext_seq''::"'s list \<Rightarrow> ('s \<Rightarrow> 's list) list \<Rightarrow> 's list" where
@@ -445,6 +448,18 @@ lemma ext_seq'_seq_apply_is_ext_seq: "ext_seq' xs (seq_apply fs) = ext_seq xs fs
       done
     done
   done
+
+lemma ext_seq'_alt_append: 
+  assumes "xs \<noteq> []"
+  shows "ext_seq' xs f = xs @ f (last xs)"
+  using assms
+  apply (induction xs)
+   apply simp
+  subgoal for x xs'
+    apply (induction xs')
+    by auto
+  done
+ 
 
 lemma ext_seq''_alt: "ext_seq'' xs fs = foldl ext_seq' xs fs"
   apply (induction fs arbitrary: xs)
@@ -594,6 +609,17 @@ next
   show ?case using 1 2 by simp
 qed
 
+lemma ext_seq'_seq_apply''_is_ext_seq'': 
+  assumes xs: "xs \<noteq> []"
+      and f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []" 
+    shows "ext_seq' xs (seq_apply'' fs) = ext_seq'' xs fs"
+  apply (subst ext_seq''_alt_append)
+    apply (rule xs)
+   apply (rule f_wf)
+  apply (subst ext_seq'_alt_append)
+   apply (rule xs)
+  by (rule HOL.refl)
+
 lemma ext_seq''_not_Nil:
   assumes "0 < length xs"
       and "\<forall>f \<in> set fs. \<forall>s. f s \<noteq> []"
@@ -711,71 +737,13 @@ proof -
     by simp
 qed
 
-lemma seq_apply''_pre_post_induct_pre:
-  fixes fs::"('a \<Rightarrow> 'a list) list"
-  assumes fs_len: "0 < length fs"
-      and f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
-      and P0: "P s 0"
-      and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) (Suc i))"
-      and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s i"
-      and i: "0 < i" "i < length fs" 
-    shows "P (last (seq_apply'' (take i fs) s)) i"
-proof -
-  from assms(1)
-  obtain f' fs' where
-    fs: "fs = f'#fs'" by (cases fs, auto)
-
-  have "Q (last (seq_apply'' (take i fs) s)) i" if "0 < i" "i < length fs" for i
-    using that
-  proof (induction i)
-    case 0
-    then show ?case by blast
-  next
-    case i: (Suc i)
-    show ?case 
-    proof (cases i)
-      case 0
-      then have "seq_apply'' (take (Suc i) fs) s = seq_apply'' [(fs ! 0)] s" using fs by simp
-      hence "seq_apply'' (take (Suc i) fs) s = (fs ! 0) s" by simp
-      moreover
-      have "Q (last ((fs ! 0) s)) (Suc i)" using P0 PQ 0 i by force
-      ultimately
-      show ?thesis by simp
-    next
-      case i'[simp]: (Suc i')
-      have 1: "seq_apply'' (take (Suc i) fs) s = seq_apply'' (take i fs) s @ (fs ! i) (last (seq_apply'' (take i fs) s))" (is "?seq = ?seq1 @ (fs ! i) ?s")
-        apply (subst seq_apply''_take_n_nth_Suc)
-        using i' apply simp
-        using i(3) apply simp
-        using f_wf apply simp
-        by blast
-
-      have "Q ?s i" 
-        apply (rule i(1))
-        using i' i by simp+
-      hence "P ?s i" using QP i i' by simp
-      hence 2: "Q (last ((fs ! i) ?s)) (Suc i)" using PQ i i' by fastforce
-
-      have 3: "(fs ! i) (last (seq_apply'' (take i fs) s)) \<noteq> []" using f_wf i by auto
-
-      show ?thesis 
-        apply (subst 1)
-        apply (subst last_append)
-        apply (subst if_not_P)
-         apply (rule 3)
-        using 2 by blast
-    qed
-  qed
-  thus ?thesis using i QP by blast
-qed
-
 lemma seq_apply''_pre_post_induct_post:
   fixes fs::"('a \<Rightarrow> 'a list) list"
   assumes fs_len: "0 < length fs"
       and f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
       and P0: "P s 0"
       and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) (Suc i))"
-      and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s i"
+      and QP: "\<forall>i \<le> length fs. \<forall>s. Q s i \<longrightarrow> P s i"
       and i: "0 < i" "i \<le> length fs" 
     shows "Q (last (seq_apply'' (take i fs) s)) i"
 proof -
@@ -827,20 +795,28 @@ proof -
   thus ?thesis using i PQ by blast
 qed
 
+
+text \<open>The variants of seq_apply and ext_seq are confusing. Maybe they exist to help prove things
+about their associated variants of ext_seq. They are used for this purpose.\<close>
+
 lemma seq_apply''_pre_post_induct':
   fixes fs::"('a \<Rightarrow> 'a list) list"
   assumes fs_len: "0 < length fs"
       and f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
       and P0: "P s 0"
       and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) (Suc i))"
-      and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s i"
-      and i: "0 < i" "i < length fs" 
-    shows "P (last (seq_apply'' (take i fs) s)) i" "Q (last (seq_apply'' (take (Suc i) fs) s)) (Suc i)"
-  subgoal 
-   apply (rule seq_apply''_pre_post_induct_pre)
+      and QP: "\<forall>i \<le> length fs. \<forall>s. Q s i \<longrightarrow> P s i"
+      and i:  "i < length fs" 
+    shows "P (last (seq_apply'' (take (Suc i) fs) s)) (Suc i)"
+          "Q (last (seq_apply'' (take (Suc i) fs) s)) (Suc i)"
+  subgoal apply (rule QP[THEN spec, THEN mp, THEN spec, THEN mp])
+    using i apply simp
+    apply (rule seq_apply''_pre_post_induct_post[where P = P])
     using assms by simp+
-  apply (rule seq_apply''_pre_post_induct_post[where P = P])
-   using assms by simp+
+  subgoal 
+    apply (rule seq_apply''_pre_post_induct_post[where P = P])
+    using assms by simp+
+  done
 
 lemma seq_apply''_pre_post_induct:
   fixes fs::"('a \<Rightarrow> 'a list) list"
@@ -848,13 +824,203 @@ lemma seq_apply''_pre_post_induct:
       and f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
       and P0: "P s 0"
       and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) (Suc i))"
-      and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s i"
-    shows "Q (last (seq_apply'' fs s)) (length fs)"
+      and QP: "\<forall>i \<le> length fs. \<forall>s. Q s i \<longrightarrow> P s i"
+    shows "P (last (seq_apply'' fs s)) (length fs)"
+          "Q (last (seq_apply'' fs s)) (length fs)"
+  subgoal 
   apply (subst take_all[of fs "length fs", symmetric])
-  apply simp
-  apply (rule seq_apply''_pre_post_induct_post[where P = P])
-  using assms 
-  by simp_all
+    apply simp
+   apply (rule seq_apply''_pre_post_induct'[where i = "length fs - 1" and P = P and Q = Q, simplified Suc_diff_1[OF fs_len]])
+    using assms
+    by simp+
+  subgoal 
+  apply (subst take_all[of fs "length fs", symmetric])
+    apply simp
+   apply (rule seq_apply''_pre_post_induct'[where i = "length fs - 1" and P = P and Q = Q, simplified Suc_diff_1[OF fs_len]])
+    using assms
+    by simp+
+  done
+
+lemma seq_apply''_pre_post_induct_Cons:
+  assumes f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
+      and P0: "P x 0"
+      and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) (Suc i))"
+      and QP: "\<forall>i \<le> length fs. \<forall>s. Q s i \<longrightarrow> P s i"
+    shows "P (last (x # seq_apply'' fs x)) (length fs)"
+proof (cases fs)
+  case Nil
+  have "length fs = 0" using Nil by simp
+  moreover
+  have "P x 0" using P0 by simp 
+  ultimately
+  show ?thesis by simp
+next
+  case (Cons f fs')
+  have len: "0 < length fs" using Cons by simp
+  have "P (last (x# seq_apply'' fs x)) (length fs)"
+    apply (subst last.simps)
+    apply (subst if_not_P)
+     apply (rule seq_apply''_not_Nil)
+      apply (rule len)
+     apply (rule f_wf)
+    apply (rule seq_apply''_pre_post_induct(1))
+    using assms len by auto
+  then
+  show ?thesis by simp
+qed
+  
+
+lemma ext_seq''_pre_post_induct:
+  assumes xs: "xs \<noteq> []"
+      and f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
+      and P0: "P (last xs) 0"
+      and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) (Suc i))"
+      and QP: "\<forall>i \<le> length fs. \<forall>s. Q s i \<longrightarrow> P s i"
+    shows "P (last (ext_seq'' xs fs)) (length fs)"
+  apply (subst ext_seq'_seq_apply''_is_ext_seq''[symmetric, OF xs f_wf])
+  apply (subst ext_seq'_alt_append[OF xs])
+  apply (subst append_butlast_last_id[symmetric,  OF xs])
+  apply (subst append.assoc)
+  apply (subst append.simps)+
+  apply (subst last_append)
+  apply (subst if_not_P)
+   apply simp
+  apply (rule seq_apply''_pre_post_induct_Cons)
+  using assms by simp+
+
+lemma "take 1 (x#xs) = [x]" by simp
+
+lemma seq_apply''_pre_post_induct_pre_1:
+  fixes fs::"('a \<Rightarrow> 'a list) list"
+  assumes f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
+      and P0: "P s 0"
+      and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) i)"
+      and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s (Suc i)"
+      and i: "0 < i" "i \<le> length fs" 
+    shows "P (last (seq_apply'' (take i fs) s)) i"
+proof -
+  from i
+  obtain f' fs' where
+    fs: "fs = f'#fs'" by (cases fs, auto)
+
+  have "P (last (seq_apply'' (take i fs) s)) i" if "0 < i" "i \<le> length fs" for i
+    using that
+  proof (induction i)
+    case 0
+    then show ?case by simp
+  next
+    case i: (Suc i)
+    show ?case 
+    proof (cases i)
+      case 0
+      then have "seq_apply'' (take (Suc i) fs) s = seq_apply'' [(fs ! 0)] s" using fs by simp
+      hence "seq_apply'' (take (Suc i) fs) s = (fs ! 0) s" by simp
+      moreover
+      have "Q (last ((fs ! 0) s)) i" using P0 PQ 0 i by fastforce
+      ultimately
+      show ?thesis using QP i by simp
+    next
+      case i': (Suc i')
+      have 1: "seq_apply'' (take (Suc i) fs) s = seq_apply'' (take i fs) s @ (fs ! i) (last (seq_apply'' (take i fs) s))" (is "?seq = ?seq1 @ (fs ! i) ?s")
+        apply (subst seq_apply''_take_n_nth_Suc)
+        using i' apply simp
+        using i(3) apply simp
+        using f_wf apply simp
+        by blast
+
+      have "P ?s i"
+        using i i' by simp
+      hence "Q (last ((fs ! i) ?s)) i" using PQ i i' by simp 
+      hence 2: "P (last ((fs ! i) ?s)) (Suc i)" using QP i(2,3) i' by auto
+      have 3: "(fs ! i) (last (seq_apply'' (take i fs) s)) \<noteq> []" using f_wf i by auto
+
+      show ?thesis 
+        apply (subst 1)
+        apply (subst last_append)
+        apply (subst if_not_P)
+         apply (rule 3)
+        by (rule 2)
+    qed
+  qed
+  thus ?thesis using i by auto
+qed
+
+lemma seq_apply''_pre_post_induct_post_1:
+  fixes fs::"('a \<Rightarrow> 'a list) list"
+  assumes f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
+      and P0: "P s 0"
+      and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) i)"
+      and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s (Suc i)"
+      and i: "i < length fs" 
+    shows "Q (last (seq_apply'' (take (Suc i) fs) s)) i"
+proof -
+  from i
+  obtain f' fs' where
+    fs: "fs = f'#fs'" by (cases fs, auto)
+
+  have "Q (last (seq_apply'' (take (Suc i) fs) s)) i" if "i < length fs" for i
+    using that
+  proof (induction i)
+    case 0
+    then show ?case using P0 PQ fs by auto
+  next
+    case i: (Suc i)
+    show ?case 
+      apply (subst seq_apply''_take_n_nth_Suc)
+         apply simp
+      using i apply simp
+      using f_wf apply simp
+      apply (subst last_appendR)
+      using f_wf i apply simp
+      apply (rule PQ[THEN spec, THEN mp, THEN spec, THEN mp])
+      using i apply simp
+      apply (rule QP[THEN spec, THEN mp, THEN spec, THEN mp])
+      using i apply simp
+      using i by simp
+  qed
+  thus ?thesis using i by auto
+qed
+
+lemma seq_apply''_pre_post_induct_1:
+  fixes fs::"('a \<Rightarrow> 'a list) list"
+  assumes f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
+      and P0: "P s 0"
+      and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) i)"
+      and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s (Suc i)"
+      and fs_len: "0 < length fs"
+    shows "P (last (seq_apply'' fs s)) (length fs)"
+  apply (subst take_all[of fs "length fs", symmetric], simp)
+  apply (rule seq_apply''_pre_post_induct_pre_1)
+  using assms by auto
+
+
+lemma seq_apply''_pre_post_induct_Cons_1:
+  assumes f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
+      and P0: "P x 0"
+      and PQ: "\<forall>i < length fs. \<forall>s. P s i \<longrightarrow> (Q (last ((fs ! i) s)) i)"
+      and QP: "\<forall>i < length fs. \<forall>s. Q s i \<longrightarrow> P s (Suc i)"
+    shows "P (last (x # seq_apply'' fs x)) (length fs)"
+proof (cases fs)
+  case Nil
+  have "length fs = 0" using Nil by simp
+  moreover
+  have "P x 0" using P0 by simp 
+  ultimately
+  show ?thesis by simp
+next
+  case (Cons f fs')
+  have len: "0 < length fs" using Cons by simp
+  have "P (last (x# seq_apply'' fs x)) (length fs)"
+    apply (subst last.simps)
+    apply (subst if_not_P)
+     apply (rule seq_apply''_not_Nil)
+      apply (rule len)
+     apply (rule f_wf)
+    apply (rule seq_apply''_pre_post_induct_1)
+    using assms Cons by simp+
+  then
+  show ?thesis by simp
+qed
 
 text \<open>Obtaining a unique name by appending underscores\<close>
 

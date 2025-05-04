@@ -293,11 +293,13 @@ qed
 
 definition "prop_state_before i p \<equiv> if (p \<in> planning_sem.plan_state_seq i) then 1 else (0::int)"
 
+definition "actions_before n \<equiv>
+  map ((!) actions) [0..<n]
+"
 
 definition "instant_actions_before t n \<equiv> 
   let 
-    actions_before = map ((!) actions) [0..<n];
-    instant_actions_before = filter (\<lambda>a. (t, at_start a) \<in> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq)  actions_before
+    instant_actions_before = filter (planning_sem.is_instant_action t) (actions_before n)
   in (set instant_actions_before)"
 
 definition "instant_snaps_before t n \<equiv> at_start ` instant_actions_before t n \<union> at_end ` instant_actions_before t n"
@@ -312,7 +314,7 @@ definition "instant_prev_updated_plan_state_seq i n \<equiv> apply_instant_snaps
 definition "instant_prev_updated_prop_state i p n \<equiv> if (p \<in> instant_prev_updated_plan_state_seq i n) then 1 else (0::int)"
 
 lemma instant_actions_before_all_is_instant_actions: "instant_actions_before t (length actions) = planning_sem.instant_actions_at t"
-  unfolding instant_actions_before_def Let_def set_filter set_map set_upt planning_sem.instant_actions_at_def by simp
+  unfolding instant_actions_before_def Let_def set_filter set_map set_upt planning_sem.instant_actions_at_def actions_before_def by simp
 
 lemma instant_snaps_before_all_is_instant_snaps: "instant_snaps_before t (length actions) = planning_sem.instant_snaps_at t"
   unfolding instant_snaps_before_def planning_sem.instant_snaps_at_def using instant_actions_before_all_is_instant_actions by simp
@@ -321,7 +323,7 @@ lemma apply_instant_snaps_before_all_is_apply_instant_snaps: "apply_instant_snap
   unfolding planning_sem.app_effs_def apply_instant_snaps_before_def Let_def instant_snaps_before_all_is_instant_snaps apply_effects_def by auto
 
 lemma instant_actions_before_0_is_none: "instant_actions_before t 0 = {}" 
-  unfolding instant_actions_before_def Let_def by simp
+  unfolding instant_actions_before_def Let_def actions_before_def by simp
 
 lemma instant_snaps_before_0_is_none: "instant_snaps_before t 0 = {}"
   unfolding instant_snaps_before_def instant_actions_before_0_is_none by blast
@@ -329,15 +331,24 @@ lemma instant_snaps_before_0_is_none: "instant_snaps_before t 0 = {}"
 lemma apply_instant_snaps_before_0_is_id: "apply_instant_snaps_before t 0 s = s"
   unfolding apply_instant_snaps_before_def instant_snaps_before_0_is_none by simp
 
+abbreviation "is_instant_index t n \<equiv> (t, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! n)) \<in> planning_sem.happ_seq"
 
-definition "instant_indices_before t n \<equiv>
-  let 
-    indices_before = [0..<n];
-    instant_indices_before = filter (\<lambda>n. (t, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! n)) \<in> planning_sem.happ_seq) indices_before
-  in instant_indices_before"
+abbreviation "is_starting_index t n \<equiv> (t, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! n)) \<notin> planning_sem.happ_seq"
+
+abbreviation "is_ending_index t n \<equiv> (t, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! n)) \<in> planning_sem.happ_seq"
+
+abbreviation "is_not_happening_index t n \<equiv> (t, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! n)) \<notin> planning_sem.happ_seq"
+
+definition "instant_indices_before t n \<equiv> filter (is_instant_index t) [0..<n]"
+
+definition "starting_indices_before t n \<equiv> filter (is_starting_index t) [0..<n]"
+
+definition "ending_indices_before t n \<equiv> filter (is_ending_index t) [0..<n]"
+
+definition "not_happening_indices_before t n \<equiv> filter (is_not_happening_index t) [0..<n]"
 
 lemma instant_actions_before_alt: "instant_actions_before t n = set (map ((!) actions) (instant_indices_before t n))"
-  unfolding instant_actions_before_def instant_indices_before_def Let_def set_map 
+  unfolding instant_actions_before_def instant_indices_before_def Let_def set_map actions_before_def
   apply (subst filter_map)
   apply (subst set_map)
   apply (subst comp_def)
@@ -356,7 +367,7 @@ proof -
       "a \<in> set actions"
       "(t, at_start a) \<in> planning_sem.happ_seq \<and> (t, at_end a) \<in> planning_sem.happ_seq"
       unfolding instant_snaps_before_def instant_actions_before_def Let_def
-      set_filter set_map set_upt using 1 by blast
+      set_filter set_map set_upt actions_before_def using 1 by blast
     hence "(t, x) \<in> planning_sem.happ_seq" by blast
   } 
   thus "instant_snaps_before t n \<subseteq> happ_at planning_sem.happ_seq t" by blast
@@ -373,7 +384,7 @@ proof -
 
     have 1: "instant_snaps_before t n = at_start ` {x \<in> (!) actions ` {0..<n}. (t, at_start x) \<in> planning_sem.happ_seq \<and> (t, at_end x) \<in> planning_sem.happ_seq} 
         \<union> at_end ` {x \<in> (!) actions ` {0..<n}. (t, at_start x) \<in> planning_sem.happ_seq \<and> (t, at_end x) \<in> planning_sem.happ_seq}"
-      unfolding instant_snaps_before_def instant_actions_before_def Let_def set_filter set_map set_upt by simp
+      unfolding instant_snaps_before_def instant_actions_before_def Let_def set_filter set_map set_upt actions_before_def by simp
     with x 
     consider i where  "i < n" "x = at_start (actions ! i)" | i where  "i < n" "x = at_end (actions ! i)"
       by auto
@@ -461,7 +472,7 @@ lemma instant_snaps_before_Suc:
       and ending: "(t, (at_end (actions ! n))) \<in> planning_sem.happ_seq"
     shows "instant_snaps_before t (Suc n) = instant_snaps_before t n \<union> {at_start (actions ! n)} \<union>  {at_end (actions ! n)}"
   unfolding instant_snaps_before_def Let_def instant_actions_before_def
-set_filter set_map set_upt  set_upt_Suc_alt
+set_filter set_map set_upt  set_upt_Suc_alt actions_before_def
    image_Un image_insert image_empty 
     using starting ending by blast
 
@@ -506,8 +517,6 @@ lemma instant_prev_updated_prop_state_Suc:
   apply (subst apply_instant_snaps_before_Suc[OF assms(2,3,4)])
   by simp
 
-
-(* To do: locked_during *)
 
 (* A is Graph_Defs for the Bisimulation_Invariant of parts of the transition relation.
 A is the original graph combined with semantics. *)
@@ -660,11 +669,11 @@ nat
 \<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
 "apply_nth_happening n s \<equiv>
 let
-  h = happ_at planning_sem.happ_seq (time_index \<pi> n);
+  t = time_index \<pi> n;
   act_indices = [0..<length actions];
-  start_indices = filter (\<lambda>n. at_start (actions ! n) \<in> h \<and> at_end (actions ! n) \<notin> h) act_indices;
-  end_indices = filter (\<lambda>n. at_start (actions ! n) \<notin> h \<and> at_end (actions ! n) \<in> h) act_indices;
-  both = filter (\<lambda>n. at_start (actions ! n) \<in> h \<and> at_end (actions ! n) \<in> h) act_indices
+  start_indices = filter (is_starting_index t) act_indices;
+  end_indices = filter (is_ending_index t) act_indices;
+  both = filter (is_instant_index t) act_indices
 in 
   s 
   |> enter_end_instants end_indices
@@ -2074,6 +2083,8 @@ schematic_goal nth_auto_trans':
 
 subsubsection \<open>Mutex constraints\<close>
 
+text \<open>This only works for the direction from plan to run.\<close>
+
 schematic_goal int_clocks_spec_alt:
   shows "set (int_clocks_spec h) = ?x"
   unfolding int_clocks_spec_def Let_def filter_append set_append set_map set_filter ..
@@ -2638,10 +2649,11 @@ proof (rule single_step_intro)
     qed
   qed
 qed
-end 
-thm ending_not_executed_loc'
-(* Context to apply every snap action placed at a timepoint *)
-context
+end
+
+
+
+context (* to apply all end snap actions of ending actions *)
   fixes M t l end_indices
     L v c
   assumes l: "l < length (htpl \<pi>)"
@@ -3080,25 +3092,25 @@ context (* for a single instant action n *)
       and prop_state: "\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_prev_updated_prop_state i p n)"
       and active: "v ActsActive = Some (planning_sem.active_before t)"
 
-      and instant_executed_time: "\<forall>i < n. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and instant_executed_time: "\<forall>i < n. is_instant_index t i
             \<longrightarrow> c (ActEnd (actions ! i)) = 0 \<and> c (ActStart (actions ! i)) = 0"
-      and instant_not_executed_time:  "\<forall>i < length actions. n \<le> i \<and> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and instant_not_executed_time:  "\<forall>i < length actions. n \<le> i \<and> is_instant_index t i
             \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
               \<and> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
 
-      and ending_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and ending_start_time: "\<forall>i < length actions. is_ending_index t i
             \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
-      and ending_end_time:  "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and ending_end_time:  "\<forall>i < length actions. is_ending_index t i
             \<longrightarrow> c (ActEnd (actions ! i)) = (0::real)"
 
-      and starting_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      and starting_start_time: "\<forall>i < length actions. is_starting_index t i
             \<longrightarrow>  c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
-      and starting_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      and starting_end_time: "\<forall>i < length actions. is_starting_index t i
             \<longrightarrow>  c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
 
-      and other_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      and other_start_time: "\<forall>i < length actions. is_not_happening_index t i
             \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
-      and other_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      and other_end_time: "\<forall>i < length actions. is_not_happening_index t i
             \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
 
       and s': "leave_end_instant n (start_to_end_instant n (enter_start_instant n (L, v, c))) = (L', v', c')"
@@ -3214,7 +3226,7 @@ lemma instant_executed_time': "\<forall>i < n. (t, at_start (actions ! i)) \<in>
     using instant_executed_time unfolding c_started by simp
   done
 
-lemma c_started_instant_not_executed_time:  "\<forall>i < length actions. n < i \<and> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+lemma c_started_instant_not_executed_time:  "\<forall>i < length actions. n < i \<and> is_instant_index t i
             \<longrightarrow> c_started (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
               \<and> c_started (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
   apply (intro allI impI conjI)
@@ -3232,7 +3244,7 @@ lemma c_started_act_n_clocks:  "c_started (ActStart (actions ! n)) = 0"
   subgoal unfolding c_started by simp
     using instant_not_executed_time n start_scheduled end_scheduled unfolding c_started by simp
     
-lemma c_started_ending_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+lemma c_started_ending_start_time: "\<forall>i < length actions. is_ending_index t i
             \<longrightarrow> c_started (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)" 
   apply (intro allI impI)
   subgoal for i
@@ -3241,7 +3253,7 @@ lemma c_started_ending_start_time: "\<forall>i < length actions. (t, at_start (a
     unfolding c_started by auto
   done
 
-lemma c_started_ending_end_time:  "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+lemma c_started_ending_end_time:  "\<forall>i < length actions. is_ending_index t i
             \<longrightarrow> c_started (ActEnd (actions ! i)) = (0::real)" 
   apply (intro allI impI)
   subgoal for i
@@ -3250,7 +3262,7 @@ lemma c_started_ending_end_time:  "\<forall>i < length actions. (t, at_start (ac
     unfolding c_started by auto
   done
 
-lemma c_started_starting_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+lemma c_started_starting_start_time: "\<forall>i < length actions. is_starting_index t i
             \<longrightarrow>  c_started (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)" 
   apply (intro allI impI)
   subgoal for i
@@ -3259,7 +3271,7 @@ lemma c_started_starting_start_time: "\<forall>i < length actions. (t, at_start 
     unfolding c_started by auto
   done
 
-lemma c_started_starting_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+lemma c_started_starting_end_time: "\<forall>i < length actions. is_starting_index t i
             \<longrightarrow>  c_started (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)" 
   apply (intro allI impI)
   subgoal for i
@@ -3268,7 +3280,7 @@ lemma c_started_starting_end_time: "\<forall>i < length actions. (t, at_start (a
     unfolding c_started by auto
   done
 
-lemma c_started_other_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+lemma c_started_other_start_time: "\<forall>i < length actions. is_not_happening_index t i
             \<longrightarrow> c_started (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)" 
   apply (intro allI impI)
   subgoal for i
@@ -3277,7 +3289,7 @@ lemma c_started_other_start_time: "\<forall>i < length actions. (t, at_start (ac
     unfolding c_started by auto
   done
 
-lemma c_started_other_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+lemma c_started_other_end_time: "\<forall>i < length actions. is_not_happening_index t i
             \<longrightarrow> c_started (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)" 
   apply (intro allI impI)
   subgoal for i
@@ -3564,7 +3576,7 @@ lemma c_ended_instant_executed_time: "\<forall>i < Suc n. (t, at_start (actions 
   done
 
 
-lemma c_ended_instant_not_executed_time:  "\<forall>i < length actions. (Suc n) \<le> i \<and> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+lemma c_ended_instant_not_executed_time:  "\<forall>i < length actions. (Suc n) \<le> i \<and> is_instant_index t i
       \<longrightarrow> c' (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
         \<and> c' (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
   apply (intro allI impI, elim conjE)
@@ -3576,7 +3588,7 @@ lemma c_ended_instant_not_executed_time:  "\<forall>i < length actions. (Suc n) 
   by auto
 done
 
-lemma c_ended_ending_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+lemma c_ended_ending_start_time: "\<forall>i < length actions. is_ending_index t i
       \<longrightarrow> c' (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
   apply (intro allI impI)
   subgoal for i
@@ -3594,7 +3606,7 @@ lemma c_ended_ending_end_time:  "\<forall>i < length actions. (t, at_start (acti
     by auto
   done
 
-lemma c_ended_starting_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+lemma c_ended_starting_start_time: "\<forall>i < length actions. is_starting_index t i
       \<longrightarrow>  c' (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
   apply (intro allI impI)
   subgoal for i
@@ -3603,7 +3615,7 @@ lemma c_ended_starting_start_time: "\<forall>i < length actions. (t, at_start (a
     by auto
   done
 
-lemma c_ended_starting_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+lemma c_ended_starting_end_time: "\<forall>i < length actions. is_starting_index t i
       \<longrightarrow>  c' (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
   apply (intro allI impI)
   subgoal for i
@@ -3612,7 +3624,7 @@ lemma c_ended_starting_end_time: "\<forall>i < length actions. (t, at_start (act
     by auto
   done
 
-lemma c_ended_other_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+lemma c_ended_other_start_time: "\<forall>i < length actions. is_not_happening_index t i
       \<longrightarrow> c' (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
   apply (intro allI impI)
   subgoal for i
@@ -3622,7 +3634,7 @@ lemma c_ended_other_start_time: "\<forall>i < length actions. (t, at_start (acti
   done
 
 
-lemma c_ended_other_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+lemma c_ended_other_end_time: "\<forall>i < length actions. is_not_happening_index t i
       \<longrightarrow> c' (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
   apply (intro allI impI)
   subgoal for i
@@ -3979,42 +3991,130 @@ lemma instant_action_steps_if: "abs_renum.urge_bisim.A.steps ((L, v, c) # apply_
     apply (rule steps_end)
    apply (rule steps_ending)
   by (rule steps_starting)
-end (* for a single instant-action n *)
+end (* for a single instant action n *)
 
-(* to do: other locations *)
+definition "single_snap_pres n L v c \<equiv> 
+let 
+  n_conds = (n < length actions) \<and> is_instant_index t i;
+  L_conds = (length L = Suc (length actions));
+  v_conds = (bounded (map_of nta_vars) v) \<and> (v PlanningLock = Some 1);
 
-context fixes L v c 
+  instant_executed_loc = (\<forall>i < n. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+        \<longrightarrow> L ! Suc i = (Off (actions ! i)));
+  instant_not_executed_loc = (\<forall>i < length actions. n \<le> i \<and> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+        \<longrightarrow> L ! Suc i = (Off (actions ! i)));
+
+  locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p)));
+  prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_prev_updated_prop_state i p n));
+  active = (v ActsActive = Some (planning_sem.active_before t));
+  
+  instant_executed_time = (\<forall>i < n. is_instant_index t i
+      \<longrightarrow> (c (ActEnd (actions ! i)) = 0) \<and> (c (ActStart (actions ! i)) = 0));
+  instant_not_executed_time =  (\<forall>i < length actions. n \<le> i \<and> is_instant_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
+        \<and> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
+  
+  ending_start_time = (\<forall>i < length actions. is_ending_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  ending_end_time =  (\<forall>i < length actions. is_ending_index t i
+      \<longrightarrow> c (ActEnd (actions ! i)) = 0);
+  
+  starting_start_time = (\<forall>i < length actions. is_starting_index t i
+      \<longrightarrow>  c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  starting_end_time = (\<forall>i < length actions. is_starting_index t i
+      \<longrightarrow>  c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
+  
+  other_start_time = (\<forall>i < length actions. is_not_happening_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  other_end_time = (\<forall>i < length actions. is_not_happening_index t i
+      \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t))
+in n_conds \<and> L_conds \<and> v_conds 
+  \<and> instant_executed_loc \<and> instant_not_executed_loc 
+  \<and> locked \<and> prop_state \<and> active 
+  \<and> instant_executed_time \<and> instant_not_executed_time 
+  \<and> ending_start_time \<and> ending_end_time 
+  \<and> starting_start_time \<and> starting_end_time 
+  \<and> other_start_time \<and> other_end_time"
+
+definition "single_snap_posts n L v c \<equiv> 
+let
+  L_conds = (length L = Suc (length actions));
+  v_conds = ((bounded (map_of nta_vars) v) \<and> (v PlanningLock = Some 1));
+
+  locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p)));
+  prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_prev_updated_prop_state i p n));
+  active = (v ActsActive = Some (planning_sem.active_before t));
+
+  instant_executed_loc = (\<forall>i \<le> n. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+        \<longrightarrow> L ! Suc i = (Off (actions ! i)));
+  instant_not_executed_loc = (\<forall>i < length actions. n < i \<and> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+        \<longrightarrow> L ! Suc i = (Off (actions ! i)));
+  
+  instant_executed_time = (\<forall>i \<le> n. is_instant_index t i
+      \<longrightarrow> (c (ActEnd (actions ! i)) = 0) \<and> (c (ActStart (actions ! i)) = 0));
+  instant_not_executed_time =  (\<forall>i < length actions. n < i \<and> is_instant_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
+        \<and> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
+  
+  ending_start_time = (\<forall>i < length actions. is_ending_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  ending_end_time =  (\<forall>i < length actions. is_ending_index t i
+      \<longrightarrow> c (ActEnd (actions ! i)) = 0);
+  
+  starting_start_time = (\<forall>i < length actions. is_starting_index t i
+      \<longrightarrow>  c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  starting_end_time = (\<forall>i < length actions. is_starting_index t i
+      \<longrightarrow>  c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
+  
+  other_start_time = (\<forall>i < length actions. is_not_happening_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  other_end_time = (\<forall>i < length actions. is_not_happening_index t i
+      \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t))
+in undefined"
+
+context (* for all instant actions at a timepoint *)
+  fixes L v c 
   assumes L_len: "length L = Suc (length actions)"
       and v_bounded: "bounded (map_of nta_vars) v"
       and planning_state: "v PlanningLock = Some 1"
 
-      and instant_loc: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and instant_loc: "\<forall>i < length actions. is_instant_index t i
           \<longrightarrow> L ! Suc i = (Off (actions ! i))"
 
       and locked: "\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p))"
       and prop_state: "\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_prev_updated_prop_state i p n)"
       and active: "v ActsActive = Some (planning_sem.active_before t)"
 
-      and instant_time:  "\<forall>i < length actions.  (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and instant_time:  "\<forall>i < length actions.  is_instant_index t i
             \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
               \<and> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
 
-      and ending_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and ending_start_time: "\<forall>i < length actions. is_ending_index t i
             \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
-      and ending_end_time:  "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and ending_end_time:  "\<forall>i < length actions. is_ending_index t i
             \<longrightarrow> c (ActEnd (actions ! i)) = (0::real)"
 
-      and starting_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      and starting_start_time: "\<forall>i < length actions. is_starting_index t i
             \<longrightarrow>  c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
-      and starting_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      and starting_end_time: "\<forall>i < length actions. is_starting_index t i
             \<longrightarrow>  c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
 
-      and other_start_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      and other_start_time: "\<forall>i < length actions. is_not_happening_index t i
             \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
-      and other_end_time: "\<forall>i < length actions. (t, at_start (actions ! i)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<notin> planning_sem.happ_seq
+      and other_end_time: "\<forall>i < length actions. is_not_happening_index t i
             \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
 begin
 term "apply_instant_actions (filter (\<lambda>n. at_start (actions ! n) \<in> h \<and> at_end (actions ! n) \<in> h) [0..<length actions]) (L, v, c)"
+
+(* Prove pre- and post-conditions using seq_apply'' of apply_instant_action *)
+
+term "filter (is_instant_index t) [0..<length actions]"
+
+term "seq_apply'' (map apply_snap_action (instant_indices_before t (length actions)))"
+
+thm seq_apply''_pre_post_induct_Cons
+(* The rule depends on the assumption that the list is not empty. We need a more general rule that 
+work with empty lists and ext_seq' *)
 term instant_actions_before
 end
 

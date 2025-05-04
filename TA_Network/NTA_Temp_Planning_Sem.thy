@@ -2847,14 +2847,18 @@ lemma happ_combine:
 (* end is happening *)
 
 
+abbreviation "is_instant_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<in> happ_seq"
+abbreviation "is_starting_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq"
+abbreviation "is_ending_action t a \<equiv> (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq"
+
 definition instant_actions_at where
-"instant_actions_at t \<equiv> {a \<in> actions. (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<in> happ_seq}"
+"instant_actions_at t \<equiv> {a \<in> actions. is_instant_action t a}"
 
 definition ending_actions_at where
-"ending_actions_at t \<equiv> {a \<in> actions. (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq}"
+"ending_actions_at t \<equiv> {a \<in> actions. is_ending_action t a}"
 
 definition starting_actions_at where
-"starting_actions_at t \<equiv> {a \<in> actions. (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq}"
+"starting_actions_at t \<equiv> {a \<in> actions. is_starting_action t a}"
 (* technically a \<in> actions not necessary *)
 
 definition "instant_snaps_at t = at_start ` instant_actions_at t \<union> at_end ` instant_actions_at t"
