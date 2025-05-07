@@ -1,5 +1,6 @@
 theory TP_NTA_Reduction_Abs_Rename_Correctness
   imports TP_NTA_Reduction_Abs_Rename
+          "Temporal_Planning_Base.Sequences"
 begin
 
 context tp_nta_reduction_spec
@@ -660,7 +661,7 @@ nat
 seq_apply [enter_start_instant n, start_to_end_instant n, leave_end_instant n] s
 "
 
-definition "apply_instant_actions ns s \<equiv> seq_apply'' (map apply_snap_action ns) s" 
+definition "apply_instant_actions ns s \<equiv> seq_apply' (map apply_snap_action ns) s" 
 
 (* apply all snap actions of the nth happening in the plan *)
 definition apply_nth_happening::"
@@ -675,12 +676,11 @@ let
   end_indices = filter (is_ending_index t) act_indices;
   both = filter (is_instant_index t) act_indices
 in 
-  s 
-  |> enter_end_instants end_indices
-  |> (\<lambda>s. ext_seq' s (enter_start_instants start_indices))
-  |> (\<lambda>s. ext_seq' s (apply_instant_actions both))
-  |> (\<lambda>s. ext_seq' s (leave_end_instants end_indices))
-  |> (\<lambda>s. ext_seq' s (leave_start_instants start_indices))
+   enter_end_instants end_indices s
+  |> ext_seq (enter_start_instants start_indices)
+  |> ext_seq (apply_instant_actions both)
+  |> ext_seq (leave_end_instants end_indices)
+  |> ext_seq (leave_start_instants start_indices)
 "
 
 definition delay::"
@@ -709,7 +709,7 @@ let
   d = get_delay i
 in
   s 
-  |> delay d
+  |> delay d  
   |> apply_nth_happening i
 "
 
@@ -762,10 +762,9 @@ definition plan_steps::"('action location list \<times>
 let 
   htp_indices = [0..<length (htpl \<pi>)];
   apply_happs = map delay_and_apply htp_indices;
-  seq = [abs_renum.a\<^sub>0] 
-        |> (\<lambda>s. ext_seq s [start_planning]) 
-        |> (\<lambda>s. ext_seq'' s apply_happs)
-        |> (\<lambda>s. ext_seq s [end_planning])
+  seq = [abs_renum.a\<^sub>0, start_planning abs_renum.a\<^sub>0]
+        |>  ext_seq' apply_happs
+        |>  ext_seq (seq_apply [end_planning])
 in seq"
 
 definition plan_state_sequence::"('action location list \<times>
@@ -1815,199 +1814,195 @@ qed
 lemma main_auto_init_edge_spec_simp: "main_auto_init_edge_spec = (InitialLocation, Simple_Expressions.bexp.eq (var PlanningLock) (exp.const 0), [], Sil STR '''', (PlanningLock, exp.const 1) # (ActsActive, exp.const 0) # map (set_prop_ab 1) init, [], Planning)"
   unfolding main_auto_init_edge_spec_def Let_def ..
 
-lemma initial_steps_are_steps: "abs_renum.urge_bisim.A.steps ([abs_renum.a\<^sub>0] |> (\<lambda>s. ext_seq s [start_planning]))"
-proof -
-  have "abs_renum.urge_bisim.A.steps [abs_renum.a\<^sub>0, start_planning abs_renum.a\<^sub>0]" 
-  proof (rule abs_renum.urge_bisim.A.steps.intros)
-    show "(case abs_renum.a\<^sub>0 of (L, s, u) \<Rightarrow> \<lambda>(L', s', u'). abs_renum.sem \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow> \<langle>L', s', u'\<rangle>) (start_planning abs_renum.a\<^sub>0)"
-    proof -
-      obtain l1 v1 c1 where
-        sp: "start_planning abs_renum.a\<^sub>0 = (l1, v1, c1)"
-        and l1: "l1 = Planning # map Off actions"
-        and "v1 PlanningLock = Some 1"
-        and v1: "v1 ActsActive = Some 0"
-        "\<forall>p \<in> set init. v1 (PropVar p) = Some 1"
-        "\<forall>v \<in> actual_variables - ({PlanningLock, ActsActive} \<union> PropVar ` set init). v1 v = Some 0" 
-        "\<forall>v. v \<notin> actual_variables \<longrightarrow> v1 v = None"
-        and c1: "c1 = (\<lambda>_. 0)" using planning_start_state_char apply (cases "start_planning abs_renum.a\<^sub>0") by blast
-      (* To do: clean up? *)
-
-      obtain l v and c::"'action clock \<Rightarrow> real" where
-        arc: "(l, v, c) = abs_renum.a\<^sub>0" apply (cases "abs_renum.a\<^sub>0::('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))") by simp
-      hence l: "l = ntas_inits" 
-        and v: "v = map_of init_vars"
-        and c: "c = (\<lambda>_. 0)" unfolding abs_renum.a\<^sub>0_def by simp+
-      from sp
-      have v1': "v1 = v(PlanningLock \<mapsto> 1, ActsActive \<mapsto> 0, map PropVar init [\<mapsto>] list_of 1 (length init))" unfolding start_planning_def Let_def arc[symmetric] prod.case by simp
-
-      have "abs_renum.sem \<turnstile> \<langle>l, v, c\<rangle> \<rightarrow> \<langle>l1, v1, c1\<rangle>"
-      proof (rule non_t_step_intro[where a = "Internal (STR '''')", simplified])
-        show "abs_renum.sem \<turnstile> \<langle>l, v, c\<rangle> \<rightarrow>\<^bsub>Internal (STR '''')\<^esub> \<langle>l1, v1, c1\<rangle>"
-          unfolding abs_renum.sem_def
-        proof (rule step_u.step_int)
-          show "TRANS ''silent'' \<bar> (InitialLocation, Simple_Expressions.bexp.eq (var PlanningLock) (exp.const 0), [], Sil STR '''', (PlanningLock, exp.const 1) # (ActsActive, exp.const 0) # map (set_prop_ab 1) init, [], Planning) \<in> Simple_Network_Language.trans (map (automaton_of \<circ> conv_automaton) actual_autos ! 0)" 
-            apply (subst TAG_def)
-            apply (subst nth_map)
-             apply (subst actual_autos_def)
-             apply (subst ntas_def)
-            apply (subst timed_automaton_net_spec_def)
-            unfolding Let_def prod.case
-             apply simp
-             apply (subst actual_autos_def)
-             apply (subst ntas_def)
-            apply (subst timed_automaton_net_spec_def)
-            unfolding Let_def prod.case
-            apply (subst nth_map)
-             apply simp
-            apply (subst upt_conv_Cons)
-             apply simp
-            apply (subst nth_zip)
-              apply simp
-             apply simp
-            apply (subst nth_Cons_0)+
-            unfolding main_auto_spec_def Let_def prod.case comp_apply snd_conv
-            unfolding conv_automaton_def prod.case
-            unfolding automaton_of_def prod.case
-            unfolding Simple_Network_Language.trans_def fst_conv snd_conv
-            unfolding set_map
-            apply (subst list.set)
-            apply (subst image_insert)
-            apply (subst main_auto_init_edge_spec_def)
-            unfolding Let_def prod.case
+lemma initial_steps_are_steps: "abs_renum.urge_bisim.A.steps [abs_renum.a\<^sub>0, start_planning abs_renum.a\<^sub>0]"
+proof (rule abs_renum.urge_bisim.A.steps.intros)
+  show "abs_renum.urge_bisim.A.steps [start_planning abs_renum.a\<^sub>0]" by rule
+  show "(case abs_renum.a\<^sub>0 of (L, s, u) \<Rightarrow> \<lambda>(L', s', u'). abs_renum.sem \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow> \<langle>L', s', u'\<rangle>) (start_planning abs_renum.a\<^sub>0)"
+  proof -
+    obtain l1 v1 c1 where
+      sp: "start_planning abs_renum.a\<^sub>0 = (l1, v1, c1)"
+      and l1: "l1 = Planning # map Off actions"
+      and "v1 PlanningLock = Some 1"
+      and v1: "v1 ActsActive = Some 0"
+      "\<forall>p \<in> set init. v1 (PropVar p) = Some 1"
+      "\<forall>v \<in> actual_variables - ({PlanningLock, ActsActive} \<union> PropVar ` set init). v1 v = Some 0" 
+      "\<forall>v. v \<notin> actual_variables \<longrightarrow> v1 v = None"
+      and c1: "c1 = (\<lambda>_. 0)" using planning_start_state_char apply (cases "start_planning abs_renum.a\<^sub>0") by blast
+    (* To do: clean up? *)
+  
+    obtain l v and c::"'action clock \<Rightarrow> real" where
+      arc: "(l, v, c) = abs_renum.a\<^sub>0" apply (cases "abs_renum.a\<^sub>0::('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))") by simp
+    hence l: "l = ntas_inits" 
+      and v: "v = map_of init_vars"
+      and c: "c = (\<lambda>_. 0)" unfolding abs_renum.a\<^sub>0_def by simp+
+    from sp
+    have v1': "v1 = v(PlanningLock \<mapsto> 1, ActsActive \<mapsto> 0, map PropVar init [\<mapsto>] list_of 1 (length init))" unfolding start_planning_def Let_def arc[symmetric] prod.case by simp
+  
+    have "abs_renum.sem \<turnstile> \<langle>l, v, c\<rangle> \<rightarrow> \<langle>l1, v1, c1\<rangle>"
+    proof (rule non_t_step_intro[where a = "Internal (STR '''')", simplified])
+      show "abs_renum.sem \<turnstile> \<langle>l, v, c\<rangle> \<rightarrow>\<^bsub>Internal (STR '''')\<^esub> \<langle>l1, v1, c1\<rangle>"
+        unfolding abs_renum.sem_def
+      proof (rule step_u.step_int)
+        show "TRANS ''silent'' \<bar> (InitialLocation, Simple_Expressions.bexp.eq (var PlanningLock) (exp.const 0), [], Sil STR '''', (PlanningLock, exp.const 1) # (ActsActive, exp.const 0) # map (set_prop_ab 1) init, [], Planning) \<in> Simple_Network_Language.trans (map (automaton_of \<circ> conv_automaton) actual_autos ! 0)" 
+          apply (subst TAG_def)
+          apply (subst nth_map)
+           apply (subst actual_autos_def)
+           apply (subst ntas_def)
+          apply (subst timed_automaton_net_spec_def)
+          unfolding Let_def prod.case
+           apply simp
+           apply (subst actual_autos_def)
+           apply (subst ntas_def)
+          apply (subst timed_automaton_net_spec_def)
+          unfolding Let_def prod.case
+          apply (subst nth_map)
+           apply simp
+          apply (subst upt_conv_Cons)
+           apply simp
+          apply (subst nth_zip)
+            apply simp
+           apply simp
+          apply (subst nth_Cons_0)+
+          unfolding main_auto_spec_def Let_def prod.case comp_apply snd_conv
+          unfolding conv_automaton_def prod.case
+          unfolding automaton_of_def prod.case
+          unfolding Simple_Network_Language.trans_def fst_conv snd_conv
+          unfolding set_map
+          apply (subst list.set)
+          apply (subst image_insert)
+          apply (subst main_auto_init_edge_spec_def)
+          unfolding Let_def prod.case
+          by simp
+          
+        show "''committed'' \<bar> InitialLocation \<in> committed (map (automaton_of \<circ> conv_automaton) actual_autos ! 0) \<or> (\<forall>p<length (map (automaton_of \<circ> conv_automaton) actual_autos). l ! p \<notin> committed (map (automaton_of \<circ> conv_automaton) actual_autos ! p))"
+          apply (subst TAG_def)
+          apply (subst conv_committed)
+          using some_actual_autos apply simp
+          apply (rule disjI2)
+          apply (intro allI impI)
+          subgoal for p
+          apply (subst conv_committed)
+          using some_actual_autos apply simp
+          apply (subst nth_map)
+          using some_actual_autos apply simp
+          apply (subst (asm) length_map)
+          apply (frule no_committed)
+          apply (subst (asm) nth_map)
+          by simp+
+        done
+        show "''bexp'' \<bar> Simple_Expressions.check_bexp v (Simple_Expressions.bexp.eq (var PlanningLock) (exp.const 0)) True"
+        proof -
+          have "is_val v (var PlanningLock) 0"
+            unfolding v init_vars_def 
+            apply (rule check_bexp_is_val.intros)
+            apply (subst nta_vars')
+            unfolding all_vars_spec_def Let_def 
             by simp
-            
-          show "''committed'' \<bar> InitialLocation \<in> committed (map (automaton_of \<circ> conv_automaton) actual_autos ! 0) \<or> (\<forall>p<length (map (automaton_of \<circ> conv_automaton) actual_autos). l ! p \<notin> committed (map (automaton_of \<circ> conv_automaton) actual_autos ! p))"
+          moreover
+          have "is_val v (exp.const 0) 0"
+            by (rule check_bexp_is_val.intros)
+          ultimately
+          show ?thesis 
+            apply -
+            apply (drule check_bexp_is_val.intros)
+             apply assumption
             apply (subst TAG_def)
-            apply (subst conv_committed)
-            using some_actual_autos apply simp
-            apply (rule disjI2)
-            apply (intro allI impI)
-            subgoal for p
-            apply (subst conv_committed)
-            using some_actual_autos apply simp
-            apply (subst nth_map)
-            using some_actual_autos apply simp
-            apply (subst (asm) length_map)
-            apply (frule no_committed)
-            apply (subst (asm) nth_map)
-            by simp+
-          done
-          show "''bexp'' \<bar> Simple_Expressions.check_bexp v (Simple_Expressions.bexp.eq (var PlanningLock) (exp.const 0)) True"
-          proof -
-            have "is_val v (var PlanningLock) 0"
-              unfolding v init_vars_def 
-              apply (rule check_bexp_is_val.intros)
-              apply (subst nta_vars')
-              unfolding all_vars_spec_def Let_def 
-              by simp
-            moreover
-            have "is_val v (exp.const 0) 0"
-              by (rule check_bexp_is_val.intros)
-            ultimately
-            show ?thesis 
-              apply -
-              apply (drule check_bexp_is_val.intros)
-               apply assumption
-              apply (subst TAG_def)
-              by simp
-          qed
-          show "''guard'' \<bar> c \<turnstile> []" apply (subst TAG_def) by simp
-          show "''target invariant'' \<bar> \<forall>p<length (map (automaton_of \<circ> conv_automaton) actual_autos). c1 \<turnstile> Simple_Network_Language.inv (map (automaton_of \<circ> conv_automaton) actual_autos ! p) (l1 ! p)"
-            apply (subst TAG_def)
-            apply (intro allI impI)
-            apply (subst no_invs)
-            by simp+
-          show "''loc'' \<bar> l ! 0 = InitialLocation"
-            apply (subst TAG_def)
-            apply (subst l)
-            apply (subst ntas_inits_alt)
             by simp
-          show "''range'' \<bar> 0 < length l"
-            by (simp add: TAG_def l ntas_inits_alt)
-          show "''new loc'' \<bar> l1 = l[0 := Planning]"
-            apply (subst TAG_def)
-            apply (subst l)
-            apply (subst ntas_inits_alt)
-            apply (subst l1)
-            by simp
-          show "''new valuation'' \<bar> c1 = [[]\<rightarrow>0]c"
-            apply (subst TAG_def)
-            unfolding c c1 by simp
-          show "''is_upd'' \<bar> is_upds v ((PlanningLock, exp.const 1) # (ActsActive, exp.const 0) # map (set_prop_ab 1) init) v1"
-          proof -
-            have 1: "map (set_prop_ab 1) xs = map (set_var 1) (map PropVar xs)" for xs unfolding set_prop_ab_def by simp
-            show ?thesis
-            apply (subst TAG_def)
-            apply (rule is_upds.intros)
-             apply (subst is_upd_def)
-             apply (intro exI conjI)
-               apply (rule HOL.refl)
-              apply (rule check_bexp_is_val.intros)
+        qed
+        show "''guard'' \<bar> c \<turnstile> []" apply (subst TAG_def) by simp
+        show "''target invariant'' \<bar> \<forall>p<length (map (automaton_of \<circ> conv_automaton) actual_autos). c1 \<turnstile> Simple_Network_Language.inv (map (automaton_of \<circ> conv_automaton) actual_autos ! p) (l1 ! p)"
+          apply (subst TAG_def)
+          apply (intro allI impI)
+          apply (subst no_invs)
+          by simp+
+        show "''loc'' \<bar> l ! 0 = InitialLocation"
+          apply (subst TAG_def)
+          apply (subst l)
+          apply (subst ntas_inits_alt)
+          by simp
+        show "''range'' \<bar> 0 < length l"
+          by (simp add: TAG_def l ntas_inits_alt)
+        show "''new loc'' \<bar> l1 = l[0 := Planning]"
+          apply (subst TAG_def)
+          apply (subst l)
+          apply (subst ntas_inits_alt)
+          apply (subst l1)
+          by simp
+        show "''new valuation'' \<bar> c1 = [[]\<rightarrow>0]c"
+          apply (subst TAG_def)
+          unfolding c c1 by simp
+        show "''is_upd'' \<bar> is_upds v ((PlanningLock, exp.const 1) # (ActsActive, exp.const 0) # map (set_prop_ab 1) init) v1"
+        proof -
+          have 1: "map (set_prop_ab 1) xs = map (set_var 1) (map PropVar xs)" for xs unfolding set_prop_ab_def by simp
+          show ?thesis
+          apply (subst TAG_def)
+          apply (rule is_upds.intros)
+           apply (subst is_upd_def)
+           apply (intro exI conjI)
              apply (rule HOL.refl)
-            apply (rule is_upds.intros)
-            apply (subst is_upd_def)
-             apply (intro exI conjI)
-               apply (rule HOL.refl)
-              apply (rule check_bexp_is_val.intros)
-               apply (rule HOL.refl)
-              unfolding v1'
-              apply (subst 1)
-              using is_upds_set_vars_list_of[where v = "v(PlanningLock \<mapsto> 1, ActsActive \<mapsto> 0)" and n = 1 and xs = "(map PropVar init)"] 
-              by simp
-          qed
-          show "''bounded'' \<bar> Simple_Network_Language.bounded (map_of nta_vars) v1"
-          proof (subst TAG_def)
-            have "bounded (map_of nta_vars) (v(PlanningLock # ActsActive # map PropVar init [\<mapsto>] (1 # 0 # list_of 1 (length init))))"
-            proof (rule upds_bounded)
-              show "bounded (map_of nta_vars) v"
-                using arc unfolding abs_renum.a\<^sub>0_def
-                using init_vars_bounded by simp
-              show "length (PlanningLock # ActsActive # map PropVar init) = length (1 # 0 # list_of 1 (length init))" 
-                apply (subst length_Cons)+
-                apply (subst length_list_of)
-                by auto
-              show "\<forall>n<length (PlanningLock # ActsActive # map PropVar init). \<exists>l u. map_of nta_vars ((PlanningLock # ActsActive # map PropVar init) ! n) = Some (l, u) \<and> l \<le> (1 # 0 # list_of 1 (length init)) ! n \<and> (1 # 0 # list_of 1 (length init)) ! n \<le> u"
-              proof (intro allI impI)
-                fix n
-                assume a: "n < length (PlanningLock # ActsActive # map PropVar init)"
-                show "\<exists>l u. map_of nta_vars ((PlanningLock # ActsActive # map PropVar init) ! n) = Some (l, u) \<and> l \<le> (1 # 0 # list_of 1 (length init)) ! n \<and> (1 # 0 # list_of 1 (length init)) ! n \<le> u"
-                proof (cases n)
+            apply (rule check_bexp_is_val.intros)
+           apply (rule HOL.refl)
+          apply (rule is_upds.intros)
+          apply (subst is_upd_def)
+           apply (intro exI conjI)
+             apply (rule HOL.refl)
+            apply (rule check_bexp_is_val.intros)
+             apply (rule HOL.refl)
+            unfolding v1'
+            apply (subst 1)
+            using is_upds_set_vars_list_of[where v = "v(PlanningLock \<mapsto> 1, ActsActive \<mapsto> 0)" and n = 1 and xs = "(map PropVar init)"] 
+            by simp
+        qed
+        show "''bounded'' \<bar> Simple_Network_Language.bounded (map_of nta_vars) v1"
+        proof (subst TAG_def)
+          have "bounded (map_of nta_vars) (v(PlanningLock # ActsActive # map PropVar init [\<mapsto>] (1 # 0 # list_of 1 (length init))))"
+          proof (rule upds_bounded)
+            show "bounded (map_of nta_vars) v"
+              using arc unfolding abs_renum.a\<^sub>0_def
+              using init_vars_bounded by simp
+            show "length (PlanningLock # ActsActive # map PropVar init) = length (1 # 0 # list_of 1 (length init))" 
+              apply (subst length_Cons)+
+              apply (subst length_list_of)
+              by auto
+            show "\<forall>n<length (PlanningLock # ActsActive # map PropVar init). \<exists>l u. map_of nta_vars ((PlanningLock # ActsActive # map PropVar init) ! n) = Some (l, u) \<and> l \<le> (1 # 0 # list_of 1 (length init)) ! n \<and> (1 # 0 # list_of 1 (length init)) ! n \<le> u"
+            proof (intro allI impI)
+              fix n
+              assume a: "n < length (PlanningLock # ActsActive # map PropVar init)"
+              show "\<exists>l u. map_of nta_vars ((PlanningLock # ActsActive # map PropVar init) ! n) = Some (l, u) \<and> l \<le> (1 # 0 # list_of 1 (length init)) ! n \<and> (1 # 0 # list_of 1 (length init)) ! n \<le> u"
+              proof (cases n)
+                case 0
+                then show ?thesis
+                using map_of_nta_vars_PlanningLock by simp
+              next
+                case n': (Suc n')
+                then show ?thesis 
+                proof (cases n')
                   case 0
-                  then show ?thesis
-                  using map_of_nta_vars_PlanningLock by simp
-                next
-                  case n': (Suc n')
                   then show ?thesis 
-                  proof (cases n')
-                    case 0
-                    then show ?thesis 
-                    using map_of_nta_vars_ActsActive n' by simp
-                  next
-                    case n'': (Suc n'')
-                    have "n'' < length init" using a n' n'' by simp
-                    hence "\<exists>l u. map_of nta_vars (map PropVar init ! n'') = Some (l, u) \<and> l \<le> (list_of 1 (length init)) ! n'' \<and> (list_of 1 (length init)) ! n'' \<le> u" 
-                      apply (subst nth_list_of, assumption)+
-                      using map_of_nta_vars_init_goal by simp
-                    then show "\<exists>l u. map_of nta_vars ((PlanningLock # ActsActive # map PropVar init) ! n) = Some (l, u) \<and> l \<le> (1 # 0 # list_of 1 (length init)) ! n \<and> (1 # 0 # list_of 1 (length init)) ! n \<le> u" 
-                      unfolding n'' n' by simp
-                  qed
+                  using map_of_nta_vars_ActsActive n' by simp
+                next
+                  case n'': (Suc n'')
+                  have "n'' < length init" using a n' n'' by simp
+                  hence "\<exists>l u. map_of nta_vars (map PropVar init ! n'') = Some (l, u) \<and> l \<le> (list_of 1 (length init)) ! n'' \<and> (list_of 1 (length init)) ! n'' \<le> u" 
+                    apply (subst nth_list_of, assumption)+
+                    using map_of_nta_vars_init_goal by simp
+                  then show "\<exists>l u. map_of nta_vars ((PlanningLock # ActsActive # map PropVar init) ! n) = Some (l, u) \<and> l \<le> (1 # 0 # list_of 1 (length init)) ! n \<and> (1 # 0 # list_of 1 (length init)) ! n \<le> u" 
+                    unfolding n'' n' by simp
                 qed
               qed
             qed
-            thus "bounded (map_of nta_vars) v1"
-              unfolding v1' by simp
           qed
+          thus "bounded (map_of nta_vars) v1"
+            unfolding v1' by simp
         qed
-        show "Simple_Network_Language.bounded (map_of nta_vars) v"
-          using arc unfolding abs_renum.a\<^sub>0_def
-          using init_vars_bounded by simp
       qed
-      thus ?thesis using arc[symmetric] sp by simp
+      show "Simple_Network_Language.bounded (map_of nta_vars) v"
+        using arc unfolding abs_renum.a\<^sub>0_def
+        using init_vars_bounded by simp
     qed
-    show "abs_renum.urge_bisim.A.steps [start_planning abs_renum.a\<^sub>0]" by (rule abs_renum.urge_bisim.A.steps.intros)
+    thus ?thesis using arc[symmetric] sp by simp
   qed
-  thus ?thesis by simp
-qed
+qed 
 
 subsubsection \<open>Rules for constructing a run\<close>
 
@@ -2015,27 +2010,21 @@ lemma steps_prepend: "abs_renum.urge_bisim.A.steps (y#ys) \<Longrightarrow> abs_
   using abs_renum.urge_bisim.A.steps_append'[where as = "[x, y]" and bs = "y#ys"]
   by auto
 
-lemma steps_extend: "abs_renum.urge_bisim.A.steps xs \<Longrightarrow> abs_renum.urge_bisim.A.steps (last xs # seq_apply fs (last xs)) \<Longrightarrow> abs_renum.urge_bisim.A.steps (ext_seq xs fs)"
+lemma steps_extend: "abs_renum.urge_bisim.A.steps xs 
+  \<Longrightarrow> abs_renum.urge_bisim.A.steps (last xs # seq_apply fs (last xs)) 
+  \<Longrightarrow> abs_renum.urge_bisim.A.steps (ext_seq (seq_apply fs) xs)"
   apply (frule abs_renum.urge_bisim.A.steps_append'[where bs = "last xs # seq_apply fs (last xs)"])
      apply simp
     apply simp
    apply (subst List.tl_def)
    apply simp
-  apply (subst (asm) ext_seq_alt[symmetric])
-   apply (erule abs_renum.urge_bisim.A.steps.cases)
-  subgoal for x by blast
-  subgoal for x xs by auto
-  by simp
-
-
-lemma length_seq_apply[simp]: "length (seq_apply fs s) = length fs"
-  apply (induction fs arbitrary: s)
-  by auto
+  apply (subst ext_seq_def)
+  by blast
 
 lemma steps_extend_induct:
   assumes "\<forall>i. Suc i < length xs \<longrightarrow> abs_renum.urge_bisim.A.steps [xs!i, xs!Suc i]"
       and "0 < length xs"
-  shows "abs_renum.urge_bisim.A.steps xs"
+    shows "abs_renum.urge_bisim.A.steps xs"
 proof -
   have "abs_renum.urge_bisim.A.steps (take n xs @ [xs ! n])" if "n < length xs" "0 < length xs" for n
     using that
@@ -2838,7 +2827,7 @@ next
 
   have "((L, v, c) # enter_end_instants end_indices (L, v, c)) ! (Suc i) = enter_end_instant (end_indices ! i) (L1, v1, c1)"
     unfolding Lvc1[symmetric] enter_end_instants_def 
-    apply (subst seq_apply_nth_Suc) 
+    apply (subst seq_apply_Cons_nth_Suc) 
     using Suc(2) apply simp
     using Suc(2) by simp
   hence Lvc': "(L', v', c') = enter_end_instant (end_indices ! i) (L1, v1, c1)" using Suc(4) by simp
@@ -2957,7 +2946,8 @@ proof (rule seq_apply_steps_induct)
     have "abs_renum.urge_bisim.A.steps [(L', v', c'), enter_end_instant (end_indices ! i) (L', v', c')]"
       using enter_end_instant_okay[OF n_len ending i_pres(1,2,3,4,5,6,7,8,9)] unfolding n by blast
     thus "abs_renum.urge_bisim.A.steps [((L, v, c) # seq_apply (map enter_end_instant end_indices) (L, v, c)) ! i, ((L, v, c) # seq_apply (map enter_end_instant end_indices) (L, v, c)) ! Suc i]" 
-      apply (subst seq_apply_nth_Suc) using i apply simp
+      apply (subst seq_apply_Cons_nth_Suc)
+      using i apply simp
       apply (subst Lvc'[simplified enter_end_instants_def])+
       using i by simp
   qed
@@ -3072,9 +3062,95 @@ assumes i: "i < length (htpl \<pi>)"
 begin (* To do: extend to include above contexts *)
 
 
+definition "single_snap_pres Lvc n \<equiv> 
+let 
+  (L, v, c) = Lvc;
+  n_conds = (n < length actions) \<and> is_instant_index t n;
+  L_conds = (length L = Suc (length actions));
+  v_conds = (bounded (map_of nta_vars) v) \<and> (v PlanningLock = Some 1);
+
+  locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p)));
+  prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_prev_updated_prop_state i p n));
+  active = (v ActsActive = Some (planning_sem.active_before t));
+
+  instant_loc = (\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+        \<longrightarrow> L ! Suc i = (Off (actions ! i)));
+  
+  instant_executed_time = (\<forall>i < n. is_instant_index t i
+      \<longrightarrow> (c (ActEnd (actions ! i)) = 0) \<and> (c (ActStart (actions ! i)) = 0));
+  instant_not_executed_time =  (\<forall>i < length actions. n \<le> i \<and> is_instant_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
+        \<and> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
+  
+  ending_start_time = (\<forall>i < length actions. is_ending_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  ending_end_time =  (\<forall>i < length actions. is_ending_index t i
+      \<longrightarrow> c (ActEnd (actions ! i)) = 0);
+  
+  starting_start_time = (\<forall>i < length actions. is_starting_index t i
+      \<longrightarrow>  c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  starting_end_time = (\<forall>i < length actions. is_starting_index t i
+      \<longrightarrow>  c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
+  
+  other_start_time = (\<forall>i < length actions. is_not_happening_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  other_end_time = (\<forall>i < length actions. is_not_happening_index t i
+      \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t))
+in n_conds \<and> L_conds \<and> v_conds 
+  \<and> locked \<and> prop_state \<and> active 
+  \<and> instant_loc
+  \<and> instant_executed_time \<and> instant_not_executed_time 
+  \<and> ending_start_time \<and> ending_end_time 
+  \<and> starting_start_time \<and> starting_end_time 
+  \<and> other_start_time \<and> other_end_time"
+
+definition "single_snap_posts Lvc n \<equiv> 
+let 
+  (L, v, c) = Lvc;
+  L_conds = (length L = Suc (length actions));
+  v_conds = ((bounded (map_of nta_vars) v) \<and> (v PlanningLock = Some 1));
+
+  locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p)));
+  prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_prev_updated_prop_state i p (Suc n)));
+  active = (v ActsActive = Some (planning_sem.active_before t));
+
+  instant_loc = (\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+        \<longrightarrow> L ! Suc i = (Off (actions ! i)));
+  
+  instant_executed_time = (\<forall>i \<le> n. is_instant_index t i
+      \<longrightarrow> (c (ActEnd (actions ! i)) = 0) \<and> (c (ActStart (actions ! i)) = 0));
+  instant_not_executed_time =  (\<forall>i < length actions. n < i \<and> is_instant_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
+        \<and> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
+  
+  ending_start_time = (\<forall>i < length actions. is_ending_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  ending_end_time =  (\<forall>i < length actions. is_ending_index t i
+      \<longrightarrow> c (ActEnd (actions ! i)) = 0);
+  
+  starting_start_time = (\<forall>i < length actions. is_starting_index t i
+      \<longrightarrow>  c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  starting_end_time = (\<forall>i < length actions. is_starting_index t i
+      \<longrightarrow>  c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
+  
+  other_start_time = (\<forall>i < length actions. is_not_happening_index t i
+      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
+  other_end_time = (\<forall>i < length actions. is_not_happening_index t i
+      \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t))
+in L_conds \<and> v_conds 
+  \<and> locked \<and> prop_state \<and> active 
+  \<and> instant_loc
+  \<and> instant_executed_time \<and> instant_not_executed_time 
+  \<and> ending_start_time \<and> ending_end_time 
+  \<and> starting_start_time \<and> starting_end_time 
+  \<and> other_start_time \<and> other_end_time"
+
 context (* for a single instant action n *)
-  fixes n L v c L' v' c'
-   assumes n: "n < length actions"
+  fixes n L v c
+  assumes pres: "single_snap_pres (L, v, c) n"
+begin
+
+lemma  n: "n < length actions"
       and end_scheduled: "(t, at_end (actions ! n)) \<in> planning_sem.happ_seq"
       and start_scheduled: "(t, at_start (actions ! n)) \<in> planning_sem.happ_seq"
 
@@ -3082,10 +3158,7 @@ context (* for a single instant action n *)
       and v_bounded: "bounded (map_of nta_vars) v"
       and planning_state: "v PlanningLock = Some 1"
 
-      and instant_executed_loc: "\<forall>i < n. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
-          \<longrightarrow> L ! Suc i = (Off (actions ! i))"
-
-      and instant_not_executed_loc: "\<forall>i < length actions. n \<le> i \<and> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+      and instant_loc: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
           \<longrightarrow> L ! Suc i = (Off (actions ! i))"
 
       and locked: "\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p))"
@@ -3112,9 +3185,10 @@ context (* for a single instant action n *)
             \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
       and other_end_time: "\<forall>i < length actions. is_not_happening_index t i
             \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
+  apply -
+  using pres[simplified single_snap_pres_def Let_def]
+  by simp_all
 
-      and s': "leave_end_instant n (start_to_end_instant n (enter_start_instant n (L, v, c))) = (L', v', c')"
-begin
 
 lemma act_n_in_actions: "actions ! n \<in> set actions" using in_set_conv_nth n by simp
 
@@ -3394,10 +3468,6 @@ lemma v_ending_bounded: "bounded (map_of nta_vars) v_ending" using v_ending_star
 
 subsubsection \<open>Lvc_ended\<close>
 
-lemma L_instant_ended: "L' = L[Suc n := Off (actions ! n)]" 
-  and c_instant_ended: "c' = c(ActStart (actions ! n) := 0, ActEnd (actions ! n) := 0)" 
-  using s' unfolding Lvc_ending leave_end_instant_def Let_def prod.case L_ending v_ending c_ending by simp+
-
 lemma map_upds_override: 
   shows "f(x \<mapsto> y, xs [\<mapsto>] ys, x \<mapsto> z) = f(xs [\<mapsto>] ys, x \<mapsto> z)" 
 proof (rule ext) 
@@ -3429,41 +3499,19 @@ lemma map_upds_twist':
   shows "f(xs [\<mapsto>] xs', x \<mapsto> y, ys [\<mapsto>] ys', zs [\<mapsto>] zs') = f(xs [\<mapsto>] xs', ys [\<mapsto>] ys', zs [\<mapsto>] zs', x \<mapsto> y)" using assms by auto
 
 
-lemma v_instant_ended': "v' = v(
-      map PropVar (dels (at_start (actions ! n))) [\<mapsto>] list_of 0 (length (map PropVar (dels (at_start (actions ! n))))), 
-      map PropVar (adds (at_start (actions ! n))) [\<mapsto>] list_of 1 (length (map PropVar (adds (at_start (actions ! n))))),
-      map PropVar (dels (at_end (actions ! n))) [\<mapsto>] list_of 0 (length (map PropVar (dels (at_end (actions ! n))))), 
-      map PropVar (adds (at_end (actions ! n))) [\<mapsto>] list_of 1 (length (map PropVar (adds (at_end (actions ! n))))))" (is "v' = v(?ds1 [\<mapsto>] ?ds1', ?as1 [\<mapsto>] ?as1', ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')")
-proof -
-  from s'
-  have "(L', v', c') =  leave_end_instant n (L_ending, v_ending, c_ending)" using Lvc_ending by auto
-  from this
-  have "v' = v_ending(ActsActive \<mapsto> the (v_ending ActsActive) - 1, ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')"
-    unfolding leave_end_instant_def Let_def prod.case by blast
-  hence "v' = v_ending(ActsActive \<mapsto> the (v ActsActive), ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')" using v_ending_ActsActive by simp
-  hence "v' = v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, ?ds1 [\<mapsto>] ?ds1', ?as1 [\<mapsto>] ?as1', ActsActive \<mapsto> the (v ActsActive), ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')" unfolding v_ending by blast
-  hence "v' = v(?ds1 [\<mapsto>] ?ds1', ?as1 [\<mapsto>] ?as1', ActsActive \<mapsto> the (v ActsActive), ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')" using map_upds_override by metis
-  hence 1: "v' = v(?ds1 [\<mapsto>] ?ds1', ?as1 [\<mapsto>] ?as1', ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2', ActsActive \<mapsto> the (v ActsActive))" 
-    apply (subst (asm) map_upds_twist'[of ActsActive ?ds2 ?as2])
-    by fastforce+
-  have 2: "\<exists>x. v ActsActive = Some x" using v_bounded dom_map_of_nta_vars unfolding bounded_def by auto
-  have 3: "(v (?ds1 [\<mapsto>] ?ds1', ?as1 [\<mapsto>] ?as1', ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')) ActsActive = v ActsActive" 
-    apply (subst map_upds_apply_nontin[of ActsActive ?as2], fastforce) 
-    apply (subst map_upds_apply_nontin[of ActsActive ?ds2], fastforce) 
-    apply (subst map_upds_apply_nontin[of ActsActive ?as1], fastforce) 
-    apply (subst map_upds_apply_nontin[of ActsActive ?ds1], fastforce) 
-    ..
-  show ?thesis 
-    apply (subst 1)
-    apply (rule ext)
-    subgoal for x
-      apply (cases "x = ActsActive")
-       apply (erule ssubst[of x])
-       apply (subst 3)
-      using 2 apply simp
-      by auto
-    done
-qed
+definition "s' = leave_end_instant n (start_to_end_instant n (enter_start_instant n (L, v, c)))"
+
+definition "L' = fst s'"
+definition "v' = fst (snd s')"
+definition "c' = snd (snd s')"
+
+lemma s': "s' = (L', v', c')" 
+    "s' = leave_end_instant n (start_to_end_instant n (enter_start_instant n (L, v, c)))" using L'_def v'_def c'_def s'_def by simp_all
+
+lemma L_instant_ended: "L' = L[Suc n := Off (actions ! n)]" 
+  and c_instant_ended: "c' = c(ActStart (actions ! n) := 0, ActEnd (actions ! n) := 0)" 
+  using s' unfolding Lvc_ending leave_end_instant_def Let_def prod.case L_ending v_ending c_ending by simp+
+
 
 lemma L_ended_ending: "L' = L_ending[Suc n := Off (actions ! n)]" 
   and v_ended_ending: "v' = v_ending(ActsActive \<mapsto> the (v_ending ActsActive) - 1, map PropVar (dels (at_end (actions ! n))) [\<mapsto>] list_of 0 (length (map PropVar (dels (at_end (actions ! n))))), map PropVar (adds (at_end (actions ! n))) [\<mapsto>] list_of 1 (length (map PropVar (adds (at_end (actions ! n))))))" 
@@ -3502,18 +3550,55 @@ subsubsection \<open>Post-conditions\<close>
 
 lemma L_ended_len: "length L' = Suc (length actions)" using L_instant_ended L_len by auto
 
+
+lemma v_instant_ended': "v' = v(
+      map PropVar (dels (at_start (actions ! n))) [\<mapsto>] list_of 0 (length (map PropVar (dels (at_start (actions ! n))))), 
+      map PropVar (adds (at_start (actions ! n))) [\<mapsto>] list_of 1 (length (map PropVar (adds (at_start (actions ! n))))),
+      map PropVar (dels (at_end (actions ! n))) [\<mapsto>] list_of 0 (length (map PropVar (dels (at_end (actions ! n))))), 
+      map PropVar (adds (at_end (actions ! n))) [\<mapsto>] list_of 1 (length (map PropVar (adds (at_end (actions ! n))))))" (is "v' = v(?ds1 [\<mapsto>] ?ds1', ?as1 [\<mapsto>] ?as1', ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')")
+proof -
+  from s'
+  have "(L', v', c') =  leave_end_instant n (L_ending, v_ending, c_ending)" using Lvc_ending by auto
+  from this
+  have "v' = v_ending(ActsActive \<mapsto> the (v_ending ActsActive) - 1, ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')"
+    unfolding leave_end_instant_def Let_def prod.case by blast
+  hence "v' = v_ending(ActsActive \<mapsto> the (v ActsActive), ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')" using v_ending_ActsActive by simp
+  hence "v' = v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, ?ds1 [\<mapsto>] ?ds1', ?as1 [\<mapsto>] ?as1', ActsActive \<mapsto> the (v ActsActive), ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')" unfolding v_ending by blast
+  hence "v' = v(?ds1 [\<mapsto>] ?ds1', ?as1 [\<mapsto>] ?as1', ActsActive \<mapsto> the (v ActsActive), ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')" using map_upds_override by metis
+  hence 1: "v' = v(?ds1 [\<mapsto>] ?ds1', ?as1 [\<mapsto>] ?as1', ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2', ActsActive \<mapsto> the (v ActsActive))" 
+    apply (subst (asm) map_upds_twist'[of ActsActive ?ds2 ?as2])
+    by fastforce+
+  have 2: "\<exists>x. v ActsActive = Some x" using v_bounded dom_map_of_nta_vars unfolding bounded_def by auto
+  have 3: "(v (?ds1 [\<mapsto>] ?ds1', ?as1 [\<mapsto>] ?as1', ?ds2 [\<mapsto>] ?ds2', ?as2 [\<mapsto>] ?as2')) ActsActive = v ActsActive" 
+    apply (subst map_upds_apply_nontin[of ActsActive ?as2], fastforce) 
+    apply (subst map_upds_apply_nontin[of ActsActive ?ds2], fastforce) 
+    apply (subst map_upds_apply_nontin[of ActsActive ?as1], fastforce) 
+    apply (subst map_upds_apply_nontin[of ActsActive ?ds1], fastforce) 
+    ..
+  show ?thesis 
+    apply (subst 1)
+    apply (rule ext)
+    subgoal for x
+      apply (cases "x = ActsActive")
+       apply (erule ssubst[of x])
+       apply (subst 3)
+      using 2 apply simp
+      by auto
+    done
+qed
+
 lemma v_ended_planning_state: "v' PlanningLock = Some 1" unfolding v_instant_ended' using planning_state 
   apply (subst map_upds_apply_nontin, fastforce)+
   by blast
 
-lemma v_ended_instant_executed_loc: "\<forall>i \<le> n. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
+lemma v_ended_instant_loc: "\<forall>i < length actions. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
           \<longrightarrow> L' ! Suc i = (Off (actions ! i))" 
   apply (intro allI impI, elim conjE)
   subgoal for i
     apply (cases "i = n")
     unfolding L_instant_ended
-    subgoal apply simp using nth_list_update_eq[of "Suc n" L] L_len n by simp
-    using instant_executed_loc by auto
+    subgoal apply simp using nth_list_update_eq[of "Suc n" L] L_len n by fastforce
+    using instant_loc by auto
   done
 
 lemma v_ended_locked: "\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v' (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p))"
@@ -3643,6 +3728,34 @@ lemma c_ended_other_end_time: "\<forall>i < length actions. is_not_happening_ind
     by auto
   done
 
+lemma instant_snap_posts: "single_snap_posts (L', v', c') n"
+  unfolding single_snap_posts_def Let_def prod.case
+  apply (intro conjI)
+  using L_ended_len apply simp
+  using v_ended_bounded apply simp
+  using v_ended_planning_state apply simp
+  using v_ended_locked apply simp
+  using v_ended_prop_state apply simp
+  using v_ended_acts_active apply simp
+  using v_ended_instant_loc apply simp
+  using c_ended_instant_executed_time apply simp
+  using c_ended_instant_not_executed_time apply simp
+  using c_ended_ending_start_time apply simp
+  using c_ended_ending_end_time apply simp
+  using c_ended_starting_start_time apply simp
+  using c_ended_starting_end_time apply simp
+  using c_ended_other_start_time apply simp
+  using c_ended_other_end_time apply simp
+  done
+
+lemma instant_snap_posts_seq: 
+  "single_snap_posts (last (apply_snap_action n (L, v, c))) n"
+  unfolding apply_snap_action_def 
+  apply (subst last_seq_apply)
+  using s' instant_snap_posts
+  by auto
+
+
 subsubsection \<open>First transition\<close>
 lemma steps_starting: "abs_renum.urge_bisim.A.steps [(L, v, c), (L_started, v_started, c_started)]"
 proof (rule single_step_intro)
@@ -3727,7 +3840,7 @@ proof (rule single_step_intro)
           by (auto intro: guard_append)
       qed
       show "\<forall>p<length (map (automaton_of \<circ> conv_automaton) actual_autos). c(ActStart (actions ! n) := 0) \<turnstile> Simple_Network_Language.inv (map (automaton_of \<circ> conv_automaton) actual_autos ! p) (L[Suc n := StartInstant (actions ! n)] ! p)" using conv_invs no_invs by simp
-      show "L ! Suc n = l" unfolding t' using instant_not_executed_loc n start_scheduled end_scheduled by blast
+      show "L ! Suc n = l" unfolding t' using instant_loc n start_scheduled end_scheduled by blast
       show "Suc n < length L" using L_len n by simp
       show "L[Suc n := StartInstant (actions ! n)] = L[Suc n := l']" unfolding t' by blast
       show "c(ActStart (actions ! n) := 0) = [r\<rightarrow>0]c" unfolding t' by simp
@@ -3981,6 +4094,7 @@ qed
 
 lemma instant_action_steps_if: "abs_renum.urge_bisim.A.steps ((L, v, c) # apply_snap_action n (L, v, c))"
   unfolding apply_snap_action_def seq_apply.simps
+  apply (subst s'(2)[symmetric])
   apply (subst s')
   apply (subst Lvc_ending)
   apply (subst Lvc_started)
@@ -3992,86 +4106,7 @@ lemma instant_action_steps_if: "abs_renum.urge_bisim.A.steps ((L, v, c) # apply_
    apply (rule steps_ending)
   by (rule steps_starting)
 end (* for a single instant action n *)
-
-definition "single_snap_pres n L v c \<equiv> 
-let 
-  n_conds = (n < length actions) \<and> is_instant_index t i;
-  L_conds = (length L = Suc (length actions));
-  v_conds = (bounded (map_of nta_vars) v) \<and> (v PlanningLock = Some 1);
-
-  instant_executed_loc = (\<forall>i < n. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
-        \<longrightarrow> L ! Suc i = (Off (actions ! i)));
-  instant_not_executed_loc = (\<forall>i < length actions. n \<le> i \<and> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
-        \<longrightarrow> L ! Suc i = (Off (actions ! i)));
-
-  locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p)));
-  prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_prev_updated_prop_state i p n));
-  active = (v ActsActive = Some (planning_sem.active_before t));
-  
-  instant_executed_time = (\<forall>i < n. is_instant_index t i
-      \<longrightarrow> (c (ActEnd (actions ! i)) = 0) \<and> (c (ActStart (actions ! i)) = 0));
-  instant_not_executed_time =  (\<forall>i < length actions. n \<le> i \<and> is_instant_index t i
-      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
-        \<and> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
-  
-  ending_start_time = (\<forall>i < length actions. is_ending_index t i
-      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
-  ending_end_time =  (\<forall>i < length actions. is_ending_index t i
-      \<longrightarrow> c (ActEnd (actions ! i)) = 0);
-  
-  starting_start_time = (\<forall>i < length actions. is_starting_index t i
-      \<longrightarrow>  c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
-  starting_end_time = (\<forall>i < length actions. is_starting_index t i
-      \<longrightarrow>  c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
-  
-  other_start_time = (\<forall>i < length actions. is_not_happening_index t i
-      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
-  other_end_time = (\<forall>i < length actions. is_not_happening_index t i
-      \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t))
-in n_conds \<and> L_conds \<and> v_conds 
-  \<and> instant_executed_loc \<and> instant_not_executed_loc 
-  \<and> locked \<and> prop_state \<and> active 
-  \<and> instant_executed_time \<and> instant_not_executed_time 
-  \<and> ending_start_time \<and> ending_end_time 
-  \<and> starting_start_time \<and> starting_end_time 
-  \<and> other_start_time \<and> other_end_time"
-
-definition "single_snap_posts n L v c \<equiv> 
-let
-  L_conds = (length L = Suc (length actions));
-  v_conds = ((bounded (map_of nta_vars) v) \<and> (v PlanningLock = Some 1));
-
-  locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p)));
-  prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_prev_updated_prop_state i p n));
-  active = (v ActsActive = Some (planning_sem.active_before t));
-
-  instant_executed_loc = (\<forall>i \<le> n. (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
-        \<longrightarrow> L ! Suc i = (Off (actions ! i)));
-  instant_not_executed_loc = (\<forall>i < length actions. n < i \<and> (t, at_start (actions ! i)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! i)) \<in> planning_sem.happ_seq
-        \<longrightarrow> L ! Suc i = (Off (actions ! i)));
-  
-  instant_executed_time = (\<forall>i \<le> n. is_instant_index t i
-      \<longrightarrow> (c (ActEnd (actions ! i)) = 0) \<and> (c (ActStart (actions ! i)) = 0));
-  instant_not_executed_time =  (\<forall>i < length actions. n < i \<and> is_instant_index t i
-      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t) 
-        \<and> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
-  
-  ending_start_time = (\<forall>i < length actions. is_ending_index t i
-      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
-  ending_end_time =  (\<forall>i < length actions. is_ending_index t i
-      \<longrightarrow> c (ActEnd (actions ! i)) = 0);
-  
-  starting_start_time = (\<forall>i < length actions. is_starting_index t i
-      \<longrightarrow>  c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
-  starting_end_time = (\<forall>i < length actions. is_starting_index t i
-      \<longrightarrow>  c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t));
-  
-  other_start_time = (\<forall>i < length actions. is_not_happening_index t i
-      \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t));
-  other_end_time = (\<forall>i < length actions. is_not_happening_index t i
-      \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t))
-in undefined"
-
+    
 context (* for all instant actions at a timepoint *)
   fixes L v c 
   assumes L_len: "length L = Suc (length actions)"
@@ -4104,15 +4139,65 @@ context (* for all instant actions at a timepoint *)
       and other_end_time: "\<forall>i < length actions. is_not_happening_index t i
             \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
 begin
-term "apply_instant_actions (filter (\<lambda>n. at_start (actions ! n) \<in> h \<and> at_end (actions ! n) \<in> h) [0..<length actions]) (L, v, c)"
 
+find_consts name: "instant*at*"
+
+definition "instant_indices \<equiv> filter (is_instant_index t) [0..<length actions]"
+
+
+definition "instant_apps \<equiv> map apply_snap_action instant_indices"
+
+schematic_goal "apply_instant_actions (filter (is_instant_index t) [0..<length actions]) (L, v, c) = ?x"
+  unfolding apply_instant_actions_def sorry
+thm instant_snap_posts_seq
 (* Prove pre- and post-conditions using seq_apply'' of apply_instant_action *)
 
 term "filter (is_instant_index t) [0..<length actions]"
 
 term "seq_apply'' (map apply_snap_action (instant_indices_before t (length actions)))"
 
-thm seq_apply''_pre_post_induct_Cons
+thm seq_apply''_pre_post_induct_Cons_1_pre[where P = single_snap_pres and Q = single_snap_posts]
+
+definition single_snap_pres' where
+"single_snap_pres' indices Lvc idx \<equiv> single_snap_pres Lvc (indices ! idx)"
+
+definition single_snap_posts' where
+"single_snap_posts' indices Lvc idx \<equiv> single_snap_posts Lvc (indices ! idx)"
+
+lemma all_instant_pres_sat_instant_pres: 
+  "single_snap_pres (L, v, c) 0"
+  unfolding single_snap_pres_def Let_def prod.case
+  sorry
+
+lemma instant_app_fun_wf: "\<forall>f\<in>set instant_apps. \<forall>x. f x \<noteq> []" unfolding instant_apps_def apply_snap_action_def using seq_apply_not_Nil by fastforce
+lemma instant_app_pre_post: 
+  "\<forall>i<length instant_apps. \<forall>s. single_snap_pres' instant_indices s i \<longrightarrow> single_snap_posts' instant_indices (last ((instant_apps ! i) s)) i"
+  unfolding single_snap_pres'_def single_snap_posts'_def 
+  apply (intro allI impI)
+  subgoal for i s
+  apply (subst instant_apps_def)
+    apply (subst nth_map)
+    apply (subst (asm) instant_apps_def)
+     apply simp
+    apply (cases s)
+    subgoal for L v c
+      apply simp
+      apply (subst instant_snap_posts_seq)
+      by simp_all
+    done
+  done
+
+
+lemma instant_app_post_pre:
+  "\<forall>i<length instant_apps. \<forall>s. single_snap_posts' instant_indices s i \<longrightarrow> single_snap_pres' instant_indices s (Suc i)"
+  
+
+thm seq_apply''_pre_post_induct_Cons_1_pre_weakened_post_strengthened[OF instant_app_fun_wf, where P = "single_snap_pres' instant_indices" and Q = "single_snap_posts' instant_indices"]
+
+lemma "single_snap_pres' (last ((L, v, c) # seq_apply'' instant_apps (L, v, c))) (length instant_apps)"
+proof (rule seq_apply''_pre_post_induct_Cons_1_pre_weakened[where P = single_snap_pres' and Q = single_snap_posts'])
+  show "\<forall>f\<in>set instant_apps. \<forall>x. f x \<noteq> []" unfolding instant_apps_def apply_snap_action_def by fastforce
+qed
 (* The rule depends on the assumption that the list is not empty. We need a more general rule that 
 work with empty lists and ext_seq' *)
 term instant_actions_before
