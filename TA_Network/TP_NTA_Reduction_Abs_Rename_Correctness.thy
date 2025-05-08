@@ -2006,9 +2006,13 @@ qed
 
 subsubsection \<open>Rules for constructing a run\<close>
 
-lemma steps_prepend: "abs_renum.urge_bisim.A.steps (y#ys) \<Longrightarrow> abs_renum.urge_bisim.A.steps [x, y] \<Longrightarrow> abs_renum.urge_bisim.A.steps (x#y#ys)"
+lemma steps_prepend: "abs_renum.urge_bisim.A.steps (y#ys) \<Longrightarrow> 
+  abs_renum.urge_bisim.A.steps [x, y] \<Longrightarrow> 
+  abs_renum.urge_bisim.A.steps (x#y#ys)"
   using abs_renum.urge_bisim.A.steps_append'[where as = "[x, y]" and bs = "y#ys"]
   by auto
+
+find_theorems name: "abs_renum.urge_bisim.A.steps_append"
 
 lemma steps_extend: "abs_renum.urge_bisim.A.steps xs 
   \<Longrightarrow> abs_renum.urge_bisim.A.steps (last xs # seq_apply fs (last xs)) 
@@ -2036,7 +2040,8 @@ proof -
     have 1: "abs_renum.urge_bisim.A.steps (take n xs @ [xs ! n])" using Suc by simp
     have 2: "abs_renum.urge_bisim.A.steps ([xs ! n, xs ! Suc n])" using assms Suc by simp
     
-    have "abs_renum.urge_bisim.A.steps (take n xs @ [xs ! n] @ [xs ! Suc n])" using abs_renum.urge_bisim.A.steps_append[OF 1 2] by force
+    have "abs_renum.urge_bisim.A.steps (take n xs @ [xs ! n] @ [xs ! Suc n])" using 
+        abs_renum.urge_bisim.A.steps_append[OF 1 2] by force
     thus ?case 
         apply (subst take_Suc_conv_app_nth)
       using Suc by auto
@@ -2046,7 +2051,8 @@ proof -
 qed
 
 lemma seq_apply_steps_induct:
-  assumes "\<forall>i. Suc i < length (s#seq_apply fs s) \<longrightarrow> abs_renum.urge_bisim.A.steps [(s#seq_apply fs s) ! i, (s#seq_apply fs s) ! Suc i]"
+  assumes "\<forall>i. Suc i < length (s#seq_apply fs s) \<longrightarrow> 
+abs_renum.urge_bisim.A.steps [(s#seq_apply fs s) ! i, (s#seq_apply fs s) ! Suc i]"
   shows "abs_renum.urge_bisim.A.steps (s # seq_apply fs s)" using assms steps_extend_induct by blast
 
 

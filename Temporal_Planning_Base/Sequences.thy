@@ -26,6 +26,14 @@ lemma seq_apply_nth:
   using assms apply simp
   by auto
 
+lemma seq_apply_nth_0:
+  assumes "0 < length fs"
+  shows "seq_apply fs x ! 0 = (fs ! 0) x"
+  apply (subst seq_apply_nth[OF assms])
+  apply (subst take_Suc_conv_app_nth[OF assms])
+  by simp
+
+
 lemma seq_apply_nth_Suc:
   assumes "Suc i < length fs"
   shows "(seq_apply fs s) ! (Suc i) = (fs ! (Suc i)) ((seq_apply fs s) ! i)"
@@ -77,6 +85,46 @@ lemma last_seq_apply:
   using assms apply simp
   apply (subst take_all)
   by simp+
+
+lemma seq_apply_take:
+  "take i (seq_apply fs x) = seq_apply (take i fs) x"
+  unfolding seq_apply_def
+  apply (subst take_map)
+  apply (cases "i \<le> length fs")
+  apply (subst take_upt, simp)
+  apply (subst length_take)
+  apply (subst min_absorb2, simp)
+  by auto
+
+lemma seq_apply_take_last:
+  assumes "i < length fs"
+  shows "last (take (Suc i) (seq_apply fs x)) = seq_apply fs x ! i"
+  apply (subst take_Suc_conv_app_nth)
+  using assms apply simp
+  apply (subst last_appendR)
+  by simp+
+
+lemma take_Suc_not_Nil:
+  assumes "xs \<noteq> []"
+  shows "take (Suc n) xs \<noteq> []"
+  using assms by simp
+
+lemma seq_apply_Cons_take_last:
+  assumes "i \<le> length fs"
+  shows "last (take (Suc i) (x#(seq_apply fs x))) = (x#seq_apply fs x) ! i"
+  apply (cases i)
+   apply simp
+  subgoal 
+    apply (subst take_Suc_Cons)
+    apply (rule ssubst[of i], assumption)
+    apply (subst nth_Cons_Suc)
+    apply (subst last_ConsR)
+    apply (rule take_Suc_not_Nil)
+     apply (rule seq_apply_not_Nil)
+    using assms apply fastforce
+    apply (rule seq_apply_take_last)
+    using assms by simp
+  done
 
 
 (* Precondition: the 0th state x must satisfy P *)
@@ -136,19 +184,15 @@ proof -
   thus ?thesis
     apply (subst (asm) seq_apply_Cons_nth)
     using assms apply simp
-    apply (subst last_conv_nth)
-     apply simp
-    apply (subst seq_apply_Cons_nth)
-    using assms apply simp
-    apply (subst take_all)
-     apply simp
+    apply (subst last_conv_nth, simp)
+    apply (subst seq_apply_Cons_nth, simp add: assms)
+    apply (subst take_all, simp)
     apply (subst (asm) take_all)
     by simp+
 qed
- 
+
 lemma seq_apply_pre_post_induct_weaken_pre_strengthen_post:
-  assumes i: "i \<le> length fs"
-      and Rx0: "R x"
+  assumes Rx0: "R x"
       and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
       and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
       and RS0: "\<And>x. 0 = length fs \<Longrightarrow> R x \<Longrightarrow> S x"
@@ -160,32 +204,381 @@ lemma seq_apply_pre_post_induct_weaken_pre_strengthen_post:
     using RS0 Rx0 by simp
   subgoal for f fs'
     apply (rule QSl)
-    apply (rule seq_apply_pre_post_induct_length_post)
-     apply simp
-    apply (rule RP0)
-     apply simp
+    apply (rule seq_apply_pre_post_induct_length_post, simp)
+    apply (rule RP0, simp)
     by (rule Rx0)
   done
 
+lemma seq_apply_take_induct_list_prop_take:
+  assumes base: "\<And>x. LP [x]"
+      and step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
+      and Rx0: "R x"
+      and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and r: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> LP [s, (fs ! i) s]"
+      and i: "0 < i" "i \<le> length fs + 1"
+    shows "LP (take i (x#seq_apply fs x))"
+proof -
+  { fix j
+    assume "j \<le> length fs"
+    hence "LP (take (Suc j) (x # seq_apply fs x))"
+      apply (induction j)
+      subgoal apply (subst take_Suc_Cons) 
+        apply (subst take_0)
+        by (rule base)
+      subgoal for j'
+        apply (subst take_Suc_conv_app_nth)
+        apply simp
+        apply (subst seq_apply_Cons_nth_Suc)
+        apply simp
+        apply (rule step)
+         apply simp
+        apply (subst seq_apply_Cons_take_last)
+         apply simp
+        apply (rule r)
+          apply simp
+        using seq_apply_pre_post_induct_steps_pre Rx0 RP0 by fastforce
+      done
+  } note j = this
+  show ?thesis
+  apply (cases i)
+    using i apply simp
+    subgoal for j
+      using j i by simp
+    done
+qed
+
+(* Later used to instantiate the induction principle for steps *)
+lemma seq_apply_take_induct_list_prop:
+  assumes base: "\<And>x. LP [x]"
+      and step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
+      and Rx0: "R x"
+      and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and ind_step: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> LP [s, (fs ! i) s]"
+    shows "LP (x#seq_apply fs x)"
+  apply (subst take_all[symmetric])
+   apply (rule order.refl)
+  apply (rule seq_apply_take_induct_list_prop_take)
+  using assms by simp+
+
 end
 
-context
-  fixes fs::"('a \<Rightarrow> 'a list) list"
-  assumes f_wf: "\<And>f x. f \<in> set fs \<Longrightarrow> f x \<noteq> []"
-begin
-thm ext_seq'_def
+lemma ext_seq_last:
+  assumes f_wf: "\<And>s. f s \<noteq> []"
+  shows "last (ext_seq f xs) = last (f (last xs))"
+  unfolding ext_seq_def
+  apply (subst last_append)
+  using f_wf by simp
 
-end
+lemma ext_seq_not_Nil:
+  "xs \<noteq> [] \<Longrightarrow> ext_seq f xs \<noteq> []"
+  "f (last xs) \<noteq> [] \<Longrightarrow> ext_seq f xs \<noteq> []"
+  unfolding ext_seq_def by simp+
+
+lemma ext_seq'_Cons:
+  "ext_seq' (f#fs) xs = ext_seq' fs (ext_seq f xs)"
+  unfolding ext_seq'_def
+  by simp
+
+lemma ext_seq'_with_Nil:
+  "ext_seq' [] xs = xs"
+  "fs = [] \<Longrightarrow> ext_seq' fs xs = xs"
+  unfolding ext_seq'_def by simp+
+
+lemma ext_seq'_take_0:
+  "ext_seq' (take 0 fs) xs = xs"
+  using ext_seq'_with_Nil by simp
+
+lemma ext_seq'_not_Nil:
+  assumes xs_not_Nil: "xs \<noteq> []"
+    shows "ext_seq' fs xs \<noteq> []"
+  using assms
+  apply (induction fs arbitrary: xs)
+   apply (subst ext_seq'_with_Nil)
+  apply simp
+  subgoal for f' fs' xs
+    apply (subst ext_seq'_Cons)
+    using ext_seq_not_Nil(1) by auto
+  done
+
+lemma ext_seq'_take_Suc:
+  assumes i: "i < length fs"
+  shows "ext_seq' (take (Suc i) fs) xs = ext_seq (fs ! i) (ext_seq' (take i fs) xs)"
+  unfolding ext_seq'_def
+  using assms 
+  apply (subst take_Suc_conv_app_nth[OF i])
+  by simp
+
+lemma tl_ext_seq'_single:
+  "tl (ext_seq' [] [x]) = []"
+  apply (subst ext_seq'_with_Nil)
+  by simp
+
+lemma tl_fold_ext_seq_Nil:
+  "tl (fold ext_seq [] xs) = tl xs" 
+  "fs = [] \<Longrightarrow> tl (fold ext_seq fs xs) = tl xs"
+  by simp+
+
+lemma tl_ext_seq_not_Nil:
+  "xs \<noteq> [] \<Longrightarrow> tl (ext_seq f xs) = tl xs @ (f (last xs))"
+  unfolding ext_seq_def by simp
+
+lemma ext_seq_conv_last:
+  assumes "xs \<noteq> []"
+  shows "ext_seq f xs = xs @ tl (ext_seq f [last xs])"
+  apply (subst ext_seq_def)+
+  by simp
+
+lemma ext_seq_last_of_last:
+  "last (ext_seq f xs) = last (ext_seq f [last xs])"
+  unfolding ext_seq_def
+  by simp
+
+lemma ext_seq_fold_Cons:
+  "fold ext_seq (f#fs) xs = ext_seq f xs @ tl (fold ext_seq fs [last (ext_seq f xs)])"
+proof (induction fs arbitrary: f xs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons f' fs')
+  show ?case 
+    apply (subst fold_Cons)
+    apply (subst comp_apply)
+    apply (subst Cons.IH)
+    apply (subst ext_seq_def)
+    apply (subst Cons.IH)
+    apply (subst (6) ext_seq_def)
+    apply (subst append.simps)+
+    apply (subst list.sel)
+    apply (subst last_ConsL)
+     apply simp
+    apply (subst ext_seq_last_of_last[symmetric])
+    by simp
+qed
+
+ 
+lemma ext_seq'_append:
+  "ext_seq' (fs @ gs) xs = ext_seq' gs (ext_seq' fs xs)"
+  unfolding ext_seq'_def by simp
+
+lemma ext_seq'_as_seq_apply':
+  "ext_seq' fs xs = xs @ seq_apply' fs (last xs)"
+  unfolding seq_apply'_def ext_seq'_def
+proof (induction fs arbitrary: xs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons f fs)
+  show ?case 
+    apply (subst fold_Cons)
+    apply (subst comp_def)
+    apply (subst Cons.IH)
+    apply (subst ext_seq_fold_Cons)
+    apply (subst tl_append2)
+    using ext_seq_not_Nil apply blast
+    apply (subst tl_ext_seq_not_Nil)
+     apply simp
+    apply (subst list.sel)
+    apply (subst ext_seq_last_of_last[symmetric])
+    apply (subst ext_seq_def)
+    by simp
+qed
+
+lemma tl_fold_ext_seq:
+  assumes "xs \<noteq> []"
+  shows "tl (fold ext_seq fs (x # xs)) = fold ext_seq fs (xs)"
+  using assms
+proof (induction fs arbitrary: xs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons f fs xs)
+  then show ?case 
+    apply (subst fold_Cons)
+    apply (subst comp_def)
+    apply (subst ext_seq_def)
+    apply (subst append.simps)
+    apply (subst Cons.IH)
+    apply blast
+    apply (subst fold_Cons, subst comp_def)
+    apply (subst ext_seq_def)
+    by simp
+qed
+
+
+lemma seq_apply'_as_ext_seq':
+  assumes "f x \<noteq> []"
+  shows "seq_apply' (f#fs) x = ext_seq' fs (f x)"
+  unfolding ext_seq'_def seq_apply'_def
+  apply (subst fold_Cons)
+  apply (subst comp_def)
+  apply (subst ext_seq_def)
+  apply (subst append.simps)+
+  apply (subst last_ConsL)
+   apply simp
+  apply (subst tl_fold_ext_seq[OF assms])
+  by blast
+
+lemma seq_apply'_not_Nil:
+  assumes "\<And>f s. f \<in> set fs \<Longrightarrow> f s \<noteq> []"
+    and "0 < length fs"
+    shows "seq_apply' fs x \<noteq> []"
+  using assms
+  apply (induction fs)
+   apply simp
+  subgoal for f fs
+    apply (subst seq_apply'_as_ext_seq')
+     apply simp
+    using ext_seq'_not_Nil
+    by auto
+  done
 
 context 
   fixes fs::"('a \<Rightarrow> 'a list) list"
       and P Q::"nat \<Rightarrow>'a \<Rightarrow> bool"
       and R::"'a \<Rightarrow> bool"
       and S::"'a \<Rightarrow> bool"
-  assumes f_wf: "\<forall>f \<in> set fs. \<forall>x. f x \<noteq> []"
-      and PQ: "\<forall>i < length fs. \<forall>s. P i s \<longrightarrow> (Q i (last ((fs ! i) s)))"
-      and QP: "\<forall>i < length fs - 1. \<forall>s. Q i s\<longrightarrow> P (Suc i) s"
+  assumes f_wf: "\<And>f x. f \<in> set fs \<Longrightarrow> f x \<noteq> []"
+      and PQ: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> (Q i (last ((fs ! i) s)))"
+      and QP: "\<And>i s. i < length fs - 1 \<Longrightarrow> Q i s \<Longrightarrow> P (Suc i) s"
 begin
 
+lemma ext_seq'_pre_post_induct_steps_pre:
+  assumes i: "i < length fs"
+      and Px0: "P 0 (last xs)"
+    shows "P i (last (ext_seq' (take i fs) xs))"
+  using i
+proof (induction i)
+  case 0
+  then show ?case apply (subst ext_seq'_take_0) by (rule Px0)
+next
+  case (Suc i)
+  have i: "i < length fs - 1" using Suc by linarith
+  show ?case 
+    apply (subst ext_seq'_take_Suc)
+    using i apply simp
+    apply (rule QP)
+    using i apply simp
+    apply (subst ext_seq_last)
+    using i f_wf apply simp
+    apply (rule PQ)
+    using i apply simp
+    using Suc by linarith
+qed
+
+lemma ext_seq'_pre_post_induct_steps_post:
+  assumes i: "i < length fs"
+      and Px0: "P 0 (last xs)"
+    shows "Q i (last (ext_seq (fs ! i) (ext_seq' (take i fs) xs)))"
+  apply (subst ext_seq_last)
+  using i f_wf apply simp
+  apply (rule PQ[OF i])
+  by (rule ext_seq'_pre_post_induct_steps_pre[OF assms])
+
+lemma ext_seq'_pre_post_induct_length_post:
+  assumes l: "0 < length fs"
+      and Px0: "P 0 (last xs)"
+    shows "Q (length fs - 1) (last (ext_seq' fs xs))"
+  apply (subst (2) take_all[symmetric, where n = "Suc (length fs - 1)"])
+  using l apply simp
+  apply (subst ext_seq'_take_Suc)
+  using l apply simp
+  apply (rule ext_seq'_pre_post_induct_steps_post)
+  using assms
+  by simp+
+
+lemma ext_seq'_pre_post_induct_weaken_pre_strengthen_post:
+  assumes Rx0: "R (last xs)"
+      and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
+      and RS0: "\<And>x. 0 = length fs \<Longrightarrow> R x \<Longrightarrow> S x"
+    shows "S (last (ext_seq' fs xs))"
+  apply (cases fs)
+  subgoal
+    apply (rule ssubst[of fs], assumption)
+    apply (subst ext_seq'_with_Nil)
+    apply (rule RS0)
+     apply simp
+    by (rule Rx0)
+  subgoal for f fs'
+    apply (rule QSl)
+    apply (rule ext_seq'_pre_post_induct_length_post)
+     apply simp
+    apply (rule RP0)
+     apply simp
+    by (rule Rx0)
+  done
+
+lemma ext_seq'_take_induct_list_prop:
+  assumes step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
+      and LPxs: "LP xs"
+      and Rx0: "R (last xs)"
+      and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and r: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> LP (s#(fs ! i) s)"
+      and i: "i \<le> length fs"
+    shows "LP (ext_seq' (take i fs) xs)"
+proof -
+  { assume "0 < length fs" "i \<le> length fs"
+    hence "LP (ext_seq' (take i fs) xs)"
+      apply (induction i)
+       apply (subst ext_seq'_take_0)
+       apply (rule LPxs)
+      subgoal for i'
+        apply (subst ext_seq'_take_Suc)
+         apply simp
+        apply (subst ext_seq_def)
+        apply (rule step)
+         apply simp
+        apply (rule r)
+         apply simp
+        apply (rule ext_seq'_pre_post_induct_steps_pre)
+         apply simp
+        apply (rule RP0)
+         apply simp
+        by (rule Rx0)
+      done
+  } note not_Nil = this
+
+  show ?thesis
+  proof (cases "length fs")
+    case 0
+    hence i: "i = 0" using i by simp
+    show ?thesis 
+      apply (subst i) 
+      apply (subst ext_seq'_take_0)
+      by (rule LPxs)
+  next
+    case (Suc nat)
+    then show ?thesis using i not_Nil by simp
+  qed
+qed
+
+lemma ext_seq'_induct_list_prop:
+  assumes step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
+      and LPxs: "LP xs"
+      and Rx0: "R (last xs)"
+      and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and r: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> LP (s#(fs ! i) s)"
+    shows "LP (ext_seq' fs xs)"
+  apply (subst take_all[symmetric])
+   apply (rule order.refl)
+  apply (rule ext_seq'_take_induct_list_prop)
+  using assms by simp+
+
+lemma seq_apply'_pre_post_induct_weaken_pre_strengthen_post:
+    assumes Rx0: "R x"
+      and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
+      and RS0: "\<And>x. 0 = length fs \<Longrightarrow> R x \<Longrightarrow> S x"
+      and l: "0 < length fs"
+    shows "S (last (seq_apply' fs x))"
+  apply (subst last_ConsR[symmetric, of _ x])
+   apply (subst seq_apply'_not_Nil)
+  using f_wf apply simp
+  using l apply simp
+   apply simp
+  apply (subst ext_seq'_as_seq_apply'[symmetric, of "[x]", simplified])
+  apply (rule ext_seq'_pre_post_induct_weaken_pre_strengthen_post)
+  using assms by simp+
+  
 end
 end
