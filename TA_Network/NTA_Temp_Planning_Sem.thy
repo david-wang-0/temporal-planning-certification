@@ -87,7 +87,7 @@ definition "pap \<equiv> plan_actions_in_problem \<pi> actions"
 definition "dur_valid \<equiv> durations_valid \<pi> lower upper"
 
 definition "valid_state_seq \<equiv> valid_state_sequence \<pi> at_start at_end over_all pre adds dels"
-
+                                        
 definition "invariant_sequence = plan_inv_seq \<pi> over_all"
 
 definition "mutex_snap \<equiv> mutex_snap_action pre adds dels"
@@ -96,7 +96,7 @@ definition "mutex_valid_happ_seq = nm_happ_seq pre adds dels \<epsilon> happ_seq
 
 definition "dur_bounds_sat = satisfies_duration_bounds lower upper"
 
-definition "app_effs \<equiv> apply_effects adds dels"
+definition "app_effs S M \<equiv> apply_effects adds dels M S"
 
 definition "inv_seq \<equiv> plan_inv_seq \<pi> over_all"
 
@@ -2786,7 +2786,7 @@ subsection \<open>Propositional states, updates, and commutativity\<close>
 lemma prop_state_upd_combine_if:                        
   assumes "\<And>a b. a \<in> h \<Longrightarrow> b \<in> h \<Longrightarrow> a \<noteq> b \<Longrightarrow> \<not> mutex_snap a b"
       and "h1 \<union> h2 = h"
-  shows "app_effs (app_effs M h1) h2 = app_effs M h"
+  shows "(app_effs h2 o app_effs h1) M  = app_effs h M"
 proof -
   from assms
   have ab_not_int: "\<And>a b. a \<in> h \<Longrightarrow> b \<in> h \<Longrightarrow> a \<noteq> b \<Longrightarrow> adds a \<inter> dels b = {}" unfolding mutex_snap_def mutex_snap_action_def by simp
@@ -2816,12 +2816,12 @@ proof -
     thus ?thesis by blast
   qed
 
-  have "app_effs (app_effs M h1) h2 = M - \<Union> (dels ` h1) \<union> \<Union> (adds ` h1) - \<Union> (dels ` h2) \<union> \<Union> (adds ` h2)" unfolding app_effs_def apply_effects_def by blast
+  have "app_effs h2 (app_effs h1 M) = M - \<Union> (dels ` h1) \<union> \<Union> (adds ` h1) - \<Union> (dels ` h2) \<union> \<Union> (adds ` h2)" unfolding app_effs_def apply_effects_def by blast
   also have "... = M - \<Union> (dels ` h1) \<union> \<Union> (adds ` h1) - (\<Union> (dels ` h2) - \<Union> (adds ` h2)) \<union> \<Union> (adds ` h2)" by blast
   also have "... = M - \<Union> (dels ` h1) - (\<Union> (dels ` h2) - \<Union> (adds ` h2)) \<union> \<Union> (adds ` h1) \<union> \<Union> (adds ` h2)" using not_int by blast
   also have "... = M - (\<Union> (dels ` h1) \<union> \<Union> (dels ` h2)) \<union> \<Union> (adds ` h1) \<union> \<Union> (adds ` h2)" by blast
   also have "... = M - \<Union> (dels ` h) \<union> \<Union> (adds ` h)" using assms(2) by blast
-  finally show ?thesis unfolding app_effs_def apply_effects_def by blast
+  finally show ?thesis unfolding app_effs_def apply_effects_def comp_def by simp
 qed
 
 lemma mutex_pre_app: 
@@ -2834,7 +2834,7 @@ lemma mutex_pre_app:
 
 lemma happ_combine:
   assumes "h1 \<union> h2 \<subseteq> happ_at happ_seq t"
-  shows "app_effs (app_effs M h1) h2 = app_effs M (h1 \<union> h2)"
+  shows "(app_effs h2 o app_effs h1) M = app_effs (h1 \<union> h2) M"
   apply (rule prop_state_upd_combine_if)
   using nm assms unfolding mutex_valid_happ_seq_def nm_happ_seq_def
   unfolding mutex_snap_def
@@ -2891,6 +2891,18 @@ lemma happ_at_is_union_of_starting_ending_instant:
         done
       apply (elim UnE)
     unfolding instant_snaps_at_def instant_actions_at_def starting_snaps_at_def starting_actions_at_def ending_snaps_at_def ending_actions_at_def by auto
+
+lemma "(app_effs (starting_snaps_at t) o app_effs (instant_snaps_at t)) M = app_effs (starting_snaps_at t \<union> instant_snaps_at t) M"
+  sorry
+
+lemma "(app_effs (ending_snaps_at t) o app_effs (starting_snaps_at t) o app_effs (instant_snaps_at t)) M = app_effs (happ_at happ_seq t) M"
+  sorry
+
+definition "inst_upd_state i \<equiv> app_effs (instant_snaps_at (time_index \<pi> i)) (plan_state_seq i)"
+
+definition "inst_start_upd_state i \<equiv> app_effs (instant_snaps_at (time_index \<pi> i) \<union> starting_snaps_at (time_index \<pi> i)) (plan_state_seq i)"
+
+definition "upd_state i \<equiv> app_effs (happ_at happ_seq (time_index \<pi> i)) (plan_state_seq i)"
 
 end                       
 end
