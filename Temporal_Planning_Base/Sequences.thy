@@ -73,7 +73,7 @@ lemma seq_apply_not_Nil:
   using assms length_seq_apply 
   by simp
 
-lemma seq_apply_Nil: "seq_apply [] x = []"
+lemma seq_apply_Nil: "fs = [] \<Longrightarrow> seq_apply fs x = []"
   unfolding seq_apply_def by auto
 
 lemma last_seq_apply: 
@@ -126,16 +126,6 @@ lemma seq_apply_Cons_take_last:
     using assms by simp
   done
 
-
-(* Precondition: the 0th state x must satisfy P *)
-(* The first state Q (fs ! 0) x must satisfy Q 0 *)
-(* Assuming the length of fs is 0, this is the final state *)
-(* Assuming the length of fs is greater than 0, this state satisfies P 1 *)
-(* the ith state (x#seq_apply fs x) ! i assuming i \<le> length fs*)
-(* Does the post-condition only have to hold when Suc i < length fs? Yes. We do not want 
-a vacuous post-condition to hold *)
-(* The pre to post condition. The final state is (fs ! (length fs - 1)) s 
-  For this, we want *)
 context
   fixes fs::"('a \<Rightarrow> 'a) list"
     and P Q::"nat \<Rightarrow>'a \<Rightarrow> bool"
@@ -201,7 +191,7 @@ lemma seq_apply_pre_post_induct_weaken_pre_strengthen_post:
   subgoal 
     apply (rule ssubst[of fs], assumption)
     apply (subst seq_apply_Nil)
-    using RS0 Rx0 by simp
+    using RS0 Rx0 by simp+
   subgoal for f fs'
     apply (rule QSl)
     apply (rule seq_apply_pre_post_induct_length_post, simp)
@@ -209,7 +199,7 @@ lemma seq_apply_pre_post_induct_weaken_pre_strengthen_post:
     by (rule Rx0)
   done
 
-lemma seq_apply_take_induct_list_prop_take:
+lemma seq_apply_take_induct_list_prop:
   assumes base: "\<And>x. LP [x]"
       and step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
       and Rx0: "R x"
@@ -248,7 +238,7 @@ proof -
 qed
 
 (* Later used to instantiate the induction principle for steps *)
-lemma seq_apply_take_induct_list_prop:
+lemma seq_apply_induct_list_prop:
   assumes base: "\<And>x. LP [x]"
       and step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
       and Rx0: "R x"
@@ -257,9 +247,22 @@ lemma seq_apply_take_induct_list_prop:
     shows "LP (x#seq_apply fs x)"
   apply (subst take_all[symmetric])
    apply (rule order.refl)
-  apply (rule seq_apply_take_induct_list_prop_take)
+  apply (rule seq_apply_take_induct_list_prop)
   using assms by simp+
 
+lemma ext_seq_induct_list_prop:
+  assumes base: "\<And>x. LP [x]"
+      and step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
+      and LPxs: "LP xs"
+      and Rx0: "R (last xs)"
+      and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and ind_step: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> LP [s, (fs ! i) s]"
+    shows "LP (ext_seq (seq_apply fs) xs)"
+  unfolding ext_seq_def
+  apply (rule step)
+   apply (rule LPxs)
+  apply (rule seq_apply_induct_list_prop)
+  using assms by simp+
 end
 
 lemma ext_seq_last:
@@ -579,6 +582,17 @@ lemma seq_apply'_pre_post_induct_weaken_pre_strengthen_post:
   apply (subst ext_seq'_as_seq_apply'[symmetric, of "[x]", simplified])
   apply (rule ext_seq'_pre_post_induct_weaken_pre_strengthen_post)
   using assms by simp+
+
+lemma seq_apply'_induct_list_prop:
+  assumes base: "\<And>x. LP [x]"
+      and step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
+      and Rx0: "R x"
+      and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and r: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> LP (s#(fs ! i) s)"
+    shows "LP (x#seq_apply' fs x)"
+  apply (subst ext_seq'_as_seq_apply'[symmetric, of "[x]", simplified])
+  apply (rule ext_seq'_induct_list_prop)
+  using assms by simp_all
   
 end
 end

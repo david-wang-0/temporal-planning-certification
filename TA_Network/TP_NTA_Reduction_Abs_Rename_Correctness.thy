@@ -2006,55 +2006,17 @@ qed
 
 subsubsection \<open>Rules for constructing a run\<close>
 
-lemma steps_prepend: "abs_renum.urge_bisim.A.steps (y#ys) \<Longrightarrow> 
-  abs_renum.urge_bisim.A.steps [x, y] \<Longrightarrow> 
-  abs_renum.urge_bisim.A.steps (x#y#ys)"
-  using abs_renum.urge_bisim.A.steps_append'[where as = "[x, y]" and bs = "y#ys"]
-  by auto
 
-find_theorems name: "abs_renum.urge_bisim.A.steps_append"
+lemma steps_extend: 
+  "abs_renum.urge_bisim.A.steps xs 
+  \<Longrightarrow> abs_renum.urge_bisim.A.steps (last xs # ys) 
+  \<Longrightarrow> abs_renum.urge_bisim.A.steps (xs @ ys)"
+  apply (rule abs_renum.urge_bisim.A.steps_append'[where as = xs and bs = "last xs # ys"])
+  by simp+
 
-lemma steps_extend: "abs_renum.urge_bisim.A.steps xs 
-  \<Longrightarrow> abs_renum.urge_bisim.A.steps (last xs # seq_apply fs (last xs)) 
-  \<Longrightarrow> abs_renum.urge_bisim.A.steps (ext_seq (seq_apply fs) xs)"
-  apply (frule abs_renum.urge_bisim.A.steps_append'[where bs = "last xs # seq_apply fs (last xs)"])
-     apply simp
-    apply simp
-   apply (subst List.tl_def)
-   apply simp
-  apply (subst ext_seq_def)
-  by blast
-
-lemma steps_extend_induct:
-  assumes "\<forall>i. Suc i < length xs \<longrightarrow> abs_renum.urge_bisim.A.steps [xs!i, xs!Suc i]"
-      and "0 < length xs"
-    shows "abs_renum.urge_bisim.A.steps xs"
-proof -
-  have "abs_renum.urge_bisim.A.steps (take n xs @ [xs ! n])" if "n < length xs" "0 < length xs" for n
-    using that
-  proof (induction n)
-    case 0
-    then show ?case by auto
-  next
-    case (Suc n)
-    have 1: "abs_renum.urge_bisim.A.steps (take n xs @ [xs ! n])" using Suc by simp
-    have 2: "abs_renum.urge_bisim.A.steps ([xs ! n, xs ! Suc n])" using assms Suc by simp
-    
-    have "abs_renum.urge_bisim.A.steps (take n xs @ [xs ! n] @ [xs ! Suc n])" using 
-        abs_renum.urge_bisim.A.steps_append[OF 1 2] by force
-    thus ?case 
-        apply (subst take_Suc_conv_app_nth)
-      using Suc by auto
-  qed
-  from this[of "length xs - 1", OF _ assms(2)]
-  show ?thesis using take_Suc_conv_app_nth[of "length xs - 1" xs] take_all[of xs "length xs"] assms(2) by auto
-qed
-
-lemma seq_apply_steps_induct:
-  assumes "\<forall>i. Suc i < length (s#seq_apply fs s) \<longrightarrow> 
-abs_renum.urge_bisim.A.steps [(s#seq_apply fs s) ! i, (s#seq_apply fs s) ! Suc i]"
-  shows "abs_renum.urge_bisim.A.steps (s # seq_apply fs s)" using assms steps_extend_induct by blast
-
+lemmas seq_apply_steps_induct = seq_apply_induct_list_prop
+lemmas ext_seq'_steps_induct = ext_seq'_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ _ steps_extend, simplified]
+lemmas seq_apply'_steps_induct = seq_apply'_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ _ abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified]
 
 
 schematic_goal nth_auto_trans:
