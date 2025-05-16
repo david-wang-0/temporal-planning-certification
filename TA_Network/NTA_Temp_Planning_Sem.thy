@@ -465,8 +465,8 @@ between their end and start, excluding the actual timepoint. This exclusion is s
 by Abdulaziz and Koller. Their notion of \<^emph>\<open>invariants at\<close> is equivalent to our notion of \<^emph>\<open>invariants before\<close>.
 
 Semantically, "invariants at" are the invariants which must be satisfied by the state \<^emph>\<open>at\<close> a 
-timepoint. There are two significant states, namely the one that the snap-actions/happenings are applied to and the
-state that they have been applied to. The state \<^emph>\<open>at\<close> the timepoint is the former.
+timepoint. There are two significant states, namely the one that the snap-actions/happenings will be 
+applied to and the state that they have been applied to. The state \<^emph>\<open>at\<close> the timepoint is the former.
 
 Note, that there are more than two states, if snap-actions are applied sequentially. Snap-actions are 
 essentially applied sequentially, because there is no true concurrency in this formalisation. \<close>

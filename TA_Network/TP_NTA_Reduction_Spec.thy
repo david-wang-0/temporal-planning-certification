@@ -322,7 +322,7 @@ in
   (StartInstant a, bexp.true, guard, Sil (STR ''''), [], resets, EndInstant a)
 "
 
-(* To do!!!: The not-locked check should only apply to those deletions which are not immediately overwritten by additions *)
+(* The not-locked check should only apply to those deletions which are not immediately overwritten by additions *)
 definition end_edge_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
 "end_edge_spec a \<equiv> 
 let 
@@ -341,9 +341,7 @@ in
   (end_instant, check, [], Sil (STR ''''), (inc_var (-1) ActsActive) # del_upds @ add_upds, [], off)
 "
 
-(* To do: Make it optional to check invariants for some actions by adding another edge from starting to ending. *)
-  (* This reduction has a different definition of no self overlap. Ends can interfere.
-     Actions can also have a duration of 0, if this matters. *)
+
 definition action_to_automaton_spec::"'action \<Rightarrow> 
   'action location \<times>
     'action location list \<times>
@@ -376,7 +374,6 @@ let
 in 
   (init_loc, locs, committed_locs, urgent_locs, edges, invs)"
 
-(* To do: add the conditions on the planning state *)
 subsection \<open>Main automaton to initialise problem and check goal satisfactions\<close>
 definition main_auto_init_edge_spec::"'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
 "main_auto_init_edge_spec \<equiv>

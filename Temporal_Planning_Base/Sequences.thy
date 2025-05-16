@@ -135,6 +135,8 @@ context
       and QP: "\<And>i s. Suc i < length fs \<Longrightarrow> Q i s \<Longrightarrow> P (Suc i) s"
 begin
 
+(* Generalise even further to accommodate for delays *)
+
 (* The implications only hold when there are actual functions.
   Therefore, we need to first consider cases in which there are some functions *)
 lemma seq_apply_pre_post_induct_steps_pre:
