@@ -16,6 +16,8 @@ lemma length_seq_apply[simp]:
   apply (subst length_upt)
   by simp
 
+lemma seq_apply_Nil[simp]: "seq_apply [] xs = []" unfolding seq_apply_def by auto
+
 lemma seq_apply_nth:
   assumes "i < length fs"
   shows "(seq_apply fs x) ! i = fold id (take (Suc i) fs) x"
@@ -135,7 +137,7 @@ context
       and QP: "\<And>i s. Suc i < length fs \<Longrightarrow> Q i s \<Longrightarrow> P (Suc i) s"
 begin
 
-(* Generalise even further to accommodate for delays *)
+(* In progress: Consider how pre- and post-conditions work when there is a conditional delay *)
 
 (* The implications only hold when there are actual functions.
   Therefore, we need to first consider cases in which there are some functions *)
@@ -201,6 +203,20 @@ lemma seq_apply_pre_post_induct_weaken_pre_strengthen_post:
     by (rule Rx0)
   done
 
+lemma last_append_conv_last_Cons: "last (xs @ ys) = last ((last xs) # ys)"
+  by simp
+
+lemma ext_seq_pre_post_induct_weaken_pre_strengthen_post:
+  assumes Rx0: "R (last xs)"
+      and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
+      and RS0: "\<And>x. length fs = 0\<Longrightarrow> R x \<Longrightarrow> S x"
+    shows "S (last (ext_seq (seq_apply fs) xs))"
+  apply (subst ext_seq_def)
+  apply (subst last_append_conv_last_Cons)
+  apply (rule seq_apply_pre_post_induct_weaken_pre_strengthen_post)
+  using assms by simp+
+
 lemma seq_apply_take_induct_list_prop:
   assumes base: "\<And>x. LP [x]"
       and step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
@@ -265,6 +281,8 @@ lemma ext_seq_induct_list_prop:
    apply (rule LPxs)
   apply (rule seq_apply_induct_list_prop)
   using assms by simp+
+
+
 end
 
 lemma ext_seq_last:

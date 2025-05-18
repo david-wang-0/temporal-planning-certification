@@ -699,12 +699,13 @@ let
   start_indices = filter (is_starting_index t) act_indices;
   end_indices = filter (is_ending_index t) act_indices;
   both = filter (is_instant_index t) act_indices
-in 
-  enter_end_instants end_indices s
+in [s] 
+    |> ext_seq (enter_end_instants end_indices)
     |> ext_seq (enter_start_instants start_indices)
     |> ext_seq (apply_instant_actions both)
     |> ext_seq (leave_end_instants end_indices)
     |> ext_seq (leave_start_instants start_indices)
+    |> tl
 "
 
 definition delay::"
@@ -2003,6 +2004,21 @@ lemma steps_extend:
   apply (rule abs_renum.urge_bisim.A.steps_append'[where as = xs and bs = "last xs # ys"])
   by simp+
 
+lemma steps_replace_Cons_hd:
+  assumes "abs_renum.urge_bisim.A.steps [x, hd ys]"
+          "abs_renum.urge_bisim.A.steps (y # ys)"
+    shows "abs_renum.urge_bisim.A.steps (x # ys)"
+proof (cases ys)
+  case Nil
+  then show ?thesis using assms(1) by blast
+next
+  case (Cons a list)
+  hence 1: "abs_renum.urge_bisim.A.steps ys" using assms abs_renum.urge_bisim.A.steps_ConsD by blast
+  show ?thesis using abs_renum.urge_bisim.A.steps_append[OF assms(1) 1] Cons by simp
+qed
+    
+
+
 thm abs_renum.urge_bisim.A.steps_append'
 
 lemmas seq_apply_steps_induct = seq_apply_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified]
@@ -2010,8 +2026,6 @@ lemmas ext_seq_steps_induct = ext_seq_induct_list_prop[where LP = abs_renum.urge
 
 lemmas ext_seq'_steps_induct = ext_seq'_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ _ steps_extend, simplified]
 lemmas seq_apply'_steps_induct = seq_apply'_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ _ abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified]
-
-lemma seq_apply_delay_steps_induct: undefined sorry
 
 
 schematic_goal nth_auto_trans:
@@ -2447,13 +2461,15 @@ thm abs_renum.urge_bisim.A.steps.intros
 thm seq_apply_steps_induct
 thm seq_apply_pre_post_induct_weaken_pre_strengthen_post
 
+thm ext_seq_pre_post_induct_weaken_pre_strengthen_post
+
+
 term "(L, v, c) # (seq_apply (map enter_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) (L, v, c \<oplus> real_of_rat (get_delay i)))"
 
 lemma "i < length (htpl \<pi>) \<Longrightarrow> happening_pre_pre_delay i s \<Longrightarrow> abs_renum.urge_bisim.A.steps (s # (map delay_and_apply [0..<length (htpl \<pi>)] ! i) s)" 
   unfolding delay_and_apply_def Let_def 
   apply (subst nth_map)
    apply simp
-  apply (subst delay_def)
   apply (cases s)
   subgoal for L v c
     apply simp
@@ -2462,7 +2478,28 @@ lemma "i < length (htpl \<pi>) \<Longrightarrow> happening_pre_pre_delay i s \<L
     sorry
   sorry
 
+lemma "i < length (htpl \<pi>) \<Longrightarrow> happening_pre_pre_delay i s \<Longrightarrow> happening_post i (last ((map delay_and_apply [0..<length (htpl \<pi>)] ! i) s))"
+  unfolding delay_and_apply_def Let_def 
+  apply (subst nth_map)
+   apply simp
+  apply (cases s)
+  subgoal for L v c
+    apply simp
+    apply (subst apply_nth_happening_def)
+    unfolding Let_def enter_end_instants_def
+
+
+find_theorems name: "abs_renum.urge_bisim.A.steps*"
+
 thm seq_apply_steps_induct
+thm ext_seq_steps_induct
+
+(* delay and apply forces the delay on the first state *)
+lemma "abs_renum.urge_bisim.A.steps ((L, v, c) # apply_nth_happening i (L, v, c \<oplus> real_of_rat (get_delay i)))"
+  unfolding delay_and_apply_def Let_def
+  apply (subst apply_nth_happening_def) 
+  apply (subst Let_def)+
+  sorry
 
 definition "happening_pre_end_starts n Lvc \<equiv>
 let 
