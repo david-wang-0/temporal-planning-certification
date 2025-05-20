@@ -16,9 +16,14 @@ lemma length_seq_apply[simp]:
   apply (subst length_upt)
   by simp
 
-lemma seq_apply_Nil[simp]: "seq_apply [] xs = []" unfolding seq_apply_def by auto
+lemma length_ext_seq[simp]:
+  "length (ext_seq f xs) = length xs + length (f (last xs))"
+  unfolding ext_seq_def by simp
 
-lemma seq_apply_nth:
+lemma seq_apply_Nil[simp]: "seq_apply [] xs = []" 
+  "fs = [] \<Longrightarrow> seq_apply fs x = []" unfolding seq_apply_def by auto
+
+lemma seq_apply_nth_conv_fold:
   assumes "i < length fs"
   shows "(seq_apply fs x) ! i = fold id (take (Suc i) fs) x"
   unfolding seq_apply_def
@@ -31,7 +36,7 @@ lemma seq_apply_nth:
 lemma seq_apply_nth_0:
   assumes "0 < length fs"
   shows "seq_apply fs x ! 0 = (fs ! 0) x"
-  apply (subst seq_apply_nth[OF assms])
+  apply (subst seq_apply_nth_conv_fold[OF assms])
   apply (subst take_Suc_conv_app_nth[OF assms])
   by simp
 
@@ -39,9 +44,9 @@ lemma seq_apply_nth_0:
 lemma seq_apply_nth_Suc:
   assumes "Suc i < length fs"
   shows "(seq_apply fs s) ! (Suc i) = (fs ! (Suc i)) ((seq_apply fs s) ! i)"
-  apply (subst seq_apply_nth)
+  apply (subst seq_apply_nth_conv_fold)
   using assms apply simp
-  apply (subst seq_apply_nth)
+  apply (subst seq_apply_nth_conv_fold)
   using assms apply simp
   apply (subst take_Suc_conv_app_nth)
   using assms by auto
@@ -53,7 +58,7 @@ lemma seq_apply_Cons_nth:
    apply simp
   subgoal for i'
     apply (simp)
-    apply (subst seq_apply_nth)
+    apply (subst seq_apply_nth_conv_fold)
     using assms by simp+
   done   
 
@@ -63,27 +68,24 @@ lemma seq_apply_Cons_nth_Suc:
   apply (subst nth_Cons_Suc)
   apply (subst seq_apply_Cons_nth)
   using assms apply simp
-  apply (subst seq_apply_nth)
+  apply (subst seq_apply_nth_conv_fold)
   using assms apply simp
   apply (subst take_Suc_conv_app_nth[OF assms])
   by simp
 
-lemma seq_apply_not_Nil:
+lemma seq_apply_not_Nil[simp]:
   assumes "fs \<noteq> []"
   shows "seq_apply fs x \<noteq> []"
   apply (subst length_greater_0_conv[symmetric])
   using assms length_seq_apply 
   by simp
 
-lemma seq_apply_Nil: "fs = [] \<Longrightarrow> seq_apply fs x = []"
-  unfolding seq_apply_def by auto
-
 lemma last_seq_apply: 
   assumes "fs \<noteq> []"
   shows "last (seq_apply fs x) = fold id fs x"
   apply (subst last_conv_nth)
   using assms[THEN seq_apply_not_Nil] apply simp
-  apply (subst seq_apply_nth)
+  apply (subst seq_apply_nth_conv_fold)
   using assms apply simp
   apply (subst take_all)
   by simp+
@@ -104,6 +106,25 @@ lemma seq_apply_take_last:
   apply (subst take_Suc_conv_app_nth)
   using assms apply simp
   apply (subst last_appendR)
+  by simp+
+
+lemma seq_apply_take_last_conv_fold:
+  assumes "i < length fs"
+  shows "last (take (Suc i) (seq_apply fs x)) = fold id (take (Suc i) fs) x"
+  apply (subst seq_apply_take_last)
+  using assms apply simp
+  apply (subst seq_apply_nth_conv_fold[OF assms])
+  by auto
+
+lemma seq_apply_last_conv_fold:
+  assumes "0 < length fs"
+  shows "last (seq_apply fs x) = fold id fs x"
+  apply (subst take_all[symmetric, of fs "Suc (length fs - 1)"])
+   apply simp
+  apply (subst seq_apply_take[symmetric])
+  apply (subst seq_apply_take_last_conv_fold)
+  using assms apply simp
+  apply (subst take_all)
   by simp+
 
 lemma take_Suc_not_Nil:
@@ -127,6 +148,202 @@ lemma seq_apply_Cons_take_last:
     apply (rule seq_apply_take_last)
     using assms by simp
   done
+
+lemma seq_apply_take_Suc_Cons: 
+  assumes "i \<le> length fs" 
+  shows "take (Suc i) (seq_apply (f#fs) x) = f x # (take i (seq_apply fs (f x)))"
+proof -
+  have 1: "[Suc 1..<length (f # take i fs) + 1]  = map Suc [1..<length (take i fs) + 1]" 
+    apply (subst length_Cons)
+    apply (subst length_take)+
+    apply (subst min_absorb2[OF assms])+
+    apply (induction i) by simp+
+
+  have 2: "map (\<lambda>ia. fold (\<lambda>x. x) (take ia (f # take i fs)) x) [Suc 1..<length (f # take i fs) + 1] =
+    map (\<lambda>ia. fold (\<lambda>x. x) (take ia (take i fs)) (f x)) [1..<length (take i fs) + 1]" 
+    apply (subst 1)
+    apply (subst map_map)
+    apply (subst comp_def)
+    apply (subst take_Suc_Cons)
+    apply (subst fold_Cons)
+    apply (subst comp_def)
+    by (rule HOL.refl)
+
+  show ?thesis
+    apply (subst seq_apply_take)
+    apply (subst take_Suc_Cons)
+    apply (subst seq_apply_take)
+    unfolding seq_apply_def
+    apply (subst upt_conv_Cons)
+     apply simp
+    apply (subst list.map)
+    apply (subst One_nat_def)
+    apply (subst take_Suc_Cons)
+    apply (subst take_0)
+    apply (subst fold.simps)+
+    apply (subst id_def)+
+    apply (subst comp_def)
+    apply (subst 2)
+    by blast
+qed
+
+lemma seq_apply_1:
+  "seq_apply [f] x = [f x]"
+  unfolding seq_apply_def by simp
+
+lemma take_append_left:
+  "take (length xs) (xs @ ys) = xs"
+  by simp
+
+
+lemma seq_apply_append_1:
+  assumes "fs \<noteq> []"
+  shows "(seq_apply (fs @ [g']) x) = seq_apply fs x @ [g' (last (x#seq_apply fs x))]"
+  apply (cases fs)
+  using assms apply simp
+  subgoal for f' fs'
+    apply (subst take_all[symmetric, of "fs @ [g']" "Suc (length fs)"])
+    apply simp
+    apply (subst seq_apply_take[symmetric])
+    apply (subst take_Suc_conv_app_nth)
+     apply simp
+    apply (subst seq_apply_take)
+    apply (subst take_append_left)
+    apply (erule ssubst)
+    apply (subst seq_apply_nth_conv_fold)
+     apply simp
+    apply (subst take_Suc_conv_app_nth)
+     apply simp
+    apply (subst take_append_left)
+    apply (subst nth_append_length)
+    apply (subst last_ConsR)
+     apply simp
+    apply (subst seq_apply_last_conv_fold)
+    by simp+
+  done 
+   
+
+lemma seq_apply_Cons_append_1:
+  "x # (seq_apply (fs @ [g']) x) = x#seq_apply fs x @ [g' (last (x#seq_apply fs x))]"
+  apply (cases fs)
+   apply (erule ssubst)
+   apply (simp add: seq_apply_1)
+  using seq_apply_append_1
+  by fast
+
+lemma ext_seq_seq_apply_take_append:
+  assumes xs: "xs \<noteq> []"
+      and i: "i \<le> length gs"
+    shows "xs @ seq_apply (fs @ take i gs) (last xs) = (xs @ seq_apply fs (last xs)) @ take i (seq_apply gs (last (xs @ seq_apply fs (last xs))))" 
+  using assms
+proof (induction i arbitrary: fs xs gs)
+  case 0
+  then show ?case by simp
+next
+  case (Suc i)
+  obtain g' gs' where
+    gs: "gs = g'#gs'" using Suc by (cases gs; auto)
+
+  consider (n) "fs = []" | (s) "fs \<noteq> []" by blast
+  note c = this
+
+  have "xs @ seq_apply (fs @ take (Suc i) gs) (last xs) = xs @ seq_apply ((fs @ [g']) @ take i gs') (last xs)" using gs by auto
+  hence 1: "xs @ seq_apply (fs @ take (Suc i) gs) (last xs)= (xs @ seq_apply (fs @ [g']) (last xs)) @ take i (seq_apply gs' (last (xs @ seq_apply (fs @ [g']) (last xs))))" 
+    apply (subst (asm) Suc.IH) using gs Suc by auto
+  show ?case
+  proof (cases rule: c)
+    case n
+    show ?thesis
+      apply (subst 1)
+      unfolding gs
+      apply (subst seq_apply_take_Suc_Cons)
+      using gs Suc apply simp
+      unfolding n
+      by (simp add: seq_apply_1)
+  next
+    case s
+    show ?thesis 
+      apply (subst 1)
+      unfolding seq_apply_append_1[OF s]
+      apply (subst last_ConsR, simp add: s)+
+      apply (subst last_appendR, simp)+
+      apply (subst last_ConsL, simp) 
+      unfolding gs
+      apply (subst seq_apply_take_Suc_Cons)
+      using gs Suc apply simp
+      apply (subst last_appendR, simp add: s)+
+      by simp
+  qed 
+qed
+    
+
+
+lemma ext_seq_seq_apply_append_take: 
+  assumes xs: "xs \<noteq> []"
+      and i2: "i \<le> length xs + length (fs @ gs)"
+  shows "take i (ext_seq (seq_apply gs) (ext_seq (seq_apply fs) xs)) = take i (ext_seq (seq_apply (fs @ gs)) xs)"
+proof (cases "i \<le> length xs")
+  case i: True
+  show ?thesis unfolding ext_seq_def using i by simp
+next
+  case i: False
+  then show ?thesis 
+  proof (cases "i \<le> length xs + length fs")
+    case i1: True
+    from i i1
+    have i0: "i - (length xs + length fs) = 0" "i - length xs - length fs = 0" by simp+
+    
+    show ?thesis 
+      unfolding ext_seq_def
+      apply (subst take_append)
+      apply (subst length_append)
+      apply (subst length_seq_apply)
+      apply (subst (2) take_append)
+      apply (subst (2) seq_apply_take)
+      apply (subst (2) take_append)
+      apply (subst i0)+
+      apply (subst take0)+
+      apply (subst append_Nil2)+
+      apply (subst seq_apply_take[symmetric])
+      apply (subst take_append[symmetric])
+      by simp
+  next
+    case i1: False
+  
+    from i i1 i2
+    
+    show ?thesis 
+        unfolding ext_seq_def
+        apply (subst take_append)
+        apply (subst length_append)
+        apply (subst length_seq_apply)
+        apply (subst take_all)
+         apply simp
+        apply (subst take_append)
+        apply (subst (2) take_all)
+         apply simp
+        apply (subst (2) seq_apply_take)
+        apply (subst take_append)
+        apply (subst (2) take_all)
+         apply simp
+        apply (subst ext_seq_seq_apply_take_append)
+          apply simp
+        using xs apply simp
+         apply simp
+        by simp
+  qed
+qed
+
+lemma ext_seq_seq_apply_append_distrib:
+  assumes "xs \<noteq> []"
+  shows "(ext_seq (seq_apply gs) (ext_seq (seq_apply fs) xs)) = (ext_seq (seq_apply (fs @ gs)) xs)"
+  apply (subst take_all[symmetric, of "ext_seq (seq_apply gs) (ext_seq (seq_apply fs) xs)" "length xs + length fs + length gs"])
+  apply simp
+  apply (subst ext_seq_seq_apply_append_take)
+  using assms apply simp
+   apply simp
+  apply (subst take_all)
+  by simp+
 
 context
   fixes fs::"('a \<Rightarrow> 'a) list"

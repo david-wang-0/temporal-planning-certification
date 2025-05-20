@@ -2016,7 +2016,7 @@ next
   hence 1: "abs_renum.urge_bisim.A.steps ys" using assms abs_renum.urge_bisim.A.steps_ConsD by blast
   show ?thesis using abs_renum.urge_bisim.A.steps_append[OF assms(1) 1] Cons by simp
 qed
-    
+
 
 
 thm abs_renum.urge_bisim.A.steps_append'
@@ -2038,7 +2038,7 @@ schematic_goal nth_auto_trans:
   apply (subst nth_map)
   apply (rule assms)
   unfolding action_to_automaton_spec_def Let_def comp_def snd_conv trans_def automaton_of_def prod.case fst_conv list.set ..
-  
+
 
 schematic_goal nth_auto_trans':
   assumes "n < length actions"
@@ -2460,7 +2460,7 @@ thm abs_renum.urge_bisim.A.steps.intros
 (* The first function application is preceded by a delay *)
 thm seq_apply_steps_induct
 thm seq_apply_pre_post_induct_weaken_pre_strengthen_post
-
+                       
 thm ext_seq_pre_post_induct_weaken_pre_strengthen_post
 
 
@@ -2475,6 +2475,9 @@ lemma "i < length (htpl \<pi>) \<Longrightarrow> happening_pre_pre_delay i s \<L
     apply simp
     apply (subst apply_nth_happening_def)
     unfolding Let_def enter_end_instants_def
+    apply (rule steps_replace_Cons_hd)
+     defer
+    apply (subst list.collapse)
     sorry
   sorry
 
