@@ -2017,16 +2017,84 @@ next
   show ?thesis using abs_renum.urge_bisim.A.steps_append[OF assms(1) 1] Cons by simp
 qed
 
+thm abs_renum.urge_bisim.A.steps.intros
+
+lemma steps_delay_replace:
+  assumes "abs_renum.urge_bisim.A.steps (delay t x # xs)"
+      and t: "0 \<le> t"
+      and not_urgent: "(\<forall>p < length (fst (snd abs_renum.sem)). (fst x) ! p \<notin> urgent (fst (snd abs_renum.sem) ! p))"
+    shows "abs_renum.urge_bisim.A.steps (x # xs)"
+proof (cases rule: abs_renum.urge_bisim.A.steps.cases[OF assms(1)])
+  case 1
+  then show ?thesis by blast
+next
+  fix tx y ys
+  assume a: "delay t x # xs = tx # y # ys"
+    "(case tx of (L, s, u) \<Rightarrow> \<lambda>(L', s', u'). abs_renum.sem \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow> \<langle>L', s', u'\<rangle>) y"
+    "abs_renum.urge_bisim.A.steps (y # ys)"
+
+  have xs: "xs = y # ys" using a by simp
+
+  obtain Ly vy cy where
+    y: "y = (Ly, vy, cy)" by (cases y; auto)
+
+  obtain L v c where
+    x: "x = (L, v, c)" by (cases x; auto)
+
+  from a(1)
+  have tx: "tx = (L, v, c \<oplus> t)" unfolding delay_def map_prod_def x prod.case id_def by simp
+
+  from a(2)[simplified tx prod.case y, THEN step_u'_elims]
+  obtain L' v' c' a where
+    del: "abs_renum.sem \<turnstile> \<langle>L, v, c \<oplus> t\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>L', v', c'\<rangle>" 
+    and a: "a \<noteq> Simple_Network_Language.label.Del" "abs_renum.sem \<turnstile> \<langle>L', v', c'\<rangle> \<rightarrow>\<^bsub>a\<^esub> \<langle>Ly, vy, cy\<rangle>" by blast
+
+  obtain broad N B where
+    as: "abs_renum.sem = (broad, N, B)" by (cases abs_renum.sem) auto
+  obtain t' where
+    "c' = (c \<oplus> t) \<oplus> t'" 
+    and L': "L' = L"
+    and v': "v' = v"
+    and t': "0 \<le> t'"
+    and other: "\<forall>p<length N. c' \<turnstile> Simple_Network_Language.inv (N ! p) (L ! p)" 
+      "(\<exists>p<length N. L ! p \<in> urgent (N ! p)) \<longrightarrow> t' = 0" 
+      "Simple_Network_Language.bounded B v"
+    apply (cases rule: step_u_elims(1)[OF del])
+    unfolding as
+    unfolding TAG_def
+    by auto
+  hence c': "c' = c \<oplus> (t + t')" unfolding cval_add_def by auto
+  have del': "abs_renum.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>L', v', c'\<rangle>"
+    unfolding as
+    unfolding L' v' c'
+    apply (rule step_u.step_t)
+    unfolding TAG_def 
+    subgoal using other c' by blast
+    subgoal using assms(2) t' by simp
+    subgoal using other(2) t' assms(2) not_urgent unfolding x as fst_conv snd_conv by blast
+    by (rule other(3))
+
+  show ?thesis
+    apply (rule steps_replace_Cons_hd[OF _ assms(1)])
+    unfolding xs list.sel
+    apply (rule single_step_intro)
+    unfolding x y prod.case
+    by (rule step_u'.intros[OF del' a])
+qed
+
 
 
 thm abs_renum.urge_bisim.A.steps_append'
 
 lemmas seq_apply_steps_induct = seq_apply_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified]
-lemmas ext_seq_steps_induct = ext_seq_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified]
+lemmas ext_seq_steps_induct = ext_seq_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified, rotated, rotated]
+
+lemmas ext_seq_steps_compose = ext_seq_induct_list_prop_compose[where LP = abs_renum.urge_bisim.A.steps, OF abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified]
+
 
 lemmas ext_seq'_steps_induct = ext_seq'_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ _ steps_extend, simplified]
 lemmas seq_apply'_steps_induct = seq_apply'_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ _ abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified]
-
+  
 
 schematic_goal nth_auto_trans:
   assumes "n < length actions"
@@ -2463,10 +2531,31 @@ thm seq_apply_pre_post_induct_weaken_pre_strengthen_post
                        
 thm ext_seq_pre_post_induct_weaken_pre_strengthen_post
 
+thm steps_delay_replace ext_seq_steps_induct
+
+find_theorems name: "ext*steps"
 
 term "(L, v, c) # (seq_apply (map enter_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) (L, v, c \<oplus> real_of_rat (get_delay i)))"
 
-lemma "i < length (htpl \<pi>) \<Longrightarrow> happening_pre_pre_delay i s \<Longrightarrow> abs_renum.urge_bisim.A.steps (s # (map delay_and_apply [0..<length (htpl \<pi>)] ! i) s)" 
+term "fold ext_seq (map (\<lambda>n. seq_apply [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))"
+
+lemma "map (\<lambda>n. seq_apply [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions])
+  = map seq_apply (map (\<lambda>n.[enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))"
+  by simp
+
+term "(map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) xs)"
+term "map (\<lambda>n. seq_apply [enter_start_instant n, start_to_end_instant n, leave_end_instant n])"
+
+lemma apply_instant_actions_alt: "ext_seq (apply_instant_actions xs) = 
+  fold (ext_seq o seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) xs) "
+  unfolding apply_instant_actions_def ext_seq_seq_apply'_conv_fold
+  unfolding apply_snap_action_def
+  by (induction xs) auto
+
+schematic_goal apply_snap_action_alt: "map (apply_snap_action) = map seq_apply o (map (\<lambda>n.[enter_start_instant n, start_to_end_instant n, leave_end_instant n]))"
+  unfolding apply_snap_action_def 
+
+lemma "i < length (htpl \<pi>) \<Longrightarrow> happening_pre_pre_delay i s \<Longrightarrow> abs_renum.urge_bisim.A.steps (s#(map delay_and_apply [0..<length (htpl \<pi>)] ! i) s)" 
   unfolding delay_and_apply_def Let_def 
   apply (subst nth_map)
    apply simp
@@ -2474,8 +2563,11 @@ lemma "i < length (htpl \<pi>) \<Longrightarrow> happening_pre_pre_delay i s \<L
   subgoal for L v c
     apply simp
     apply (subst apply_nth_happening_def)
-    unfolding Let_def enter_end_instants_def
-    apply (rule steps_replace_Cons_hd)
+    unfolding Let_def enter_end_instants_def enter_start_instants_def apply_instant_actions_def leave_end_instants_def leave_start_instants_def apply_snap_action_def 
+    apply (subst ext_seq_seq_apply_append_distrib, intro ext_seq_not_Nil(1), simp) 
+    unfolding ext_seq_seq_apply'_conv_fold
+    find_theorems name: "ext_seq*"
+    using ext_seq_steps_induct
      defer
     apply (subst list.collapse)
     sorry
