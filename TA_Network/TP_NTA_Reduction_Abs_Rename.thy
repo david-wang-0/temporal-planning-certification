@@ -888,6 +888,27 @@ let
 in
   fold (@) ind_urg []"
 
+schematic_goal all_ta_urg_conv_prod: "all_ta_urg = ?x"
+   unfolding all_ta_urg_def Let_def   ta_urg_def timed_automaton_net_spec_def 
+    ntas_def prod.case
+  apply (subst map_map[symmetric, of _ snd])
+  apply (subst map_snd_zip)
+    apply simp
+   ..
+
+schematic_goal set_all_ta_urg_conv_prod: "set all_ta_urg = ?x"
+  unfolding all_ta_urg_conv_prod
+  unfolding set_fold_append' fold_union set_map list.set
+  ..
+
+
+schematic_goal all_ta_urg_alt: "all_ta_urg = ?x"
+  unfolding all_ta_urg_conv_prod main_auto_spec_def main_auto_spec_def Let_def comp_def fst_conv snd_conv action_to_automaton_spec_def list.map map_map ..
+
+schematic_goal set_all_ta_urg_alt: "set all_ta_urg = ?x"
+  unfolding all_ta_urg_alt set_fold_append' fold_union'
+  ..
+
 subsubsection \<open>Correctness\<close>
 abbreviation "ta_comm' \<equiv> fst o snd o snd"
 
@@ -1629,6 +1650,16 @@ lemma nta_length[simp]: "length individual_ta_states = length ntas"
   unfolding individual_ta_states_def
   using length_map .
 
+lemma n_ps_conv_Suc_length_actions: "Prod_TA_Defs.n_ps (set broadcast, map automaton_of actual_autos, map_of nta_vars) = Suc (length actions)"
+  unfolding Prod_TA_Defs.n_ps_def fst_conv snd_conv actual_autos_alt by simp
+
+schematic_goal sem_alt_def: "Simple_Network_Impl.sem actual_autos broadcast nta_vars = ?y"
+  apply (subst Simple_Network_Impl.sem_def)
+  apply (subst actual_autos_alt)
+  apply (subst map_map)
+  apply (subst comp_assoc[symmetric])
+  ..
+
 sublocale abs_renum: Simple_Network_Rename_Formula
     broadcast 
     nta_vars 
@@ -2039,8 +2070,7 @@ proof
   qed
 
   show "inj_on var_renum (Prod_TA_Defs.var_set (set broadcast, map automaton_of actual_autos, map_of nta_vars))" 
-  proof -                                                                                          
-    
+  proof -
     have "inj_on var_renum (set (map fst nta_vars))" unfolding var_renum_def using mk_renum_inj by blast
     thus ?thesis using inj_on_subset actual_variables_correct var_set_alt by blast
   qed
@@ -2137,7 +2167,10 @@ proof
   show "(\<Union>g\<in>set (map (snd \<circ> snd \<circ> snd) actual_autos). fst ` set g) \<subseteq> Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)" 
     unfolding loc_set_alt[symmetric] unfolding actual_autos_def using all_inv_loc_correct unfolding all_ta_inv_loc_def Let_def set_fold_append' fold_union' set_map image_image comp_apply ta_inv_loc_def by blast
   show "\<Union> ((set \<circ>\<circ>\<circ> (\<circ>)) fst snd ` set actual_autos) \<subseteq> Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
-    unfolding loc_set_alt[symmetric] unfolding actual_autos_def using all_urg_correct unfolding all_ta_urg_def Let_def ta_urg_def set_fold_append' fold_union' set_map image_image comp_apply by simp
+    unfolding loc_set_alt[symmetric] unfolding actual_autos_def 
+    unfolding set_map image_image comp_def
+    using all_urg_correct 
+    unfolding all_ta_urg_def Let_def ta_urg_def set_fold_append' fold_union' set_map image_image comp_apply by simp
   show "\<Union> ((set \<circ> fst) ` set actual_autos) \<subseteq> Prod_TA_Defs.loc_set (set broadcast, map automaton_of actual_autos, map_of nta_vars)"
     unfolding loc_set_alt[symmetric] unfolding actual_autos_def using all_comm_correct unfolding all_ta_comm_def Let_def ta_comm_def set_fold_append' fold_union' set_map image_image comp_apply by simp
   show "urge_clock \<notin> Simple_Network_Impl.clk_set' actual_autos" 
@@ -2289,7 +2322,6 @@ proof
     unfolding var_set_alt actual_variables_correct
     unfolding form_def timed_automaton_net_spec_def Let_def prod.case vars_of_formula.simps vars_of_sexp.simps ..
 qed
-
 end
 
 end

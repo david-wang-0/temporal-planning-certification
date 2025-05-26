@@ -112,7 +112,13 @@ lemma in_happ_seqE_act:
   assumes in_happ_seq: "(time, snap) \<in> plan_happ_seq"
   shows "\<exists>a t d. (a, t, d) \<in> ran \<pi> \<and> (at_start a = snap \<or> at_end a = snap)"
   using assms unfolding plan_happ_seq_def by blast
-  
+
+lemma htpsE:
+  assumes "time \<in> htps"
+      and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> time = t \<Longrightarrow> thesis"
+      and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> time = t + d \<Longrightarrow> thesis"
+  shows thesis 
+  using assms unfolding htps_def by blast
     
 text \<open>Invariants\<close>
 definition plan_inv_seq::"('proposition, 'time) invariant_sequence" where
@@ -1206,7 +1212,7 @@ lemma time_index_inj_on_list: "inj_on time_index {n. n < length htpl}"
 lemma time_index_img_list: "time_index ` {n. n < length htpl} = set htpl"
   using time_index_bij_betw_list unfolding bij_betw_def by blast
 
-lemma card_htps_len_htpl: "card htps= length htpl" unfolding htpl_def by simp
+lemma card_htps_len_htpl: "card htps = length htpl" unfolding htpl_def by simp
 
 lemmas time_index_strict_sorted_list = strict_sorted_list_of_set[of htps, simplified htpl_def[symmetric], THEN sorted_wrt_nth_less]
 
@@ -1261,6 +1267,8 @@ proof (rule notI)
   ultimately
   show "False" by simp
 qed
+
+
 
 subsubsection \<open>Finite Plans\<close>
 
@@ -1362,6 +1370,86 @@ lemma time_indexI_htpl:
     shows "\<exists>i < length htpl. time_index i = t"
   using time_index_img_list assms by force
 
+lemma time_index_htplD:
+  assumes "i < length htpl"
+    shows "time_index i \<in> set htpl" 
+  using nth_mem assms by blast
+
+lemma time_index_htpsD:
+  assumes finite_plan
+      and "i < length htpl"
+    shows "time_index i \<in> htps" 
+  using time_index_img_set assms card_htps_len_htpl by auto
+  
+
+lemma exists_snaps_at_time_index:
+  assumes finite_plan
+      and "i < length htpl"
+  shows "\<exists>a. (time_index i, at_start a) \<in> plan_happ_seq \<or> (time_index i, at_end a) \<in> plan_happ_seq"
+  apply (insert time_index_htpsD[OF assms])
+  apply (erule htpsE)
+  subgoal for a t d
+    apply (rule exI[of _ a])
+    apply (rule disjI1)
+    unfolding plan_happ_seq_def by blast
+  subgoal for a t d
+    apply (rule exI[of _ a])
+    apply (rule disjI2)
+    unfolding plan_happ_seq_def by blast
+  done
+
+lemma exists_actions_happening_at_time_index:
+  assumes finite_plan
+      and "plan_actions_in_problem actions"
+      and "i < length htpl"
+  shows "\<exists>a \<in> actions. (time_index i, at_start a) \<in> plan_happ_seq \<or> (time_index i, at_end a) \<in> plan_happ_seq"
+  apply (insert time_index_htpsD[OF assms(1, 3)])
+  apply (erule htpsE)
+  subgoal for a t d
+    apply (rule bexI[of _ a])
+    apply (rule disjI1)
+    unfolding plan_happ_seq_def apply blast
+    using assms(2) unfolding plan_actions_in_problem_def by blast
+  subgoal for a t d
+    apply (rule bexI[of _ a])
+    apply (rule disjI2)
+    unfolding plan_happ_seq_def apply blast
+    using assms(2) unfolding plan_actions_in_problem_def by blast
+  done
+
+lemma snaps_at_time_index_cases:
+  assumes finite_plan
+    and "i < length htpl"
+    and "\<And>a. (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+    and "\<And>a. (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+  shows thesis using assms exists_snaps_at_time_index by blast
+
+lemma actions_at_time_index_cases:
+  assumes finite_plan
+    and "i < length htpl"
+    and "plan_actions_in_problem actions"
+    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+  shows thesis using assms exists_actions_happening_at_time_index by blast
+
+lemma snaps_at_time_index_exhaustive_cases:
+  assumes finite_plan
+    and "i < length htpl"
+    and "\<And>a. (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+    and "\<And>a. (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<notin> plan_happ_seq \<Longrightarrow> thesis"
+    and "\<And>a. (time_index i, at_start a) \<notin> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+  shows thesis using assms exists_snaps_at_time_index by blast
+
+
+lemma actions_at_time_index_exhaustive_cases:
+  assumes finite_plan
+    and "i < length htpl"
+    and "plan_actions_in_problem actions"
+    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<notin> plan_happ_seq \<Longrightarrow> thesis"
+    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<notin> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+  shows thesis using assms exists_actions_happening_at_time_index by blast
+  
 lemma no_actions_between_indexed_timepoints: 
   assumes "finite_plan"
     "(Suc l) < length htpl"

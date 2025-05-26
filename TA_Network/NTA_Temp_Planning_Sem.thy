@@ -54,8 +54,6 @@ lemma at_start_in_happ_seqE':
   using pap unfolding plan_actions_in_problem_def 
   using vp unfolding valid_plan_def by auto
 
-
-
 lemma at_end_in_happ_seqE':
   assumes a_in_acts: "a \<in> actions"
       and sn: "(s, at_end a) \<in> plan_happ_seq \<pi> at_start at_end"
@@ -64,14 +62,11 @@ lemma at_end_in_happ_seqE':
   using pap unfolding plan_actions_in_problem_def 
   using vp unfolding valid_plan_def by auto
 
-
-  
 lemma eps_cases: 
   assumes "\<epsilon> = 0 \<Longrightarrow> thesis"
       and "0 \<le> \<epsilon> \<Longrightarrow> thesis"
     shows "thesis"
   using assms eps_range by blast
-
 
 abbreviation snaps::"'action \<Rightarrow> 'snap_action set" where
 "snaps a \<equiv> {at_start a, at_end a}"
@@ -158,6 +153,8 @@ lemma at_end_in_happ_seqE'':
 lemma a_in_plan_is_in_actions:
   assumes "(a, t, d) \<in> ran \<pi>"
   shows "a \<in> actions" using assms pap unfolding plan_actions_in_problem_def by blast
+
+lemmas actions_at_time_index_exhaustive_cases' = actions_at_time_index_exhaustive_cases[OF vp[THEN valid_plan_finite] _ pap, of _ at_start at_end, simplified happ_seq_def[symmetric]]
 
 subsubsection \<open>Mutual exclusivity on the happening sequence\<close>
 
@@ -935,6 +932,11 @@ proof -
   thus ?thesis by fastforce
 qed
 
+lemma open_active_count_cases:
+assumes "open_active_count = 0 \<Longrightarrow> thesis"
+    and "open_active_count = 1 \<Longrightarrow> thesis"
+  shows "thesis" using assms open_active_count_ran by auto
+
 lemma closed_start_closed_end_paired: "\<forall>n \<le> i. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! n = t \<and> closed_end_list ! n = t + d) 
           \<and> (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! n = t \<longrightarrow> closed_end_list ! n = t + d)
           \<and> (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_end_list ! n = t + d \<longrightarrow> closed_start_list ! n = t)" 
@@ -1267,6 +1269,11 @@ proof -
   thus ?thesis by fastforce
 qed
 
+lemma closed_active_count_cases:
+  assumes "closed_active_count = 0 \<Longrightarrow> thesis"
+      and "closed_active_count = 1 \<Longrightarrow> thesis"
+    shows thesis using assms closed_active_count_ran by auto
+
 lemma open_closed_active_count_ran:
   shows "open_closed_active_count \<in> {0, 1}"
 proof -
@@ -1278,6 +1285,12 @@ proof -
   qed
   thus ?thesis by auto
 qed
+
+
+lemma open_closed_active_count_cases:
+  assumes "open_closed_active_count = 0 \<Longrightarrow> thesis"
+      and "open_closed_active_count = 1 \<Longrightarrow> thesis"
+    shows thesis using assms open_closed_active_count_ran by auto
 
 lemma open_active_count_1E:
   assumes "open_active_count = 1"
@@ -2903,6 +2916,7 @@ definition "inst_upd_state i \<equiv> app_effs (instant_snaps_at (time_index \<p
 definition "inst_start_upd_state i \<equiv> app_effs (instant_snaps_at (time_index \<pi> i) \<union> starting_snaps_at (time_index \<pi> i)) (plan_state_seq i)"
 
 definition "upd_state i \<equiv> app_effs (happ_at happ_seq (time_index \<pi> i)) (plan_state_seq i)"
+
 
 end                       
 end

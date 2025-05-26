@@ -2089,8 +2089,7 @@ thm abs_renum.urge_bisim.A.steps_append'
 lemmas seq_apply_steps_induct = seq_apply_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified]
 lemmas ext_seq_steps_induct = ext_seq_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified, rotated, rotated]
 
-lemmas ext_seq_steps_compose = ext_seq_induct_list_prop_compose[where LP = abs_renum.urge_bisim.A.steps, OF abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified]
-
+lemmas ext_seq_steps_compose = ext_seq_comp_seq_apply_induct_list_prop_compose[where LP = abs_renum.urge_bisim.A.steps, OF abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified, simplified comp_apply[symmetric, of ext_seq seq_apply]]
 
 lemmas ext_seq'_steps_induct = ext_seq'_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ _ steps_extend, simplified]
 lemmas seq_apply'_steps_induct = seq_apply'_induct_list_prop[where LP = abs_renum.urge_bisim.A.steps, OF _ _ _ abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified]
@@ -2516,7 +2515,8 @@ thm ext_seq'_pre_post_induct_weaken_pre_strengthen_post[
       and S = goal_trans_pre
       and fs = "map delay_and_apply [0..<length (htpl \<pi>)]" 
       and xs = "[abs_renum.a\<^sub>0, start_planning abs_renum.a\<^sub>0]", 
-      simplified length_map length_upt Nat.minus_nat.diff_0]
+      simplified length_map length_upt Nat.minus_nat.diff_0 nth_upt]
+
 
 
 (* We need to prove these two for each happening. These are the same as the ones above *)
@@ -2548,30 +2548,223 @@ term "map (\<lambda>n. seq_apply [enter_start_instant n, start_to_end_instant n,
 
 lemma apply_instant_actions_alt: "ext_seq (apply_instant_actions xs) = 
   fold (ext_seq o seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) xs) "
-  unfolding apply_instant_actions_def ext_seq_seq_apply'_conv_fold
+  unfolding apply_instant_actions_def 
+  unfolding ext_seq_seq_apply'_conv_fold
   unfolding apply_snap_action_def
   by (induction xs) auto
 
-schematic_goal apply_snap_action_alt: "map (apply_snap_action) = map seq_apply o (map (\<lambda>n.[enter_start_instant n, start_to_end_instant n, leave_end_instant n]))"
-  unfolding apply_snap_action_def 
+find_theorems name: "time_index"
 
-lemma "i < length (htpl \<pi>) \<Longrightarrow> happening_pre_pre_delay i s \<Longrightarrow> abs_renum.urge_bisim.A.steps (s#(map delay_and_apply [0..<length (htpl \<pi>)] ! i) s)" 
-  unfolding delay_and_apply_def Let_def 
-  apply (subst nth_map)
-   apply simp
-  apply (cases s)
-  subgoal for L v c
-    apply simp
+schematic_goal action_auto_urg: "urgent ((automaton_of \<circ> conv_automaton \<circ> snd \<circ> snd) (action_to_automaton_spec a)) = ?x"
+  unfolding urgent_def action_to_automaton_spec_def Let_def comp_apply fst_conv snd_conv conv_automaton_def prod.case automaton_of_def list.set ..
+
+lemma in_setE:
+  assumes "x \<in> set xs"
+    and "\<And>i. i < length xs \<Longrightarrow> x = xs ! i \<Longrightarrow> thesis"
+  shows thesis using assms unfolding in_set_conv_nth by blast
+
+lemma sum_list_pos_if_ex_pos: "\<exists>x \<in> set xs. 0 < x \<Longrightarrow> (0::nat) < sum_list xs" 
+  unfolding sum_list.eq_foldr apply (induction xs) apply simp
+  by fastforce
+
+lemma assumes i: "i < length (htpl \<pi>)" 
+          and pres: "happening_pre_pre_delay i s"
+  shows "abs_renum.urge_bisim.A.steps (s#(map delay_and_apply [0..<length (htpl \<pi>)] ! i) s) \<and> happening_post i (last ((map delay_and_apply [0..<length (htpl \<pi>)] ! i) s))" 
+proof -
+  presume "abs_renum.urge_bisim.A.steps (s#delay_and_apply i s) \<and> happening_post i (last (delay_and_apply i s))" 
+  thus "abs_renum.urge_bisim.A.steps (s#(map delay_and_apply [0..<length (htpl \<pi>)] ! i) s) \<and> happening_post i (last ((map delay_and_apply [0..<length (htpl \<pi>)] ! i) s))" using i by simp
+next
+  let ?seq = "
+     ((ext_seq \<circ> seq_apply) (map leave_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))
+       ((ext_seq \<circ> seq_apply) (map leave_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions]))
+         (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))
+           ((ext_seq \<circ> seq_apply) (map enter_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))
+             ((ext_seq \<circ> seq_apply) (map enter_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) [delay (real_of_rat (get_delay i)) s])))))"
+  presume p: "abs_renum.urge_bisim.A.steps ?seq \<and> happening_post i (last ?seq)"
+
+  have delay_non_negative: "0 \<le> real_of_rat (get_delay i)" 
+    unfolding get_delay_def
+    apply (cases "i = 0")
+     apply (subst if_P, simp)
+    using eps_range apply simp
+    apply (subst if_not_P, simp)
+    using time_index_sorted_list[of "i - 1" "i"] assms(1)
+    by auto
+
+  obtain L v c where
+    s: "s = (L, v, c)" using prod_cases3 by blast
+
+  obtain c' where
+    c': "c' = c \<oplus> real_of_rat (get_delay i)" 
+    and Lvc': "(L, v, c') = delay (real_of_rat (get_delay i)) (L, v, c)"
+    unfolding delay_def by simp
+
+  from pres[simplified s happening_pre_pre_delay_def Let_def happening_pre_def]
+  have Lv_con: "Lv_conds L v" by fastforce
+  
+  have no_urgent: "\<forall>p<length (fst (snd abs_renum.sem)). fst (L, v, c) ! p \<notin> urgent (fst (snd abs_renum.sem) ! p)"
+  proof (intro allI impI)
+    have len_L: "length L = Suc (length actions)" using Lv_con unfolding Lv_conds_def by blast
+
+    fix p
+    assume "p <length (fst (snd abs_renum.sem))"
+    hence pl: "p < Suc (length actions)"
+          "p < length L"
+      using n_ps_conv_Suc_length_actions
+      unfolding Prod_TA_Defs.n_ps_def
+      unfolding sem_alt_def
+      using len_L by simp+
+    
+    show "fst (L, v, c) ! p \<notin> urgent (fst (snd abs_renum.sem) ! p)"
+    proof (cases p)
+      case 0
+      then have "L ! p = Planning" using Lv_con unfolding Lv_conds_def by blast
+      moreover
+      have "urgent (fst (snd abs_renum.sem) ! p) = {InitialLocation, GoalLocation}" 
+        apply (subst sem_alt_def)
+        unfolding fst_conv snd_conv
+        apply (subst nth_map, simp add: pl)
+        apply (subst 0)
+        apply (subst nth_Cons_0)
+        unfolding comp_def main_auto_spec_def Let_def snd_conv automaton_of_def conv_automaton_def prod.case
+          urgent_def fst_conv by auto
+      ultimately
+      show ?thesis by simp
+    next
+      case (Suc n)
+      hence a: "actions ! n \<in> set actions" using pl by simp
+      consider "L ! p = Off (actions ! n)" | "L ! p = Running (actions ! n)"
+        using pres unfolding s happening_pre_pre_delay_def Let_def happening_pre_def prod.case
+        using pl unfolding Suc
+        apply (cases rule: planning_sem.open_active_count_cases[OF a])
+        by blast+
+      note c = this
+      have "urgent (fst (snd abs_renum.sem) ! p) = {StartInstant (actions ! n), EndInstant (actions ! n)} "
+        apply (subst sem_alt_def)
+        unfolding fst_conv snd_conv
+        apply (subst nth_map, simp add: pl)
+        unfolding Suc
+        apply (subst nth_Cons_Suc) 
+        apply (subst nth_map)
+        using Suc pl apply blast
+        apply (subst action_auto_urg)
+        ..
+      then
+      show ?thesis 
+        apply (cases rule: c)
+        by simp+
+    qed
+  qed
+    
+  have tl_not_Nil: "1 < length xs \<Longrightarrow> tl xs \<noteq> []" for xs apply (cases xs) by auto
+  have last_tl_eq_last: "last
+       (tl ((ext_seq \<circ> seq_apply) (map leave_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))
+             ((ext_seq \<circ> seq_apply) (map leave_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions]))
+               (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))
+                 ((ext_seq \<circ> seq_apply) (map enter_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))
+                   ((ext_seq \<circ> seq_apply) (map enter_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) [delay (real_of_rat (get_delay i)) s]))))))
+      = last ((ext_seq \<circ> seq_apply) (map leave_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))
+             ((ext_seq \<circ> seq_apply) (map leave_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions]))
+               (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))
+                 ((ext_seq \<circ> seq_apply) (map enter_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))
+                   ((ext_seq \<circ> seq_apply) (map enter_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) [delay (real_of_rat (get_delay i)) s])))))"
+  proof (rule tl_last[symmetric], rule tl_not_Nil, (subst length_ext_seq_comp_seq_apply | subst length_fold_ext_seq_comp_seq_apply)+)
+    have "0 < length (map enter_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) +
+        length (map enter_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions])) +
+        sum_list (map length (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))) +
+        length (map leave_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) +
+        length (map leave_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))"
+      apply (subst length_map)+
+      apply (subst map_map)
+      apply (subst comp_def)
+      apply (rule planning_sem.actions_at_time_index_exhaustive_cases'[OF i])
+      subgoal for a
+        apply (erule in_setE)
+        subgoal for n
+          unfolding add_gr_0
+          apply (rule disjI1)
+          apply (rule disjI1)
+          apply (rule disjI2)
+          apply (rule sum_list_pos_if_ex_pos)
+          by auto
+        done
+      subgoal for a
+        apply (erule in_setE)
+        subgoal for n
+          unfolding add_gr_0
+          apply (rule disjI1)
+          apply (rule disjI1)
+          apply (rule disjI1)       
+          apply (rule disjI2)
+          apply (rule length_pos_if_in_set[of n])
+          by auto
+        done
+      subgoal for a
+        apply (erule in_setE)
+        subgoal for n
+          unfolding add_gr_0
+          apply (rule disjI1)+
+          apply (rule length_pos_if_in_set[of n])
+          by auto
+        done
+      done
+    thus "1 < length [delay (real_of_rat (get_delay i)) s] + length (map enter_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) +
+        length (map enter_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions])) +
+        sum_list (map length (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))) +
+        length (map leave_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) +
+        length (map leave_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))"
+      apply (subst length_Cons)
+      apply (subst length_nth_simps(1))
+      by linarith
+  qed
+
+  show "abs_renum.urge_bisim.A.steps (s#delay_and_apply i s) \<and> happening_post i (last (delay_and_apply i s))" 
+    apply (rule conjI)
+    subgoal
+      unfolding delay_and_apply_def Let_def
+      unfolding s
+      apply (subst apply_nth_happening_def)
+      unfolding Let_def enter_end_instants_def enter_start_instants_def leave_end_instants_def leave_start_instants_def apply_snap_action_def apply_instant_actions_alt
+      unfolding comp_apply[of ext_seq seq_apply, symmetric]
+      apply (subst ext_seq_seq_apply_append_distrib, intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil, simp)
+      apply (subst fold_ext_seq_comp_conv_foldl_append, intro ext_seq_comp_seq_apply_not_Nil, simp)
+      apply (subst ext_seq_seq_apply_append_distrib, intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil, simp)
+      apply (subst ext_seq_seq_apply_append_distrib, intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil, simp)
+      apply (subst ext_seq_seq_apply_append_distrib, simp)
+      apply (rule steps_delay_replace[OF _ delay_non_negative no_urgent])
+      apply (subst comp_def)
+      apply (subst Cons_tl_ext_seq)
+      apply (subst comp_apply[of ext_seq seq_apply, symmetric])
+      apply (subst ext_seq_seq_apply_append_distrib[symmetric], simp)
+      apply (subst ext_seq_seq_apply_append_distrib[symmetric], intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil, simp)
+      apply (subst ext_seq_seq_apply_append_distrib[symmetric], intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil, simp)
+      apply (subst fold_ext_seq_comp_conv_foldl_append[symmetric], intro ext_seq_comp_seq_apply_not_Nil, simp)
+      apply (subst ext_seq_seq_apply_append_distrib[symmetric], intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil, simp)
+      using p s by blast
+    unfolding delay_and_apply_def Let_def
     apply (subst apply_nth_happening_def)
-    unfolding Let_def enter_end_instants_def enter_start_instants_def apply_instant_actions_def leave_end_instants_def leave_start_instants_def apply_snap_action_def 
-    apply (subst ext_seq_seq_apply_append_distrib, intro ext_seq_not_Nil(1), simp) 
-    unfolding ext_seq_seq_apply'_conv_fold
-    find_theorems name: "ext_seq*"
-    using ext_seq_steps_induct
-     defer
-    apply (subst list.collapse)
-    sorry
-  sorry
+    unfolding Let_def enter_end_instants_def enter_start_instants_def leave_end_instants_def leave_start_instants_def apply_snap_action_def  apply_instant_actions_alt
+    unfolding comp_apply[of ext_seq seq_apply, symmetric]
+    apply (subst last_tl_eq_last)
+    using p by blast
+  
+next
+
+  show "abs_renum.urge_bisim.A.steps
+   ((ext_seq \<circ> seq_apply) (map leave_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))
+     ((ext_seq \<circ> seq_apply) (map leave_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions]))
+       (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))
+         ((ext_seq \<circ> seq_apply) (map enter_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))
+           ((ext_seq \<circ> seq_apply) (map enter_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) [delay (real_of_rat (get_delay i)) s]))))) \<and>
+  happening_post i
+   (last
+     ((ext_seq \<circ> seq_apply) (map leave_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))
+       ((ext_seq \<circ> seq_apply) (map leave_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions]))
+         (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))
+           ((ext_seq \<circ> seq_apply) (map enter_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))
+             ((ext_seq \<circ> seq_apply) (map enter_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) [delay (real_of_rat (get_delay i)) s]))))))"
+    apply (rule ext_seq_steps_compose)
+qed
 
 lemma "i < length (htpl \<pi>) \<Longrightarrow> happening_pre_pre_delay i s \<Longrightarrow> happening_post i (last ((map delay_and_apply [0..<length (htpl \<pi>)] ! i) s))"
   unfolding delay_and_apply_def Let_def 
@@ -3528,7 +3721,7 @@ context (* for a single instant action n *)
   assumes pres: "single_snap_pres (L, v, c) n"
 begin
 
-lemma  n: "n < length actions"
+lemma n: "n < length actions"
       and end_scheduled: "(t, at_end (actions ! n)) \<in> planning_sem.happ_seq"
       and start_scheduled: "(t, at_start (actions ! n)) \<in> planning_sem.happ_seq"
 
@@ -3540,7 +3733,7 @@ lemma  n: "n < length actions"
           \<longrightarrow> L ! Suc i = (Off (actions ! i))"
 
       and locked: "\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p))"
-      and prop_state: "\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_prev_updated_prop_state i p n)"
+      and prop_state: "\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_prev_updated_prop_state i n p)"
       and active: "v ActsActive = Some (planning_sem.active_before t)"
 
       and instant_executed_time: "\<forall>i < n. is_instant_index t i
@@ -3563,7 +3756,6 @@ lemma  n: "n < length actions"
             \<longrightarrow> c (ActStart (actions ! i)) = real_of_rat (planning_sem.exec_time (at_start (actions ! i)) t)"
       and other_end_time: "\<forall>i < length actions. is_not_happening_index t i
             \<longrightarrow> c (ActEnd (actions ! i)) = real_of_rat (planning_sem.exec_time (at_end (actions ! i)) t)"
-  apply -
   using pres[simplified single_snap_pres_def Let_def]
   by simp_all
 
