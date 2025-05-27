@@ -1,6 +1,8 @@
 theory Sequences
   imports Base
 begin
+
+(* to do: move into locale *)
 definition "seq_apply fs x = map (\<lambda>i. (fold (id) (take i fs) x)) [1..<length fs + 1]"
 
 definition "ext_seq f xs \<equiv> xs @ f (last xs)"
@@ -467,7 +469,7 @@ proof -
     by simp+
 qed
 
-lemma seq_apply_pre_post_induct_weaken_pre_strengthen_post:
+lemma seq_apply_pre_post_induct_strengthen_pre_weaken_post:
   assumes Rx0: "R x"
       and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
       and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
@@ -488,15 +490,15 @@ lemma seq_apply_pre_post_induct_weaken_pre_strengthen_post:
 lemma last_append_conv_last_Cons: "last (xs @ ys) = last ((last xs) # ys)"
   by simp
 
-lemma ext_seq_pre_post_induct_weaken_pre_strengthen_post:
+lemma ext_seq_pre_post_induct_strengthen_pre_weaken_post:
   assumes Rx0: "R (last xs)"
       and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
       and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
-      and RS0: "\<And>x. length fs = 0\<Longrightarrow> R x \<Longrightarrow> S x"
+      and RS0: "\<And>x. length fs = 0 \<Longrightarrow> R x \<Longrightarrow> S x"
     shows "S (last (ext_seq (seq_apply fs) xs))"
   apply (subst ext_seq_def)
   apply (subst last_append_conv_last_Cons)
-  apply (rule seq_apply_pre_post_induct_weaken_pre_strengthen_post)
+  apply (rule seq_apply_pre_post_induct_strengthen_pre_weaken_post)
   using assms by simp+
 
 lemma seq_apply_take_induct_list_prop:
@@ -576,10 +578,52 @@ lemma ext_seq_induct_list_prop_and_post:
   apply (rule conjI)
   subgoal apply (rule ext_seq_induct_list_prop)
     using assms by simp+
-  apply (rule ext_seq_pre_post_induct_weaken_pre_strengthen_post)
+  apply (rule ext_seq_pre_post_induct_strengthen_pre_weaken_post)
   using assms by simp+
 end
 
+lemma ext_seq_comp_seq_apply_induct_list_prop_composable:
+  assumes base: "\<And>x. LP [x]"
+      and step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
+      and LPxsRxn: "LP xs \<and> R (last xs)"
+      and PQ: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> Q i ((fs ! i) s)"
+      and QP: "\<And>i s. Suc i < length fs \<Longrightarrow> Q i s \<Longrightarrow> P (Suc i) s"
+      and RPn: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
+      and RSn: "\<And>x. length fs = 0 \<Longrightarrow> R x \<Longrightarrow> S x"
+      and ind_step: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> LP [s, (fs ! i) s]"
+      and SR1: "\<And>x. S x \<Longrightarrow> R' x"
+    shows "LP ((ext_seq o seq_apply) fs xs) \<and> R' (last ((ext_seq o seq_apply) fs xs))"
+proof -
+  presume "LP ((ext_seq o seq_apply) fs xs) \<and> S (last ((ext_seq o seq_apply) fs xs))"
+  thus ?thesis using SR1 by simp
+next
+  show "LP ((ext_seq \<circ> seq_apply) fs xs) \<and> S (last ((ext_seq \<circ> seq_apply) fs xs))"
+    unfolding comp_def
+    apply (rule ext_seq_induct_list_prop_and_post[where P = P and Q = Q and R = R])
+    using assms by auto
+qed
+
+lemma ext_seq_comp_seq_apply_single_list_prop_and_post:
+  assumes base: "\<And>x. LP [x]"
+      and step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
+      and LPxsRxn: "LP xs \<and> R (last xs)"
+      and QSl: "\<And>x. R x \<Longrightarrow> S (f x)"
+      and ind_step: "\<And>x. LP [x, f x]"
+    shows "LP ((ext_seq o seq_apply) [f] xs) \<and> S (last ((ext_seq o seq_apply) [f] xs))"
+  apply (rule ext_seq_comp_seq_apply_induct_list_prop_composable[where R = R and P = "\<lambda>x. R" and Q = "\<lambda>x. S" and S = S])
+  using assms by auto
+
+lemma ext_seq_comp_seq_apply_single_list_prop_and_post_composable:
+  assumes base: "\<And>x. LP [x]"
+      and step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
+      and LPxsRxn: "LP xs \<and> R (last xs)"
+      and QSl: "\<And>x. R x \<Longrightarrow> S (f x)"
+      and ind_step: "\<And>x. LP [x, f x]"
+      and SR1: "\<And>x. S x \<Longrightarrow> R1 x"
+    shows "LP ((ext_seq o seq_apply) [f] xs) \<and> R1 (last ((ext_seq o seq_apply) [f] xs))"
+  apply (rule ext_seq_comp_seq_apply_induct_list_prop_composable[where R = R and P = "\<lambda>x. R" and Q = "\<lambda>x. S" and S = S])
+  using assms by auto
 
 lemma ext_seq_comp_seq_apply_induct_list_prop_compose:
   assumes base: "\<And>x. LP [x]"
@@ -857,7 +901,7 @@ lemma ext_seq'_pre_post_induct_length_post:
   using assms
   by simp+
 
-lemma ext_seq'_pre_post_induct_weaken_pre_strengthen_post:
+lemma ext_seq'_pre_post_induct_strengthen_pre_weaken_post:
   assumes Rx0: "R (last xs)"
       and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
       and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
@@ -943,9 +987,9 @@ lemma ext_seq'_induct_list_prop_and_post:
       and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
       and r: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> LP (s#(fs ! i) s)"
     shows "LP (ext_seq' fs xs) \<and> S (last (ext_seq' fs xs))"
-  using ext_seq'_induct_list_prop ext_seq'_pre_post_induct_weaken_pre_strengthen_post assms by blast
+  using ext_seq'_induct_list_prop ext_seq'_pre_post_induct_strengthen_pre_weaken_post assms by blast
 
-lemma seq_apply'_pre_post_induct_weaken_pre_strengthen_post:
+lemma seq_apply'_pre_post_induct_strengthen_pre_weaken_post:
     assumes Rx0: "R x"
       and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
       and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
@@ -958,7 +1002,7 @@ lemma seq_apply'_pre_post_induct_weaken_pre_strengthen_post:
   using l apply simp
    apply simp
   apply (subst ext_seq'_as_seq_apply'[symmetric, of "[x]", simplified])
-  apply (rule ext_seq'_pre_post_induct_weaken_pre_strengthen_post)
+  apply (rule ext_seq'_pre_post_induct_strengthen_pre_weaken_post)
   using assms by simp+
 
 lemma seq_apply'_induct_list_prop:
@@ -1001,6 +1045,41 @@ lemma fold_ext_seq_comp_seq_apply_induct_list_prop_compose:
   apply (subst fold_ext_seq_comp_seq_apply_conv_ext_seq'_map_seq_apply)+
   apply (rule ext_seq'_induct_list_prop_and_post[where R = R and P = P and Q = Q and S = S])
   subgoal using seq_apply_not_Nil not_empty by auto
+  using assms by auto
+
+
+
+lemma fold_ext_seq_comp_seq_apply_induct_list_prop_composable:
+  assumes step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
+      and LPxsRx0: "LP xs \<and> R (last xs)"
+      and not_empty: "\<And>f. f \<in> set fs \<Longrightarrow> f \<noteq> []"
+      and PQ: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> Q i (last (seq_apply (fs ! i) s))"
+      and QP: "\<And>i s. i < length fs - 1 \<Longrightarrow> Q i s \<Longrightarrow> P (Suc i) s"
+      and RS0: "\<And>x. 0 = length fs \<Longrightarrow> R x \<Longrightarrow> S x"
+      and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
+      and r: "\<And>i s. i < length  fs \<Longrightarrow> P i s \<Longrightarrow> LP (s # (seq_apply (fs ! i)) s)"
+      and SR1: "\<And>x. S x \<Longrightarrow> R1 x"
+    shows "LP (fold (ext_seq o seq_apply) fs xs) \<and> R1 (last (fold (ext_seq o seq_apply) fs xs))"
+proof -
+  have "LP (fold (ext_seq o seq_apply) fs xs) \<and> S (last (fold (ext_seq o seq_apply) fs xs))"
+    apply (rule fold_ext_seq_comp_seq_apply_induct_list_prop_compose[where R = R and P = P and Q = Q and S = S])
+    using assms by auto
+  thus ?thesis using SR1 by auto
+qed
+
+
+lemma ext_seq'_induct_list_prop_and_post':
+  assumes step: "\<And>xs ys. LP xs \<Longrightarrow> LP (last xs # ys) \<Longrightarrow> LP (xs @ ys)"
+      and LPxsRx0: "LP xs \<and> R (last xs)"
+      and ind_step: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> LP (s#(fs ! i) s) \<and> Q i (last ((fs ! i) s))"
+      and "\<And>i s. i < length fs - 1 \<Longrightarrow> Q i s \<Longrightarrow> P (Suc i) s"
+      and RP0: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and RS0: "\<And>x. 0 = length fs \<Longrightarrow> R x \<Longrightarrow> S x"
+      and QSl: "\<And>x. Q (length fs - 1) x \<Longrightarrow> S x"
+      and "\<And>f x. f \<in> set fs \<Longrightarrow> f x \<noteq> []"
+    shows "LP (ext_seq' fs xs) \<and> S (last (ext_seq' fs xs))"
+  apply (rule ext_seq'_induct_list_prop_and_post[where R = R and P = P and Q = Q])
   using assms by auto
 
 end

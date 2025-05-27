@@ -76,7 +76,6 @@ lemma in_happ_atD:
   shows "(t, x) \<in> B"
   using assms by (rule CollectD)
 
-
 lemma in_happ_atI:
   assumes "(t, x) \<in> B"
   shows "x \<in> happ_at B t"
@@ -112,6 +111,11 @@ lemma in_happ_seqE_act:
   assumes in_happ_seq: "(time, snap) \<in> plan_happ_seq"
   shows "\<exists>a t d. (a, t, d) \<in> ran \<pi> \<and> (at_start a = snap \<or> at_end a = snap)"
   using assms unfolding plan_happ_seq_def by blast
+
+lemma in_happ_seqI:
+  assumes "(a, t, d) \<in> ran \<pi>"
+  shows "(t, at_start a) \<in> plan_happ_seq" "(t + d, at_end a) \<in> plan_happ_seq"
+  using assms unfolding plan_happ_seq_def by blast+
 
 lemma htpsE:
   assumes "time \<in> htps"
@@ -1439,7 +1443,6 @@ lemma snaps_at_time_index_exhaustive_cases:
     and "\<And>a. (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<notin> plan_happ_seq \<Longrightarrow> thesis"
     and "\<And>a. (time_index i, at_start a) \<notin> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
   shows thesis using assms exists_snaps_at_time_index by blast
-
 
 lemma actions_at_time_index_exhaustive_cases:
   assumes finite_plan

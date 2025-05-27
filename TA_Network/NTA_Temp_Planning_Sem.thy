@@ -436,6 +436,11 @@ qed
 lemma plan_durations: "(a, t, d) \<in> ran \<pi> \<Longrightarrow> 0 \<le> d" using valid_plan_durs[OF vp] unfolding durations_ge_0_def by blast
 lemmas plan_overlap_cond = nso[THEN no_self_overlap_ran]
 
+text \<open>The cases for snap-actions that occur at a timepoint\<close>
+abbreviation "is_instant_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<in> happ_seq"
+abbreviation "is_starting_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq"
+abbreviation "is_ending_action t a \<equiv> (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq"
+
 context
   fixes t::'time
     and a::'action
@@ -468,7 +473,13 @@ applied to and the state that they have been applied to. The state \<^emph>\<ope
 Note, that there are more than two states, if snap-actions are applied sequentially. Snap-actions are 
 essentially applied sequentially, because there is no true concurrency in this formalisation. \<close>
 definition open_closed_active_count where
-"open_closed_active_count \<equiv> open_active_count - (if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0)"
+"open_closed_active_count \<equiv> open_active_count - (if is_ending_action t a then 1 else 0)"
+
+definition closed_open_active_count where
+"closed_open_active_count \<equiv> open_active_count + (if is_starting_action t a then 1 else 0)"
+
+definition active_count'' where
+"active_count'' \<equiv> open_active_count + (if is_starting_action t a then 1 else 0) - (if is_ending_action t a then 1 else 0)"
 
 subsubsection \<open>Properties of these sets\<close>
 
@@ -2020,6 +2031,9 @@ definition "active_before t \<equiv> sum_list (map (open_active_count t) action_
 
 definition "active_after t \<equiv> sum_list (map (closed_active_count t) action_list)"
 
+definition "active_during t \<equiv> sum_list (map (closed_open_active_count t) action_list)"
+
+definition "active_during_minus_ended t \<equiv> sum_list (map (active_count'' t) action_list)"
 
 lemma assumes "\<forall>x \<in> set xs. x = 1"
   shows "sum_list xs = length xs"
@@ -2860,10 +2874,6 @@ lemma happ_combine:
 (* end is happening *)
 
 
-abbreviation "is_instant_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<in> happ_seq"
-abbreviation "is_starting_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq"
-abbreviation "is_ending_action t a \<equiv> (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq"
-
 definition instant_actions_at where
 "instant_actions_at t \<equiv> {a \<in> actions. is_instant_action t a}"
 
@@ -2905,15 +2915,50 @@ lemma happ_at_is_union_of_starting_ending_instant:
       apply (elim UnE)
     unfolding instant_snaps_at_def instant_actions_at_def starting_snaps_at_def starting_actions_at_def ending_snaps_at_def ending_actions_at_def by auto
 
-lemma "(app_effs (starting_snaps_at t) o app_effs (instant_snaps_at t)) M = app_effs (starting_snaps_at t \<union> instant_snaps_at t) M"
-  sorry
+lemma app_start_instant_dist: "(app_effs (starting_snaps_at t) o app_effs (instant_snaps_at t)) M = app_effs (instant_snaps_at t \<union> starting_snaps_at t) M"
+  apply (rule prop_state_upd_combine_if[OF _ HOL.refl])
+  subgoal for a b
+    unfolding instant_snaps_at_def starting_snaps_at_def instant_actions_at_def starting_actions_at_def
+    using nm unfolding mutex_valid_happ_seq_def nm_happ_seq_def
+    unfolding mutex_snap_def
+    by blast
+  done
 
-lemma "(app_effs (ending_snaps_at t) o app_effs (starting_snaps_at t) o app_effs (instant_snaps_at t)) M = app_effs (happ_at happ_seq t) M"
-  sorry
+lemma app_all_dist: "(app_effs (ending_snaps_at t) o app_effs (starting_snaps_at t) o app_effs (instant_snaps_at t)) M = app_effs (happ_at happ_seq t) M"
+  apply (subst comp_assoc)
+  apply (subst app_start_instant_dist[THEN ext])
+  apply (rule prop_state_upd_combine_if)
+  subgoal for a b
+    using nm unfolding mutex_valid_happ_seq_def nm_happ_seq_def unfolding mutex_snap_def by blast
+  subgoal unfolding instant_snaps_at_def starting_snaps_at_def ending_snaps_at_def 
+    unfolding instant_actions_at_def starting_actions_at_def ending_actions_at_def
+    apply (rule equalityI)
+     apply blast
+    apply (rule subsetI)
+    subgoal for b
+      apply (drule in_happ_atD)
+      apply (erule in_happ_seqE[of _ _ \<pi> at_start at_end, simplified happ_seq_def[symmetric]])
+      subgoal for a t' d
+        apply (erule subst)
+        apply (erule ssubst)
+       apply (frule at_start_in_happ_seqI)
+        using pap[simplified plan_actions_in_problem_def]
+        by fast
+      subgoal for a t' d
+        apply (erule subst)
+        apply (erule ssubst)
+       apply (frule at_end_in_happ_seqI)
+        using pap[simplified plan_actions_in_problem_def]
+        by fast
+      done
+    done
+  done
+    
+        
 
 definition "inst_upd_state i \<equiv> app_effs (instant_snaps_at (time_index \<pi> i)) (plan_state_seq i)"
 
-definition "inst_start_upd_state i \<equiv> app_effs (instant_snaps_at (time_index \<pi> i) \<union> starting_snaps_at (time_index \<pi> i)) (plan_state_seq i)"
+definition "inst_start_upd_state i \<equiv> ((app_effs (starting_snaps_at (time_index \<pi> i))) o (app_effs (instant_snaps_at (time_index \<pi> i)))) (plan_state_seq i)"
 
 definition "upd_state i \<equiv> app_effs (happ_at happ_seq (time_index \<pi> i)) (plan_state_seq i)"
 
