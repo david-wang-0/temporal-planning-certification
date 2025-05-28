@@ -425,8 +425,87 @@ definition "nta_vars \<equiv> let (automata, clocks, vars, formula) = timed_auto
 
 definition "var_renum \<equiv> mk_renum (map fst nta_vars)"
 
-subsubsection \<open>Actual Variables\<close>
+subsection \<open>General properties of the problem\<close>
+lemma action_variables: 
+  assumes "a \<in> set actions"
+  shows "action_vars_spec a \<subseteq> PropLock ` (set props) \<union> PropVar ` (set props)"
+  unfolding action_vars_spec_def Let_def inv_vars_spec_def set_map set_append snap_vars_spec_def 
+  using domain_ref_fluents[simplified fluent_domain_def, THEN bspec, OF assms] 
+  unfolding act_ref_fluents_def by auto
 
+lemma init_variables:
+  "PropVar ` (set init) \<union> PropVar ` (set goal) \<subseteq> PropVar ` (set props)"
+  using init_props goal_props by auto
+
+lemma all_vars_spec_exact: "all_vars_spec = [(ActsActive, 0, (length actions)), (PlanningLock, 0, 2)] @ map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props) @
+    map (\<lambda>p. (PropVar p, 0, 1)) (filter (\<lambda>x. PropVar x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)" 
+proof -
+  have 1: "filter (\<lambda>x. fst x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props) = 
+    map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props) @
+    map (\<lambda>p. (PropVar p, 0, 1)) (filter (\<lambda>x. PropVar x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)"
+    apply (subst filter_append)
+    apply (subst filter_map)+
+    apply (subst comp_def)+
+    apply (subst fst_conv)+ by simp
+  
+  have 2: "map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)
+      = map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props)" apply (induction props) by auto
+  
+  show "all_vars_spec = [(ActsActive, 0, (length actions)), (PlanningLock, 0, 2)] @ map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props) @
+    map (\<lambda>p. (PropVar p, 0, 1)) (filter (\<lambda>x. PropVar x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)" 
+    unfolding all_vars_spec_def Let_def fold_union' apply (subst 1)
+    apply (subst 2)
+    by simp
+qed
+
+
+lemma all_vars_spec_exact_set: "set (map fst all_vars_spec) = {ActsActive, PlanningLock} \<union> (\<Union> (action_vars_spec ` set actions) \<union> PropVar ` set init \<union> PropVar ` set goal)"
+proof -
+  have 1: "set (map fst (filter (\<lambda>x. fst x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props))) 
+    = \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)"
+    apply (subst filter_append)
+    unfolding filter_map comp_def
+    unfolding set_append fst_conv map_append
+    unfolding map_map comp_def fst_conv
+    apply (subst (3) comp_def[of _ PropLock, symmetric])
+    apply (subst filter_map[symmetric])
+    apply (subst (4) comp_def[of _ PropVar, symmetric])
+    apply (subst filter_map[symmetric])
+    using action_variables init_variables 
+    by auto
+  show ?thesis 
+    unfolding all_vars_spec_def Let_def prod.case fold_union'
+    unfolding map_append
+    unfolding set_append
+    apply (subst list.map)+
+    apply (subst fst_conv)+
+    apply (subst list.set)+
+    apply (subst 1)
+    unfolding set_map ..
+qed
+
+lemma nta_vars': "nta_vars = all_vars_spec" 
+  unfolding nta_vars_def timed_automaton_net_spec_def Let_def prod.case ..
+
+schematic_goal nta_vars_exact: "nta_vars = ?x"
+  apply (subst nta_vars')
+  apply (subst all_vars_spec_exact)
+  ..
+
+schematic_goal map_of_nta_vars_exact: "map_of nta_vars = ?x"
+  apply (subst nta_vars_exact)
+  apply (subst map_of_map)
+  unfolding comp_def map_of_append
+  ..
+
+schematic_goal dom_map_of_nta_vars: "dom (map_of nta_vars) = ?d"
+  apply (subst dom_map_of_conv_image_fst)
+  apply (subst nta_vars')
+  apply (subst all_vars_spec_exact_set[simplified set_map])
+  ..
+
+
+subsubsection \<open>Actual Variables\<close>
 
 definition "vars_of_update u \<equiv>
 let 
@@ -465,9 +544,6 @@ lemma condition_vars_simps:
 lemma vars_of_bexp_all:
   "vars_of_bexp (bexp_and_all bs) = (\<Union>b \<in> set bs. vars_of_bexp b)"
   by (induction bs; simp)
-
-lemma nta_vars': "nta_vars = all_vars_spec" 
-  unfolding nta_vars_def timed_automaton_net_spec_def Let_def prod.case ..
 
 lemma actual_variables_correct: "actual_variables = set (map fst nta_vars)"
 proof (rule equalityI; rule subsetI)
@@ -835,9 +911,21 @@ next
   qed
 qed
 
+schematic_goal actual_variables_exact: "actual_variables = ?x"
+  unfolding actual_variables_correct
+  unfolding nta_vars_exact
+  unfolding map_map comp_apply prod.case map_append list.map
+  unfolding fst_conv
+  unfolding set_append list.set set_map
+set_filter 
+  unfolding image_Collect
+  unfolding Union_Un_distrib
+  ..
+  
+
 subsection \<open>Locations\<close>       
-subsubsection \<open>Returned locations for simplicity\<close>
-(* Explicitly returned states *)
+subsubsection \<open>Locations for simplicity\<close>
+(* Explicitly returned (by functions) states *)
 definition "ta_states \<equiv> (fst o snd o snd)"
 
 definition "individual_ta_states \<equiv> map ta_states ntas"

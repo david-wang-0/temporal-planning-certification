@@ -300,10 +300,14 @@ lemma prop_state_simps[simp]:
   "p \<in> S \<Longrightarrow> prop_state S p = 1"
   "p \<notin> S \<Longrightarrow> prop_state S p = 0" unfolding prop_state_def by simp+
 
-lemma pro_stateD:
-  "prop_state S p = (1::nat) \<Longrightarrow> p \<in> S"
-  "prop_state S p = (0::nat) \<Longrightarrow> p \<notin> S"  
+lemma prop_stateD:
+  "prop_state S p = (1::int) \<Longrightarrow> p \<in> S"
+  "prop_state S p = (0::int) \<Longrightarrow> p \<notin> S"  
   by (cases "p \<in> S") auto
+
+lemma prop_state_iff:
+  "p \<in> S \<longleftrightarrow> prop_state S p = (1::int)"
+  "p \<notin> S \<longleftrightarrow> prop_state S p = (0::int)" using prop_stateD by fastforce+
 
 (* before anything happens *)
 definition "prop_state_before_happ i \<equiv> prop_state (planning_sem.plan_state_seq i)"
@@ -390,8 +394,9 @@ lemma apply_instant_snaps_before_0_is_id: "apply_instant_snaps_before t 0 s = s"
 
 
 (* categorising actions occurring at a time *)
-abbreviation "is_instant_index t n \<equiv> (t, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! n)) \<in> planning_sem.happ_seq"
 
+abbreviation "is_instant_index t n \<equiv> (t, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! n)) \<in> planning_sem.happ_seq"
+      
 abbreviation "is_starting_index t n \<equiv> (t, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (t, at_end (actions ! n)) \<notin> planning_sem.happ_seq"
 
 abbreviation "is_ending_index t n \<equiv> (t, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (t, at_end (actions ! n)) \<in> planning_sem.happ_seq"
@@ -815,65 +820,6 @@ definition plan_state_sequence::"('action location list \<times>
 
 
 
-subsection \<open>General properties of the problem\<close>
-lemma action_variables: 
-  assumes "a \<in> set actions"
-  shows "action_vars_spec a \<subseteq> PropLock ` (set props) \<union> PropVar ` (set props)"
-  unfolding action_vars_spec_def Let_def inv_vars_spec_def set_map set_append snap_vars_spec_def 
-  using domain_ref_fluents[simplified fluent_domain_def, THEN bspec, OF assms] 
-  unfolding act_ref_fluents_def by auto
-
-lemma init_variables:
-  "PropVar ` (set init) \<union> PropVar ` (set goal) \<subseteq> PropVar ` (set props)"
-  using init_props goal_props by auto
-
-lemma all_vars_spec_exact: "all_vars_spec = [(ActsActive, 0, (length actions)), (PlanningLock, 0, 2)] @ map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props) @
-    map (\<lambda>p. (PropVar p, 0, 1)) (filter (\<lambda>x. PropVar x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)" 
-proof -
-  have 1: "filter (\<lambda>x. fst x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props) = 
-    map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props) @
-    map (\<lambda>p. (PropVar p, 0, 1)) (filter (\<lambda>x. PropVar x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)"
-    apply (subst filter_append)
-    apply (subst filter_map)+
-    apply (subst comp_def)+
-    apply (subst fst_conv)+ by simp
-  
-  have 2: "map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)
-      = map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props)" apply (induction props) by auto
-  
-  show "all_vars_spec = [(ActsActive, 0, (length actions)), (PlanningLock, 0, 2)] @ map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props) @
-    map (\<lambda>p. (PropVar p, 0, 1)) (filter (\<lambda>x. PropVar x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)" 
-    unfolding all_vars_spec_def Let_def fold_union' apply (subst 1)
-    apply (subst 2)
-    by simp
-qed
-
-
-
-lemma all_vars_spec_exact_set: "set (map fst all_vars_spec) = {ActsActive, PlanningLock} \<union> (\<Union> (action_vars_spec ` set actions) \<union> PropVar ` set init \<union> PropVar ` set goal)"
-proof -
-  have 1: "set (map fst (filter (\<lambda>x. fst x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props))) 
-    = \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)"
-    apply (subst filter_append)
-    unfolding filter_map comp_def
-    unfolding set_append fst_conv map_append
-    unfolding map_map comp_def fst_conv
-    apply (subst (3) comp_def[of _ PropLock, symmetric])
-    apply (subst filter_map[symmetric])
-    apply (subst (4) comp_def[of _ PropVar, symmetric])
-    apply (subst filter_map[symmetric])
-    using action_variables init_variables 
-    by auto
-  show ?thesis 
-    unfolding all_vars_spec_def Let_def prod.case fold_union'
-    unfolding map_append
-    unfolding set_append
-    apply (subst list.map)+
-    apply (subst fst_conv)+
-    apply (subst list.set)+
-    apply (subst 1)
-    unfolding set_map ..
-qed
 
 subsection \<open>General properties of the automaton\<close>
 
@@ -1390,23 +1336,6 @@ proof (intro conjI ballI)
       using y by simp
   }
 qed
-
-schematic_goal nta_vars_exact: "nta_vars = ?x"
-  apply (subst nta_vars')
-  apply (subst all_vars_spec_exact)
-  ..
-
-schematic_goal map_of_nta_vars_exact: "map_of nta_vars = ?x"
-  apply (subst nta_vars_exact)
-  apply (subst map_of_map)
-  unfolding comp_def map_of_append
-  ..
-
-schematic_goal dom_map_of_nta_vars: "dom (map_of nta_vars) = ?d"
-  apply (subst dom_map_of_conv_image_fst)
-  apply (subst nta_vars')
-  apply (subst all_vars_spec_exact_set[simplified set_map])
-  ..
 
 lemma map_of_nta_vars_ActsActive: 
   "map_of nta_vars ActsActive = Some (0, length actions)" using nta_vars_exact by simp
@@ -2113,20 +2042,22 @@ schematic_goal nth_auto_trans:
   apply (subst nth_Cons_Suc)
   apply (subst nth_map)
   apply (rule assms)
-  unfolding action_to_automaton_spec_def Let_def comp_def snd_conv trans_def automaton_of_def prod.case fst_conv list.set ..
+  unfolding action_to_automaton_spec_def Let_def comp_def snd_conv trans_def 
+    automaton_of_def prod.case fst_conv list.set ..
 
 
 schematic_goal nth_auto_trans':
   assumes "n < length actions"
   shows "trans (automaton_of ((snd \<circ> snd) (action_to_automaton_spec (actions ! n)))) = ?x"
-  unfolding action_to_automaton_spec_def Let_def comp_def snd_conv trans_def automaton_of_def prod.case fst_conv list.set ..
+  unfolding action_to_automaton_spec_def Let_def comp_def snd_conv trans_def 
+    automaton_of_def prod.case fst_conv list.set ..
 
 (* Indices of locations and automata are offset by 1 w.r.t. actions' indices *)
 
 subsubsection \<open>Mutex constraints\<close>
 
 text \<open>This only works for the direction from plan to run.\<close>
-
+(* goal cases*)
 schematic_goal int_clocks_spec_alt:
   shows "set (int_clocks_spec h) = ?x"
   unfolding int_clocks_spec_def Let_def filter_append set_append set_map set_filter ..
@@ -2317,7 +2248,10 @@ Let_def lower_sem_def comp_def
       by (metis of_rat_less_eq of_rat_of_int_eq)
     done
   done
-
+(* coercions *)
+(* declare [[show_sorts]] *)
+(* show sorts *)
+find_theorems "?x < ?y"
 lemma u_dur_spec_sat_if:
   assumes "satisfies_duration_bounds lower_sem upper_sem act r"
       and "((cv (ActStart act))::real) = real_of_rat r"
@@ -2823,22 +2757,49 @@ in start_end_invs n Lvc
   \<and> active
   \<and> starting_loc"
 
-lemmas ext_seq_steps_compose = ext_seq_comp_seq_apply_induct_list_prop_compose[where LP = abs_renum.urge_bisim.A.steps, OF abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified, simplified comp_apply[symmetric, of ext_seq seq_apply]]
-lemmas ext_seq'_steps_induct_list_prop_and_post = ext_seq'_induct_list_prop_and_post'[where LP = abs_renum.urge_bisim.A.steps, OF steps_extend, simplified] 
 
-lemmas ext_seq_comp_seq_apply_steps_induct_composable = ext_seq_comp_seq_apply_induct_list_prop_composable[where LP = abs_renum.urge_bisim.A.steps, OF abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified, simplified comp_apply[of ext_seq seq_apply, symmetric]]
-lemmas fold_ext_seq_comp_seq_apply_steps_induct_composable = fold_ext_seq_comp_seq_apply_induct_list_prop_composable[where LP = abs_renum.urge_bisim.A.steps, OF steps_extend, simplified, simplified comp_apply[of ext_seq seq_apply, symmetric]]
+text \<open>The rules used to show that the composition of sequences results in a run\<close>
+interpretation steps_seq: sequence_rules abs_renum.urge_bisim.A.steps
+  apply standard                                 
+  using abs_renum.urge_bisim.A.steps.intros(1) steps_extend .
 
-lemmas ext_seq_comp_seq_apply_steps_single = ext_seq_comp_seq_apply_single_list_prop_and_post[where LP = abs_renum.urge_bisim.A.steps, OF abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified, simplified comp_apply[symmetric, of ext_seq seq_apply]]
-lemmas ext_seq_comp_seq_apply_steps_single_composable = ext_seq_comp_seq_apply_single_list_prop_and_post_composable[where LP = abs_renum.urge_bisim.A.steps, OF abs_renum.urge_bisim.A.steps.intros(1) steps_extend, simplified, simplified comp_apply[symmetric, of ext_seq seq_apply]]
+section \<open>Properties of states\<close>
+subsection \<open>The initial state\<close>
 
-thm ext_seq'_steps_induct_list_prop_and_post[
-    where xs = "[abs_renum.a\<^sub>0, start_planning abs_renum.a\<^sub>0]" 
-      and R = init_planning_state_props' 
-      and S = goal_trans_pre
-      and P = happening_pre_pre_delay
-      and Q = happening_post
-      and fs = "map delay_and_apply [0..<length (htpl \<pi>)]", simplified length_map set_map set_upt length_upt minus_nat.diff_0]
+lemma init_state_char: "init_state_props abs_renum.a\<^sub>0"
+  unfolding a\<^sub>0_alt
+  unfolding init_state_props_def Let_def prod.case
+  unfolding map_map[of _ fst, symmetric, simplified comp_def]
+  unfolding actual_variables_correct
+  apply (intro conjI)
+  subgoal
+    apply (rule ballI)
+    subgoal for x
+      apply (rule map_of_determ)
+       apply fastforce
+      by auto
+    done
+   apply (subst map_of_eq_None_iff)
+  by auto
+
+find_theorems name: "prop_state"
+
+lemma init_planning_state_props_weaken: "init_planning_state_props (L, v, c) \<Longrightarrow> init_planning_state_props' (L, v, c)"
+  unfolding init_planning_state_props'_def init_planning_state_props_def Let_def prod.case
+  apply (elim conjE, intro conjI allI impI)
+        apply assumption
+       apply assumption
+      apply assumption
+  subgoal for p
+    apply (subst (asm) actual_variables_correct)
+    apply (subst (asm) dom_map_of_conv_image_fst)
+    apply (subst (asm) set_map)
+    find_theorems name: "prop_state"
+    sorry
+  sorry
+
+
+
 
 (* We need to prove these two for each happening. These are the same as the ones above *)
 term "i < length (htpl \<pi>) \<Longrightarrow> happening_pre_pre_delay i s \<Longrightarrow> happening_post i (last ((map delay_and_apply [0..<length (htpl \<pi>)] ! i) s))"
@@ -2961,7 +2922,7 @@ next
   have last_tl_eq_last: "last(tl ?seq)
       = last ?seq"
   proof (rule tl_last[symmetric], rule tl_not_Nil, (subst length_ext_seq_comp_seq_apply | subst length_fold_ext_seq_comp_seq_apply)+)
-    have "0 < length (map enter_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) +
+    have "0 < length (map enter_end_instant (filter (is_starting_index (time_index \<pi> i)) [0..<length actions])) +
         length (map enter_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions])) +
         sum_list (map length (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))) +
         length (map leave_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) +
@@ -2974,22 +2935,13 @@ next
         apply (erule in_setE)
         subgoal for n
           unfolding add_gr_0
-          apply (rule disjI1)
-          apply (rule disjI1)
-          apply (rule disjI2)
-          apply (rule sum_list_pos_if_ex_pos)
-          by auto
+          by (fastforce intro!: sum_list_pos_if_ex_pos)
         done
       subgoal for a
         apply (erule in_setE)
         subgoal for n
           unfolding add_gr_0
-          apply (rule disjI1)
-          apply (rule disjI1)
-          apply (rule disjI1)       
-          apply (rule disjI2)
-          apply (rule length_pos_if_in_set[of n])
-          by auto
+          by (fastforce intro!: length_pos_if_in_set[of n])
         done
       subgoal for a
         apply (erule in_setE)
@@ -3046,16 +2998,37 @@ let ?seq = "(ext_seq \<circ> seq_apply) (map leave_start_instant (filter (\<lamb
          ((ext_seq \<circ> seq_apply) (map enter_start_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<in> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<notin> planning_sem.happ_seq) [0..<length actions]))
            (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))
              ((ext_seq \<circ> seq_apply) (map enter_end_instant (filter (\<lambda>n. (time_index \<pi> i, at_start (actions ! n)) \<notin> planning_sem.happ_seq \<and> (time_index \<pi> i, at_end (actions ! n)) \<in> planning_sem.happ_seq) [0..<length actions])) [delay (real_of_rat (get_delay i)) s]))))"
+  
+  have x: "abs_renum.urge_bisim.A.steps ((ext_seq \<circ> seq_apply) fs xs) \<and> R' (last ((ext_seq \<circ> seq_apply) fs xs))" for i::nat and fs xs R'
+    apply (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[where R = "happening_pre_end_ends i" and S = "happening_post_end_ends i"])
+    sorry
   show "abs_renum.urge_bisim.A.steps ?seq \<and> happening_post i (last ?seq)"
+    apply (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[where R = "happening_pre_start_ends i" and S = "happening_post_start_ends i"])
+    apply (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[where R = "happening_pre_end_ends i" and S = "happening_post_end_ends i"])
+    apply (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[where R = "happening_pre_start_starts i" and S = "happening_post_start_starts i"])
+    apply (rule steps_seq.fold_ext_seq_comp_seq_apply_induct_list_prop_composable[where R = "happening_pre_instants i" and S = "happening_post_instants i"])
+    apply (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[where R = "happening_pre_end_starts i" and S = "happening_post_end_starts i"])
+
+    unfolding length_map
     sorry
 qed
 
+
 lemma "abs_renum.urge_bisim.A.steps plan_steps \<and> goal_state_conds (last plan_steps)" 
-  unfolding plan_steps_def comp_apply[of ext_seq seq_apply, symmetric]
-  apply (rule ext_seq_comp_seq_apply_steps_single[where R = goal_trans_pre])
-  apply (rule ext_seq'_steps_induct_list_prop_and_post)
-  apply (rule ext_seq_comp_seq_apply_steps_single_composable[where R = goal_trans_pre])
-  find_theorems name: "ext_seq'*"
+proof -
+  show ?thesis 
+    unfolding plan_steps_def 
+    unfolding comp_apply[of ext_seq seq_apply, symmetric]         
+    apply (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R = goal_trans_pre and S = goal_state_conds])
+       apply (rule steps_seq.ext_seq'_induct_list_prop_and_post[where P = happening_pre_pre_delay and Q = happening_post and R = init_planning_state_props'])
+    apply (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composable[where R = init_state_props and S = init_planning_state_props])
+    unfolding length_map length_upt minus_nat.diff_0 
+  proof -
+    show "abs_renum.urge_bisim.A.steps [abs_renum.a\<^sub>0] \<and> init_state_props (last [abs_renum.a\<^sub>0])" using init_state_char abs_renum.urge_bisim.A.steps.intros by simp
+    show "\<And>x. init_state_props x \<Longrightarrow> init_planning_state_props (start_planning x) \<and> abs_renum.urge_bisim.A.steps [x, start_planning x]" sorry
+  qed
+qed
+
 
 find_theorems name: "abs_renum.urge_bisim.A.steps*"
 
@@ -3409,7 +3382,7 @@ qed
 
 lemma planning_locked_after:
   "v' PlanningLock = Some 1" using planning_state variables_same_after by fastforce
-
+(* Add intro and elim rules for every definition *)
 lemma enter_end_instant_okay:
     shows "abs_renum.urge_bisim.A.steps [(L, v, c), enter_end_instant n (L, v, c)]"
 proof (rule single_step_intro)
@@ -3431,7 +3404,8 @@ proof (rule single_step_intro)
     show "bounded (map_of nta_vars) v" using v_bounded .
     show "abs_renum.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow>\<^bsub>Internal STR ''''\<^esub> \<langle>L', v', c'\<rangle>"
       unfolding abs_renum.sem_def
-    proof (rule step_int)
+      apply (rule step_int)
+    proof goal_cases
       show "TRANS ''silent'' \<bar> (l, b, g, Sil STR '''', f, r, l') \<in> Simple_Network_Language.trans (map (automaton_of \<circ> conv_automaton) actual_autos ! (Suc n))"
         apply (subst TAG_def)
         apply (subst t'(4)[symmetric])
