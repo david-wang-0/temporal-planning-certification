@@ -437,9 +437,9 @@ lemma plan_durations: "(a, t, d) \<in> ran \<pi> \<Longrightarrow> 0 \<le> d" us
 lemmas plan_overlap_cond = nso[THEN no_self_overlap_ran]
 
 text \<open>The cases for snap-actions that occur at a timepoint\<close>
-abbreviation "is_instant_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<in> happ_seq"
-abbreviation "is_starting_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq"
-abbreviation "is_ending_action t a \<equiv> (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq"
+definition "is_instant_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<in> happ_seq"
+definition "is_starting_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq"
+definition "is_ending_action t a \<equiv> (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq"
 
 context
   fixes t::'time

@@ -916,12 +916,15 @@ schematic_goal actual_variables_exact: "actual_variables = ?x"
   unfolding nta_vars_exact
   unfolding map_map comp_apply prod.case map_append list.map
   unfolding fst_conv
-  unfolding set_append list.set set_map
-set_filter 
+  unfolding set_append list.set set_map set_filter 
   unfolding image_Collect
   unfolding Union_Un_distrib
   ..
-  
+
+schematic_goal in_actual_variablesI:
+  "?c \<Longrightarrow> x \<in> actual_variables"
+  unfolding actual_variables_exact
+  by assumption
 
 subsection \<open>Locations\<close>       
 subsubsection \<open>Locations for simplicity\<close>
