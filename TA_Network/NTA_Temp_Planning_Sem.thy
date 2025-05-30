@@ -101,6 +101,17 @@ definition "plan_state_seq \<equiv> SOME MS. valid_state_seq MS"
 
 definition "action_list \<equiv> SOME xs. set xs = actions \<and> distinct xs"
 
+lemma valid_state_seqE: 
+  assumes "valid_state_seq MS"
+    and "i < length (htpl \<pi>)"
+    and "apply_effects adds dels (MS i) (happ_at (plan_happ_seq \<pi> at_start at_end) (time_index \<pi> i)) = MS (Suc i) \<Longrightarrow> invs_at (plan_inv_seq \<pi> over_all) (time_index \<pi> i) \<subseteq> MS i \<Longrightarrow> \<Union> (pre ` happ_at (plan_happ_seq \<pi> at_start at_end) (time_index \<pi> i)) \<subseteq> MS i \<Longrightarrow> thesis"
+  shows thesis
+  apply (insert assms(1)) unfolding valid_state_seq_def valid_state_sequence_def Let_def
+  apply (drule spec)
+  apply (drule mp[OF _ assms(2)])
+  apply (erule conjE)+
+  using assms(3) by blast
+
 lemma set_action_list: "set action_list = actions"
   unfolding action_list_def using finite_actions[THEN finite_distinct_list, THEN someI_ex] by blast
 
@@ -194,6 +205,22 @@ lemma mutex_same_instant_is_same:
       and "mutex_snap a b"
     shows "a = b" 
   using mutex_not_in_same_instant assms by blast
+
+subsubsection \<open>Time index and happenings\<close>
+
+lemma time_index_happ_at:
+  assumes "i < length (htpl \<pi>)"
+  shows "\<exists>h. (time_index \<pi> i, h) \<in> happ_seq"
+  apply (insert time_index_htpsD[OF vp[THEN valid_plan_finite] assms])
+  apply (erule htpsE)
+  unfolding happ_seq_def
+   apply (rule exI)
+   apply (rule in_happ_seqI)
+   apply simp
+  apply (rule exI)
+  apply (erule ssubst)
+  by (erule in_happ_seqI)
+
 
 subsubsection \<open>Execution state\<close>
 
@@ -440,6 +467,37 @@ text \<open>The cases for snap-actions that occur at a timepoint\<close>
 definition "is_instant_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<in> happ_seq"
 definition "is_starting_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq"
 definition "is_ending_action t a \<equiv> (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq"
+definition "is_not_happening_action t a \<equiv> (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<notin> happ_seq"
+
+lemma action_happening_cases:
+  assumes "is_instant_action t a \<Longrightarrow> thesis"
+          "is_starting_action t a \<Longrightarrow> thesis"
+          "is_ending_action t a \<Longrightarrow> thesis"
+          "is_not_happening_action t a \<Longrightarrow> thesis"
+shows thesis
+  using assms unfolding is_instant_action_def is_starting_action_def is_ending_action_def is_not_happening_action_def by blast
+
+lemmas action_happening_case_defs = is_instant_action_def is_starting_action_def is_ending_action_def is_not_happening_action_def 
+
+lemma htps_action_happening_cases:
+  assumes "t \<in> htps \<pi>"
+      and "\<And>a. a \<in> actions \<Longrightarrow> is_starting_action t a \<Longrightarrow> thesis"
+      and "\<And>a. a \<in> actions \<Longrightarrow> is_ending_action t a \<Longrightarrow> thesis"
+      and "\<And>a. a \<in> actions \<Longrightarrow> is_instant_action t a \<Longrightarrow> thesis"
+    shows thesis
+proof -
+  presume "\<exists>a \<in> actions. is_starting_action t a \<or> is_ending_action t a \<or> is_instant_action t a"
+  thus thesis using assms by blast
+next
+  show "\<exists>a\<in>actions. is_starting_action t a \<or> is_ending_action t a \<or> is_instant_action t a" 
+    apply (insert assms(1))
+    apply (erule htpsE; (frule a_in_plan_is_in_actions, erule ssubst))
+    unfolding action_happening_case_defs
+     apply (drule at_start_in_happ_seqI, blast)
+    by (drule at_end_in_happ_seqI, blast) 
+qed
+
+lemmas time_index_action_happening_cases = time_index_htpsD[OF vp[THEN valid_plan_finite], THEN htps_action_happening_cases]
 
 context
   fixes t::'time
@@ -1814,7 +1872,7 @@ lemma locked_by_alt: "{a \<in> actions. p \<in> over_all a} = set (locked_by p)"
 text \<open>Relating the ideas of an action being active at, during and after a timepoint.\<close>
 
 lemma ending_timepoint_count_le_open_active_count:
-  "(\<Sum>a\<leftarrow>xs. if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0) \<le> sum_list (map (open_active_count t) xs)" 
+  "(\<Sum>a\<leftarrow>xs. if is_ending_action t a then 1 else 0) \<le> sum_list (map (open_active_count t) xs)" 
   if "set xs \<subseteq> actions"
     using that 
     apply (induction xs)
@@ -1827,12 +1885,12 @@ lemma ending_timepoint_count_le_open_active_count:
       apply (subst sum_list.eq_foldr[symmetric])+
       apply (cases "(t, at_start x) \<notin> happ_seq \<and> (t, at_end x) \<in> happ_seq")
       using open_active_count_1_if_ending apply simp
-      using open_active_count_ran by auto
+      using open_active_count_ran is_ending_action_def by auto
     done
 
-lemma locked_during_and_before: "locked_during t p = locked_before t p - sum_list (map (\<lambda>a. (if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0)) (locked_by p))"
+lemma locked_during_and_before: "locked_during t p = locked_before t p - sum_list (map (\<lambda>a. (if is_ending_action t a then 1 else 0)) (locked_by p))"
 proof -
-  have 2: "sum_list (map (open_closed_active_count t) xs) = sum_list (map (open_active_count t) xs) - (\<Sum>a\<leftarrow>xs. if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0)" if "set xs \<subseteq> actions" for xs
+  have 2: "sum_list (map (open_closed_active_count t) xs) = sum_list (map (open_active_count t) xs) - (\<Sum>a\<leftarrow>xs. if is_ending_action t a then 1 else 0)" if "set xs \<subseteq> actions" for xs
     using that
   proof (induction xs)
     case Nil
@@ -1845,33 +1903,33 @@ proof -
       apply (subst comp_apply)+
       apply (subst sum_list.eq_foldr[symmetric])+
       apply (subst open_closed_active_count_def)
-      apply (cases "(t, at_start x) \<notin> happ_seq \<and> (t, at_end x) \<in> happ_seq")
-      subgoal
+      apply (cases "is_ending_action t x")
+      subgoal 
         apply simp
         apply (subst add_diff_assoc2)
-         using open_active_count_1_if_ending
+        using open_active_count_1_if_ending 
+        unfolding is_ending_action_def 
          apply simp
         apply (subst add_diff_assoc)
-        using ending_timepoint_count_le_open_active_count apply simp
-        by simp
-      subgoal
+        using ending_timepoint_count_le_open_active_count 
+        unfolding is_ending_action_def by auto
+      subgoal unfolding is_ending_action_def
         apply (subst if_not_P)
          apply assumption
         apply (subst if_not_P)
          apply assumption
         apply simp
         apply (subst add_diff_assoc[symmetric]) 
-        using ending_timepoint_count_le_open_active_count apply simp
-        by simp
+        using ending_timepoint_count_le_open_active_count unfolding is_ending_action_def by auto
       done
   qed
   have "set (locked_by p) \<subseteq> actions" using locked_by_alt by auto
   thus ?thesis unfolding locked_during_def locked_before_def using 2 by simp
 qed
 
-lemma locked_before_and_during: "locked_before t p = locked_during t p + sum_list (map (\<lambda>a. (if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0)) (locked_by p))"
+lemma locked_before_and_during: "locked_before t p = locked_during t p + sum_list (map (\<lambda>a. (if is_ending_action t a then 1 else 0)) (locked_by p))"
 proof -
-  have 2: "sum_list (map (open_active_count t) xs) = sum_list (map (open_closed_active_count t) xs) + (\<Sum>a\<leftarrow>xs. if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0)" if "set xs \<subseteq> actions" for xs
+  have 2: "sum_list (map (open_active_count t) xs) = sum_list (map (open_closed_active_count t) xs) + (\<Sum>a\<leftarrow>xs. if is_ending_action t a then 1 else 0)" if "set xs \<subseteq> actions" for xs
     using that
   proof (induction xs)
     case Nil
@@ -1885,6 +1943,7 @@ proof -
       apply (subst sum_list.eq_foldr[symmetric])+
       apply (subst open_closed_active_count_def)
       apply (cases "(t, at_start x) \<notin> happ_seq \<and> (t, at_end x) \<in> happ_seq")
+      unfolding is_ending_action_def
       subgoal
         apply simp
         using open_active_count_1_if_ending
@@ -1901,10 +1960,10 @@ proof -
   thus ?thesis unfolding locked_during_def locked_before_def using 2 by simp
 qed
 
-lemma locked_after_and_during: "locked_after t p = locked_during t p + sum_list (map (\<lambda>a. (if (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq then 1 else 0)) (locked_by p))"
+lemma locked_after_and_during: "locked_after t p = locked_during t p + sum_list (map (\<lambda>a. (if is_starting_action t a then 1 else 0)) (locked_by p))"
 proof -
   have "sum_list (map (closed_active_count t) xs) =
-        sum_list (map (open_active_count t) xs) - (\<Sum>a\<leftarrow>xs. if (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq then 1 else 0) + (\<Sum>a\<leftarrow>xs. if (t, at_start a) \<in> happ_seq \<and> (t, at_end a) \<notin> happ_seq then 1 else 0)" if "set xs \<subseteq> actions" for xs 
+        sum_list (map (open_active_count t) xs) - (\<Sum>a\<leftarrow>xs. if is_ending_action t a then 1 else 0) + (\<Sum>a\<leftarrow>xs. if is_starting_action t a then 1 else 0)" if "set xs \<subseteq> actions" for xs 
     using that
     apply (induction xs)
      apply simp
@@ -1916,25 +1975,26 @@ proof -
       apply (subst sum_list.eq_foldr[symmetric])+
       apply (cases "(t, at_start x) \<in> happ_seq"; cases "(t, at_end x) \<in> happ_seq")
          apply simp
-      subgoal using open_active_count_0_if_start_scheduled closed_active_count_0_if_end_scheduled by simp
-      subgoal 
+      subgoal using open_active_count_0_if_start_scheduled closed_active_count_0_if_end_scheduled action_happening_case_defs by simp
+      subgoal unfolding action_happening_case_defs
         apply (subst if_not_P, simp)
         apply (subst (2) if_P, simp)
         apply (subst closed_active_count_1_if_starting, simp, simp, simp)
         apply (subst open_active_count_0_if_start_scheduled; simp)
         done
-      subgoal 
+      subgoal unfolding action_happening_case_defs
         apply (subst if_P, simp)
         apply (subst (2) if_not_P, simp)
         apply (subst closed_active_count_0_if_end_scheduled, simp, simp, simp)
         apply (subst open_active_count_1_if_ending; simp)
         done
-      subgoal 
+      subgoal unfolding action_happening_case_defs
         apply (subst if_not_P, simp)
         apply (subst (2) if_not_P, simp)
         apply (subst open_active_count_eq_closed_active_count_if_only_instant_acts, simp, simp, simp)
         apply (subst add_diff_assoc)
-        using ending_timepoint_count_le_open_active_count by simp+
+        using ending_timepoint_count_le_open_active_count 
+        unfolding is_ending_action_def by simp+
       done
     done
   moreover
@@ -2025,6 +2085,53 @@ proof -
     using order_trans by auto
 qed
 
+lemma closed_active_count_is_open_active_count_if_nothing_happens:
+  assumes "s < t"
+    and "\<not>(\<exists>s' h. s < s' \<and> s' < t \<and> (s', h) \<in> happ_seq)" 
+  shows "closed_active_count s a = open_active_count t a"
+proof -
+  have "{sa. sa \<le> s \<and> (sa, at_start a) \<in> happ_seq} = {s. s < t \<and> (s, at_start a) \<in> happ_seq}"
+    apply (intro equalityI subsetI)
+    subgoal using assms(1) by auto
+    subgoal for x
+      apply (cases "x \<le> s")
+      using assms(2) by auto
+    done
+  moreover
+  have "{s'. s' \<le> s \<and> (s', at_end a) \<in> happ_seq} = {s'. s' < t \<and> (s', at_end a) \<in> happ_seq}"
+    apply (intro equalityI subsetI)
+    subgoal using assms(1) by auto
+    subgoal for x
+      apply (cases "x \<le> s")
+      using assms(2) by auto
+    done
+  ultimately
+  show ?thesis unfolding open_active_count_def closed_active_count_def by simp
+qed
+
+lemma closed_active_count_on_indexed_timepoint_is_open_active_count_Suc:
+  assumes "Suc i < length (htpl \<pi>)"
+  shows "closed_active_count (time_index \<pi> i) a = open_active_count (time_index \<pi> (Suc i)) a"
+  apply (rule closed_active_count_is_open_active_count_if_nothing_happens)
+   apply (rule time_index_strict_sorted_list, (simp add: assms)+)
+  using no_actions_between_indexed_timepoints[OF vp[THEN valid_plan_finite] assms]
+  unfolding happ_seq_def by fast
+
+lemma locked_after_is_locked_before_if_nothing_happens:
+  assumes "s < t"
+    and "\<not>(\<exists>s' h. s < s' \<and> s' < t \<and> (s', h) \<in> happ_seq)" 
+  shows "locked_after s p = locked_before t p"
+  unfolding locked_after_def locked_before_def
+  using closed_active_count_is_open_active_count_if_nothing_happens assms by simp
+
+lemma locked_after_indexed_timepoint_is_locked_before_Suc:
+  assumes "Suc i < length (htpl \<pi>)"
+  shows "locked_after (time_index \<pi> i) p = locked_before (time_index \<pi> (Suc i)) p"
+  apply (rule locked_after_is_locked_before_if_nothing_happens)
+   apply (rule time_index_strict_sorted_list, (simp add: assms)+)
+  using no_actions_between_indexed_timepoints[OF vp[THEN valid_plan_finite] assms]
+  unfolding happ_seq_def by fast
+
 subsubsection \<open>Counting the number of active actions in total\<close>
 
 definition "active_before t \<equiv> sum_list (map (open_active_count t) action_list)"
@@ -2113,6 +2220,24 @@ proof -
     using sum_list_binary_less_than_length_if[where xs = "map (open_active_count t) action_list"] length_action_list[symmetric]
     by simp
 qed
+
+subsubsection \<open>Relating the notions of active actions\<close>
+
+lemma active_after_is_before_if_nothing_happens:
+  assumes "s < t"
+    and "\<not>(\<exists>s' h. s < s' \<and> s' < t \<and> (s', h) \<in> happ_seq)" 
+  shows "active_after s = active_before t"
+  unfolding active_after_def active_before_def 
+  using closed_active_count_is_open_active_count_if_nothing_happens assms by auto
+
+lemma active_after_indexed_timepoint_is_active_before_Suc: 
+  assumes "Suc i < length (htpl \<pi>)"
+  shows "active_after (time_index \<pi> i) = active_before (time_index \<pi> (Suc i))"
+  apply (rule active_after_is_before_if_nothing_happens)
+   apply (rule time_index_strict_sorted_list, (simp add: assms)+)
+  using no_actions_between_indexed_timepoints[OF vp[THEN valid_plan_finite] assms]
+  unfolding happ_seq_def by fast
+
 
 subsubsection \<open>Relating the invariant sequence to the number of locks\<close>
 
@@ -2255,7 +2380,7 @@ proof (rule iffI)
   ultimately
   have not_ending: "(t, at_end a) \<notin> happ_seq" by simp
 
-  have a_in_open_closed: "open_closed_active_count t a = 1" unfolding open_closed_active_count_def using a_open_active not_starting not_ending by simp
+  have a_in_open_closed: "open_closed_active_count t a = 1" unfolding open_closed_active_count_def using a_open_active not_starting not_ending is_ending_action_def by simp
 
   show "0 < locked_during t p"
   proof -
@@ -2288,7 +2413,7 @@ next
   hence oac: "open_active_count t a = 1" using open_closed_active_count_def open_active_count_ran by force
 
   from ocac oac
-  consider "(t, at_start a) \<in> happ_seq" | "(t, at_end a) \<notin> happ_seq" unfolding open_closed_active_count_def by fastforce
+  consider "(t, at_start a) \<in> happ_seq" | "(t, at_end a) \<notin> happ_seq" unfolding open_closed_active_count_def is_ending_action_def by fastforce
   then consider "(t, at_start a) \<in> happ_seq" "(t, at_end a) \<notin> happ_seq" | "(t, at_start a) \<in> happ_seq" "(t, at_end a) \<in> happ_seq"| "(t, at_start a) \<notin> happ_seq" "(t, at_end a) \<notin> happ_seq" by argo
   hence not_starting_or_ending: "(t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<notin> happ_seq"
     apply cases 
@@ -2906,14 +3031,15 @@ lemma happ_at_is_union_of_starting_ending_instant:
         apply (frule at_start_in_happ_seqI)
         apply (frule acts_in_prob)
         apply (cases "(t, at_end a) \<in> happ_seq")
-        unfolding instant_snaps_at_def instant_actions_at_def starting_snaps_at_def starting_actions_at_def by auto
+        unfolding instant_snaps_at_def instant_actions_at_def is_instant_action_def starting_snaps_at_def is_starting_action_def starting_actions_at_def by auto
         apply (frule at_end_in_happ_seqI)
         apply (frule acts_in_prob)
       apply (cases "(t + d, at_start a) \<in> happ_seq")
-      unfolding instant_snaps_at_def instant_actions_at_def ending_snaps_at_def ending_actions_at_def by auto
+      unfolding instant_snaps_at_def instant_actions_at_def is_instant_action_def ending_snaps_at_def is_ending_action_def ending_actions_at_def by auto
         done
       apply (elim UnE)
-    unfolding instant_snaps_at_def instant_actions_at_def starting_snaps_at_def starting_actions_at_def ending_snaps_at_def ending_actions_at_def by auto
+      unfolding instant_snaps_at_def instant_actions_at_def starting_snaps_at_def starting_actions_at_def ending_snaps_at_def ending_actions_at_def
+      unfolding action_happening_case_defs by auto
 
 lemma app_start_instant_dist: "(app_effs (starting_snaps_at t) o app_effs (instant_snaps_at t)) M = app_effs (instant_snaps_at t \<union> starting_snaps_at t) M"
   apply (rule prop_state_upd_combine_if[OF _ HOL.refl])
@@ -2921,8 +3047,8 @@ lemma app_start_instant_dist: "(app_effs (starting_snaps_at t) o app_effs (insta
     unfolding instant_snaps_at_def starting_snaps_at_def instant_actions_at_def starting_actions_at_def
     using nm unfolding mutex_valid_happ_seq_def nm_happ_seq_def
     unfolding mutex_snap_def
-    by blast
-  done
+    unfolding action_happening_case_defs by auto
+    done
 
 lemma app_all_dist: "(app_effs (ending_snaps_at t) o app_effs (starting_snaps_at t) o app_effs (instant_snaps_at t)) M = app_effs (happ_at happ_seq t) M"
   apply (subst comp_assoc)
@@ -2932,6 +3058,7 @@ lemma app_all_dist: "(app_effs (ending_snaps_at t) o app_effs (starting_snaps_at
     using nm unfolding mutex_valid_happ_seq_def nm_happ_seq_def unfolding mutex_snap_def by blast
   subgoal unfolding instant_snaps_at_def starting_snaps_at_def ending_snaps_at_def 
     unfolding instant_actions_at_def starting_actions_at_def ending_actions_at_def
+    unfolding action_happening_case_defs
     apply (rule equalityI)
      apply blast
     apply (rule subsetI)
@@ -2961,6 +3088,13 @@ definition "inst_upd_state i \<equiv> app_effs (instant_snaps_at (time_index \<p
 definition "inst_start_upd_state i \<equiv> ((app_effs (starting_snaps_at (time_index \<pi> i))) o (app_effs (instant_snaps_at (time_index \<pi> i)))) (plan_state_seq i)"
 
 definition "upd_state i \<equiv> app_effs (happ_at happ_seq (time_index \<pi> i)) (plan_state_seq i)"
+
+lemma state_seq_Suc_is_upd:
+  assumes "i < length (htpl \<pi>)"
+  shows "plan_state_seq (Suc i) = upd_state i"
+  apply (rule valid_state_seqE[OF plan_state_seq_valid assms])
+  unfolding upd_state_def happ_seq_def app_effs_def by blast
+
 
 
 end                       
