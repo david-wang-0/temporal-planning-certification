@@ -97,7 +97,7 @@ definition "inv_seq \<equiv> plan_inv_seq \<pi> over_all"
 
 definition "plan_invs_before t \<equiv> invs_at inv_seq t"
 
-definition "plan_state_seq \<equiv> SOME MS. valid_state_seq MS"
+definition "plan_state_seq \<equiv> SOME MS. valid_state_seq MS \<and> MS 0 = init \<and> goal \<subseteq> MS (length (htpl \<pi>))"
 
 definition "action_list \<equiv> SOME xs. set xs = actions \<and> distinct xs"
 
@@ -122,15 +122,15 @@ lemma distinct_action_list: "distinct action_list"
 lemma length_action_list: "length action_list = card actions" 
   using set_action_list distinct_action_list distinct_card by metis
 
-lemma plan_state_seq_valid: "valid_state_seq plan_state_seq"
-  using vp unfolding valid_plan_def Let_def  valid_state_seq_def 
-    plan_state_seq_def 
+lemma plan_state_seq_valid: "valid_state_seq plan_state_seq \<and> plan_state_seq 0 = init \<and> goal \<subseteq> plan_state_seq (length (htpl \<pi>))"
+    apply (insert vp[THEN valid_plan_state_seq])
   unfolding valid_state_seq_def[symmetric]
-  apply -
-  apply (rule  Hilbert_Choice.someI_ex[where P = valid_state_seq])
+  unfolding plan_state_seq_def
+    apply (erule someI2_ex[where Q = "\<lambda>M. valid_state_seq M \<and> M 0 = init \<and> goal \<subseteq> M (length (htpl \<pi>))"])
   by blast
-
-lemmas plan_state_seq_props = plan_state_seq_valid[simplified valid_state_seq_def valid_state_sequence_def]
+  
+  
+lemmas plan_state_seq_props = plan_state_seq_valid[simplified valid_state_seq_def valid_state_sequence_def Let_def]
 
 lemma plan_state_seq_happ_pres:
   assumes "i < length (htpl \<pi>)"
@@ -2132,6 +2132,20 @@ lemma locked_after_indexed_timepoint_is_locked_before_Suc:
   using no_actions_between_indexed_timepoints[OF vp[THEN valid_plan_finite] assms]
   unfolding happ_seq_def by fast
 
+lemma open_active_count_initial_is_0:
+  shows "open_active_count (time_index \<pi> 0) a = 0"
+proof -
+  have "{s. s < time_index \<pi> 0 \<and> (s, at_start a) \<in> happ_seq} = {}" sorry
+  moreover
+  have "{s'. s' < time_index \<pi> 0 \<and> (s', at_end a) \<in> happ_seq} = {}" sorry
+  ultimately
+  show ?thesis unfolding open_active_count_def by presburger
+qed
+
+lemma locked_before_initial_is_0:
+  shows "locked_before (time_index \<pi> 0) p = 0"
+  unfolding locked_before_def
+
 subsubsection \<open>Counting the number of active actions in total\<close>
 
 definition "active_before t \<equiv> sum_list (map (open_active_count t) action_list)"
@@ -3092,10 +3106,8 @@ definition "upd_state i \<equiv> app_effs (happ_at happ_seq (time_index \<pi> i)
 lemma state_seq_Suc_is_upd:
   assumes "i < length (htpl \<pi>)"
   shows "plan_state_seq (Suc i) = upd_state i"
-  apply (rule valid_state_seqE[OF plan_state_seq_valid assms])
+  using plan_state_seq_valid valid_state_seqE assms
   unfolding upd_state_def happ_seq_def app_effs_def by blast
-
-
 
 end                       
 end
