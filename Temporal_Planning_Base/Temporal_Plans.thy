@@ -122,7 +122,28 @@ lemma htpsE:
       and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> time = t \<Longrightarrow> thesis"
       and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> time = t + d \<Longrightarrow> thesis"
   shows thesis 
-  using assms unfolding htps_def by blast
+  using assms unfolding htps_def by blast 
+
+lemma htpsI:
+  assumes "(a, t, d) \<in> ran \<pi>"
+  shows "t \<in> htps" "t + d \<in> htps"
+  unfolding htps_def using assms by blast+
+
+lemma htps_conv_happ_seq_ex:
+  assumes "t \<in> htps"
+  shows "\<exists>h. (t, h) \<in> plan_happ_seq"
+  using assms
+  apply -
+  apply (erule htpsE)
+  using in_happ_seqI by blast+
+
+lemma happ_seq_conv_htps:
+  assumes "(t, h) \<in> plan_happ_seq"
+  shows "t \<in> htps"
+  using assms 
+  apply -
+  apply (erule in_happ_seqE)
+  using htpsI by blast+
     
 text \<open>Invariants\<close>
 definition plan_inv_seq::"('proposition, 'time) invariant_sequence" where
@@ -1481,6 +1502,12 @@ proof -
   }
   thus "card (ran \<pi>) = 0" by blast
 qed
+
+lemma empty_acts_if_empty_htpl_finite:
+  assumes len: "length htpl = 0"
+      and fp: "finite_plan"
+    shows "ran \<pi> = {}"
+  using assms empty_acts_if_empty_htpl finite_ran finite_plan_def by fastforce
 
 lemma no_actions_after_final_timepoint:
   assumes finite_plan

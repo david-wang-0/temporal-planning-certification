@@ -2085,6 +2085,73 @@ proof -
     using order_trans by auto
 qed
 
+lemma open_active_count_initial_is_0: "open_active_count (time_index \<pi> 0) a = 0"
+proof -
+  find_theorems name: "no*init*ti"
+  have "{s. s < time_index \<pi> 0 \<and> (s, at_start a) \<in> happ_seq} = {}" (is "?S = {}")
+  proof -
+    { fix x
+      assume "x \<in> ?S"
+      hence False 
+        apply -
+        apply (elim CollectE conjE)
+        unfolding happ_seq_def
+        apply (drule happ_seq_conv_htps)
+        apply (drule time_indexI_htps[rotated])
+        using vp valid_plan_finite apply blast
+        using time_index_sorted_set[of 0]
+        by fastforce
+    }
+    thus ?thesis by blast
+  qed
+  moreover
+  have "{s'. s' < time_index \<pi> 0 \<and> (s', at_end a) \<in> happ_seq} = {}" (is "?S = {}")
+  proof -
+    { fix x
+      assume "x \<in> ?S"
+      hence False 
+        apply -
+        apply (elim CollectE conjE)
+        unfolding happ_seq_def
+        apply (drule happ_seq_conv_htps)
+        apply (drule time_indexI_htps[rotated])
+        using vp valid_plan_finite apply blast
+        using time_index_sorted_set[of 0]
+        by fastforce
+    }
+    thus ?thesis by blast
+  qed
+  ultimately
+  show ?thesis unfolding open_active_count_def by presburger
+qed
+
+find_theorems name: "closed_active_count"
+
+find_theorems "time_index"
+
+lemma closed_active_count_final_is_0: 
+  assumes "a \<in> actions"
+  shows "closed_active_count (time_index \<pi> (length (htpl \<pi>) - 1)) a = 0"
+proof (cases "length (htpl \<pi>)")
+  case 0
+  hence "ran \<pi> = {}"
+    using empty_acts_if_empty_htpl_finite vp valid_plan_finite by blast
+  then show ?thesis 
+    unfolding closed_active_count_def happ_seq_def plan_happ_seq_def by simp
+next
+  case (Suc nat)
+  show ?thesis 
+    apply (subst closed_active_count_0_iff)
+     apply (rule assms)
+    apply (rule notI)
+    apply (elim exE conjE)
+    subgoal for t d
+      using no_actions_after_final_timepoint[OF vp[THEN valid_plan_finite]]
+      using Suc  apply simp
+      using in_happ_seqI by fast
+    done
+qed
+
 lemma closed_active_count_is_open_active_count_if_nothing_happens:
   assumes "s < t"
     and "\<not>(\<exists>s' h. s < s' \<and> s' < t \<and> (s', h) \<in> happ_seq)" 
@@ -2132,19 +2199,13 @@ lemma locked_after_indexed_timepoint_is_locked_before_Suc:
   using no_actions_between_indexed_timepoints[OF vp[THEN valid_plan_finite] assms]
   unfolding happ_seq_def by fast
 
-lemma open_active_count_initial_is_0:
-  shows "open_active_count (time_index \<pi> 0) a = 0"
-proof -
-  have "{s. s < time_index \<pi> 0 \<and> (s, at_start a) \<in> happ_seq} = {}" sorry
-  moreover
-  have "{s'. s' < time_index \<pi> 0 \<and> (s', at_end a) \<in> happ_seq} = {}" sorry
-  ultimately
-  show ?thesis unfolding open_active_count_def by presburger
-qed
-
 lemma locked_before_initial_is_0:
   shows "locked_before (time_index \<pi> 0) p = 0"
-  unfolding locked_before_def
+  unfolding locked_before_def using open_active_count_initial_is_0 by simp
+
+lemma locked_after_final_is_0:
+  "locked_after (time_index \<pi> (length (htpl \<pi>) - 1)) p = 0"
+  unfolding locked_after_def using closed_active_count_final_is_0 locked_by_def set_action_list by auto
 
 subsubsection \<open>Counting the number of active actions in total\<close>
 
@@ -2252,6 +2313,11 @@ lemma active_after_indexed_timepoint_is_active_before_Suc:
   using no_actions_between_indexed_timepoints[OF vp[THEN valid_plan_finite] assms]
   unfolding happ_seq_def by fast
 
+lemma active_before_initial_is_0: "active_before (time_index \<pi> 0) = 0"
+  unfolding active_before_def using open_active_count_initial_is_0 by auto
+
+lemma active_after_final_is_0:  "active_after (time_index \<pi> (length (htpl \<pi>) - 1)) = 0"
+  unfolding active_after_def  using closed_active_count_final_is_0 set_action_list by simp
 
 subsubsection \<open>Relating the invariant sequence to the number of locks\<close>
 
