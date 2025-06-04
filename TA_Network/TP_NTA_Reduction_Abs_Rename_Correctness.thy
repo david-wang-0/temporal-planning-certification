@@ -203,14 +203,14 @@ lemma partially_updated_locked_before_inv_mono': assumes "n \<le> m"
     by blast
   done
 
-lemma partially_updated_locked_before_by_none_is_locked_before:
+lemma partially_updated_locked_before_0_is_locked_before:
   "partially_updated_locked_before t p 0 = planning_sem.locked_before t p"
   unfolding partially_updated_locked_before_def
   by simp
 
 lemma partially_updated_locked_before_ran: "partially_updated_locked_before t p n \<le> length actions" 
   using planning_sem.locked_before_ran unfolding distinct_card[OF distinct_actions]
-  using partially_updated_locked_before_inv_mono'[of 0 n] unfolding partially_updated_locked_before_by_none_is_locked_before 
+  using partially_updated_locked_before_inv_mono'[of 0 n] unfolding partially_updated_locked_before_0_is_locked_before 
   using order_trans by blast
 
 find_theorems "[?n..<?m] @ [?m..<?o]"
@@ -2407,7 +2407,7 @@ let
   t = time_index \<pi> n;
   (L, v, c) = Lvc;
 
-  locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_before t p)));
+  locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_before t p)));
 
   ending_loc = (\<forall>i < length actions. is_ending_index t i \<longrightarrow> L ! Suc i = (Running (actions ! i)));
 
@@ -2423,7 +2423,7 @@ let
   t = time_index \<pi> n;
   (L, v, c) = Lvc;
 
-  locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int_of_nat (planning_sem.locked_during t p)));
+  locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during t p)));
 
   ending_loc = (\<forall>i < length actions. is_ending_index t i \<longrightarrow> L ! Suc i = (EndInstant (actions ! i)));
 
@@ -2445,7 +2445,7 @@ let
   not_updated_locs = (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index t j \<longrightarrow> L ! Suc j = (Running (actions ! j)));
 
   updated_clocks =  (\<forall>j. j < i \<and> is_ending_index t j \<longrightarrow> c (ActEnd (actions ! j)) = 0);
-  not_updated_clocks =  (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index t j \<longrightarrow> c (ActEnd (actions ! j)) = 0)
+  not_updated_clocks =  (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index t j \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! j)) (time_index \<pi> n))
 
 in end_start_invs n Lvc
   \<and> locked 
@@ -2465,7 +2465,7 @@ let
   not_updated_locs = (\<forall>j. i < j \<and> j < length actions \<and> is_ending_index t j \<longrightarrow> L ! Suc j = (Running (actions ! j)));
 
   updated_clocks =  (\<forall>j. j \<le> i \<and> is_ending_index t j \<longrightarrow> c (ActEnd (actions ! j)) = 0);
-  not_updated_clocks =  (\<forall>j. i < j \<and> j < length actions \<and> is_ending_index t j \<longrightarrow> c (ActEnd (actions ! j)) = 0)
+  not_updated_clocks =  (\<forall>j. i < j \<and> j < length actions \<and> is_ending_index t j \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! j)) (time_index \<pi> n))
 
 in end_start_invs n Lvc
   \<and> locked 
@@ -2967,7 +2967,7 @@ lemma end_start_preE:
     (\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j)) \<Longrightarrow>
     (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j)) \<Longrightarrow>
     (\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0) \<Longrightarrow>
-    (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0) \<Longrightarrow>
+    (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! j)) (time_index \<pi> n)) \<Longrightarrow>
     thesis"
   shows thesis
   using assms by (auto simp: end_start_pre_def)
@@ -2979,7 +2979,7 @@ lemma end_start_preD:
     (\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j)) \<and>
     (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j)) \<and>
     (\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0) \<and>
-    (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0)"
+    (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! j)) (time_index \<pi> n))"
   using assms by (auto simp: end_start_pre_def)
 
 lemma end_start_pre_dests:
@@ -2989,7 +2989,7 @@ lemma end_start_pre_dests:
     "(\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j))"
     "(\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j))"
     "(\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0)"
-    "(\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0)"
+    "(\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! j)) (time_index \<pi> n))"
   using assms by (auto dest!: end_start_preD)
 
 lemma end_start_preI:
@@ -2999,7 +2999,7 @@ lemma end_start_preI:
     "(\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j))"
     "(\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j))"
     "(\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0)"
-    "(\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0)"
+    "(\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! j)) (time_index \<pi> n))"
   shows "end_start_pre n i x"
   using assms by (auto simp: end_start_pre_def)
 
@@ -3011,11 +3011,10 @@ lemma end_start_postE:
     (\<forall>j. j \<le> i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j)) \<Longrightarrow>
     (\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j)) \<Longrightarrow>
     (\<forall>j. j \<le> i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0) \<Longrightarrow> 
-    (\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0) \<Longrightarrow> 
+    (\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! j)) (time_index \<pi> n)) \<Longrightarrow> 
     thesis"
   shows thesis
   using assms by (auto simp: end_start_post_def)
-
 
 lemma end_start_post_dests:
   assumes "end_start_post n i x"
@@ -3025,7 +3024,7 @@ lemma end_start_post_dests:
     "(\<forall>j. j \<le> i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j))"
     "(\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j))"
     "(\<forall>j. j \<le> i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0)"
-    "(\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0)"
+    "(\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! j)) (time_index \<pi> n))"
   using assms by (auto simp: end_start_post_def)
 
 lemma end_start_postI:
@@ -3035,9 +3034,37 @@ lemma end_start_postI:
     "(\<forall>j. j \<le> i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j))"
     "(\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j))"
     "(\<forall>j. j \<le> i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0)"
-    "(\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> c (ActEnd (actions ! j)) = 0)"
+    "(\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! j)) (time_index \<pi> n))"
   shows "end_start_post n i x"
   using assms by (auto simp: end_start_post_def)
+
+lemma happening_pre_end_starts_dests:
+  assumes "happening_pre_end_starts n x"
+      and "x = (L, v, c)"
+  shows "end_start_invs n (L, v, c)"
+        "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_before (time_index \<pi> n) p)))"
+        "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Running (actions ! i))" 
+        "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
+  using assms happening_pre_end_starts_def by auto
+
+lemma happening_post_end_starts_dests:
+  assumes "happening_post_end_starts n x"
+    and "x = (L, v, c)"
+  shows "end_start_invs n (L, v, c)"
+    "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during (time_index \<pi> n) p)))"
+    "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = EndInstant (actions ! i))"
+    "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
+  using assms unfolding happening_post_end_starts_def by auto
+
+
+lemma happening_post_end_startsI:
+  assumes  "x = (L, v, c)"
+  and "end_start_invs n (L, v, c)"
+      "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during (time_index \<pi> n) p)))"
+      "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = EndInstant (actions ! i))"
+      "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
+  shows "happening_post_end_starts n x"
+  using assms unfolding happening_post_end_starts_def by auto
 
 text \<open>The rules used to show that the composition of sequences results in a run\<close>
 interpretation steps_seq: sequence_rules abs_renum.urge_bisim.A.steps
@@ -3275,14 +3302,98 @@ lemma end_starts_possible:
     shows "abs_renum.urge_bisim.A.steps ((ext_seq \<circ> seq_apply) (map enter_end_instant end_indices) xs) \<and> 
           happening_pre_instants i (last ((ext_seq \<circ> seq_apply) (map enter_end_instant end_indices) xs))"
 proof -
-  have end_indices_mono: "end_indices ! j < end_indices ! Suc j" if "Suc j < length end_indices" for j
+
+  have end_indices_mono: "end_indices ! m < end_indices ! n" if "m < n" "n < length end_indices" for m n
     apply (rule distinct_sorted_mono)
     using that unfolding end_indices
-    by (auto intro: sorted_filter'  distinct_filter)
+    by (auto intro: sorted_filter')
 
-  have end_indices_inc_all: "Suc (end_indices ! j) \<le> k \<Longrightarrow> k < end_indices ! Suc j \<Longrightarrow>  \<not> planning_sem.is_ending_action (time_index \<pi> i) (actions ! k)" 
-      if "Suc j < length end_indices" for j k
-    using end_indices_mono 
+  have end_indices_sorted: "end_indices ! m \<le> end_indices ! n" if "m \<le> n" "n < length end_indices" for m n
+    using that by (cases "m = n") (fastforce dest: le_neq_implies_less end_indices_mono)+
+
+  have end_indices_mono': "n < m" 
+    if "end_indices ! n < end_indices ! m" 
+      "n < length end_indices" 
+    for m n
+    apply (rule contrapos_pp[OF that(1)])
+    using end_indices_sorted[OF _ that(2), of m] by simp
+   
+  have end_indices_Suc: "end_indices ! j < end_indices ! Suc j" if "Suc j < length end_indices" for j
+    using end_indices_mono that by blast
+
+  have end_indices_exI: "\<exists>ij < length end_indices. end_indices ! ij = j" 
+    if "j < length actions" 
+      "is_ending_index (time_index \<pi> i) j" 
+    for j
+    apply (subst in_set_conv_nth[symmetric])
+    by (simp add: that end_indices)
+
+
+  have length_end_indices: "length end_indices \<le> length actions" 
+    unfolding end_indices 
+    apply (rule order_trans)
+     apply (rule length_filter_le)
+    by simp
+
+  have nth_end_indices_ran: "\<forall>j < length end_indices. end_indices ! j < length actions"
+    apply (subst all_set_conv_all_nth[symmetric])
+    unfolding end_indices by simp
+
+  have end_indices_inc_all: "\<not> is_ending_index (time_index \<pi> i) m" 
+    if jl: "Suc j < length end_indices" 
+      and x: "Suc (end_indices ! j) \<le> m" "m < end_indices ! Suc j" for j m
+  proof (rule notI)
+    assume a: "is_ending_index (time_index \<pi> i) m"
+    have ml: "m < length actions" using x nth_end_indices_ran[THEN spec, THEN mp, OF jl] by simp
+    obtain im where
+      im: "im < length end_indices" "end_indices ! im = m"
+      using end_indices_exI[OF ml a] by blast
+    hence "end_indices ! j < end_indices ! im" "end_indices ! im < end_indices ! Suc j" using x by simp_all
+    hence "j < im" "im < Suc j"
+      using jl im(1)
+      by (auto elim!: end_indices_mono')
+    thus False by simp
+  qed
+
+  have end_indices_inc_all': "\<not> is_ending_index (time_index \<pi> i) m" 
+    if jl: "0 < length end_indices" 
+   and x: "m < end_indices ! 0" for m
+  proof (rule notI)
+    assume a: "is_ending_index (time_index \<pi> i) m"
+    have ml: "m < length actions" using x nth_end_indices_ran[THEN spec, THEN mp, OF jl] by simp
+    obtain im where
+      im: "im < length end_indices" "end_indices ! im = m"
+      using end_indices_exI[OF ml a] by blast
+    hence o: "end_indices ! im < end_indices ! 0" using x by simp_all
+    have "im < 0"
+      apply (rule end_indices_mono')
+      using o im by auto
+    thus False by simp
+  qed
+
+  have end_indices_inc_all'': "\<not> is_ending_index (time_index \<pi> i) m" 
+   if x: "end_indices ! (length end_indices - 1) < m"
+   and  ml: "m < length actions" for m
+  proof (cases "length end_indices = 0")
+    case True
+    then show ?thesis by (auto dest:  arg_cong[where f = set] simp: end_indices ml)
+  next
+    case False
+    show ?thesis 
+    proof (rule notI)
+      from False 
+      have jl: "0 < length end_indices" by simp
+      assume a: "is_ending_index (time_index \<pi> i) m"
+      obtain im where
+        im: "im < length end_indices" "end_indices ! im = m"
+        using end_indices_exI[OF ml a] by blast
+      hence o: "end_indices ! (length end_indices - 1) < end_indices ! im" using x by blast
+      have "(length end_indices - 1) < im"
+        apply (rule end_indices_mono')
+        using o jl by auto
+      thus False using im by simp
+    qed
+  qed
 
   show ?thesis
   proof (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[
@@ -3383,6 +3494,7 @@ proof -
       ultimately
       show ?thesis using v_PropLock p_in_vars by presburger
     qed
+    
     have bounded_after: "Simple_Network_Language.bounded (map_of nta_vars) v'"
     proof (rule updated_bounded[OF _ _ v'_def], goal_cases)
       case 1
@@ -3407,7 +3519,8 @@ proof -
         done
       done
     qed 
-    show ?case 
+    
+    show ?case
       apply (insert esp)
       unfolding s
         unfolding enter_end_instant_def Let_def prod.case comp_def
@@ -3510,11 +3623,7 @@ proof -
             apply (cases "k < end_indices ! j")
             by (auto dest: end_start_pre_dests(5))
           done
-        subgoal apply (intro allI impI)
-          subgoal for k
-            apply (cases "k < end_indices ! j")
-            by (auto dest: end_start_pre_dests(6))
-          done
+        subgoal by (auto simp: nth_actions_unique dest: end_start_pre_dests(6))
         done
   next
     case (2 i s)
@@ -3527,15 +3636,68 @@ proof -
       subgoal by (drule end_start_post_dests(1), simp)
       subgoal apply (drule end_start_post_dests(2), simp)
         apply (subst partially_updated_locked_before_inv[where n = "(Suc (end_indices ! i))", symmetric])
-        subgoal using end_indices_mono by fastforce
-        subgoal for _ k a
-          
+        using end_indices_mono[rotated] apply fastforce
+        using end_indices_inc_all is_ending_index_def by fast+
+      subgoal apply (drule end_start_post_dests(3), simp)
+        apply (intro impI allI, elim conjE)
+        subgoal for j
+          by (cases "j \<le> end_indices ! i") (auto simp: end_indices_inc_all)
+        done
+      subgoal apply (drule end_start_post_dests(4), simp)
+        by (auto dest: end_indices_mono[rotated])
+      subgoal apply (drule end_start_post_dests(5), simp)
+        apply (intro impI allI, elim conjE)
+        subgoal for j
+          by (cases "j \<le> end_indices ! i") (auto simp: end_indices_inc_all)
+        done
+      subgoal apply (drule end_start_post_dests(6), simp)
+        by (auto dest: end_indices_mono[rotated])
+      done
   next
     case (3 x)
-    then show ?case sorry
+    obtain L v c where
+      x: "x = (L, v, c)" by (rule prod_cases3)
+    show ?case 
+      apply (insert 3)
+      unfolding comp_def x
+      apply (rule end_start_preI, simp)
+      subgoal by (drule happening_pre_end_starts_dests(1)) simp+
+      subgoal apply (drule happening_pre_end_starts_dests(2), simp)
+        apply (subst partially_updated_locked_before_inv[where n = 0, symmetric], simp)
+        using end_indices_inc_all'[simplified is_ending_index_def] apply blast
+        using partially_updated_locked_before_0_is_locked_before by simp
+      subgoal apply (drule happening_pre_end_starts_dests(3), simp)
+        by (auto simp: end_indices_inc_all')
+      subgoal by (drule happening_pre_end_starts_dests(3), simp+)
+      subgoal apply (drule happening_pre_end_starts_dests(4), simp)
+        by (auto simp: end_indices_inc_all')      
+      subgoal by (drule happening_pre_end_starts_dests(4), simp+)
+      done
   next
     case (4 x)
-    then show ?case sorry
+    obtain L v c where
+      x: "x = (L, v, c)" by (rule prod_cases3)
+    show ?case
+      apply (insert 4)
+      unfolding comp_def x
+      apply (rule happening_post_end_startsI, simp)
+      subgoal by (drule end_start_post_dests(1), simp+)
+      subgoal apply (drule end_start_post_dests(2), simp)
+        apply (subst partially_updated_locked_before_by_all_actions_is_locked_during[symmetric])
+        apply (subst partially_updated_locked_before_inv[symmetric, where n = "Suc (end_indices ! (length end_indices - 1))"])
+        subgoal by (force intro: nth_end_indices_ran[THEN spec, THEN mp] Suc_leI)
+        by (auto simp: end_indices_inc_all''[simplified is_ending_index_def])
+      subgoal apply (intro allI impI)
+        subgoal for k
+          by (cases "k \<le> end_indices ! (length end_indices - 1)"; 
+              force dest!: end_indices_inc_all''[rotated] end_start_post_dests(3))
+        done
+      subgoal apply (intro allI impI)
+        subgoal for k
+          by (cases "k \<le> end_indices ! (length end_indices - 1)"; 
+              force dest!: end_indices_inc_all''[rotated] end_start_post_dests(5))
+        done
+      done
   next
     case (5 x)
     then show ?case sorry
