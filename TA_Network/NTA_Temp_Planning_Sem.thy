@@ -1686,11 +1686,13 @@ lemma open_active_count_0_iff:
   using open_active_count_1E open_active_count_ran open_active_count_0E by blast
 
 lemma open_active_count_1_if_ending:
-  assumes "(t, at_end a) \<in> happ_seq"
-      and "(t, at_start a) \<notin> happ_seq"
-  shows "open_active_count = 1" 
+  assumes "is_ending_action t a"
+    shows "open_active_count = 1" 
   apply (subst open_active_count_1_iff)
-  using at_end_in_happ_seqE''[OF a_in_acts assms(1)]
+  apply (insert assms)
+  unfolding is_ending_action_def
+  apply (erule conjE)
+  apply (frule at_end_in_happ_seqE''[OF a_in_acts])
   apply -
   apply (drule ex1_implies_ex)
   apply (elim exE)
@@ -1992,7 +1994,7 @@ proof -
       unfolding is_ending_action_def
       subgoal
         apply simp
-        using open_active_count_1_if_ending
+        using open_active_count_1_if_ending is_ending_action_def
         by simp
       subgoal
         apply (subst if_not_P)
@@ -2032,7 +2034,7 @@ proof -
         apply (subst if_P, simp)
         apply (subst (2) if_not_P, simp)
         apply (subst closed_active_count_0_if_end_scheduled, simp, simp, simp)
-        apply (subst open_active_count_1_if_ending; simp)
+        apply (subst open_active_count_1_if_ending; simp add: is_ending_action_def)
         done
       subgoal unfolding action_happening_case_defs
         apply (subst if_not_P, simp)
@@ -3217,9 +3219,8 @@ lemma locked_before_and_during_if_none_ending:
   shows "locked_before t p = locked_during t p"
   unfolding locked_before_and_during
   apply (subst sum_list_0)
-    using assms[simplified ending_actions_at_conv_ending_indexes]
-    unfolding locked_by_def by auto
-  done
+  using assms[simplified ending_actions_at_conv_ending_indexes]
+  unfolding locked_by_def by auto
 
 definition "inst_upd_state i \<equiv> app_effs (instant_snaps_at (time_index \<pi> i)) (plan_state_seq i)"
 
