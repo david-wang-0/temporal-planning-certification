@@ -174,7 +174,7 @@ locale tp_nta_reduction_spec =
       and at_start_inj: "inj_on at_start (set actions)"
       and at_end_inj: "inj_on at_end (set actions)"
       and snaps_disj: "at_start ` (set actions) \<inter> at_end ` (set actions) = {}"
-      and over_all_distinct: "\<forall>a \<in> set actions. distinct (over_all a)"
+      and distinct_over_all: "\<forall>a \<in> set actions. distinct (over_all a)"
 begin
 
 subsection \<open>Abbreviations for encoding propositions into clocks\<close>
@@ -192,32 +192,32 @@ fun bexp_and_all::"('a, 'b) bexp list \<Rightarrow> ('a, 'b) bexp" where
 definition is_prop_ab::"
    int \<Rightarrow> 'proposition
 \<Rightarrow> ('proposition variable, int) bexp" where
-"is_prop_ab n prop \<equiv> var_is n (PropVar prop)"
+"is_prop_ab n \<equiv> var_is n o PropVar"
 
 definition set_prop_ab::"
   int \<Rightarrow> 'proposition
 \<Rightarrow> 'proposition variable \<times> ('proposition variable, int) exp" where
-"set_prop_ab n prop = set_var n (PropVar prop)"
+"set_prop_ab n = set_var n o PropVar"
 
 definition inc_prop_ab::"
   int \<Rightarrow> 'proposition
 \<Rightarrow> 'proposition variable \<times> ('proposition variable, int) exp" where
-"inc_prop_ab n prop \<equiv> inc_var n (PropVar prop)"
+"inc_prop_ab n \<equiv> inc_var n o PropVar"
 
 definition is_prop_lock_ab::"
    int \<Rightarrow> 'proposition
 \<Rightarrow> ('proposition variable, int) bexp" where
-"is_prop_lock_ab n prop \<equiv> var_is n (PropLock prop)"
+"is_prop_lock_ab n \<equiv> var_is n o PropLock"
 
 definition set_prop_lock_ab::"
   int \<Rightarrow> 'proposition
 \<Rightarrow> 'proposition variable \<times> ('proposition variable, int) exp" where
-"set_prop_lock_ab n prop \<equiv> set_var n (PropLock prop)"
+"set_prop_lock_ab n \<equiv> set_var n o PropLock"
 
 definition inc_prop_lock_ab::"
   int \<Rightarrow> 'proposition
 \<Rightarrow> 'proposition variable \<times> ('proposition variable, int) exp" where
-"inc_prop_lock_ab n prop \<equiv> inc_var n (PropLock prop)"
+"inc_prop_lock_ab n \<equiv> inc_var n o PropLock"
   
 
 

@@ -469,6 +469,38 @@ definition "is_starting_action t a \<equiv> (t, at_start a) \<in> happ_seq \<and
 definition "is_ending_action t a \<equiv> (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<in> happ_seq"
 definition "is_not_happening_action t a \<equiv> (t, at_start a) \<notin> happ_seq \<and> (t, at_end a) \<notin> happ_seq"
 
+lemma is_instant_actionI: "(t, at_start a) \<in> happ_seq \<Longrightarrow> (t, at_end a) \<in> happ_seq \<Longrightarrow> is_instant_action t a"
+  using is_instant_action_def by simp
+
+lemma is_instant_action_dests: 
+  assumes "is_instant_action t a" 
+  shows "(t, at_start a) \<in> happ_seq" "(t, at_end a) \<in> happ_seq"
+  using is_instant_action_def assms by blast+
+
+lemma is_starting_actionI: "(t, at_start a) \<in> happ_seq \<Longrightarrow> (t, at_end a) \<notin> happ_seq \<Longrightarrow> is_starting_action t a"
+  using is_starting_action_def by simp
+
+lemma is_starting_action_dests: 
+  assumes "is_starting_action t a" 
+  shows "(t, at_start a) \<in> happ_seq" "(t, at_end a) \<notin> happ_seq"
+  using is_starting_action_def assms by blast+
+
+lemma is_ending_actionI: "(t, at_start a) \<notin> happ_seq \<Longrightarrow> (t, at_end a) \<in> happ_seq \<Longrightarrow> is_ending_action t a"
+  using is_ending_action_def by simp
+
+lemma is_ending_action_dests: 
+  assumes "is_ending_action t a" 
+  shows "(t, at_start a) \<notin> happ_seq" "(t, at_end a) \<in> happ_seq"
+  using is_ending_action_def assms by blast+
+
+lemma is_not_happening_actionI: "(t, at_start a) \<notin> happ_seq \<Longrightarrow> (t, at_end a) \<notin> happ_seq \<Longrightarrow> is_not_happening_action t a"
+  using is_not_happening_action_def by simp
+
+lemma is_not_happening_action_dests: 
+  assumes "is_not_happening_action t a" 
+  shows "(t, at_start a) \<notin> happ_seq" "(t, at_end a) \<notin> happ_seq"
+  using is_not_happening_action_def assms by blast+
+
 lemma action_happening_cases:
   assumes "is_instant_action t a \<Longrightarrow> thesis"
           "is_starting_action t a \<Longrightarrow> thesis"
@@ -498,6 +530,20 @@ next
 qed
 
 lemmas time_index_action_happening_cases = time_index_htpsD[OF vp[THEN valid_plan_finite], THEN htps_action_happening_cases]
+
+lemma action_happening_disj: 
+  "\<not>(is_instant_action t n \<and> is_starting_action t n)"
+  "\<not>(is_instant_action t n \<and> is_ending_action t n)"
+  "\<not>(is_instant_action t n \<and> is_not_happening_action t n)"
+  "\<not>(is_starting_action t n \<and> is_ending_action t n)"
+  "\<not>(is_starting_action t n \<and> is_not_happening_action t n)"
+  "\<not>(is_ending_action t n \<and> is_not_happening_action t n)"
+  "is_instant_action t n \<Longrightarrow> \<not>is_starting_action t n \<and> \<not>is_ending_action t n \<and> \<not>is_not_happening_action t n"
+  "is_starting_action t n \<Longrightarrow> \<not>is_instant_action t n \<and> \<not>is_ending_action t n \<and> \<not>is_not_happening_action t n"
+  "is_ending_action t n \<Longrightarrow> \<not>is_instant_action t n \<and> \<not>is_starting_action t n \<and> \<not>is_not_happening_action t n"
+  "is_not_happening_action t n \<Longrightarrow> \<not>is_instant_action t n \<and> \<not>is_starting_action t n \<and> \<not>is_ending_action t n"
+  using action_happening_case_defs by blast+
+
 
 context
   fixes t::'time
@@ -2948,13 +2994,6 @@ proof -
   thus ?thesis using sd(1) by blast
 qed
 
-lemma exec_time_sat_dur_const:
-  assumes a_in_actions: "a \<in> actions"
-      and ending: "(t, at_end a) \<in> happ_seq"
-      and not_starting: "(t, at_start a) \<notin> happ_seq"
-    shows "satisfies_duration_bounds lower upper a (exec_time (at_start a) t)"
-  using exec_time_when_ending[OF assms] valid_plan_durs(2)[OF vp]
-  unfolding durations_valid_def by blast
 
 lemma instant_act_in_happ_seqE:
   assumes a_in_actions: "a \<in> actions"
@@ -2983,14 +3022,19 @@ proof -
   thus ?thesis using tede by blast
 qed
 
-lemma instant_acts_sat_dur_const:
+lemma ending_act_sat_dur_bounds:
   assumes a_in_actions: "a \<in> actions"
-      and ending: "(t, at_end a) \<in> happ_seq"
-      and starting: "(t, at_start a) \<in> happ_seq"
+      and ending: "is_ending_action t a"
+    shows "satisfies_duration_bounds lower upper a (exec_time (at_start a) t)"
+  using exec_time_when_ending valid_plan_durs(2)[OF vp] assms 
+  unfolding is_ending_action_def durations_valid_def by blast
+
+lemma instant_act_sat_dur_bounds:
+  assumes a_in_actions: "a \<in> actions"
+      and is_instant: "is_instant_action t a"
     shows "satisfies_duration_bounds lower upper a 0"
-  using valid_plan_durs(2)[OF vp] instant_act_in_happ_seqE[OF assms]
-  unfolding durations_valid_def by blast
-  
+  using valid_plan_durs(2)[OF vp] instant_act_in_happ_seqE assms
+  unfolding durations_valid_def is_instant_action_def by blast
 
 lemma exec_time_at_init:
   assumes some_happs: "0 < card (htps \<pi>)"
@@ -3160,8 +3204,22 @@ lemma app_all_dist: "(app_effs (ending_snaps_at t) o app_effs (starting_snaps_at
       done
     done
   done
-    
-        
+
+lemma ending_actions_at_conv_ending_indexes: 
+  "ending_actions_at t = set (filter (is_ending_action t) action_list)"
+  unfolding ending_actions_at_def set_filter set_action_list ..
+
+lemma sum_list_0: "\<forall>x \<in> set xs. f x = 0 \<Longrightarrow> (\<Sum>x\<leftarrow>xs. f x) = (0::nat)"
+  by simp
+
+lemma locked_before_and_during_if_none_ending:
+  assumes "ending_actions_at t = {}"
+  shows "locked_before t p = locked_during t p"
+  unfolding locked_before_and_during
+  apply (subst sum_list_0)
+    using assms[simplified ending_actions_at_conv_ending_indexes]
+    unfolding locked_by_def by auto
+  done
 
 definition "inst_upd_state i \<equiv> app_effs (instant_snaps_at (time_index \<pi> i)) (plan_state_seq i)"
 

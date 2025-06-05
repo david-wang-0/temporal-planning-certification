@@ -877,12 +877,11 @@ begin
   
   lemma ext_seq_comp_seq_apply_induct_list_prop_composable:
     assumes LPxsRxn: "LP xs \<and> R (last xs)"
-        and PQ: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> Q i ((fs ! i) s)"
+        and PQ: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> Q i ((fs ! i) s) \<and> LP [s, (fs ! i) s]"
         and QP: "\<And>i s. Suc i < length fs \<Longrightarrow> Q i s \<Longrightarrow> P (Suc i) s"
         and RPn: "\<And>x. 0 < length fs \<Longrightarrow> R x \<Longrightarrow> P 0 x"
         and QSl: "\<And>x. 0 < length fs \<Longrightarrow> Q (length fs - 1) x \<Longrightarrow> S x"
         and RSn: "\<And>x. length fs = 0 \<Longrightarrow> R x \<Longrightarrow> S x"
-        and ind_step: "\<And>i s. i < length fs \<Longrightarrow> P i s \<Longrightarrow> LP [s, (fs ! i) s]"
         and SR1: "\<And>x. S x \<Longrightarrow> R' x"
       shows "LP ((ext_seq o seq_apply) fs xs) \<and> R' (last ((ext_seq o seq_apply) fs xs))"
   proof -

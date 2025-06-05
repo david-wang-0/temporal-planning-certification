@@ -1149,6 +1149,8 @@ lemma actual_autos_alt: "actual_autos = map (snd o snd) (main_auto_spec # map ac
    apply simp
   by simp
 
+lemma length_actual_autos: "length actual_autos = Suc (length actions)" using actual_autos_alt by simp
+
 lemma actual_autos_alt_set: "set actual_autos = (\<lambda>a. snd (snd a)) ` set (main_auto_spec # map action_to_automaton_spec actions)"
   unfolding actual_autos_def ntas_def Let_def timed_automaton_net_spec_def prod.case comp_apply set_map 
     apply -
