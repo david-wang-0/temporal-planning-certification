@@ -81,9 +81,28 @@ lemma seq_apply_nth_0:
   by simp
 
 
-thm take_Suc_conv_app_nth
+lemma seq_apply_Cons_Cons: "x # seq_apply (f#fs) x = x # f x # seq_apply fs (f x)"
+proof -
+  have 1: "[Suc 1..<Suc (length fs) + 1] = map Suc [1..<length fs + 1]" for fs 
+    by (induction fs) auto
+    
+  show ?thesis 
+    apply (subst seq_apply_def)
+    apply (subst upt_conv_Cons)
+     apply simp
+    apply (subst length_Cons)
+    apply (subst list.map)
+    apply (subst 1)
+    apply (subst map_map)
+    unfolding comp_def
+    apply (subst take_Suc_Cons)
+    apply (subst fold.simps)
+    unfolding comp_def
+    apply (subst (3) id_def)
+    apply (subst seq_apply_def[symmetric])
+    by auto
+qed
 
-find_theorems name: last "?f (?xs ! ?n)"
 
 (* is there a lemma that connects xs ! (length xs - 1) with last xs *)
 
@@ -1031,7 +1050,22 @@ begin
     subgoal using seq_apply_not_Nil not_empty by auto
     using assms by simp+
 
+lemma seq_apply_ConsE:
+  assumes "P x"
+      and "\<And>x. P x \<Longrightarrow> LP [x, f x] \<and> Q (f x)"
+      and "\<And>x. Q x \<Longrightarrow> S (last (x#(seq_apply fs x))) \<and> LP (x#(seq_apply fs x))"
+  shows "S (last (x#(seq_apply (f#fs) x))) \<and> LP (x#(seq_apply (f#fs) x))" 
+proof -
+  from assms
+  have 1: "LP [x, f x]" "Q (f x)" by blast+
+  have 2: "LP ((f x)#seq_apply fs (f x))" "S (last ((f x)#seq_apply fs (f x)))" using assms 1 by blast+
+  show ?thesis
+    unfolding seq_apply_Cons_Cons
+    using 1 2 step by fastforce
+qed
+
+
+
 end
 
-find_theorems name: "List.rev_induct"
 end

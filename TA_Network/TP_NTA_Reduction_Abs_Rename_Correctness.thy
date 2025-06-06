@@ -3908,14 +3908,16 @@ proof -
           and P = "instant_pre i o ((!) instant_indices)"
           and Q = "instant_post i o ((!) instant_indices)"
           and fs = "(map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) instant_indices)",
-        simplified length_map length_upt nth_map set_map comp_apply, 
+        simplified length_map length_upt nth_map set_map comp_apply , 
         OF assms(1)], 
       goal_cases)
     case (1 f)
     then show ?case by auto
   next
     case (2 i s)
-    then show ?case sorry
+    then show ?case 
+      apply (subst last_ConsR[symmetric, where x = s, OF seq_apply_not_Nil, OF list.distinct(2)])
+      apply (rule steps_seq.seq_apply_ConsE[where P = "instant_pre i (instant_indices ! i)"])
   next
     case (3 i s)
     then show ?case sorry
