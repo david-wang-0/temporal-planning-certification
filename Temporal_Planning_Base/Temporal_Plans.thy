@@ -1553,7 +1553,7 @@ definition fluent_domain where
 "fluent_domain actions \<equiv> \<forall>a \<in> actions. act_ref_fluents a"
 
 text \<open>Actions only modify fluent propositions. The problem can have constants.\<close>
-abbreviation snap_mod_fluents where
+definition snap_mod_fluents where
 "snap_mod_fluents s \<equiv> adds s \<union> dels s \<subseteq> fluents"
 
 definition act_mod_fluents where
@@ -1591,7 +1591,7 @@ lemma app_valid_snap_to_fluent_state:
 proof -
   have "M - \<Union> (dels ` H) \<subseteq> fluents" using assms by blast
   moreover
-  have "\<And>M. M \<subseteq> fluents \<Longrightarrow> M \<union> \<Union> (adds ` H) \<subseteq> fluents" using assms by blast
+  have "\<And>M. M \<subseteq> fluents \<Longrightarrow> M \<union> \<Union> (adds ` H) \<subseteq> fluents" using assms snap_mod_fluents_def by blast
   ultimately
   show ?thesis unfolding apply_effects_def by simp
 qed
@@ -1604,7 +1604,7 @@ lemma app_fluent_valid_snaps:
 
 lemma fluent_plan_is_const_valid: "fluent_plan \<Longrightarrow> const_valid_plan" 
   unfolding fluent_plan_def act_ref_fluents_def  
-    const_valid_plan_def act_mod_fluents_def  
+    const_valid_plan_def act_mod_fluents_def snap_mod_fluents_def 
   by blast
 
 abbreviation snap_consts where
@@ -1633,7 +1633,7 @@ lemma fluent_plan_consts:
 lemma cv_plan_consts:
   assumes "const_valid_plan"
   shows "plan_consts = \<Union> ((\<lambda>a. pre (at_start a) \<union> pre (at_end a) \<union> over_all a) ` {a|a t d. (a, t, d) \<in> ran \<pi>}) - fluents"
-  using assms unfolding const_valid_plan_def plan_consts_def act_mod_fluents_def by fast
+  using assms unfolding const_valid_plan_def plan_consts_def act_mod_fluents_def snap_mod_fluents_def by fast
 
 lemma cv_domain_consts:
   assumes "const_valid_plan"
@@ -1657,7 +1657,7 @@ lemma cv_plan_cv_happ_seq:
 lemma cv_happ_seq_consts:
   assumes "const_valid_happ_seq"
   shows "happ_seq_consts = \<Union>(pre ` {s|t s. (t, s) \<in> plan_happ_seq}) - fluents"
-  using assms unfolding const_valid_happ_seq_def  happ_seq_consts_def 
+  using assms unfolding const_valid_happ_seq_def  happ_seq_consts_def snap_mod_fluents_def
   by blast
 
 lemma plan_consts_not_fluent:
@@ -1787,7 +1787,8 @@ proof -
   from x 
   have "x \<in> \<Union>(snap_consts ` {h|t h. (t, h) \<in> plan_happ_seq})" unfolding happ_seq_consts_def by simp
   with cvp 
-  have x: "x \<in> \<Union>(pre ` {h|t h. (t, h) \<in> plan_happ_seq}) - fluents" using cv_plan_imp_cv_hs act_mod_fluents_def const_valid_happ_seq_def  by fast
+  have x: "x \<in> \<Union>(pre ` {h|t h. (t, h) \<in> plan_happ_seq}) - fluents" 
+    using cv_plan_imp_cv_hs act_mod_fluents_def snap_mod_fluents_def const_valid_happ_seq_def by blast
   then obtain t where
     t: "x \<in>  \<Union>(pre ` happ_at plan_happ_seq t)" by auto
   then obtain i where
@@ -1923,7 +1924,7 @@ proof -
 
     have "fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels" 
       unfolding fluent_plan_def act_ref_fluents_def 
-    using cvp over_all'_def pre'_def unfolding const_valid_plan_def act_mod_fluents_def by fast
+    using cvp over_all'_def pre'_def unfolding const_valid_plan_def act_mod_fluents_def snap_mod_fluents_def by fast
   moreover
   have "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'"
        "fluent_state_seq \<pi> fluents MS'" 
@@ -1937,9 +1938,9 @@ proof -
       show "apply_effects adds dels (MS' i) ?S = MS' (Suc i)" 
       proof -
         have "\<Union>(adds ` ?S) \<subseteq> fluents" 
-             "\<Union>(dels ` ?S) \<subseteq> fluents" using i_ran cv_hs unfolding fluent_state_seq_def by auto
-        hence "\<forall>s\<in>happ_at (plan_happ_seq \<pi> at_start at_end) (time_index \<pi> i). snap_mod_fluents fluents adds dels s" by blast
-        thus "apply_effects adds dels (MS' i) ?S = MS' (Suc i)" using app_fluent_valid_snaps[OF _ app_eff[OF that]] using MS'_p that by simp
+             "\<Union>(dels ` ?S) \<subseteq> fluents" using i_ran cv_hs unfolding fluent_state_seq_def snap_mod_fluents_def by auto
+        hence "\<forall>s\<in>happ_at (plan_happ_seq \<pi> at_start at_end) (time_index \<pi> i). snap_mod_fluents fluents adds dels s" unfolding  snap_mod_fluents_def by blast
+        thus "apply_effects adds dels (MS' i) ?S = MS' (Suc i)" using app_fluent_valid_snaps[OF _ app_eff[OF that]] using MS'_p that unfolding snap_mod_fluents_def by simp
       qed
       show "invs_at ?Inv' (?t i) \<subseteq> MS' i" 
       proof -
@@ -2036,7 +2037,8 @@ proof -
 qed
 
 text \<open>Not necessary, probably.\<close>
-lemma cvp_nm_happ_seq_equiv: "nm_happ_seq pre adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end) \<longleftrightarrow> nm_happ_seq pre' adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end)"
+lemma cvp_nm_happ_seq_equiv: "nm_happ_seq pre adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end) 
+  \<longleftrightarrow> nm_happ_seq pre' adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end)"
 proof -
   from cvp
   have "const_valid_happ_seq \<pi> fluents at_start at_end adds dels" using cv_plan_cv_happ_seq by blast
@@ -2049,7 +2051,7 @@ proof -
     subgoal for s t a b
       apply (frule spec, drule bspec[where x = a], assumption)
       apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre'_def by auto
+      unfolding pre'_def snap_mod_fluents_def by auto
     subgoal for s t a b
       apply (frule spec, drule bspec[where x = a], assumption)
       apply (drule spec, drule bspec[where x = b], assumption)
@@ -2057,7 +2059,7 @@ proof -
     subgoal for s t a b
       apply (frule spec, drule bspec[where x = a], assumption)
       apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre'_def by auto
+      unfolding pre'_def snap_mod_fluents_def by auto
     subgoal for s t a b
       apply (frule spec, drule bspec[where x = a], assumption)
       apply (drule spec, drule bspec[where x = b], assumption)
@@ -2115,7 +2117,7 @@ proof -
     using that
     apply -
     apply (elim disjE; rule mutex_equiv)
-    using cvp unfolding const_valid_plan_def act_mod_fluents_def
+    using cvp unfolding const_valid_plan_def act_mod_fluents_def snap_mod_fluents_def
     by blast+
 
   have mutex_self: "mutex_snap_action pre adds dels (at_start a) (at_end a) \<longleftrightarrow> mutex_snap_action pre' adds dels (at_start a) (at_end a)" 

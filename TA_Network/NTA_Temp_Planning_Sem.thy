@@ -510,6 +510,7 @@ shows thesis
   using assms unfolding is_instant_action_def is_starting_action_def is_ending_action_def is_not_happening_action_def by blast
 
 lemmas action_happening_case_defs = is_instant_action_def is_starting_action_def is_ending_action_def is_not_happening_action_def 
+lemmas action_happening_case_dests = is_instant_action_dests is_starting_action_dests is_ending_action_dests is_not_happening_action_dests
 
 lemma htps_action_happening_cases:
   assumes "t \<in> htps \<pi>"

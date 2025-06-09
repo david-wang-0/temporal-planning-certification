@@ -1050,7 +1050,7 @@ begin
     subgoal using seq_apply_not_Nil not_empty by auto
     using assms by simp+
 
-lemma seq_apply_ConsE:
+lemma seq_apply_ConsI:
   assumes "P x"
       and "\<And>x. P x \<Longrightarrow> LP [x, f x] \<and> Q (f x)"
       and "\<And>x. Q x \<Longrightarrow> S (last (x#(seq_apply fs x))) \<and> LP (x#(seq_apply fs x))"
