@@ -1052,8 +1052,9 @@ begin
 
 lemma seq_apply_ConsI:
   assumes "P x"
-      and "\<And>x. P x \<Longrightarrow> LP [x, f x] \<and> Q (f x)"
       and "\<And>x. Q x \<Longrightarrow> S (last (x#(seq_apply fs x))) \<and> LP (x#(seq_apply fs x))"
+      and "\<And>x. P x \<Longrightarrow> Q (f x)"
+      and "\<And>x. P x \<Longrightarrow> Q (f x) \<Longrightarrow> LP [x, f x]"
   shows "S (last (x#(seq_apply (f#fs) x))) \<and> LP (x#(seq_apply (f#fs) x))" 
 proof -
   from assms
