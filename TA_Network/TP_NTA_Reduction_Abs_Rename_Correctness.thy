@@ -4801,6 +4801,13 @@ proof -
         by simp
       done
     subgoal 
+      apply (subst locked_during_and_by_def)
+      apply (subst comp_apply)
+      apply (intro allI impI)
+      subgoal for p
+        apply (drule instant_pre_dests(3))
+        apply (drule spec[of _ p])
+        apply (drule mp, simp)
       subgoal for x sorry
       done
   next                                                        
