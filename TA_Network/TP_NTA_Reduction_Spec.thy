@@ -317,10 +317,9 @@ let
 
   guard = l_dur_spec a @ u_dur_spec a @ int_clocks;
 
-  unlock_invs = map (inc_prop_lock_ab (-1)) (over_all a);
   resets = [ActEnd a]
 in 
-  (StartInstant a, bexp.true, guard, Sil (STR ''''), unlock_invs, resets, EndInstant a)
+  (StartInstant a, bexp.true, guard, Sil (STR ''''), [], resets, EndInstant a)
 "
 
 (* The not-locked check should only apply to those deletions which are not immediately overwritten by additions *)
