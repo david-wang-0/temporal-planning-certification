@@ -114,4 +114,16 @@ begin
   qed
 end
 
+definition "unzip xs = (map fst xs, map snd xs)"
+
+lemma zip_unzip:
+  "length xs = length ys \<Longrightarrow> unzip (zip xs ys) = (xs, ys)"
+  "uncurry zip (unzip xs) = xs"     
+  subgoal by (induction xs arbitrary: ys) (auto simp: unzip_def)
+  by (simp add: unzip_def)
+
+lemma replicate_length_conv_map:
+  "replicate (length xs) n = map (\<lambda>x. n) xs"
+  by (induction xs) (use replicate_append_same in auto)
+
 end

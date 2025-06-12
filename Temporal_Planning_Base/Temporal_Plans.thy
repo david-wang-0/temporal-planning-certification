@@ -1575,7 +1575,7 @@ definition const_valid_domain where
 "const_valid_domain actions \<equiv> \<forall>a \<in> actions. act_mod_fluents a"
 
 lemma fluent_imp_const_valid_dom: "fluent_domain actions \<Longrightarrow> const_valid_domain actions"
-  unfolding fluent_domain_def const_valid_domain_def act_ref_fluents_def act_mod_fluents_def by simp
+  unfolding fluent_domain_def const_valid_domain_def act_ref_fluents_def act_mod_fluents_def snap_mod_fluents_def by simp
 
 text \<open>The restriction of a state to its fluents\<close>
 definition fluent_state::"'proposition set \<Rightarrow> 'proposition set" where
@@ -1703,7 +1703,7 @@ proof -
   moreover
   from cvp[THEN cv_plan_imp_cv_hs]
   have "\<Union>(adds ` (happ_at plan_happ_seq (time_index i))) \<subseteq> fluents" 
-       "\<Union>(dels ` (happ_at plan_happ_seq (time_index i))) \<subseteq> fluents" unfolding const_valid_happ_seq_def by blast+
+       "\<Union>(dels ` (happ_at plan_happ_seq (time_index i))) \<subseteq> fluents" unfolding const_valid_happ_seq_def snap_mod_fluents_def by blast+
   hence "x \<notin> \<Union>(adds ` (happ_at plan_happ_seq (time_index i))) \<union> \<Union>(dels ` (happ_at plan_happ_seq (time_index i)))" using \<open>x \<notin> fluents\<close> by blast
   ultimately
   show "x \<in> MS i" unfolding apply_effects_def by blast
@@ -1999,7 +1999,7 @@ proof -
     show "apply_effects adds dels (MS i) ?S = MS (Suc i)" 
     proof -
       have "\<Union>(adds ` ?S) \<subseteq> fluents" (is "?as \<subseteq> fluents")
-           "\<Union>(dels ` ?S) \<subseteq> fluents" (is "?ds \<subseteq> fluents") using i_ran cv_hs unfolding fluent_state_seq_def by auto
+           "\<Union>(dels ` ?S) \<subseteq> fluents" (is "?ds \<subseteq> fluents") using i_ran cv_hs unfolding fluent_state_seq_def snap_mod_fluents_def by auto
       hence "?as \<inter> ?dc = {}"
             "?ds \<inter> ?dc = {}" using dc by auto
       moreover

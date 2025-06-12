@@ -767,6 +767,137 @@ qed
   
 end
 
+lemma map_upds_append:
+  assumes "length xs = length xs'"
+      and "length ys = length ys'"
+    shows "f(xs @ ys [\<mapsto>] xs' @ ys') = f(xs [\<mapsto>] xs', ys [\<mapsto>] ys')"
+  unfolding map_upds_def using assms map_of_append by simp
+
+
+definition edge_effect::"
+  nat 
+  \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp 
+    \<times> ('action clock, int) acconstraint list \<times> String.literal act 
+    \<times> ('proposition variable \<times> ('proposition variable, int) exp) list 
+    \<times> 'action clock list \<times> 'action location 
+  \<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+  \<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
+"edge_effect n e Lvc \<equiv> 
+let 
+  (_, _, _, _, u, r, s') = e;
+  (L, v, c) = Lvc;
+  (vs, as) = unzip (map (map_prod id (eval (the o v))) u);
+  L' = L[n := s'];
+  v' = v(vs [\<mapsto>] as);
+  c' = clock_set r 0 c
+in (L', v', c')
+"
+definition "start_edge_effect n = edge_effect (Suc n) (start_edge_spec (actions ! n))"
+
+definition "edge_2_effect n = edge_effect (Suc n) (edge_2_spec (actions ! n))"
+
+definition "edge_3_effect n = edge_effect (Suc n) (edge_3_spec (actions ! n))"
+
+definition "end_edge_effect n = edge_effect (Suc n) (end_edge_spec (actions ! n))"
+
+definition "instant_trans_edge_effect n = edge_effect (Suc n) (instant_trans_edge_spec (actions ! n))"
+
+definition "main_auto_init_edge_effect = edge_effect 0 main_auto_init_edge_spec"
+
+definition "main_auto_goal_edge_effect = edge_effect 0 main_auto_goal_edge_spec"
+
+lemma start_edge_effect_alt: "start_edge_effect n (L, v, c) = 
+  (L[Suc n := StartInstant (actions ! n)],
+     v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1,
+         map PropVar (dels (at_start (actions ! n))) [\<mapsto>] map (\<lambda>x. 0) (dels (at_start (actions ! n))),
+         map PropVar (adds (at_start (actions ! n))) [\<mapsto>] map (\<lambda>x. 1) (adds (at_start (actions ! n)))),
+     c(ActStart (actions ! n) := 0))"
+  unfolding start_edge_effect_def start_edge_spec_def
+  unfolding  edge_effect_def Let_def prod.case unzip_def set_prop_ab_def
+    map_map comp_def fst_map_prod snd_map_prod id_def list.map map_append fst_conv snd_conv
+  by (auto simp: map_upds_append eval.simps)
+
+lemma edge_2_effect_alt: "edge_2_effect n (L, v, c) = 
+  (L[Suc n := Running (actions ! n)],
+    v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. (the (v x)) + 1) (map PropLock (over_all (actions ! n)))), 
+    c)"
+  unfolding edge_2_effect_def edge_2_spec_def
+  unfolding 
+    edge_effect_def Let_def prod.case unzip_def set_prop_ab_def
+    map_map comp_def fst_map_prod snd_map_prod id_def list.map map_append
+    comp_def fst_conv snd_conv unzip_def inc_prop_lock_ab_def eval.simps
+  by auto
+
+lemma edge_3_effect_alt: "edge_3_effect n (L, v, c) = 
+  (L[Suc n := EndInstant (actions ! n)],
+    v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) (- 1)) (map PropLock (over_all (actions ! n)))),
+    c(ActEnd (actions ! n) := 0))"
+  unfolding edge_3_effect_def edge_3_spec_def
+  unfolding 
+    edge_effect_def Let_def prod.case unzip_def set_prop_ab_def
+    map_map comp_def fst_map_prod snd_map_prod id_def list.map map_append
+    comp_def fst_conv snd_conv unzip_def inc_prop_lock_ab_def eval.simps
+  by auto
+
+lemma end_edge_effect_alt: "end_edge_effect n (L, v, c) = 
+  (L[Suc n := Off (actions ! n)],
+    v(ActsActive \<mapsto> plus_int (the (v ActsActive)) (- 1),
+      map PropVar (dels (at_end (actions ! n))) [\<mapsto>] map (\<lambda>x. 0) (map PropVar (dels (at_end (actions ! n)))),
+      map PropVar (adds (at_end (actions ! n))) [\<mapsto>] map (\<lambda>x. 1) (map PropVar (adds (at_end (actions ! n))))),
+    c)"
+  unfolding end_edge_effect_def end_edge_spec_def
+  unfolding 
+    edge_effect_def Let_def prod.case unzip_def set_prop_ab_def
+    map_map comp_def fst_map_prod snd_map_prod id_def list.map map_append
+    comp_def fst_conv snd_conv unzip_def inc_prop_lock_ab_def eval.simps
+  by (auto simp: map_upds_append)
+
+lemma instant_trans_edge_effect_alt: "instant_trans_edge_effect n (L, v, c) = 
+  (L[Suc n := EndInstant (actions ! n)], v, c(ActEnd (actions ! n):=0))"
+  unfolding instant_trans_edge_effect_def instant_trans_edge_spec_def
+  unfolding 
+    edge_effect_def Let_def prod.case unzip_def set_prop_ab_def
+    map_map comp_def fst_map_prod snd_map_prod id_def list.map map_append
+    comp_def fst_conv snd_conv unzip_def inc_prop_lock_ab_def eval.simps
+  by auto
+
+lemma main_auto_init_edge_effect_alt: "main_auto_init_edge_effect (L, v, c) =
+  (L[0 := Planning], v(PlanningLock \<mapsto> 1, ActsActive \<mapsto> 0, map PropVar init [\<mapsto>] map (\<lambda>x. 1) (map PropVar init)), c)"
+  unfolding main_auto_init_edge_effect_def main_auto_init_edge_spec_def
+  unfolding 
+    edge_effect_def Let_def prod.case unzip_def set_prop_ab_def
+    map_map comp_def fst_map_prod snd_map_prod id_def list.map map_append
+    comp_def fst_conv snd_conv unzip_def inc_prop_lock_ab_def eval.simps
+  by auto
+
+lemma main_auto_goal_edge_effect_alt: "main_auto_goal_edge_effect (L, v, c) = 
+  (L[0 := GoalLocation], v(PlanningLock \<mapsto> 2), c)"
+  unfolding main_auto_goal_edge_effect_def main_auto_goal_edge_spec_def
+  unfolding 
+    edge_effect_def Let_def prod.case unzip_def set_prop_ab_def
+    map_map comp_def fst_map_prod snd_map_prod id_def list.map map_append
+    comp_def fst_conv snd_conv unzip_def inc_prop_lock_ab_def eval.simps
+  by auto
+
+definition apply_start_edge_effects::"
+nat list
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
+"apply_start_edge_effects ns s \<equiv>
+  seq_apply (map start_edge_effect ns) s
+"
+
+definition "apply_edge_2_effects ns s = seq_apply (map edge_2_effect ns) s"
+
+definition "apply_edge_3_effects ns s \<equiv> seq_apply (map edge_3_effect ns) s"
+
+definition "apply_end_edge_effects ns s \<equiv> seq_apply (map end_edge_effect ns) s"
+
+definition "apply_snap_action n s \<equiv> seq_apply [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n] s"
+
+definition "apply_instant_actions ns s \<equiv> seq_apply' (map apply_snap_action ns) s"
+
+(* 
 (* The main automaton is the first automaton, so the index must be incremented *)
 definition enter_start_instant::"
 nat
@@ -781,21 +912,16 @@ let
   ds = dels (at_start act) |> map PropVar;
   as = adds (at_start act) |> map PropVar;
   var_asmt' = var_asmt(ActsActive \<mapsto> (the (var_asmt ActsActive) + 1));
-  var_asmt'' = var_asmt'(ds [\<mapsto>] (list_of (0::int) (length ds)));
-  var_asmt''' = var_asmt''(as [\<mapsto>] (list_of (1::int) (length as)));
+  var_asmt'' = var_asmt'(ds [\<mapsto>] (replicate (length ds) (0::int)));
+  var_asmt''' = var_asmt''(as [\<mapsto>] (replicate (length as) (1::int)));
   
   clock_asmt' = clock_asmt(ActStart act := 0)
 in (act_locs', var_asmt''', clock_asmt')
 "
 
-definition enter_start_instants::"
-nat list
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
-"enter_start_instants ns s \<equiv>
-  seq_apply (map enter_start_instant ns) s
-"
-
+lemma "enter_start_instant n (L, v, c) = start_edge_effect n (L, v, c)"
+  unfolding start_edge_effect_alt enter_start_instant_def Let_def prod.case
+  by (auto simp: replicate_length_conv_map map_upds_append)
 
 (* It is valid to assume that variables have an assignment. Hidden assumption (at this level)
 
@@ -815,14 +941,6 @@ let
   next_asmt = map (\<lambda>x. x + 1) cur_asmt;
   var_asmt' = var_asmt(locks [\<mapsto>] next_asmt)
 in (act_locs', var_asmt', clock_asmt)
-"
-
-definition leave_start_instants::"
-nat list
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock, real) cval) list" where
-"leave_start_instants ns s \<equiv>
-  seq_apply (map leave_start_instant ns) s
 "
 
 text \<open>Applying the end happenings first\<close>
@@ -845,8 +963,6 @@ let
 in (act_locs', var_asmt', clock_asmt')
 "
 
-definition "enter_end_instants ns s \<equiv> seq_apply (map enter_end_instant ns) s"
-
 
 definition leave_end_instant::"
 nat
@@ -862,12 +978,11 @@ let
   ds = dels (at_end act) |> map PropVar;
   as = adds (at_end act) |> map PropVar;
   var_asmt' = var_asmt(ActsActive \<mapsto> (the (var_asmt ActsActive) - 1));
-  var_asmt'' = var_asmt'(ds [\<mapsto>] (list_of (0::int) (length ds)));
-  var_asmt''' = var_asmt''(as [\<mapsto>] (list_of (1::int) (length as)))
+  var_asmt'' = var_asmt'(ds [\<mapsto>] (replicate (length ds) (0::int)));
+  var_asmt''' = var_asmt''(as [\<mapsto>] (replicate (length as) (1::int)))
 in (act_locs', var_asmt''', clock_asmt)
 "
 
-definition "leave_end_instants ns s \<equiv> seq_apply (map leave_end_instant ns) s"
 
 definition start_to_end_instant::"
 nat
@@ -889,67 +1004,6 @@ let
 in (act_locs', var_asmt', clock_asmt')
 "
 
-definition apply_snap_action::"
-nat
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
-"apply_snap_action n s \<equiv>
-seq_apply [enter_start_instant n, start_to_end_instant n, leave_end_instant n] s
-"
-
-definition "apply_instant_actions ns s \<equiv> seq_apply' (map apply_snap_action ns) s" 
-
-(* apply all snap actions of the nth happening in the plan *)
-definition apply_nth_happening::"
-nat
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
-"apply_nth_happening n s \<equiv>
-let
-  t = time_index \<pi> n;
-  act_indices = [0..<length actions];
-  start_indices = filter (is_starting_index t) act_indices;
-  end_indices = filter (is_ending_index t) act_indices;
-  both = filter (is_instant_index t) act_indices
-in [s] 
-    |> ext_seq (enter_end_instants end_indices)
-    |> ext_seq (apply_instant_actions both)
-    |> ext_seq (enter_start_instants start_indices)
-    |> ext_seq (leave_end_instants end_indices)
-    |> ext_seq (leave_start_instants start_indices)
-    |> tl
-"
-
-definition delay::"
-real
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock, real) cval)" where
-"delay t s \<equiv> map_prod id (map_prod id (\<lambda>clock_asmt. clock_asmt \<oplus> t)) s"
-
-
-find_theorems name: "real*of"
-
-definition get_delay::"nat \<Rightarrow> real" where
-"get_delay i \<equiv>
-  if (i = 0) 
-  then real_of_int (\<epsilon> + 1)
-  else real_of_rat (htpl \<pi> ! i - htpl \<pi> ! (i - 1)) 
-"
-
-
-definition delay_and_apply::"
-nat
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
-"delay_and_apply i s \<equiv>
-let
-  d = get_delay i
-in
-  s 
-  |> delay d  
-  |> apply_nth_happening i
-"
-
 definition start_planning::"
 ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))
 \<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
@@ -962,7 +1016,7 @@ let
   
   init_props = map PropVar init;
   var_asmt' = var_asmt(PlanningLock \<mapsto> 1, ActsActive \<mapsto> 0);
-  var_asmt'' = var_asmt'(init_props [\<mapsto>] (list_of (1::int) (length init)))
+  var_asmt'' = var_asmt'(init_props [\<mapsto>] (replicate (length init_props) (1::int)))
 in (locs', var_asmt'', clock_asmt)"
 
 definition end_planning::"
@@ -978,7 +1032,55 @@ let
   init_props = map PropLock init;
   var_asmt' = var_asmt(PlanningLock \<mapsto> 2)
 in (locs', var_asmt', clock_asmt)"
+ *)
 
+
+(* apply all snap actions of the nth happening in the plan *)
+definition apply_nth_happening::"
+nat
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
+"apply_nth_happening n s \<equiv>
+let
+  t = time_index \<pi> n;
+  act_indices = [0..<length actions];
+  start_indices = filter (is_starting_index t) act_indices;
+  end_indices = filter (is_ending_index t) act_indices;
+  both = filter (is_instant_index t) act_indices
+in [s] 
+    |> ext_seq (apply_edge_3_effects end_indices)
+    |> ext_seq (apply_instant_actions both)
+    |> ext_seq (apply_start_edge_effects start_indices)
+    |> ext_seq (apply_end_edge_effects end_indices)
+    |> ext_seq (apply_edge_2_effects start_indices)
+    |> tl
+"
+
+definition delay::"
+real
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock, real) cval)" where
+"delay t s \<equiv> map_prod id (map_prod id (\<lambda>clock_asmt. clock_asmt \<oplus> t)) s"
+
+definition get_delay::"nat \<Rightarrow> real" where
+"get_delay i \<equiv>
+  if (i = 0) 
+  then real_of_int (\<epsilon> + 1)
+  else real_of_rat (htpl \<pi> ! i - htpl \<pi> ! (i - 1)) 
+"
+
+definition delay_and_apply::"
+nat
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
+\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) list" where
+"delay_and_apply i s \<equiv>
+let
+  d = get_delay i
+in
+  s 
+  |> delay d  
+  |> apply_nth_happening i
+"
 
 primcorec goal_run::"
   ('action location list \<times>
@@ -997,9 +1099,9 @@ definition plan_steps::"('action location list \<times>
     ('action clock, real) cval) list" where
 "plan_steps \<equiv> 
   [abs_renum.a\<^sub>0]
-    |> ext_seq (seq_apply [start_planning])
+    |> ext_seq (seq_apply [main_auto_init_edge_effect])
     |> ext_seq' (map delay_and_apply [0..<length (htpl \<pi>)])
-    |> ext_seq (seq_apply [end_planning])"
+    |> ext_seq (seq_apply [main_auto_goal_edge_effect])"
 
 definition plan_state_sequence::"('action location list \<times>
     ('proposition variable \<Rightarrow> int option) \<times>
@@ -1186,31 +1288,20 @@ lemma map_of_zip_dom_to_range':
   by simp
 
 subsubsection \<open>Relating maps and bounds\<close>
-lemma "x \<in> dom v \<Longrightarrow> \<exists>y. v x = Some y" by auto
 
-lemma is_upds_set_vars_list_of: 
+lemma is_upds_set_vars_replicate: 
   assumes "upds = (map (set_var n) xs)"
-      and "v' = (v(xs [\<mapsto>] (list_of n (length xs))))"
+      and "v' = (v(xs [\<mapsto>] (replicate (length xs) n)))"
     shows "is_upds v upds v'"
   unfolding assms
-  apply (induction xs arbitrary: v)
-  subgoal 
-    apply (subst list_of_def)
-    apply simp
-    by (rule is_upds.intros)
-  subgoal for x xs v
-    apply (subst length_nth_simps)
-    apply (subst list_of_Suc)
-    apply (subst list.map)
-    apply (subst map_upds_Cons)
-    apply (rule is_upds.intros)
-    unfolding is_upd_def
-    apply (intro exI conjI)
-      apply (rule HOL.refl)
-      apply (rule check_bexp_is_val.intros)
-     apply (rule HOL.refl)
-    by simp
-  done
+  by (induction xs arbitrary: v) (auto intro: is_upds.intros simp: is_upd_def check_bexp_simps is_val_simps)
+
+lemma is_upds_set_vars_map: 
+  assumes "upds = (map (set_var n) xs)"
+      and "v' = (v(xs [\<mapsto>] (map (\<lambda>x. n) xs)))"
+    shows "is_upds v upds v'"
+  unfolding assms
+  by (induction xs arbitrary: v) (auto intro: is_upds.intros simp: is_upd_def check_bexp_simps is_val_simps)
 
 lemma is_upds_inc_vars: 
   assumes "set xs \<subseteq> dom v"
@@ -1337,14 +1428,7 @@ proof (rule conjI)
   show 1: "dom v' = dom M"
     apply (intro equalityI subsetI)
     subgoal for x
-      unfolding v'
-      apply (subst (asm) dom_map_upds)
-      apply (subst (asm) assms(2)[symmetric])
-      apply (subst (asm) take_all, simp)
-      apply (erule UnE)
-      subgoal using bounds by blast
-      subgoal using previous unfolding bounded_def by argo
-      done
+      using assms(2)[symmetric] bounds previous unfolding  v' bounded_def by auto
     subgoal for x
       unfolding v'
       apply (subst dom_map_upds)
@@ -1370,34 +1454,21 @@ proof (rule conjI)
     done
 qed
 
-lemma zip_list_of: 
+lemma all_zip_replicate:
   assumes "x \<in> set xs"
-  shows "(x, n) \<in> set (zip xs (list_of n (length xs)))"
-  using assms 
-  apply (induction xs arbitrary: n x)
-   apply simp
-  subgoal for a as n x
-    apply (subst length_Cons)
-    apply (subst list_of_Suc)
-    apply (subst zip_Cons_Cons)
-    by auto
-  done
-
-lemma all_zip_list_of:
-  assumes "x \<in> set xs"
-  shows "\<forall>m. (x, m) \<in> set (zip xs (list_of n (length xs))) \<longrightarrow> m = n"
+  shows "\<forall>m. (x, m) \<in> set (zip xs (replicate (length xs) n)) \<longrightarrow> m = n"
   using assms
 proof (induction xs arbitrary: n x)
   case Nil
   then show ?case by simp
 next
   case (Cons a as)
-  have IH: "\<forall>m. (x, m) \<in> set (zip as (list_of n (length as))) \<longrightarrow> m = n"
+  have IH: "\<forall>m. (x, m) \<in> set (zip as (replicate (length as) n)) \<longrightarrow> m = n"
     using Cons apply (cases "x \<in> set as")
      apply simp using set_zip_leftD by metis
   show ?case 
     apply (subst length_Cons)
-    apply (subst list_of_Suc)
+    apply (subst replicate.simps)
     apply (subst zip_Cons_Cons)
     apply (rule allI)
     subgoal for m
@@ -1446,26 +1517,51 @@ next
   qed
 qed
 
-lemma map_upds_with_list_of:
+lemma map_upds_with_replicate:
   assumes "x \<in> set xs"
-  shows "(v(xs [\<mapsto>] (list_of n (length xs)))) x = Some n"
-  using assms 
-  unfolding map_upds_def 
-  apply (subst map_add_find_right)
-   apply (rule map_of_determ)
-  apply (subst set_rev)
-    using all_zip_list_of
-    apply fast
-     apply (subst set_rev)
-     apply (erule zip_list_of)
-    by simp
+  shows "(v(xs [\<mapsto>] (replicate (length xs) n))) x = Some n"
+proof -
+  have "(x, n) \<in> set (zip xs (replicate (length xs) n))"
+    apply (subst set_zip)
+    using length_replicate assms
+    using nth_replicate
+    by (auto simp: set_conv_nth)
+  thus ?thesis
+    using assms 
+    unfolding map_upds_def 
+    apply (subst map_add_find_right)
+     apply (rule map_of_determ)
+    apply (subst set_rev)
+    using all_zip_replicate
+    by (fast, auto)
+qed
 
-lemma upds_list_of_bounded:
+
+lemma map_upds_with_map:
+  assumes "x \<in> set xs"
+  shows "(v(xs [\<mapsto>] (map (\<lambda>x. n) xs))) x = Some n"
+proof -
+  have "\<forall>m. (x, m) \<in> set (zip xs (map (\<lambda>x. n) xs)) \<longrightarrow> m = n"
+    apply (subst set_zip)
+    by auto
+  moreover
+  have "(x, n) \<in> set (zip xs (map (\<lambda>x. n) xs))"
+    apply (subst set_zip)
+    using assms
+    by (auto simp: set_conv_nth set_zip)
+  ultimately
+  show ?thesis
+    using assms unfolding map_upds_def 
+    apply (subst map_add_find_right)
+    by (auto intro: map_of_determ)
+qed
+
+lemma upds_replicate_bounded:
   assumes previous: "bounded M v"
-      and v': "v' = v(xs [\<mapsto>] (list_of n (length xs)))"
+      and v': "v' = v(xs [\<mapsto>] (replicate (length xs) n))"
       and bounds: "\<forall>x \<in> set xs. (\<exists>l u. M x = Some (l, u) \<and> l \<le> n \<and> n \<le> u)"   
     shows "bounded M v'"
-proof (rule updated_bounded[OF assms(1) length_list_of[symmetric] assms(2)])
+proof (rule updated_bounded[OF assms(1) length_replicate[symmetric] assms(2)])
   show "\<forall>x\<in>set xs. \<exists>l u. M x = Some (l, u) \<and> l \<le> the (v' x) \<and> the (v' x) \<le> u"
   proof (rule ballI)
     fix x
@@ -1474,7 +1570,28 @@ proof (rule updated_bounded[OF assms(1) length_list_of[symmetric] assms(2)])
     have "\<exists>l u. M x = Some (l, u) \<and> l \<le> n \<and> n \<le> u" by simp
     moreover
     have "the (v' x) = n" unfolding v' 
-      apply (subst map_upds_with_list_of[OF a]) 
+      apply (subst map_upds_with_replicate[OF a]) 
+      by simp
+    ultimately
+    show "\<exists>l u. M x = Some (l, u) \<and> l \<le> the (v' x) \<and> the (v' x) \<le> u" by simp
+  qed
+qed
+
+lemma upds_map_bounded:
+  assumes previous: "bounded M v"
+      and v': "v' = v(xs [\<mapsto>] (map (\<lambda>x. n) xs))"
+      and bounds: "\<forall>x \<in> set xs. (\<exists>l u. M x = Some (l, u) \<and> l \<le> n \<and> n \<le> u)"   
+    shows "bounded M v'"
+proof (rule updated_bounded[OF assms(1) length_map[symmetric] assms(2)])
+  show "\<forall>x\<in>set xs. \<exists>l u. M x = Some (l, u) \<and> l \<le> the (v' x) \<and> the (v' x) \<le> u"
+  proof (rule ballI)
+    fix x
+    assume a: "x \<in> set xs"
+    with bounds
+    have "\<exists>l u. M x = Some (l, u) \<and> l \<le> n \<and> n \<le> u" by simp
+    moreover
+    have "the (v' x) = n" unfolding v' 
+      apply (subst map_upds_with_map[OF a])
       by simp
     ultimately
     show "\<exists>l u. M x = Some (l, u) \<and> l \<le> the (v' x) \<and> the (v' x) \<le> u" by simp
@@ -3639,7 +3756,7 @@ subsection \<open>The initial state\<close>
 
 
 
-lemma initial_step_possible: "abs_renum.urge_bisim.A.steps ((ext_seq \<circ> seq_apply) [start_planning] [abs_renum.a\<^sub>0]) \<and> init_planning_state_props' (last ((ext_seq \<circ> seq_apply) [start_planning] [abs_renum.a\<^sub>0]))"
+lemma initial_step_possible: "abs_renum.urge_bisim.A.steps ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [abs_renum.a\<^sub>0]) \<and> init_planning_state_props' (last ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [abs_renum.a\<^sub>0]))"
 proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composable[where R = init_state_props and S = init_planning_state_props])
   show "abs_renum.urge_bisim.A.steps [abs_renum.a\<^sub>0] \<and> init_state_props (last [abs_renum.a\<^sub>0])"
   proof (intro conjI, goal_cases)
@@ -3692,27 +3809,30 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
         by blast+
       done
     done
-  show "\<And>x. init_state_props x \<Longrightarrow> init_planning_state_props (start_planning x) \<and> abs_renum.urge_bisim.A.steps [x, start_planning x]"
+  show "\<And>x. init_state_props x \<Longrightarrow> init_planning_state_props (main_auto_init_edge_effect x) \<and> abs_renum.urge_bisim.A.steps [x, main_auto_init_edge_effect x]"
   proof -
     fix x
     assume a: "init_state_props x"
-    have x: "init_planning_state_props (start_planning x)"
+    have x: "init_planning_state_props (main_auto_init_edge_effect x)"
       apply (rule init_state_propsE[OF a])
       subgoal for L v c
         apply (erule ssubst)
         apply (rule init_planning_state_propsI)
-        unfolding start_planning_def Let_def prod.case 
+        unfolding main_auto_init_edge_effect_alt
                apply (rule HOL.refl)
         subgoal apply (rule Lv_condsI)
              apply simp
             apply simp
-          subgoal apply (rule upds_list_of_bounded[where v = "v(PlanningLock \<mapsto> 1, ActsActive \<mapsto> 0)"])
-               apply (rule single_upd_bounded)
-                  apply (erule single_upd_bounded)
-                    apply (subst map_of_nta_vars_exact, simp, simp, simp)
-                apply (subst map_of_nta_vars_exact, simp, simp, simp)
-             apply (subst length_map[symmetric, where f = PropVar and xs = init])
-            apply (rule HOL.refl)
+          subgoal apply (rule upds_map_bounded[where v = "v(PlanningLock \<mapsto> 1, ActsActive \<mapsto> 0)"])
+              apply (rule single_upd_bounded)
+                 apply (erule single_upd_bounded)
+                   apply (rule map_of_nta_vars_PlanningLock)
+                  apply simp
+                 apply simp
+                apply (rule map_of_nta_vars_ActsActive)
+               apply simp
+              apply simp
+             apply (rule HOL.refl)
             subgoal apply (rule ballI)
               subgoal for x
                 apply (intro exI)
@@ -3732,8 +3852,7 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
           by auto
         subgoal by (subst map_upds_apply_nontin) auto
             apply simp
-        subgoal apply (subst length_map[symmetric, where f = PropVar and xs = init])
-          by (fastforce intro!: map_upds_with_list_of)
+        subgoal by (fastforce intro!: map_upds_with_map)
           apply simp
         subgoal for x
           apply (subst map_upds_apply_nontin)
@@ -3749,16 +3868,16 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
         by simp
       done
     moreover
-    have "abs_renum.urge_bisim.A.steps [x, start_planning x]"
+    have "abs_renum.urge_bisim.A.steps [x, main_auto_init_edge_effect x]"
     proof (rule single_step_intro)
       obtain L v c where
         Lvc: "x = (L, v, c)" by (erule prod_cases3)  
 
       obtain L' v' c' where
-        Lvc': "start_planning x = (L', v', c')" by (erule prod_cases3)
+        Lvc': "main_auto_init_edge_effect x = (L', v', c')" by (erule prod_cases3)
 
-      have v': "v' = v(PlanningLock \<mapsto> 1, ActsActive \<mapsto> 0, map PropVar init [\<mapsto>] list_of 1 (length init))"
-        using Lvc' Lvc unfolding start_planning_def by auto
+      have v': "v' = v(PlanningLock \<mapsto> 1, ActsActive \<mapsto> 0, map PropVar init [\<mapsto>] map (\<lambda>x. 1) (map PropVar init))"
+        using Lvc' Lvc using main_auto_init_edge_effect_alt by auto
 
       have "abs_renum.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow> \<langle>L', v', c'\<rangle>"
       proof (rule non_t_step_intro[where a = "Internal (STR '''')", simplified])
@@ -3801,15 +3920,15 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
                apply simp
                apply (rule init_state_propsE[OF a, simplified Lvc])
               apply simp
-          using Lvc'[simplified start_planning_def Let_def Lvc prod.case] apply simp
-          using Lvc'[simplified start_planning_def Let_def Lvc prod.case] apply simp
+          using Lvc'[simplified main_auto_init_edge_effect_alt Let_def Lvc prod.case] apply simp
+          using Lvc'[simplified main_auto_init_edge_effect_alt Let_def Lvc prod.case] apply simp
            apply (subst v')
            apply (rule is_upds.intros)
             defer
             apply (rule is_upds.intros)
              defer
           unfolding set_prop_ab_def
-             apply (rule is_upds_set_vars_list_of)
+             apply (rule is_upds_set_vars_map)
               apply (subst map_map[symmetric])
               apply blast
              apply simp
@@ -3817,11 +3936,11 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
           using Lv_conds_def apply blast
           by (simp add: is_upd_const_simp)+
       qed
-      thus "(case x of (L, s, u) \<Rightarrow> \<lambda>(L', s', u'). abs_renum.sem \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow> \<langle>L', s', u'\<rangle>) (start_planning x)"
+      thus "(case x of (L, s, u) \<Rightarrow> \<lambda>(L', s', u'). abs_renum.sem \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow> \<langle>L', s', u'\<rangle>) (main_auto_init_edge_effect x)"
         using Lvc Lvc' by auto
     qed
     ultimately
-    show "init_planning_state_props (start_planning x) \<and> abs_renum.urge_bisim.A.steps [x, start_planning x]" by simp
+    show "init_planning_state_props (main_auto_init_edge_effect x) \<and> abs_renum.urge_bisim.A.steps [x, main_auto_init_edge_effect x]" by simp
   qed
 qed
 
@@ -3836,7 +3955,7 @@ thm abs_renum.urge_bisim.A.steps.intros
 (* The first function application is preceded by a delay *)
 
 lemma apply_instant_actions_alt: "ext_seq (apply_instant_actions xs) = 
-  fold (ext_seq o seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) xs) "
+  fold (ext_seq o seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) xs) "
   unfolding apply_instant_actions_def 
   unfolding ext_seq_seq_apply'_conv_fold
   unfolding apply_snap_action_def
@@ -3860,8 +3979,8 @@ lemma end_starts_possible:
   assumes "abs_renum.urge_bisim.A.steps xs \<and> happening_pre_end_starts i (last xs)"
       and end_indices: "end_indices = filter (is_ending_index (time_index \<pi> i)) [0..<length actions]"
       and i: "i < length (htpl \<pi>)"
-    shows "abs_renum.urge_bisim.A.steps ((ext_seq \<circ> seq_apply) (map enter_end_instant end_indices) xs) \<and> 
-          happening_pre_instants i (last ((ext_seq \<circ> seq_apply) (map enter_end_instant end_indices) xs))"
+    shows "abs_renum.urge_bisim.A.steps ((ext_seq \<circ> seq_apply) (map edge_3_effect end_indices) xs) \<and> 
+          happening_pre_instants i (last ((ext_seq \<circ> seq_apply) (map edge_3_effect end_indices) xs))"
 proof -
   interpret eip: filter_sorted_distinct_list "[0..<length actions]" "is_ending_index (time_index \<pi> i)" end_indices 
     apply (unfold_locales)
@@ -3908,7 +4027,7 @@ proof -
             where R = "happening_pre_end_starts i" 
               and S = "happening_post_end_starts i" 
               and R' = "happening_pre_instants i"
-              and fs = "map enter_end_instant end_indices"
+              and fs = "map edge_3_effect end_indices"
               and P = "end_start_pre i o ((!) end_indices)"
               and Q = "end_start_post i o ((!) end_indices)",
               OF assms(1), simplified length_map nth_map],
@@ -4031,7 +4150,7 @@ proof -
       subgoal
         apply (insert esp)
         unfolding s
-          unfolding enter_end_instant_def Let_def prod.case comp_def
+          unfolding edge_3_effect_alt comp_def
           apply (rule end_start_postI, simp)
                apply (drule end_start_pre_dests(1))
           subgoal
@@ -4042,10 +4161,10 @@ proof -
                 apply (erule Lv_conds_maintained)
                    apply simp
                   apply simp
-                 apply (rule map_upds_apply_nontin, force)
+                 apply (subst map_upds_apply_nontin, force)+
+                apply simp
                 using bounded_after
-                unfolding v'_def
-                unfolding map_map comp_def by blast
+                unfolding v'_def by auto
               subgoal by simp
               subgoal
                 apply (intro allI impI)
@@ -4126,7 +4245,7 @@ proof -
           done
         subgoal apply (insert esp j)
           apply (rule single_step_intro)
-          unfolding s prod.case enter_end_instant_def Let_def prod.case
+          unfolding s prod.case edge_3_effect_alt Let_def prod.case
           apply (rule non_t_step_intro[where a="Internal (STR '''')", simplified])
            prefer 2
           subgoal by (force dest: end_start_pre_dests(1) end_start_invs_dests(1) happening_invs_dests(1) Lv_conds_dests)
@@ -4163,7 +4282,9 @@ proof -
                apply (subst inc_prop_lock_ab_def) 
                apply (subst map_map[symmetric, of _ PropLock])
                apply blast
-              apply simp
+              apply (subst map_map)+
+              apply (subst comp_def)+
+            apply blast
              apply (rule subsetI)
             subgoal for x
               apply (drule end_start_pre_dests(2))
@@ -4833,7 +4954,7 @@ lemma happening_steps_possible:
       and pres: "happening_pre_pre_delay i s"
   shows "abs_renum.urge_bisim.A.steps (s#delay_and_apply i s) \<and> happening_post i (last (delay_and_apply i s))" 
 proof -
-  let ?seq = "(ext_seq \<circ> seq_apply) (map leave_start_instant (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
+  let ?seq = "(ext_seq \<circ> seq_apply) (map apply_edge_2_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
            ((ext_seq \<circ> seq_apply) (map leave_end_instant (filter (is_ending_index (time_index \<pi> i)) [0..<length actions]))
              ((ext_seq \<circ> seq_apply) (map enter_start_instant (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
                (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions])) 
@@ -4921,7 +5042,7 @@ proof -
         length (map enter_start_instant (filter (is_starting_index (time_index \<pi> i)) [0..<length actions])) +
         sum_list (map length (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))) +
         length (map leave_end_instant (filter (is_ending_index (time_index \<pi> i)) [0..<length actions])) +
-        length (map leave_start_instant (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))"
+        length (map apply_edge_2_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))"
       unfolding add_gr_0
       apply (rule time_index_action_index_happening_cases[OF i])
       by (fastforce intro!: length_pos_if_in_set sum_list_pos_if_ex_pos)+
@@ -4938,7 +5059,7 @@ proof -
       unfolding delay_and_apply_def Let_def
       unfolding s
       apply (subst apply_nth_happening_def)
-      unfolding Let_def enter_end_instants_def enter_start_instants_def leave_end_instants_def leave_start_instants_def apply_snap_action_def apply_instant_actions_alt
+      unfolding Let_def apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def apply_instant_actions_alt
       unfolding comp_apply[of ext_seq seq_apply, symmetric]
       apply (subst ext_seq_seq_apply_append_distrib, intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil, simp)
       apply (subst fold_ext_seq_comp_conv_foldl_append, intro ext_seq_comp_seq_apply_not_Nil, simp)
@@ -4957,13 +5078,13 @@ proof -
       using p s by blast
     unfolding delay_and_apply_def Let_def
     apply (subst apply_nth_happening_def)
-    unfolding Let_def enter_end_instants_def enter_start_instants_def leave_end_instants_def leave_start_instants_def apply_snap_action_def  apply_instant_actions_alt
+    unfolding Let_def apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def  apply_instant_actions_alt
     unfolding comp_apply[of ext_seq seq_apply, symmetric]
     apply (subst last_tl_eq_last)
     using p by blast
   
 next
-let ?seq = "(ext_seq \<circ> seq_apply) (map leave_start_instant (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
+let ?seq = "(ext_seq \<circ> seq_apply) (map apply_edge_2_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
        ((ext_seq \<circ> seq_apply) (map leave_end_instant (filter (is_ending_index (time_index \<pi> i)) [0..<length actions]))
          ((ext_seq \<circ> seq_apply) (map enter_start_instant (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
            (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions])) 
@@ -5047,7 +5168,7 @@ proof (rule steps_seq.ext_seq'_induct_list_prop_and_post[
     show ?thesis
       unfolding delay_and_apply_def 
       unfolding apply_nth_happening_def Let_def
-      unfolding leave_start_instants_def leave_end_instants_def enter_start_instants_def apply_instant_actions_alt enter_end_instants_def
+      unfolding apply_edge_2_effects_def apply_end_edge_effects_def apply_start_edge_effects_def apply_instant_actions_alt apply_edge_3_effects_def
       unfolding comp_apply[of ext_seq seq_apply, symmetric]
       apply (subst fold_ext_seq_comp_conv_foldl_append, intro ext_seq_comp_seq_apply_not_Nil, simp)
       apply (subst ext_seq_seq_apply_append_distrib, intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil, simp)+
@@ -5165,25 +5286,25 @@ next
 
 lemma final_step_possible: 
   assumes "abs_renum.urge_bisim.A.steps xs \<and> goal_trans_pre (last xs)"
-  shows "abs_renum.urge_bisim.A.steps ((ext_seq \<circ> seq_apply) [end_planning] xs) \<and> goal_state_conds (last ((ext_seq \<circ> seq_apply) [end_planning] xs))"
+  shows "abs_renum.urge_bisim.A.steps ((ext_seq \<circ> seq_apply) [main_auto_goal_edge_effect] xs) \<and> goal_state_conds (last ((ext_seq \<circ> seq_apply) [main_auto_goal_edge_effect] xs))"
 proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R = goal_trans_pre, OF assms], rule conjI)
   fix x::"'action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)"
   assume a: "goal_trans_pre x"
-  show "goal_state_conds (end_planning x)" 
+  show "goal_state_conds (main_auto_goal_edge_effect x)" 
     apply (insert a)
     apply (erule goal_trans_preE)
     subgoal for L v c
       apply (rule ssubst[of x], assumption)
-      unfolding end_planning_def Let_def prod.case
+      unfolding main_auto_goal_edge_effect_def Let_def prod.case
       apply (rule goal_state_condsI, rule HOL.refl)
       by (auto elim: Lv_condsE intro!: single_upd_bounded map_of_nta_vars_PlanningLock)
     done
-  show "abs_renum.urge_bisim.A.steps [x, end_planning x]"
+  show "abs_renum.urge_bisim.A.steps [x, main_auto_goal_edge_effect x]"
     apply (rule single_step_intro)
     apply (cases x)
     subgoal for L v c
       apply (rule ssubst, assumption)
-      unfolding end_planning_def Let_def prod.case
+      unfolding main_auto_goal_edge_effect_def Let_def prod.case
       apply (insert a)
       apply (rule non_t_step_intro[where a = "Internal (STR '''')", simplified])
        apply (subst abs_renum.sem_def)
