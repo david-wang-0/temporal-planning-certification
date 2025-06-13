@@ -307,7 +307,14 @@ in
 (* Checking that no interfering snap-action is starting is done using the clock constraints. 
 It is sufficient to check that the end does not interfere with the start, because interference is
 reflexive and the start clock has been reset already *)
-definition instant_trans_edge_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
+definition instant_trans_edge_spec::"'action 
+  \<Rightarrow> 'action location 
+    \<times> ('proposition variable, int) Simple_Expressions.bexp 
+    \<times> ('action clock, int) acconstraint list 
+    \<times> String.literal act 
+    \<times> ('proposition variable \<times> ('proposition variable, int) exp) list 
+    \<times> 'action clock list 
+    \<times> 'action location" where
 "instant_trans_edge_spec a \<equiv>
 let
   end_snap = at_end a;

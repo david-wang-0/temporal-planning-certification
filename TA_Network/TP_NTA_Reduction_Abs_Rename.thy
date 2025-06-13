@@ -1753,6 +1753,8 @@ schematic_goal sem_alt_def: "Simple_Network_Impl.sem actual_autos broadcast nta_
   apply (subst comp_assoc[symmetric])
   ..
 
+typ "(String.literal, 'action location,'action clock, int, 'proposition variable, int) transition"
+
 sublocale abs_renum: Simple_Network_Rename_Formula
     broadcast 
     nta_vars 
