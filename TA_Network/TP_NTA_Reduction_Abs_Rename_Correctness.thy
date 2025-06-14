@@ -764,6 +764,30 @@ proof -
     apply (subst instant_intermediate_prop_state_alt[OF h t n])
     using p' pre_sat_by_upd_state_seq[OF t happening(2) _ n] p by auto
 qed
+
+lemma instant_part_upd_prop_state_inv:
+  assumes "n \<le> m"
+      and "\<forall>j a. n \<le> j \<and> j < m \<and> a = actions ! j \<longrightarrow> \<not>(planning_sem.is_instant_action (time_index \<pi> i) a)" 
+    shows "instant_part_updated_prop_state n p = instant_part_updated_prop_state m p"
+proof -
+  have 1: "[0..<m] = [0..<n] @ [n..<m]" using assms upt_append by auto
+  have 2: "filter (planning_sem.is_instant_action (time_index \<pi> i)) (map ((!) actions) [n..<m]) = []"
+    apply (subst filter_empty_conv)
+    using assms(2) by auto
+  have "filter (planning_sem.is_instant_action (time_index \<pi> i)) (map ((!) actions) [0..<n]) =
+      filter (planning_sem.is_instant_action (time_index \<pi> i)) (map ((!) actions) [0..<m])"
+    apply (subst 1)
+    using 2 by auto
+  thus ?thesis 
+    unfolding instant_part_updated_prop_state_def 
+    unfolding instant_part_updated_plan_state_seq_def 
+    unfolding apply_instant_snaps_before_def
+    unfolding instant_snaps_before_def
+    unfolding instant_starts_before_def instant_ends_before_def
+    unfolding instant_actions_before_def
+    unfolding actions_before_def by argo
+qed
+  
   
 end
 
@@ -1296,6 +1320,21 @@ lemma is_upds_set_vars_replicate:
     shows "is_upds v upds v'"
   unfolding assms
   by (induction xs arbitrary: v) (auto intro: is_upds.intros simp: is_upd_def check_bexp_simps is_val_simps)
+
+lemma map_const_eq_conv_length_eq:
+  "map (\<lambda>x. n) xs = map (\<lambda>y. m) ys \<longleftrightarrow> length xs = length ys \<and> ((xs \<noteq> []) \<longrightarrow> n = m)"
+  apply (rule iffI)
+   apply (induction xs arbitrary: ys)
+    apply simp
+  subgoal for x xs ys
+    apply (induction ys)
+    by auto
+  apply (induction xs arbitrary: ys)
+   apply simp
+  subgoal for x xs ys
+    apply (induction ys)
+    by auto
+  done
 
 lemma is_upds_set_vars_map: 
   assumes "upds = (map (set_var n) xs)"
@@ -2493,48 +2532,70 @@ lemma ending_actions_sat_mutex_const_specs:
     using clocks in_acts at_end_inj unfolding inj_on_def by auto
   done
 
-lemma instant_action_sat_mutex_const_specs:
+lemma instant_action_sat_mutex_start:
   assumes in_acts: "a \<in> set actions"
-    and ending: "planning_sem.is_instant_action t a"
+    and instant: "planning_sem.is_instant_action t a"
+    and clocks: "\<forall>b\<in>set actions. planning_sem.is_ending_action t b \<longrightarrow> act_clock_pre_happ_spec c (ActStart b) t"
+                "\<forall>b\<in>set actions. planning_sem.is_not_happening_action t b \<longrightarrow> act_clock_pre_happ_spec c (ActStart b) t"
+                "\<forall>b\<in>set actions. planning_sem.is_starting_action t b \<longrightarrow> act_clock_pre_happ_spec c (ActEnd b) t"
+                "\<forall>b\<in>set actions. planning_sem.is_not_happening_action t b \<longrightarrow> act_clock_pre_happ_spec c (ActEnd b) t"
+                "act_clock_pre_happ_spec c (ActStart a) t"
+    and g: " g = map conv_ac (map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec (at_start a))) \<or> 
+            g = map conv_ac (map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec (at_start a)))"
+  shows "c \<turnstile> g"
+proof -
+  have 1: "(t, at_end a) \<in> planning_sem.happ_seq" 
+          "(t, at_start a) \<in> planning_sem.happ_seq" using instant planning_sem.is_instant_action_def by simp+
+  have 2: "\<forall>b\<in>set actions. (t, at_start b) \<notin> planning_sem.happ_seq \<or> at_start a = at_start b \<longrightarrow> act_clock_pre_happ_spec c (ActStart b) t"
+  apply (intro ballI impI)
+    subgoal for b
+      apply (erule disjE)
+      using clocks in_acts at_start_inj unfolding inj_on_def
+      by (blast intro: planning_sem.is_ending_actionI planning_sem.is_not_happening_actionI intro: clocks)+
+    done
+  have 3: "\<forall>b\<in>set actions. (t, at_end b) \<notin> planning_sem.happ_seq \<or> at_start a = at_end b \<longrightarrow> act_clock_pre_happ_spec c (ActEnd b) t"
+    apply (intro ballI impI)
+    subgoal for b
+      apply (cases "(t, at_start b) \<in> planning_sem.happ_seq")
+      using clocks snaps_disj in_acts planning_sem.is_starting_actionI 
+      by (blast intro: planning_sem.is_starting_actionI planning_sem.is_not_happening_actionI)+
+    done
+  show ?thesis
+    using g 1 2 3 mutex_0_constraint_sat mutex_eps_constraint_sat 
+    by blast
+qed
+
+lemma instant_action_sat_mutex_end:
+  assumes in_acts: "a \<in> set actions"
+    and instant: "planning_sem.is_instant_action t a"
     and clocks: "\<forall>b\<in>set actions. planning_sem.is_ending_action t b \<longrightarrow> act_clock_pre_happ_spec c (ActStart b) t"
                 "\<forall>b\<in>set actions. planning_sem.is_not_happening_action t b \<longrightarrow> act_clock_pre_happ_spec c (ActStart b) t"
                 "\<forall>b\<in>set actions. planning_sem.is_starting_action t b \<longrightarrow> act_clock_pre_happ_spec c (ActEnd b) t"
                 "\<forall>b\<in>set actions. planning_sem.is_not_happening_action t b \<longrightarrow> act_clock_pre_happ_spec c (ActEnd b) t"
                 "act_clock_pre_happ_spec c (ActEnd a) t"
-    and g: "g = map conv_ac (map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec (at_end a))) \<or> g = map conv_ac (map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec (at_end a)))"
+    and g: "g = map conv_ac (map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec (at_end a))) \<or> 
+            g = map conv_ac (map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec (at_end a)))"
   shows "c \<turnstile> g"
-  apply (rule disjE[OF g]; elim ssubst)
-  subgoal
-    apply (rule mutex_0_constraint_sat)
-    using assms(2) planning_sem.is_instant_action_def apply blast
-     apply (intro ballI impI)
-    subgoal for b
-      apply (cases "(t, at_end b) \<in> planning_sem.happ_seq")
-      using clocks snaps_disj in_acts 
-      by (blast intro: planning_sem.is_ending_actionI planning_sem.is_not_happening_actionI)+
+proof -
+  have 1: "(t, at_end a) \<in> planning_sem.happ_seq" using instant planning_sem.is_instant_action_def by simp
+  have 2: "\<forall>b\<in>set actions. (t, at_start b) \<notin> planning_sem.happ_seq \<or> at_end a = at_start b \<longrightarrow> act_clock_pre_happ_spec c (ActStart b) t"
     apply (intro ballI impI)
     subgoal for b
-      apply (erule disjE)
-      using clocks in_acts
-       apply (blast intro: planning_sem.is_starting_actionI planning_sem.is_not_happening_actionI)
-      apply (cases "a = b")
-      using clocks in_acts at_end_inj unfolding inj_on_def by auto
+      apply (cases "(t, at_end b) \<in> planning_sem.happ_seq")
+      subgoal using clocks snaps_disj in_acts planning_sem.is_ending_actionI by blast
+      subgoal using clocks snaps_disj in_acts planning_sem.is_not_happening_actionI by blast
+      done
     done
-  apply (rule mutex_eps_constraint_sat)
-  using assms(2) planning_sem.is_instant_action_dests apply blast
-   apply (intro ballI impI)
-  subgoal for b
-    apply (cases "(t, at_end b) \<in> planning_sem.happ_seq")
-    using clocks snaps_disj in_acts 
-    by (blast intro: planning_sem.is_ending_actionI planning_sem.is_not_happening_actionI)+
+  have 3: "\<forall>b\<in>set actions. (t, at_end b) \<notin> planning_sem.happ_seq \<or> at_end a = at_end b \<longrightarrow> act_clock_pre_happ_spec c (ActEnd b) t"
   apply (intro ballI impI)
-  subgoal for b
-    apply (erule disjE)
-    using clocks in_acts
-     apply (blast intro: planning_sem.is_starting_actionI planning_sem.is_not_happening_actionI)
-    apply (cases "a = b")
-    using clocks in_acts at_end_inj unfolding inj_on_def by auto
-  done
+    subgoal for b
+      using clocks in_acts at_end_inj unfolding inj_on_def
+      by (blast intro: planning_sem.is_starting_actionI planning_sem.is_not_happening_actionI intro: clocks)+
+    done
+  show ?thesis
+    using g 1 2 3 mutex_0_constraint_sat mutex_eps_constraint_sat 
+    by blast
+qed
 section \<open>Applying happenings\<close>
 
 
@@ -3554,8 +3615,7 @@ lemma happening_post_end_startsI:
   using assms unfolding happening_post_end_starts_def by auto
 
 lemma happening_pre_instants_dests:
-  assumes "happening_pre_instants n x"
-    "x = (L, v, c)"
+  assumes "happening_pre_instants n (L, v, c)"
   shows "instant_action_invs n (L, v, c)"
   "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_before_happ n p))"
   "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
@@ -3755,7 +3815,26 @@ lemma instant_action_invs_maintained:
   apply (insert assms(1))
   apply (rule instant_action_invsI, simp)
   by (auto dest: instant_action_invs_dests simp: happ_invs lock clock Loc)
+
+lemma happening_post_instants_dests:
+  assumes "happening_post_instants n (L, v, c)"
+  shows "instant_action_invs n (L, v, c)"
+  "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ n p))"
+  "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+  "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
+  "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
+  "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))"  
+  using assms unfolding happening_post_instants_def by auto
   
+lemma happening_post_instantsI:
+  assumes "instant_action_invs n (L, v, c)"
+  "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ n p))"
+  "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+  "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
+  "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
+  "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))" 
+  shows "happening_post_instants n (L, v, c)" 
+  using assms unfolding happening_post_instants_def by auto
 
 text \<open>The rules used to show that the composition of sequences results in a run\<close>
 interpretation steps_seq: sequence_rules abs_renum.urge_bisim.A.steps
@@ -4415,6 +4494,7 @@ proof -
   qed
 qed
 
+lemma Suc_lessI: "n < m - 1 \<Longrightarrow> Suc n < m" by auto
 
 lemma instant_actions_possible:
   assumes "abs_renum.urge_bisim.A.steps xs \<and> happening_pre_instants i (last xs)"
@@ -4486,7 +4566,7 @@ proof -
     have "(actions ! (instant_indices ! j)) \<in> planning_sem.instant_actions_at (time_index \<pi> i)" by blast
     
     hence iij_instant: "planning_sem.is_instant_action (time_index \<pi> i) (actions ! (instant_indices ! j))"
-      "actions ! (instant_indices ! j) \<in> set actions" using planning_sem.instant_actions_at_def by simp_all
+      and iij_in_act: "actions ! (instant_indices ! j) \<in> set actions" using planning_sem.instant_actions_at_def by simp_all
 
     have iij_instant_index: "is_instant_index (time_index \<pi> i) (instant_indices ! j)" apply (insert iij_set) apply (subst (asm) (2) instant_indices) by simp
 
@@ -4495,21 +4575,57 @@ proof -
       apply (subst (asm) (2) instant_indices)
       by simp
 
+    
+    have v_pre_conds_sat: "Simple_Expressions.check_bexp v (bexp_and_all (map (is_prop_ab 1) (pre (at_start (actions ! (instant_indices ! j)))))) True"
+      if prop_state: "\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_part_updated_prop_state i (instant_indices ! j) p)" for v
+    proof -
+      { fix p
+        assume p: "p \<in> set (pre (at_start (actions ! (instant_indices ! j))))"
+        moreover
+        have "PropVar p \<in> dom (map_of nta_vars)" using map_of_nta_vars_action_start_pre iij_in_act p by auto
+        ultimately
+        have "v (PropVar p) = Some 1" using pre_val_in_instant_part_updated_prop_state_if i  prop_state iij_ran iij_instant[simplified planning_sem.is_instant_action_def] by metis 
+        hence "Simple_Expressions.check_bexp v (is_prop_ab 1 p) True" 
+          unfolding is_prop_ab_def comp_def
+          by (simp add: check_bexp_simps  is_val_simps)
+      } 
+      hence "\<forall>b\<in>set (map (is_prop_ab 1) (pre (at_start (actions ! (instant_indices ! j))))). Simple_Expressions.check_bexp v b True" by auto
+      thus ?thesis using check_bexp_all by blast
+    qed
+    
+    have v_lock_conds_sat: "Simple_Expressions.check_bexp v (bexp_and_all (map (is_prop_lock_ab 0) (filter (\<lambda>p. p \<notin> set (adds (at_start (actions ! (instant_indices ! j))))) (dels (at_start (actions ! (instant_indices ! j))))))) True"
+      if locked: "\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during (time_index \<pi> i) p))" for v
+    proof -
+      { fix p
+        assume p: "p \<notin> set (adds (at_start (actions ! (instant_indices ! j))))"
+               "p \<in> set (dels (at_start (actions ! (instant_indices ! j))))"
+        hence "p \<notin> planning_sem.plan_invs_during (time_index \<pi> i)" using planning_sem.snap_does_not_delete_inv iij_instant planning_sem.action_happening_case_defs by auto
+        hence "planning_sem.locked_during (time_index \<pi> i) p = 0" using planning_sem.in_invs_during_iff_locked_during by blast
+        moreover
+        have "PropLock p \<in> dom (map_of nta_vars)" using map_of_nta_vars_action_start_del_lock iij_in_act p by auto
+        ultimately
+        have "v (PropLock p) = Some 0" using locked unfolding int_of_nat_def by simp
+        hence "Simple_Expressions.check_bexp v (is_prop_lock_ab 0 p) True" 
+          unfolding is_prop_lock_ab_def 
+          by (simp add: check_bexp_simps  is_val_simps)
+      } 
+      hence "\<forall>b\<in>set (map (is_prop_lock_ab 0) (filter (\<lambda>p. p \<notin> set (adds (at_start (actions ! (instant_indices ! j))))) (dels (at_start (actions ! (instant_indices ! j)))))). Simple_Expressions.check_bexp v b True"  by auto
+      thus ?thesis using check_bexp_all by blast
+    qed
+
     have v_ending_pre_conds_sat: "Simple_Expressions.check_bexp v' (bexp_and_all (map (is_prop_ab 1) (pre (at_end (actions ! (instant_indices ! j)))))) True"
       if prop_state: "\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v' (PropVar p) = Some (instant_intermediate_prop_state i (instant_indices ! j) p)" for v'
     proof -
       { fix p
         assume p: "p \<in> set (pre (at_end (actions ! (instant_indices ! j))))"
         moreover
-        have "PropVar p \<in> dom (map_of nta_vars)" using  p iij_instant p map_of_nta_vars_action_end_pre by auto
+        have "PropVar p \<in> dom (map_of nta_vars)" using  p iij_in_act p map_of_nta_vars_action_end_pre by auto
         ultimately
         have "v' (PropVar p) = Some 1" using pre_val_in_instant_intermediate_prop_state_if[OF i _ iij_instant_index] using iij_ran p prop_state by auto
     
         hence "Simple_Expressions.check_bexp v' (is_prop_ab 1 p) True" 
-          unfolding is_prop_ab_def comp_apply
-          apply (subst check_bexp_simps)
-          apply (subst is_val_simps)+
-          by simp
+          unfolding is_prop_ab_def
+          by (simp add: check_bexp_simps is_val_simps)
       } 
       hence "\<forall>b\<in>set (map (is_prop_ab 1) (pre (at_end (actions ! (instant_indices ! j))))). Simple_Expressions.check_bexp v' b True" by auto
       thus ?thesis using check_bexp_all by blast
@@ -4527,15 +4643,13 @@ proof -
         hence "p \<notin> planning_sem.plan_invs_during (time_index \<pi> i)" using planning_sem.snap_does_not_delete_inv iij_instant planning_sem.action_happening_case_defs by auto
         hence "planning_sem.locked_during (time_index \<pi> i) p = 0" using planning_sem.in_invs_during_iff_locked_during by blast
         moreover
-        have "PropLock p \<in> dom (map_of nta_vars)" using map_of_nta_vars_action_end_del_lock p iij_instant by auto
+        have "PropLock p \<in> dom (map_of nta_vars)" using map_of_nta_vars_action_end_del_lock p iij_in_act by auto
         ultimately
         have "v' (PropLock p) = Some 0" using locked by simp
         
         hence "Simple_Expressions.check_bexp v' (is_prop_lock_ab 0 p) True" 
-          unfolding is_prop_lock_ab_def comp_def
-          apply (subst check_bexp_simps)
-          apply (subst is_val_simps)+
-          by simp
+          unfolding is_prop_lock_ab_def 
+          by (simp add: check_bexp_simps is_val_simps)
       } 
       hence "\<forall>b\<in>set (map (is_prop_lock_ab 0) 
                       (filter (\<lambda>p. p \<notin> set (adds (at_end (actions ! (instant_indices ! j))))) 
@@ -4576,10 +4690,10 @@ proof -
                 apply (rule map_of_nta_vars_ActsActive)
                      apply (drule instant_ending_cond_dests(3)) 
                   apply simp
-            subgoal using planning_sem.active_before_less_if_scheduled iij_instant instant_ending_cond_dests(3)
+            subgoal using planning_sem.active_before_less_if_scheduled iij_instant iij_in_act instant_ending_cond_dests(3)
               by (fastforce simp: planning_sem.action_happening_case_defs card_action_set)
-            subgoal by (force intro: map_of_nta_vars_action_end_del iij_instant)+
-            subgoal by (force intro: map_of_nta_vars_action_end_add iij_instant)+
+            subgoal by (force intro: map_of_nta_vars_action_end_del iij_instant iij_in_act)+
+            subgoal by (force intro: map_of_nta_vars_action_end_add iij_instant iij_in_act)+
             done
           done
             apply simp
@@ -4752,21 +4866,21 @@ proof -
         subgoal 
           apply (rule l_dur_spec_sat_if)
           apply (rule planning_sem.instant_act_sat_dur_bounds)
-          using iij_instant iij_instant_index 
+          using iij_instant iij_instant_index iij_in_act
           by (auto dest!: instant_starting_cond_dests(4))
         subgoal 
           apply (rule u_dur_spec_sat_if)
           apply (rule planning_sem.instant_act_sat_dur_bounds)
-          using iij_instant iij_instant_index
+          using iij_instant iij_instant_index iij_in_act
           by (auto dest!: instant_starting_cond_dests(4))
-        subgoal apply (rule instant_action_sat_mutex_const_specs)
-                 apply (rule iij_instant)
+        subgoal apply (rule instant_action_sat_mutex_end)
+                 apply (rule iij_in_act)
                 apply (rule iij_instant)
           unfolding set_conv_nth
                apply (auto simp: index_case_defs dest!: instant_starting_cond_dests(1) instant_action_invs_dests(1) dest: happening_invs_dests)[4]
-          by (auto dest!: instant_starting_cond_dests(7) simp: iij_instant_index iij_ran)
-        subgoal apply (rule instant_action_sat_mutex_const_specs)
-                 apply (rule iij_instant)
+          by (auto dest!: instant_starting_cond_dests(7) simp: iij_instant_index iij_ran )
+        subgoal apply (rule instant_action_sat_mutex_end)
+                 apply (rule iij_in_act)
                 apply (rule iij_instant)
           unfolding set_conv_nth
                apply (auto simp: index_case_defs dest!: instant_starting_cond_dests(1) instant_action_invs_dests(1) dest: happening_invs_dests)[4]
@@ -4801,9 +4915,9 @@ proof -
                 apply (erule single_upd_bounded)
                   apply (rule map_of_nta_vars_ActsActive)
             subgoal using instant_pre_dests(3) by fastforce
-            subgoal using planning_sem.active_before_less_if_scheduled iij_instant card_action_set planning_sem.action_happening_case_defs 
+            subgoal using planning_sem.active_before_less_if_scheduled iij_instant iij_in_act card_action_set planning_sem.action_happening_case_defs 
               by (fastforce dest:instant_pre_dests(3))
-            using iij_instant map_of_nta_vars_action_start_del map_of_nta_vars_action_start_add
+            using iij_instant map_of_nta_vars_action_start_del map_of_nta_vars_action_start_add iij_in_act
             by (auto dest: instant_pre_dests)
           using iij_instant_index iij_ran nth_actions_unique
           by (auto dest: index_case_dests_disj intro: nth_list_update_neq)
@@ -4865,15 +4979,87 @@ proof -
       using iij_ran actual_autos_alt apply simp
                   apply simp
       subgoal using conv_committed no_committed by auto
-
-
-                   
-    next                                                        
-    case (3 i s)
-    then show ?case sorry
+      subgoal apply (rule check_bexp_all_append)
+        subgoal apply (drule instant_pre_dests(1)) by (auto intro: v_pre_conds_sat v_lock_conds_sat dest: instant_action_invs_dests)
+        subgoal by (auto intro: v_pre_conds_sat v_lock_conds_sat dest: instant_pre_dests)
+        done
+      subgoal apply (intro guard_append instant_action_sat_mutex_start[OF iij_in_act iij_instant])
+        using iij_ran iij_instant_index instant_pre_dests(6)
+        by (auto dest!: instant_pre_dests(1)[THEN instant_action_invs_dests(1)] dest: happening_invs_dests simp: index_case_defs set_conv_nth)
+      subgoal using conv_invs no_invs by auto
+      subgoal by (auto dest: instant_pre_dests simp: iij_ran iij_instant_index)
+      subgoal by (subst Lv_conds_dests, auto intro: instant_pre_dests instant_action_invs_dests happening_invs_dests simp: iij_ran)
+      subgoal by simp
+      subgoal by simp
+      subgoal 
+        apply (rule is_upds.intros(2))
+         apply (subst is_upd_def)
+         apply (intro exI conjI)
+           apply simp
+          apply (rule check_bexp_is_val.intros)
+           apply (rule check_bexp_is_val.intros(12)[where v= "the (v ActsActive)"])
+           apply (drule instant_pre_dests(3), simp)
+          apply (subst is_val.simps)
+          apply simp
+         apply simp
+        apply (rule is_upds_appendI)
+        unfolding set_prop_ab_def
+         apply (rule is_upds_set_vars_map)
+          apply (subst map_map[symmetric])
+          apply (rule HOL.refl)
+         apply simp
+        apply (rule is_upds_set_vars_map)
+        apply (subst map_map[symmetric])
+         apply (rule HOL.refl)
+        apply (subst map_map)
+        apply (subst comp_def)+
+        by simp
+      by (auto intro: instant_starting_cond_dests instant_pre_dests instant_action_invs_dests happening_invs_dests Lv_conds_dests)
+    done
+  done
+  next                                                        
+    case (3 j s)
+    then show ?case 
+      apply (induction s)
+      subgoal for L v c
+        apply (rule instant_preI, simp)
+        subgoal apply (drule instant_post_dests(1))
+          apply (erule instant_action_invs_maintained)
+          apply (erule happening_invs_maintained)
+          by simp+
+        subgoal apply (drule instant_post_dests(2))
+          apply (drule Suc_lessI)
+          apply (subst instant_part_upd_prop_state_inv[OF i, symmetric, of "Suc (instant_indices ! j)"])
+          using instant_indices_inc_all is_instant_index_def by (auto simp: Suc_le_eq intro: iip.ys_Suc)
+        subgoal using instant_post_dests by blast
+        subgoal apply (drule Suc_lessI)
+          apply (intro strip, elim conjE)
+          subgoal for k
+            apply (cases "Suc (instant_indices ! j) \<le> k")
+            using instant_indices_inc_all by (auto dest: instant_post_dests)
+          done
+        subgoal apply (drule Suc_lessI)
+          apply (intro strip, elim conjE)
+          subgoal for k
+            apply (cases "Suc (instant_indices ! j) \<le> k")
+            using instant_indices_inc_all by (auto dest: instant_post_dests)
+          done
+        subgoal
+          apply (drule Suc_lessI, frule iip.ys_Suc)
+          using instant_indices_inc_all 
+          by (auto dest: instant_post_dests)
+        by (drule iip.ys_Suc[OF Suc_lessI], auto dest: instant_post_dests instant_indices_inc_all[OF Suc_lessI])
+      done
   next
     case (4 x)
-    then show ?case sorry
+    then show ?case 
+      apply (induction x)
+      subgoal for L v c
+        apply (rule happening_post_instantsI)
+        subgoal apply (drule happening_pre_instants_dests(1), simp)
+          apply simp
+          done
+        subgoal apply (drule happening_pre_instants_dests(2))
   next
     case (5 x)
     then show ?case sorry
