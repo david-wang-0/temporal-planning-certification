@@ -444,6 +444,7 @@ definition "ending_part_updated_state_seq n \<equiv> apply_ending_snaps_before n
 
 definition "ending_part_updated_prop_state n \<equiv> prop_state (ending_part_updated_state_seq n)"
 
+(*instant*)
 lemma instant_actions_before_all_is_instant_actions: "instant_actions_before (length actions) = planning_sem.instant_actions_at (time_index \<pi> i)"
   unfolding instant_actions_before_def Let_def set_filter set_map set_upt planning_sem.instant_actions_at_def actions_before_def by simp
 
@@ -463,6 +464,31 @@ lemma instant_snaps_before_0_is_none: "instant_snaps_before 0 = {}"
 lemma apply_instant_snaps_before_0_is_id: "apply_instant_snaps_before 0 = id"
   unfolding apply_instant_snaps_before_def instant_snaps_before_0_is_none apply_snaps_def id_def by blast
 
+(* starting *)
+
+lemma starting_actions_before_all_is_starting_actions: 
+  "starting_actions_before (length actions) = planning_sem.starting_actions_at (time_index \<pi> i)"
+  unfolding starting_actions_before_def Let_def set_filter set_map set_upt 
+    planning_sem.starting_actions_at_def actions_before_def by simp
+
+lemma starting_snaps_before_all_is_starting_snaps: "starting_snaps_before (length actions) = planning_sem.starting_snaps_at (time_index \<pi> i)"
+  unfolding starting_snaps_before_def planning_sem.starting_snaps_at_def  
+  using starting_actions_before_all_is_starting_actions by simp
+
+lemma apply_starting_snaps_before_all_is_apply_starting_snaps: "apply_starting_snaps_before (length actions) s = planning_sem.app_effs (planning_sem.starting_snaps_at (time_index \<pi> i)) s"
+  unfolding planning_sem.app_effs_def apply_starting_snaps_before_def Let_def starting_snaps_before_all_is_starting_snaps apply_effects_def apply_snaps_def by blast
+
+lemma starting_actions_before_0_is_none: "starting_actions_before 0 = {}"
+  using starting_actions_before_def actions_before_def by auto
+
+lemma starting_snaps_before_0_is_none: "starting_snaps_before 0 = {}" 
+  using starting_snaps_before_def starting_actions_before_0_is_none by blast
+
+lemma apply_starting_snaps_before_0_is_id: "apply_starting_snaps_before 0 = id"
+  unfolding apply_starting_snaps_before_def apply_snaps_def starting_snaps_before_0_is_none by auto
+
+(* ending - to do *)
+
 definition "instant_indices_before n \<equiv> filter (is_instant_index (time_index \<pi> i)) [0..<n]"
 
 definition "starting_indices_before n \<equiv> filter (is_starting_index (time_index \<pi> i)) [0..<n]"
@@ -470,7 +496,8 @@ definition "starting_indices_before n \<equiv> filter (is_starting_index (time_i
 definition "ending_indices_before n \<equiv> filter (is_ending_index (time_index \<pi> i)) [0..<n]"
 
 lemma instant_actions_before_alt: "instant_actions_before n = set (map ((!) actions) (instant_indices_before n))"
-  unfolding instant_actions_before_def instant_indices_before_def set_map set_filter Let_def is_instant_index_def actions_before_def by blast
+  unfolding instant_actions_before_def instant_indices_before_def set_map set_filter 
+    Let_def is_instant_index_def actions_before_def by blast
 
 lemma instant_snaps_before_is_in_happ_seq: 
   assumes "n < length actions"
@@ -806,13 +833,131 @@ lemma instant_part_upd_prop_state_all_is_prop_state_after:
   unfolding instant_part_updated_prop_state_def prop_state_after_instant_happ_def
   unfolding instant_part_updated_plan_state_seq_def
   using apply_instant_snaps_before_all_is_apply_instant_snaps planning_sem.inst_upd_state_def by simp
+
+subsubsection \<open>Active Actions\<close>
+
+definition "updated_active_before n \<equiv> 
+planning_sem.active_before (time_index \<pi> i) + card (starting_actions_before n) 
+"
+
+lemma updated_active_before_0_is_active_before: "updated_active_before 0 = planning_sem.active_before (time_index \<pi> i)"
+  using updated_active_before_def starting_actions_before_0_is_none by auto
+
+lemma updated_active_before_all_is_active_during: 
+   "updated_active_before (length actions) = planning_sem.active_during (time_index \<pi> i)"
+  using updated_active_before_def starting_actions_before_all_is_starting_actions
+    planning_sem.active_during_conv_active_before by auto
+
+lemma starting_actions_before_mono:
+  assumes "n \<le> m"
+  shows "starting_actions_before n \<subseteq> starting_actions_before m"
+  using assms unfolding starting_actions_before_def actions_before_def by auto
+
+lemma card_starting_actions_before_mono:
+  assumes "n \<le> m"
+  shows "card (starting_actions_before n) \<le> card (starting_actions_before m)"
+  using assms unfolding starting_actions_before_def actions_before_def 
+  by (auto intro: card_mono)
+
+lemma updated_active_before_mono:
+  assumes "n \<le> m"
+  shows "updated_active_before n \<le> updated_active_before m"
+  using assms card_starting_actions_before_mono updated_active_before_def by simp
+
+lemma starting_actions_before_inv:
+  assumes "n \<le> m"
+      and "\<forall>j a. n \<le> j \<and> j < m \<longrightarrow> \<not>(is_starting_index (time_index \<pi> i) j)" 
+    shows "starting_actions_before n = starting_actions_before m"
+proof-
+  have 1: "[0..<m] = [0..<n] @ [n..<m]" using assms by simp
+  show ?thesis 
+    unfolding starting_actions_before_def
+    unfolding actions_before_def
+    apply (subst 1)
+    apply (subst map_append)
+    apply (subst filter_append)
+    apply (subst set_append)
+    using assms index_case_defs
+    by auto
+qed
+
+lemma starting_actions_before_if_starting:
+  assumes "is_starting_index (time_index \<pi> i) n"
+      and "n < length actions"
+  shows "starting_actions_before (Suc n) = starting_actions_before n \<union> {actions ! n}"
+  using assms
+  unfolding starting_actions_before_def actions_before_def index_case_defs by simp
+
+lemma finite_starting_actions_before:
+  shows "finite (starting_actions_before n)"
+  unfolding starting_actions_before_def actions_before_def by blast
+
+lemma updated_active_before_inv:
+  assumes "n \<le> m"
+      and "\<forall>j a. n \<le> j \<and> j < m \<longrightarrow> \<not>(is_starting_index (time_index \<pi> i) j)" 
+    shows "updated_active_before n = updated_active_before m"
+  using assms starting_actions_before_inv updated_active_before_def by auto
+
+lemma updated_active_before_ran:  
+  assumes "n \<le> length actions"
+  shows "updated_active_before n \<le> length actions"
+  using updated_active_before_mono[OF assms]
+  using updated_active_before_all_is_active_during 
+  using planning_sem.active_during_ran card_action_set 
+  using order.trans by auto
+
+lemma updated_active_before_less_if_starting:
+  assumes "is_starting_index (time_index \<pi> i) n"
+    and "n < length actions"
+    shows "updated_active_before n < length actions"
+proof -
+  have "disjnt (starting_actions_before n) {actions ! n}"
+    unfolding disjnt_def starting_actions_before_def actions_before_def
+    using nth_actions_unique assms(2) by auto
+  hence "updated_active_before (Suc n) = updated_active_before n + 1"
+    unfolding updated_active_before_def starting_actions_before_if_starting[OF assms]
+    by (auto simp: card_Un_disjnt finite_starting_actions_before)
+  thus ?thesis using updated_active_before_ran[of "Suc n"] assms(2) by simp
+qed
+
+
+lemma apply_starting_snaps_before_Suc:
+  assumes is_starting: "is_starting_index t n"
+      and n: "n < length actions"
+      and t: "t = time_index \<pi> i"
+    shows "apply_starting_snaps_before (Suc n) s = 
+  apply_starting_snaps_before n s
+  - set (dels (at_start (actions ! n)))
+  \<union> set (adds (at_start (actions ! n)))"
+proof -
+  have "at_start ` starting_actions_before n \<union> at_start ` {actions ! n} \<subseteq> at_start ` planning_sem.starting_actions_at t"
+  proof -
+    have "starting_actions_before (Suc n) \<subseteq> planning_sem.starting_actions_at (time_index \<pi> i)"
+      apply (subst starting_actions_before_all_is_starting_actions[symmetric])
+      apply (rule starting_actions_before_mono)
+      using n by auto
+    with starting_actions_before_if_starting assms
+    show ?thesis by auto
+  qed
+  hence 1: "at_start ` starting_actions_before n \<union> at_start ` {actions ! n} \<subseteq> happ_at planning_sem.happ_seq t"
+    unfolding planning_sem.starting_actions_at_def planning_sem.action_happening_case_defs by auto
+
+  show ?thesis
+    unfolding apply_starting_snaps_before_def
+    unfolding starting_snaps_before_def
+    apply (subst starting_actions_before_if_starting)
+    using assms apply auto[2]
+    apply (subst image_Un)
+    unfolding apply_snaps_def
+    apply (subst planning_sem.happ_combine[simplified planning_sem.app_effs_def apply_effects_def, symmetric])
+    using 1 
+    unfolding planning_sem.app_effs_def apply_effects_def 
+    by auto
+qed
+
 end
 
-lemma map_upds_append:
-  assumes "length xs = length xs'"
-      and "length ys = length ys'"
-    shows "f(xs @ ys [\<mapsto>] xs' @ ys') = f(xs [\<mapsto>] xs', ys [\<mapsto>] ys')"
-  unfolding map_upds_def using assms map_of_append by simp
+subsection \<open>Effects of Edges\<close>
 
 find_theorems name: "step_u"
 find_theorems name: "List*upd"
@@ -2932,9 +3077,24 @@ in start_start_invs n Lvc
   \<and> starting_start_time
   \<and> starting_loc"
 
-definition "start_start_cond n Lvc \<equiv>
-undefined
-"
+definition "start_start_cond n j Lvc \<equiv>
+let 
+  t = time_index \<pi> n;
+  (L, v, c) = Lvc;
+
+  prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ n p));
+
+  active = (v ActsActive = Some (int (updated_active_before n j)));
+
+  updated_start_time = (\<forall>i. i < j \<and> is_starting_index t i \<longrightarrow> c (ActStart (actions ! i)) = 0);
+  not_updated_start_time = (\<forall>i. j \<le> i \<longrightarrow> i  < length actions \<longrightarrow> is_starting_index t i  \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) t);
+  
+  not_updated_start_loc =  (\<forall>i. i < j \<and> is_starting_index t i \<longrightarrow> L ! Suc i = (StartInstant (actions ! i)));
+  updated_start_loc = (\<forall>i. j \<le> i \<longrightarrow> i  < length actions \<longrightarrow> is_starting_index t i  \<longrightarrow> L ! Suc i = (Off (actions ! i)))
+in start_start_invs n Lvc
+  \<and> prop_state \<and> active 
+  \<and> not_updated_start_loc \<and> updated_start_time
+  \<and> not_updated_start_loc \<and> updated_start_loc"
 
 definition "happening_post_start_starts n Lvc \<equiv>
 let 
@@ -5089,7 +5249,28 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[
         where R = "happening_pre_start_starts i" 
           and S = "happening_post_start_starts i"
           and fs = "map start_edge_effect start_indices",
-          simplified length_map nth_map])
+          simplified length_map nth_map], goal_cases)
+  case 1
+  then show ?case sorry
+next
+  case (2 i s)
+  then show ?thesis sorry
+next
+  case (3 i s)
+  then show ?thesis sorry
+next
+  case (4 x)
+  then show ?thesis sorry
+next
+  case (5 x)
+  then show ?case sorry
+next
+  case (6 x)
+  then show ?case sorry
+next
+  case (7 x)
+  then show ?case sorry
+qed
 
 lemma happening_steps_possible:
   assumes i: "i < length (htpl \<pi>)" 

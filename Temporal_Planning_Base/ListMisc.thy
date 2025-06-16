@@ -131,4 +131,91 @@ lemma replicate_length_conv_map:
   "replicate (length xs) n = map (\<lambda>x. n) xs"
   by (induction xs) (use replicate_append_same in auto)
 
+lemma foldr_map_filter:
+  "sum_list (map (\<lambda>x. if P x then 1 else 0) xs) = sum_list (map (\<lambda>x. 1) (filter P xs))"
+  unfolding sum_list.eq_foldr
+  apply (induction xs) by auto
+
+lemma distinct_sum_list_1_conv_card_set:
+  assumes "distinct xs"
+  shows "sum_list (map (\<lambda>x. 1) xs) = card (set xs)"
+  using assms by (induction xs) simp_all
+
+lemma map_upds_append:
+  assumes "length xs = length xs'"
+      and "length ys = length ys'"
+    shows "f(xs @ ys [\<mapsto>] xs' @ ys') = f(xs [\<mapsto>] xs', ys [\<mapsto>] ys')"
+  unfolding map_upds_def using assms map_of_append by simp
+
+
+lemma sum_list_max: 
+  assumes "\<forall>x \<in> set xs. x \<le> n"
+  shows "sum_list xs \<le> length xs * n"
+  using assms 
+  unfolding sum_list.eq_foldr 
+  apply (induction xs)
+  by auto
+
+lemma assumes "\<forall>x \<in> set xs. x = 1"
+  shows "sum_list xs = length xs"
+  using assms 
+  apply (induction xs)
+  by simp+
+
+lemma sum_list_binary_less_than_length_if:
+  assumes "\<forall>x \<in> set xs. x \<in> ({0, 1}::nat set)"
+          and "\<exists>x \<in> set xs. x = 0"
+        shows "sum_list xs < length xs"
+proof (cases "0 < length xs")
+  case True
+  obtain x0 where
+    "x0 \<in> set xs" "x0 = 0" using assms by auto
+  hence "x0 \<in> set_mset (mset xs)" by auto
+
+  have set_sort_key: "set (sort_key id xs) = set xs" by simp
+  have length_sort_key: "length (sort_key id xs) = length xs" by simp
+  with True
+  have not_empty_sort_key: "sort_key id xs \<noteq> []" by fastforce
+  hence hd_tl_sort_key: "hd (sort_key id xs) # (tl (sort_key id xs)) = sort_key id xs" by simp
+  
+  have "\<exists>y \<in> set (sort_key id xs). y = 0" using assms set_sort_key by auto
+  have set_sort_key_ran: "\<forall>y \<in> set (sort_key id xs). y \<in> {0, 1}" using assms(1) set_sort_key by blast
+  have tl_sort_key_ran: "\<forall>y \<in> set (tl (sort_key id xs)). y \<in> {0, 1}" using  set_sort_key_ran 
+    apply (subst (asm) hd_tl_sort_key[symmetric]) by auto
+
+  have hd_sort_key_0: "hd (sort_key id xs) = 0" 
+  proof (rule ccontr)
+    assume a: "hd (sort_key id xs) \<noteq> 0"
+    
+    have "hd (sort_key id xs) \<in> set xs" using hd_in_set set_sort_key not_empty_sort_key by blast
+    hence 1: "hd (sort_key id xs) = 1" using assms(1) a by fastforce
+
+    have "sorted (sort_key id xs)" by (metis eq_id_iff sorted_sort)
+    hence "\<forall>y \<in> set (tl (sort_key id xs)). hd (sort_key id xs) \<le> y" by (metis ball_empty list.collapse list.sel(2) list.set(1) sorted_wrt.simps(2))
+    hence "\<forall>y \<in> set (tl (sort_key id xs)). y = 1" using 1 tl_sort_key_ran by auto
+    with 1
+    have "\<forall>y \<in> set (sort_key id xs). y = 1" apply (subst hd_tl_sort_key[symmetric]) by simp
+    with set_sort_key assms(2)
+    show False by auto
+  qed
+  
+  have mset_sort_key: "mset (sort_key id xs) = mset xs" by simp
+  hence "sum_list xs = sum_list (sort_key id xs)" unfolding sum_list.eq_foldr
+    apply (subst foldr_fold)
+     apply force
+    apply (subst foldr_fold)
+    apply force
+    apply (rule fold_permuted_eq[where P = "\<lambda>_. True" and f = "(+)"])
+    by simp+
+  hence "sum_list xs = sum_list (hd (sort_key id xs) # tl (sort_key id xs))" using hd_tl_sort_key by auto
+  also have "... = 0 + sum_list (tl (sort_key id xs))" using hd_sort_key_0 by auto
+  also have "... \<le> length (tl (sort_key id xs))" using tl_sort_key_ran sum_list_max by fastforce
+  also have "... < length (sort_key id xs)" apply (subst (2) hd_tl_sort_key[symmetric]) by simp
+  finally
+  show ?thesis using length_sort_key by simp
+next 
+  case False
+  thus ?thesis using assms(2) by simp
+qed
+
 end

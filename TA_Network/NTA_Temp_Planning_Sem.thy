@@ -1,6 +1,7 @@
 theory NTA_Temp_Planning_Sem
   imports Temporal_Planning_Base.Temporal_Plans
           "HOL-Library.Multiset"
+          Temporal_Planning_Base.ListMisc
 begin
 
 lemma GreatestI_time: "P (k::'t::time) \<Longrightarrow> (\<And>y. P y \<Longrightarrow> y \<le> k) \<Longrightarrow> P (Greatest P)"
@@ -1402,7 +1403,6 @@ proof -
   thus ?thesis by auto
 qed
 
-
 lemma open_closed_active_count_cases:
   assumes "open_closed_active_count = 0 \<Longrightarrow> thesis"
       and "open_closed_active_count = 1 \<Longrightarrow> thesis"
@@ -1895,11 +1895,58 @@ lemma open_active_count_eq_closed_active_count_iff_only_instant_acts:
   using open_active_count_eq_closed_active_count_if_only_instant_acts 
     only_instant_acts_if_open_active_count_eq_closed_active_count by blast
 
+  text \<open>closed_open_active_count\<close>
+lemma closed_open_active_count_ran:
+  "closed_open_active_count \<in> {0, 1}"
+proof -
+  have "\<not>1 < closed_open_active_count"
+  proof (rule notI)
+    assume "1 < closed_open_active_count"
+    hence "open_active_count = 1 \<and> is_starting_action t a" unfolding closed_open_active_count_def
+      by (rule contrapos_pp) (use open_active_count_ran in auto)
+    thus False using open_active_count_0_if_start_scheduled is_starting_action_def by auto
+  qed
+  thus ?thesis by auto
+qed
+
+lemma closed_open_active_count_cases:
+  assumes "closed_open_active_count = 0 \<Longrightarrow> thesis"
+          "closed_open_active_count = 1 \<Longrightarrow> thesis"
+        shows thesis using closed_open_active_count_ran assms by blast
+
+lemma closed_open_active_count_1_if_starting:
+  assumes "is_starting_action t a"
+  shows "closed_open_active_count = 1"
+  using assms closed_open_active_count_ran 
+  unfolding closed_open_active_count_def by auto
+
+lemma closed_open_active_count_conv_open_active_count:
+  "closed_open_active_count = 1 \<Longrightarrow> is_starting_action t a \<and> open_active_count = 0 \<or> (\<not>is_starting_action t a \<and> open_active_count = 1)"
+  "closed_open_active_count = 0 \<Longrightarrow> \<not>is_starting_action t a \<and> open_active_count = 0"
+  unfolding closed_open_active_count_def by (auto elim: open_active_count_cases, presburger+)
+    
 end
 end
-thm open_active_count_ran
-thm open_closed_active_count_ran
-thm closed_active_count_ran
+
+subsubsection \<open>Sets of actions and snap actions happening\<close>
+
+
+definition instant_actions_at where
+"instant_actions_at t \<equiv> {a \<in> actions. is_instant_action t a}"
+
+definition ending_actions_at where
+"ending_actions_at t \<equiv> {a \<in> actions. is_ending_action t a}"
+
+definition starting_actions_at where
+"starting_actions_at t \<equiv> {a \<in> actions. is_starting_action t a}"
+(* technically a \<in> actions not necessary *)
+
+definition "instant_snaps_at t = at_start ` instant_actions_at t \<union> at_end ` instant_actions_at t"
+
+definition "starting_snaps_at t = at_start ` starting_actions_at t"
+
+definition "ending_snaps_at t =  at_end ` ending_actions_at t"
+
 
 subsubsection \<open>Counting how many actions have locked a proposition\<close>
 
@@ -2054,13 +2101,6 @@ qed
 
 text \<open>Range\<close>
 
-lemma sum_list_max: 
-  assumes "\<forall>x \<in> set xs. x \<le> n"
-  shows "sum_list xs \<le> length xs * n"
-  using assms 
-  unfolding sum_list.eq_foldr 
-  apply (induction xs)
-  by auto
 
 lemma locked_before_ran: "locked_before t p \<le> card actions"
 proof -
@@ -2266,68 +2306,6 @@ definition "active_during t \<equiv> sum_list (map (closed_open_active_count t) 
 
 definition "active_during_minus_ended t \<equiv> sum_list (map (active_count'' t) action_list)"
 
-lemma assumes "\<forall>x \<in> set xs. x = 1"
-  shows "sum_list xs = length xs"
-  using assms 
-  apply (induction xs)
-  by simp+
-
-lemma sum_list_binary_less_than_length_if:
-  assumes "\<forall>x \<in> set xs. x \<in> ({0, 1}::nat set)"
-          and "\<exists>x \<in> set xs. x = 0"
-        shows "sum_list xs < length xs"
-proof (cases "0 < length xs")
-  case True
-  obtain x0 where
-    "x0 \<in> set xs" "x0 = 0" using assms by auto
-  hence "x0 \<in> set_mset (mset xs)" by auto
-
-  have set_sort_key: "set (sort_key id xs) = set xs" by simp
-  have length_sort_key: "length (sort_key id xs) = length xs" by simp
-  with True
-  have not_empty_sort_key: "sort_key id xs \<noteq> []" by fastforce
-  hence hd_tl_sort_key: "hd (sort_key id xs) # (tl (sort_key id xs)) = sort_key id xs" by simp
-  
-  have "\<exists>y \<in> set (sort_key id xs). y = 0" using assms set_sort_key by auto
-  have set_sort_key_ran: "\<forall>y \<in> set (sort_key id xs). y \<in> {0, 1}" using assms(1) set_sort_key by blast
-  have tl_sort_key_ran: "\<forall>y \<in> set (tl (sort_key id xs)). y \<in> {0, 1}" using  set_sort_key_ran 
-    apply (subst (asm) hd_tl_sort_key[symmetric]) by auto
-
-  have hd_sort_key_0: "hd (sort_key id xs) = 0" 
-  proof (rule ccontr)
-    assume a: "hd (sort_key id xs) \<noteq> 0"
-    
-    have "hd (sort_key id xs) \<in> set xs" using hd_in_set set_sort_key not_empty_sort_key by blast
-    hence 1: "hd (sort_key id xs) = 1" using assms(1) a by fastforce
-
-    have "sorted (sort_key id xs)" by (metis eq_id_iff sorted_sort)
-    hence "\<forall>y \<in> set (tl (sort_key id xs)). hd (sort_key id xs) \<le> y" by (metis ball_empty list.collapse list.sel(2) list.set(1) sorted_wrt.simps(2))
-    hence "\<forall>y \<in> set (tl (sort_key id xs)). y = 1" using 1 tl_sort_key_ran by auto
-    with 1
-    have "\<forall>y \<in> set (sort_key id xs). y = 1" apply (subst hd_tl_sort_key[symmetric]) by simp
-    with set_sort_key assms(2)
-    show False by auto
-  qed
-  
-  have mset_sort_key: "mset (sort_key id xs) = mset xs" by simp
-  hence "sum_list xs = sum_list (sort_key id xs)" unfolding sum_list.eq_foldr
-    apply (subst foldr_fold)
-     apply force
-    apply (subst foldr_fold)
-    apply force
-    apply (rule fold_permuted_eq[where P = "\<lambda>_. True" and f = "(+)"])
-    by simp+
-  hence "sum_list xs = sum_list (hd (sort_key id xs) # tl (sort_key id xs))" using hd_tl_sort_key by auto
-  also have "... = 0 + sum_list (tl (sort_key id xs))" using hd_sort_key_0 by auto
-  also have "... \<le> length (tl (sort_key id xs))" using tl_sort_key_ran sum_list_max by fastforce
-  also have "... < length (sort_key id xs)" apply (subst (2) hd_tl_sort_key[symmetric]) by simp
-  finally
-  show ?thesis using length_sort_key by simp
-next 
-  case False
-  thus ?thesis using assms(2) by simp
-qed
-
 lemma active_before_less_if_scheduled:
   assumes "(t, at_start a) \<in> happ_seq"
       and "a \<in> actions"
@@ -2344,6 +2322,8 @@ proof -
     using sum_list_binary_less_than_length_if[where xs = "map (open_active_count t) action_list"] length_action_list[symmetric]
     by simp
 qed
+
+find_theorems name:"closed_open_active"
 
 subsubsection \<open>Relating the notions of active actions\<close>
 
@@ -2367,6 +2347,74 @@ lemma active_before_initial_is_0: "active_before (time_index \<pi> 0) = 0"
 
 lemma active_after_final_is_0:  "active_after (time_index \<pi> (length (htpl \<pi>) - 1)) = 0"
   unfolding active_after_def  using closed_active_count_final_is_0 set_action_list by simp
+
+lemma active_during_conv_active_before: 
+  "active_during t = active_before t + card (starting_actions_at t)"
+proof -
+  have "sum_list (map (closed_open_active_count t) action_list) = 
+        sum_list (map (open_active_count t) action_list) + card (starting_actions_at t)"
+  proof -
+    have "sum_list (map (closed_open_active_count t) action_list) = 
+        sum_list (map (\<lambda>a. open_active_count t a + (if is_starting_action t a then 1 else 0)) action_list)"
+    proof -
+      have "map (closed_open_active_count t) action_list =
+            map (\<lambda>a. open_active_count t a + (if is_starting_action t a then 1 else 0)) action_list" (is "map ?f ?xs = map ?g ?xs")
+        apply (subst map_eq_conv[of ?f ?xs ?g])
+        apply (subst set_action_list)
+        apply (intro ballI impI)
+        subgoal for x
+          apply (rule closed_open_active_count_cases, assumption)
+          by (frule closed_open_active_count_conv_open_active_count[rotated]; force)+
+        done
+      thus ?thesis by argo
+    qed
+    also
+    have "... = sum_list (map (open_active_count t) action_list) + card (starting_actions_at t)"
+    proof -
+      have "set (filter (is_starting_action t) action_list) = starting_actions_at t"
+        unfolding starting_actions_at_def using set_action_list by auto
+      hence "(\<Sum>a\<leftarrow>action_list. if is_starting_action t a then 1 else 0)  = card (starting_actions_at t)"
+        unfolding starting_actions_at_def
+        apply (subst foldr_map_filter)
+        apply (subst distinct_sum_list_1_conv_card_set)
+        using distinct_action_list by auto
+      thus ?thesis by (simp add: sum_list_addf)
+    qed
+    finally 
+    show ?thesis .
+  qed
+  thus ?thesis using active_during_def active_before_def by simp
+qed
+
+lemma active_during_ran:
+  "active_during t \<le> card actions"
+proof -
+  have 1: "sum_list (map (closed_open_active_count t) action_list) \<le> length (map (closed_open_active_count t) action_list) * 1"
+    using set_action_list closed_open_active_count_ran[where t = t] by (fastforce intro: sum_list_max)
+    
+  show ?thesis
+    unfolding active_during_def
+    apply (subst (2) set_action_list[symmetric])
+    apply (subst distinct_card[OF distinct_action_list])
+    using 1 by simp
+qed
+
+lemma active_during_less_if_starting:
+  assumes "is_starting_action t a"
+      and "a \<in> actions"
+  shows "active_during t < card actions"
+proof -
+  have "closed_open_active_count t a = 0" using assms closed_open_active_count_1_if_starting
+  moreover
+  have "closed_open_active_count t a \<in> set (map (closed_open_active_count t) action_list)" using set_action_list assms by simp
+  moreover
+  have "\<forall>x \<in> set (map (open_active_count t) action_list). x \<in> {0, 1}" using open_active_count_ran set_action_list by auto
+  ultimately
+  show ?thesis
+    unfolding active_before_def
+    using sum_list_binary_less_than_length_if[where xs = "map (open_active_count t) action_list"] length_action_list[symmetric]
+    by simp
+qed
 
 subsubsection \<open>Relating the invariant sequence to the number of locks\<close>
 
@@ -3119,30 +3167,11 @@ lemma happ_combine:
   unfolding mutex_snap_def
   by blast+
 
-(* All previous instant actions are happening *)
 
-(* start is happening *)
-
-(* end is happening *)
-
-
-definition instant_actions_at where
-"instant_actions_at t \<equiv> {a \<in> actions. is_instant_action t a}"
-
-definition ending_actions_at where
-"ending_actions_at t \<equiv> {a \<in> actions. is_ending_action t a}"
-
-definition starting_actions_at where
-"starting_actions_at t \<equiv> {a \<in> actions. is_starting_action t a}"
-(* technically a \<in> actions not necessary *)
-
-definition "instant_snaps_at t = at_start ` instant_actions_at t \<union> at_end ` instant_actions_at t"
-
-definition "starting_snaps_at t = at_start ` starting_actions_at t"
-
-definition "ending_snaps_at t =  at_end ` ending_actions_at t"
 
 lemma acts_in_prob: "(a, t, d) \<in> ran \<pi> \<Longrightarrow> a \<in> actions" using pap unfolding plan_actions_in_problem_def by auto
+
+subsection \<open>Restating happenings\<close>
 
 lemma happ_at_is_union_of_starting_ending_instant:
   "happ_at happ_seq t = instant_snaps_at t \<union> ending_snaps_at t \<union> starting_snaps_at t"
