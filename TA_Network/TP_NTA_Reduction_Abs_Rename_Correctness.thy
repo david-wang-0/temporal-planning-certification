@@ -444,7 +444,6 @@ definition "ending_part_updated_state_seq n \<equiv> apply_ending_snaps_before n
 
 definition "ending_part_updated_prop_state n \<equiv> prop_state (ending_part_updated_state_seq n)"
 
-
 lemma instant_actions_before_all_is_instant_actions: "instant_actions_before (length actions) = planning_sem.instant_actions_at (time_index \<pi> i)"
   unfolding instant_actions_before_def Let_def set_filter set_map set_upt planning_sem.instant_actions_at_def actions_before_def by simp
 
@@ -787,8 +786,26 @@ proof -
     unfolding instant_actions_before_def
     unfolding actions_before_def by argo
 qed
-  
-  
+
+
+lemma no_instant_imp_prop_state_before_is_after_instant:
+  assumes "planning_sem.instant_snaps_at (time_index \<pi> i) = {}"
+  shows "prop_state_before_happ = prop_state_after_instant_happ"
+  unfolding
+  prop_state_after_instant_happ_def prop_state_before_happ_def
+  using assms planning_sem.no_instant_imp_state_is_inst_upd by presburger
+
+lemma instant_part_upd_prop_state_0_is_prop_state_before:
+  shows "instant_part_updated_prop_state 0 = prop_state_before_happ"
+  unfolding instant_part_updated_prop_state_def prop_state_before_happ_def
+  unfolding instant_part_updated_plan_state_seq_def apply_instant_snaps_before_def
+  using instant_snaps_before_0_is_none apply_snaps_def by simp
+
+lemma instant_part_upd_prop_state_all_is_prop_state_after:
+  shows "instant_part_updated_prop_state (length actions) = prop_state_after_instant_happ"
+  unfolding instant_part_updated_prop_state_def prop_state_after_instant_happ_def
+  unfolding instant_part_updated_plan_state_seq_def
+  using apply_instant_snaps_before_all_is_apply_instant_snaps planning_sem.inst_upd_state_def by simp
 end
 
 lemma map_upds_append:
@@ -921,143 +938,6 @@ definition "apply_end_edge_effects ns s \<equiv> seq_apply (map end_edge_effect 
 definition "apply_snap_action n s \<equiv> seq_apply [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n] s"
 
 definition "apply_instant_actions ns s \<equiv> seq_apply' (map apply_snap_action ns) s"
-
-(* 
-(* The main automaton is the first automaton, so the index must be incremented *)
-definition enter_start_instant::"
-nat
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
-"enter_start_instant n s \<equiv>
-let 
-  act = actions ! n;
-  (act_locs, var_asmt, clock_asmt) = s;
-  act_locs' = act_locs[Suc n := StartInstant act];
-
-  ds = dels (at_start act) |> map PropVar;
-  as = adds (at_start act) |> map PropVar;
-  var_asmt' = var_asmt(ActsActive \<mapsto> (the (var_asmt ActsActive) + 1));
-  var_asmt'' = var_asmt'(ds [\<mapsto>] (replicate (length ds) (0::int)));
-  var_asmt''' = var_asmt''(as [\<mapsto>] (replicate (length as) (1::int)));
-  
-  clock_asmt' = clock_asmt(ActStart act := 0)
-in (act_locs', var_asmt''', clock_asmt')
-"
-
-lemma "enter_start_instant n (L, v, c) = start_edge_effect n (L, v, c)"
-  unfolding start_edge_effect_alt enter_start_instant_def Let_def prod.case
-  by (auto simp: replicate_length_conv_map map_upds_append)
-
-(* It is valid to assume that variables have an assignment. Hidden assumption (at this level)
-
-The initial variable assignment has a domain equal to the set of actually occurring variables and
-in no step is a variable unassigned *)
-definition leave_start_instant::"
-nat
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
-"leave_start_instant n s \<equiv>
-let 
-  act = actions ! n;
-  (act_locs, var_asmt, clock_asmt) = s;
-  act_locs' = act_locs[Suc n := Running act];
-  locks = over_all act |> map PropLock;
-  cur_asmt = map (the o var_asmt) locks;
-  next_asmt = map (\<lambda>x. x + 1) cur_asmt;
-  var_asmt' = var_asmt(locks [\<mapsto>] next_asmt)
-in (act_locs', var_asmt', clock_asmt)
-"
-
-text \<open>Applying the end happenings first\<close>
-definition enter_end_instant::"
-nat
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
-"enter_end_instant n s \<equiv>
-let 
-  act = actions ! n;
-  (act_locs, var_asmt, clock_asmt) = s;
-  act_locs' = act_locs[Suc n := EndInstant act];
-
-  locks = over_all act |> map PropLock;
-  cur_asmt = map (the o var_asmt) locks;
-  next_asmt = map (\<lambda>x. x - 1) cur_asmt;
-  var_asmt' = var_asmt(locks [\<mapsto>] next_asmt);
-
-  clock_asmt' = clock_asmt(ActEnd act := 0)
-in (act_locs', var_asmt', clock_asmt')
-"
-
-
-definition leave_end_instant::"
-nat
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
-"leave_end_instant n s \<equiv>
-let 
-  act = actions ! n;
-  (act_locs, var_asmt, clock_asmt) = s;
-  act_locs' = act_locs[Suc n := Off act];
-
-  
-  ds = dels (at_end act) |> map PropVar;
-  as = adds (at_end act) |> map PropVar;
-  var_asmt' = var_asmt(ActsActive \<mapsto> (the (var_asmt ActsActive) - 1));
-  var_asmt'' = var_asmt'(ds [\<mapsto>] (replicate (length ds) (0::int)));
-  var_asmt''' = var_asmt''(as [\<mapsto>] (replicate (length as) (1::int)))
-in (act_locs', var_asmt''', clock_asmt)
-"
-
-
-definition start_to_end_instant::"
-nat
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real)) 
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
-"start_to_end_instant n s \<equiv>
-let 
-  act = actions ! n;
-  (act_locs, var_asmt, clock_asmt) = s;
-  act_locs' = act_locs[Suc n := EndInstant act];
-  
-  invs = over_all act |> map PropLock;
-  
-  cur_asmt = map (the o var_asmt) invs;
-  next_asmt = map (\<lambda>x. x - 1) cur_asmt;
-  var_asmt' = var_asmt(invs [\<mapsto>] next_asmt);
-
-  clock_asmt' = clock_asmt(ActEnd act := 0)
-in (act_locs', var_asmt', clock_asmt')
-"
-
-definition start_planning::"
-('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
-"start_planning s \<equiv>
-let 
-  (locs, var_asmt, clock_asmt) = s;
-  main_auto_index = 0;
-
-  locs' = locs[main_auto_index := Planning];
-  
-  init_props = map PropVar init;
-  var_asmt' = var_asmt(PlanningLock \<mapsto> 1, ActsActive \<mapsto> 0);
-  var_asmt'' = var_asmt'(init_props [\<mapsto>] (replicate (length init_props) (1::int)))
-in (locs', var_asmt'', clock_asmt)"
-
-definition end_planning::"
-('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))
-\<Rightarrow> ('action location list \<times> ('proposition variable \<Rightarrow> int option) \<times> ('action clock \<Rightarrow> real))" where
-"end_planning s \<equiv>
-let
-  (locs, var_asmt, clock_asmt) = s;
-  main_auto_index = 0;
-
-  locs' = locs[main_auto_index := GoalLocation];
-  
-  init_props = map PropLock init;
-  var_asmt' = var_asmt(PlanningLock \<mapsto> 2)
-in (locs', var_asmt', clock_asmt)"
- *)
 
 
 (* apply all snap actions of the nth happening in the plan *)
@@ -3836,6 +3716,48 @@ lemma happening_post_instantsI:
   shows "happening_post_instants n (L, v, c)" 
   using assms unfolding happening_post_instants_def by auto
 
+lemma happening_pre_start_starts_dests:
+  assumes "happening_pre_start_starts i (L, v, c)"
+  shows "start_start_invs i (L, v, c)"
+  "PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ i p)"
+  "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> i)))"
+  "j<length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) j \<Longrightarrow>  act_clock_pre_happ_spec c (ActStart (actions ! j)) (time_index \<pi> i)"
+  "j<length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) j \<Longrightarrow>  L ! Suc j = Off (actions ! j)"
+  using assms unfolding happening_pre_start_starts_def by auto
+
+lemma happening_pre_start_startsI:
+  assumes "start_start_invs i (L, v, c)"
+      "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ i p)"
+      "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> i)))"
+      "\<And>ia. ia < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) ia \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! ia)) (time_index \<pi> i)"
+      "\<And>ia. ia < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) ia \<Longrightarrow> L ! Suc ia = Off (actions ! ia)"
+  shows "happening_pre_start_starts i (L, v, c)"
+  unfolding happening_pre_start_starts_def using assms by auto
+
+lemma start_start_invs_maintained:
+  assumes "start_start_invs i (L, v, c)"
+      and "happening_invs i (L, v, c) \<Longrightarrow> happening_invs i (L', v', c')"
+      and "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v' (PropLock p) = v (PropLock p))"
+          "(\<forall>ia<length actions. is_ending_index (time_index \<pi> i) ia \<longrightarrow> c' (ActEnd (actions ! ia)) = c (ActEnd (actions ! ia)))"
+          "(\<forall>ia<length actions. is_instant_index (time_index \<pi> i) ia \<longrightarrow> c' (ActStart (actions ! ia)) = c (ActStart (actions ! ia)))"
+          "(\<forall>ia<length actions. is_instant_index (time_index \<pi> i) ia \<longrightarrow> c' (ActEnd (actions ! ia)) = c (ActEnd (actions ! ia)))"
+          "(\<forall>ia<length actions. is_ending_index (time_index \<pi> i) ia \<longrightarrow> L' ! Suc ia = L ! Suc ia)"
+          "(\<forall>ia<length actions. is_instant_index (time_index \<pi> i) ia \<longrightarrow> L' ! Suc ia = L ! Suc ia)"
+  shows "start_start_invs i (L', v', c')"
+  using assms unfolding start_start_invs_def by auto
+
+lemma start_start_invsI:
+  assumes "happening_invs i (L, v, c)"
+      "\<And>p. PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during (time_index \<pi> i) p))"
+      "\<And>ia. ia < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) ia \<Longrightarrow> c (ActEnd (actions ! ia)) = 0"
+      "\<And>ia. ia < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) ia \<Longrightarrow> c (ActStart (actions ! ia)) = 0"
+      "\<And>ia. ia < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) ia \<Longrightarrow> c (ActEnd (actions ! ia)) = 0"
+      "\<And>ia. ia < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) ia \<Longrightarrow> L ! Suc ia = EndInstant (actions ! ia)"
+      "\<And>ia. ia < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) ia \<Longrightarrow> L ! Suc ia = Off (actions ! ia)"
+  shows "start_start_invs i (L, v, c)"
+  unfolding start_start_invs_def using assms by auto
+  
+
 text \<open>The rules used to show that the composition of sequences results in a run\<close>
 interpretation steps_seq: sequence_rules abs_renum.urge_bisim.A.steps
   apply standard                                 
@@ -4502,7 +4424,7 @@ lemma instant_actions_possible:
       and i: "i < length (htpl \<pi>)"
     shows "abs_renum.urge_bisim.A.steps (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) instant_indices) xs) 
   \<and> happening_pre_start_starts i (last (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) instant_indices) xs))"
-proof -
+proof -                             
   interpret iip: filter_sorted_distinct_list "[0..<length actions]" "is_instant_index (time_index \<pi> i)" instant_indices
     apply (unfold_locales)
     using instant_indices by auto
@@ -5052,23 +4974,103 @@ proof -
       done
   next
     case (4 x)
-    then show ?case 
+    from \<open>0 = length instant_indices\<close>
+    have no_instant_indices: "set instant_indices = {}" by simp
+    hence "planning_sem.instant_actions_at (time_index \<pi> i) = {}"
+      apply -
+      unfolding instant_indices planning_sem.instant_actions_at_def is_instant_index_def 
+      apply (subst set_conv_nth)
+      by auto
+    hence no_instant: "planning_sem.instant_actions_at (time_index \<pi> i) = {}"
+           "planning_sem.instant_snaps_at (time_index \<pi> i) = {}" 
+      using planning_sem.instant_snaps_at_def by auto
+
+    have not_instant: "\<not>is_instant_index (time_index \<pi> i) j" if "j < length actions" for j 
+      apply (insert that no_instant_indices) 
+      apply (subst (asm) instant_indices)  by simp
+    show ?case 
+      apply (insert 4)
       apply (induction x)
       subgoal for L v c
         apply (rule happening_post_instantsI)
-        subgoal apply (drule happening_pre_instants_dests(1), simp)
-          apply simp
-          done
+        subgoal by (drule happening_pre_instants_dests(1), simp)
         subgoal apply (drule happening_pre_instants_dests(2))
+          apply (intro allI impI)
+          apply (subst no_instant_imp_prop_state_before_is_after_instant[symmetric])
+          using i no_instant by auto
+        using not_instant  by (auto intro: happening_pre_instants_dests)
+      done
   next
     case (5 x)
-    then show ?case sorry
+    then show ?case 
+      apply -
+      apply (induction x)
+      subgoal for L v c
+        apply (rule instant_preI, simp)
+        subgoal by (auto intro: happening_pre_instants_dests)
+        subgoal apply (intro allI impI)
+          apply (subst instant_part_upd_prop_state_inv[where n = 0, symmetric])
+          using i instant_indices_inc_all_below index_case_defs 
+          by (auto dest: happening_pre_instants_dests(2) simp: instant_part_upd_prop_state_0_is_prop_state_before i)
+        subgoal using happening_pre_instants_dests by blast
+        subgoal using instant_indices_inc_all_below by auto
+        subgoal using instant_indices_inc_all_below by auto
+        subgoal using happening_pre_instants_dests instant_indices_inc_all_below by blast
+        subgoal by (drule happening_pre_instants_dests(5)) (use instant_indices_inc_all_below in auto)
+        subgoal by (drule happening_pre_instants_dests) (use instant_indices_inc_all_below in auto)
+        done
+      done
   next
     case (6 x)
-    then show ?case sorry
+    then show ?case
+      apply -
+      apply (induction x)
+      subgoal for L v c
+        apply (rule happening_post_instantsI)
+        subgoal by (rule instant_post_dests(1))
+        subgoal apply (drule instant_post_dests(2))
+          apply (intro allI impI)
+          apply (subst instant_part_upd_prop_state_all_is_prop_state_after[symmetric])
+          using i  apply simp
+          apply (subst instant_part_upd_prop_state_inv[symmetric, where n = "Suc (instant_indices ! (length instant_indices - 1))"])
+          using i apply simp
+          using iip.nth_ys_ran[simplified set_upt, THEN spec[of _ "length instant_indices - 1"]] apply simp  
+           apply (intro allI impI, elim conjE ssubst)
+           apply (rule instant_indices_inc_all_above[simplified index_case_defs])
+          using i by auto
+        subgoal using instant_post_dests by blast
+        subgoal apply (intro allI impI)
+          subgoal for k
+            apply (cases "k < Suc (instant_indices ! (length instant_indices - 1))") 
+            using instant_indices_inc_all_above
+            by (auto dest: instant_post_dests)
+          done
+        subgoal apply (intro allI impI)
+          subgoal for k
+            apply (cases "k < Suc (instant_indices ! (length instant_indices - 1))") 
+            using instant_indices_inc_all_above
+            by (auto dest: instant_post_dests)
+          done
+        subgoal apply (intro allI impI)
+          subgoal for k
+            apply (cases "k < Suc (instant_indices ! (length instant_indices - 1))") 
+            using instant_indices_inc_all_above
+            by (auto dest: instant_post_dests)
+          done
+        done
+      done
   next
     case (7 x)
-    then show ?case sorry
+    then show ?case 
+      apply -
+      apply (induction x)
+      subgoal for L v c
+        apply (rule happening_pre_start_startsI)
+        subgoal by (rule start_start_invsI) (auto dest: happening_post_instants_dests instant_action_invs_dests)
+        subgoal by (auto dest: happening_post_instants_dests)
+        subgoal using happening_post_instants_dests by simp
+        by (auto dest!: happening_post_instants_dests(1) dest: instant_action_invs_dests)
+      done
   qed 
 qed
 
@@ -5077,11 +5079,11 @@ lemma happening_steps_possible:
       and pres: "happening_pre_pre_delay i s"
   shows "abs_renum.urge_bisim.A.steps (s#delay_and_apply i s) \<and> happening_post i (last (delay_and_apply i s))" 
 proof -
-  let ?seq = "(ext_seq \<circ> seq_apply) (map apply_edge_2_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
-           ((ext_seq \<circ> seq_apply) (map leave_end_instant (filter (is_ending_index (time_index \<pi> i)) [0..<length actions]))
-             ((ext_seq \<circ> seq_apply) (map enter_start_instant (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
-               (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions])) 
-                ((ext_seq \<circ> seq_apply) (map enter_end_instant (filter (is_ending_index (time_index \<pi> i)) [0..<length actions])) [delay (get_delay i) s]))))"
+  let ?seq = "(ext_seq \<circ> seq_apply) (map edge_2_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
+           ((ext_seq \<circ> seq_apply) (map end_edge_effect (filter (is_ending_index (time_index \<pi> i)) [0..<length actions]))
+             ((ext_seq \<circ> seq_apply) (map start_edge_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
+               (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions])) 
+                ((ext_seq \<circ> seq_apply) (map edge_3_effect (filter (is_ending_index (time_index \<pi> i)) [0..<length actions])) [delay (get_delay i) s]))))"
   presume p: "abs_renum.urge_bisim.A.steps ?seq \<and> happening_post i (last ?seq)"
 
   have delay_non_negative: "0 \<le> get_delay i" 
@@ -5161,11 +5163,11 @@ proof -
   have tl_not_Nil: "1 < length xs \<Longrightarrow> tl xs \<noteq> []" for xs apply (cases xs) by auto
   have last_tl_eq_last: "last(tl ?seq)= last ?seq"
   proof - 
-    have 1: "0 < length (map enter_end_instant (filter (is_ending_index (time_index \<pi> i)) [0..<length actions])) +
-        length (map enter_start_instant (filter (is_starting_index (time_index \<pi> i)) [0..<length actions])) +
-        sum_list (map length (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))) +
-        length (map leave_end_instant (filter (is_ending_index (time_index \<pi> i)) [0..<length actions])) +
-        length (map apply_edge_2_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))"
+    have 1: "0 < length (map end_edge_effect (filter (is_ending_index (time_index \<pi> i)) [0..<length actions])) +
+        length (map start_edge_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions])) +
+        sum_list (map length (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions]))) +
+        length (map end_edge_effect (filter (is_ending_index (time_index \<pi> i)) [0..<length actions])) +
+        length (map edge_2_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))"
       unfolding add_gr_0
       apply (rule time_index_action_index_happening_cases[OF i])
       by (fastforce intro!: length_pos_if_in_set sum_list_pos_if_ex_pos)+
@@ -5182,7 +5184,8 @@ proof -
       unfolding delay_and_apply_def Let_def
       unfolding s
       apply (subst apply_nth_happening_def)
-      unfolding Let_def apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def apply_instant_actions_alt
+      unfolding Let_def
+unfolding apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def apply_instant_actions_alt
       unfolding comp_apply[of ext_seq seq_apply, symmetric]
       apply (subst ext_seq_seq_apply_append_distrib, intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil, simp)
       apply (subst fold_ext_seq_comp_conv_foldl_append, intro ext_seq_comp_seq_apply_not_Nil, simp)
@@ -5207,11 +5210,11 @@ proof -
     using p by blast
   
 next
-let ?seq = "(ext_seq \<circ> seq_apply) (map apply_edge_2_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
-       ((ext_seq \<circ> seq_apply) (map leave_end_instant (filter (is_ending_index (time_index \<pi> i)) [0..<length actions]))
-         ((ext_seq \<circ> seq_apply) (map enter_start_instant (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
-           (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [enter_start_instant n, start_to_end_instant n, leave_end_instant n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions])) 
-            ((ext_seq \<circ> seq_apply) (map enter_end_instant (filter (is_ending_index (time_index \<pi> i)) [0..<length actions])) [delay (get_delay i) s]))))"
+let ?seq = "(ext_seq \<circ> seq_apply) (map edge_2_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
+       ((ext_seq \<circ> seq_apply) (map end_edge_effect (filter (is_ending_index (time_index \<pi> i)) [0..<length actions]))
+         ((ext_seq \<circ> seq_apply) (map start_edge_effect (filter (is_starting_index (time_index \<pi> i)) [0..<length actions]))
+           (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) (filter (is_instant_index (time_index \<pi> i)) [0..<length actions])) 
+            ((ext_seq \<circ> seq_apply) (map edge_3_effect (filter (is_ending_index (time_index \<pi> i)) [0..<length actions])) [delay (get_delay i) s]))))"
 
   have pres': "happening_pre_end_starts i (delay (get_delay i) s)"
   proof -
@@ -5259,7 +5262,7 @@ let ?seq = "(ext_seq \<circ> seq_apply) (map apply_edge_2_effect (filter (is_sta
     apply (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[where R = "happening_pre_start_ends i" and S = "happening_post_start_ends i"])
           apply (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[where R = "happening_pre_end_ends i" and S = "happening_post_end_ends i"])
                 apply (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[where R = "happening_pre_start_starts i" and S = "happening_post_start_starts i"])
-                      apply (rule steps_seq.fold_ext_seq_comp_seq_apply_induct_list_prop_composable[where R = "happening_pre_instants i" and S = "happening_post_instants i"])
+                      apply (rule instant_actions_possible)
                         apply (rule end_starts_possible)
                         apply (auto intro!: abs_renum.urge_bisim.A.steps.intros pres')[1]
                         apply simp

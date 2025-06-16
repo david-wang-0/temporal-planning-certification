@@ -3235,5 +3235,11 @@ lemma state_seq_Suc_is_upd:
   using plan_state_seq_valid valid_state_seqE assms
   unfolding upd_state_def happ_seq_def app_effs_def by blast
 
+lemma no_instant_imp_state_is_inst_upd:
+  assumes "instant_snaps_at (time_index \<pi> i) = {}"
+  shows "plan_state_seq i = inst_upd_state i"
+  unfolding inst_upd_state_def app_effs_def apply_effects_def
+  using assms by blast
+
 end                       
 end

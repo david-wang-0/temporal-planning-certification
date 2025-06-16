@@ -36,7 +36,6 @@ begin
     apply (subst in_set_conv_nth[symmetric])
     by (simp add: that ys)
 
-
   lemma length_ys: "length ys \<le> length xs" 
     unfolding ys 
     apply (rule order_trans)
@@ -112,6 +111,12 @@ begin
       thus False using im by simp
     qed
   qed
+
+lemma length_0_imp_no_P:
+  assumes "length ys = 0"
+  shows "\<forall>x \<in> set xs. \<not> P x"
+  using assms ys
+  by (auto dest: arg_cong[of _ _ set])
 end
 
 definition "unzip xs = (map fst xs, map snd xs)"
