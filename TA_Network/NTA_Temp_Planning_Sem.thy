@@ -131,7 +131,7 @@ lemma plan_state_seq_valid: "valid_state_seq plan_state_seq \<and> plan_state_se
   by blast
   
   
-lemmas plan_state_seq_props = plan_state_seq_valid[simplified valid_state_seq_def valid_state_sequence_def Let_def]
+lemmas plan_state_seq_props = plan_state_seq_valid[simplified valid_state_seq_def valid_state_sequence_def Let_def happ_seq_def[symmetric]]
 
 lemma plan_state_seq_happ_pres:
   assumes "i < length (htpl \<pi>)"
@@ -1947,6 +1947,19 @@ definition "starting_snaps_at t = at_start ` starting_actions_at t"
 
 definition "ending_snaps_at t =  at_end ` ending_actions_at t"
 
+lemma instant_snaps_happening:
+  "instant_snaps_at t \<subseteq> happ_at happ_seq t"
+  unfolding instant_snaps_at_def instant_actions_at_def is_instant_action_def by blast
+
+lemma starting_snaps_happening:
+  "starting_snaps_at t \<subseteq> happ_at happ_seq t"
+  unfolding starting_snaps_at_def starting_actions_at_def is_starting_action_def by blast
+
+lemma ending_snaps_happening:
+  "ending_snaps_at t \<subseteq> happ_at happ_seq t"
+  unfolding ending_snaps_at_def ending_actions_at_def is_ending_action_def by blast
+
+
 
 subsubsection \<open>Counting how many actions have locked a proposition\<close>
 
@@ -3252,6 +3265,37 @@ lemma no_instant_imp_state_is_inst_upd:
   shows "plan_state_seq i = inst_upd_state i"
   unfolding inst_upd_state_def app_effs_def apply_effects_def
   using assms by blast
+
+lemma pre_sat_by_arbitrary_intermediate_state:
+  assumes i: "i < length (htpl \<pi>)"
+      and t: "t = time_index \<pi> i"
+      and h: "(t, h) \<in> happ_seq"
+      and snap: "S \<subseteq> happ_at happ_seq t"
+      and h_not_in_S: "h \<notin> S"
+      and state: "state = app_effs S (plan_state_seq i)"
+    shows "pre h \<subseteq> state"
+proof -
+  have "pre h \<subseteq> plan_state_seq i" 
+  proof -
+    have "h \<in> happ_at happ_seq t" using t h by simp
+    thus ?thesis 
+      using plan_state_seq_props i t by blast
+  qed
+  moreover
+  have "pre h \<inter> (\<Union>(adds ` S) \<union> \<Union>(dels ` S)) = {}"
+  proof -
+    {fix b
+      assume b: "b \<in> S"
+      have happening: "(t, b) \<in> happ_seq" using b snap by blast
+      have not_eq: "b \<noteq> h" using h_not_in_S b by blast
+      have "\<not>mutex_snap h b" using mutex_not_in_same_instant using happening not_eq h by blast
+      hence "pre h \<inter> (adds b \<union> dels b) = {}" unfolding mutex_snap_def mutex_snap_action_def by auto
+    }
+    thus ?thesis by auto
+  qed
+  ultimately
+  show ?thesis unfolding state app_effs_def apply_effects_def by auto
+qed
 
 end                       
 end
