@@ -429,7 +429,7 @@ definition "apply_starting_snaps_before n s \<equiv> apply_snaps (starting_snaps
 
 definition "starting_part_updated_state_seq n \<equiv> apply_starting_snaps_before n (planning_sem.inst_upd_state i)"
 
-definition "starting_part_updated_prop_state n \<equiv> prop_state (starting_part_updated_state_seq i)"
+definition "starting_part_updated_prop_state n \<equiv> prop_state (starting_part_updated_state_seq n)"
 
 (* ending *)
 definition "ending_actions_before n \<equiv> set (filter (planning_sem.is_ending_action (time_index \<pi> i)) (actions_before n))"
@@ -881,7 +881,7 @@ proof-
     by auto
 qed
 
-lemma starting_actions_before_if_starting:
+lemma starting_actions_before_Suc:
   assumes "is_starting_index (time_index \<pi> i) n"
       and "n < length actions"
   shows "starting_actions_before (Suc n) = starting_actions_before n \<union> {actions ! n}"
@@ -906,17 +906,27 @@ lemma updated_active_before_ran:
   using planning_sem.active_during_ran card_action_set 
   using order.trans by auto
 
+lemma updated_active_before_Suc:
+  assumes "is_starting_index (time_index \<pi> i) n"
+    and "n < length actions"
+  shows "updated_active_before (Suc n) = updated_active_before n + 1"
+proof -
+  have "disjnt (starting_actions_before n) {actions ! n}"
+    unfolding disjnt_def starting_actions_before_def actions_before_def
+    using nth_actions_unique assms(2) by auto
+  thus "updated_active_before (Suc n) = updated_active_before n + 1"
+    unfolding updated_active_before_def 
+    using starting_actions_before_Suc[OF assms]
+    using card_Un_disjnt finite_starting_actions_before by auto
+qed
+
 lemma updated_active_before_less_if_starting:
   assumes "is_starting_index (time_index \<pi> i) n"
     and "n < length actions"
     shows "updated_active_before n < length actions"
 proof -
-  have "disjnt (starting_actions_before n) {actions ! n}"
-    unfolding disjnt_def starting_actions_before_def actions_before_def
-    using nth_actions_unique assms(2) by auto
-  hence "updated_active_before (Suc n) = updated_active_before n + 1"
-    unfolding updated_active_before_def starting_actions_before_if_starting[OF assms]
-    by (auto simp: card_Un_disjnt finite_starting_actions_before)
+  have"updated_active_before (Suc n) = updated_active_before n + 1"
+    using updated_active_before_Suc assms by blast
   thus ?thesis using updated_active_before_ran[of "Suc n"] assms(2) by simp
 qed
 
@@ -955,12 +965,19 @@ proof -
     by auto
 qed
 
+lemma starting_part_updated_prop_state_Suc:
+  assumes is_starting: "is_starting_index t n"
+      and n: "n < length actions"
+      and t: "t = time_index \<pi> i"
+  shows "starting_part_updated_prop_state (Suc n) p =  (if p \<in> apply_starting_snaps_before n (planning_sem.inst_upd_state i) - set (dels (at_start (actions ! n))) \<union> set (adds (at_start (actions ! n))) then 1 else 0)"
+  unfolding starting_part_updated_prop_state_def prop_state_def starting_part_updated_state_seq_def
+  using apply_starting_snaps_before_Suc
+  using assms by auto
+
 end
 
 subsection \<open>Effects of Edges\<close>
 
-find_theorems name: "step_u"
-find_theorems name: "List*upd"
 definition edge_effect::"
   nat 
   \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp 
@@ -3082,7 +3099,7 @@ let
   t = time_index \<pi> n;
   (L, v, c) = Lvc;
 
-  prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ n p));
+  prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (starting_part_updated_prop_state n j p));
 
   active = (v ActsActive = Some (int (updated_active_before n j)));
 
@@ -3090,11 +3107,15 @@ let
   not_updated_start_time = (\<forall>i. j \<le> i \<longrightarrow> i  < length actions \<longrightarrow> is_starting_index t i  \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) t);
   
   not_updated_start_loc =  (\<forall>i. i < j \<and> is_starting_index t i \<longrightarrow> L ! Suc i = (StartInstant (actions ! i)));
-  updated_start_loc = (\<forall>i. j \<le> i \<longrightarrow> i  < length actions \<longrightarrow> is_starting_index t i  \<longrightarrow> L ! Suc i = (Off (actions ! i)))
+  updated_start_loc = (\<forall>i. j \<le> i \<longrightarrow> i < length actions \<longrightarrow> is_starting_index t i  \<longrightarrow> L ! Suc i = (Off (actions ! i)))
 in start_start_invs n Lvc
   \<and> prop_state \<and> active 
   \<and> not_updated_start_loc \<and> updated_start_time
   \<and> not_updated_start_loc \<and> updated_start_loc"
+
+definition "start_start_pre \<equiv> start_start_cond"
+
+definition "start_start_post n j \<equiv> start_start_cond n (Suc j)"
 
 definition "happening_post_start_starts n Lvc \<equiv>
 let 
@@ -3922,7 +3943,60 @@ lemma start_start_invsI:
       "\<And>ia. ia < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) ia \<Longrightarrow> L ! Suc ia = Off (actions ! ia)"
   shows "start_start_invs i (L, v, c)"
   unfolding start_start_invs_def using assms by auto
-  
+
+lemma start_start_invs_dests:
+  assumes "start_start_invs i (L, v, c)"
+  shows "happening_invs i (L, v, c)"
+    "\<And>p. PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during (time_index \<pi> i) p))"
+    "\<And>k. k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> c (ActEnd (actions ! k)) = 0"
+    "\<And>k. k < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
+    "\<And>k. k < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) k \<Longrightarrow> c (ActEnd (actions ! k)) = 0"
+    "\<And>k. k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
+    "\<And>k. k < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
+  using assms unfolding start_start_invs_def by auto
+
+lemma start_start_preI:
+  assumes "start_start_invs i (L, v, c)"
+    "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (starting_part_updated_prop_state i n p)"
+    "v ActsActive = Some (int (updated_active_before i n))"
+    "\<And>k. k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
+    "\<And>k. k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
+    "\<And>k. n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
+  shows "start_start_pre i n (L, v, c)"
+  unfolding start_start_pre_def start_start_cond_def
+  using assms by auto
+
+lemma start_start_pre_dests:
+  assumes "start_start_pre i n (L, v, c)"
+  shows "start_start_invs i (L, v, c)"
+    "PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (starting_part_updated_prop_state i n p)"
+    "v ActsActive = Some (int (updated_active_before i n))"
+    "k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
+    "k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
+    "n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
+  using assms unfolding start_start_pre_def start_start_cond_def by auto
+
+lemma start_start_postI:
+  assumes "start_start_invs i (L, v, c)"
+    "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (starting_part_updated_prop_state i (Suc n) p)"
+    "v ActsActive = Some (int (updated_active_before i (Suc n)))"
+    "\<And>k. k < Suc n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
+    "\<And>k. k < Suc n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
+    "\<And>k. Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
+  shows "start_start_post i n (L, v, c)"
+  unfolding start_start_post_def start_start_cond_def Let_def prod.case
+  using assms by auto
+
+lemma start_start_post_dests:
+  assumes "start_start_post i n (L, v, c)"
+  shows "start_start_invs i (L, v, c)"
+    "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (starting_part_updated_prop_state i (Suc n) p)"
+    "v ActsActive = Some (int (updated_active_before i (Suc n)))"
+    "\<And>k. k < Suc n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
+    "\<And>k. k < Suc n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
+    "\<And>k. Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
+  using assms unfolding start_start_post_def start_start_cond_def by auto
+
 
 text \<open>The rules used to show that the composition of sequences results in a run\<close>
 interpretation steps_seq: sequence_rules abs_renum.urge_bisim.A.steps
@@ -5244,32 +5318,198 @@ lemma start_starts_possible:
   assumes "abs_renum.urge_bisim.A.steps xs \<and> happening_pre_start_starts i (last xs)"
   assumes i: "i < length (htpl \<pi>)" 
   assumes start_indices: "start_indices = filter (is_starting_index (time_index \<pi> i)) [0..<length actions]"
-shows " abs_renum.urge_bisim.A.steps ((ext_seq \<circ> seq_apply) (map start_edge_effect start_indices) xs) \<and>  happening_pre_end_ends i (last ((ext_seq \<circ> seq_apply) (map start_edge_effect start_indices) xs))"
-proof (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[
-        where R = "happening_pre_start_starts i" 
-          and S = "happening_post_start_starts i"
-          and fs = "map start_edge_effect start_indices",
-          simplified length_map nth_map], goal_cases)
-  case 1
-  then show ?case sorry
-next
-  case (2 i s)
-  then show ?thesis sorry
-next
-  case (3 i s)
-  then show ?thesis sorry
-next
-  case (4 x)
-  then show ?thesis sorry
-next
-  case (5 x)
-  then show ?case sorry
-next
-  case (6 x)
-  then show ?case sorry
-next
-  case (7 x)
-  then show ?case sorry
+  shows " abs_renum.urge_bisim.A.steps ((ext_seq \<circ> seq_apply) (map start_edge_effect start_indices) xs) \<and>  happening_pre_end_ends i (last ((ext_seq \<circ> seq_apply) (map start_edge_effect start_indices) xs))"
+proof -
+  interpret sip: filter_sorted_distinct_list "[0..<length actions]" "is_starting_index (time_index \<pi> i)" start_indices
+    apply (unfold_locales)
+    using start_indices by auto
+
+  have sij_in_act': "j < length actions" 
+    if "i < length start_indices"
+      "j \<le> start_indices ! i" for i j
+    using set_nthI[OF that(1)]
+    apply -
+    apply (subst (asm) (2) start_indices)
+    apply (subst (asm) set_filter)
+    using that
+    by simp
+  
+  have start_indices_inc_all: "\<not> is_starting_index (time_index \<pi> i) m"
+    if "Suc j < length start_indices" "Suc (start_indices ! j) \<le> m" "m < start_indices ! Suc j" for j m
+    apply (rule sip.ys_inc_all)
+    using sij_in_act' that by auto
+
+  have start_indices_inc_all_below: "\<not> is_starting_index (time_index \<pi> i) m"
+    if "0 < length start_indices" "m < start_indices ! 0" for m
+    apply (rule sip.ys_inc_all_below)
+    using that sij_in_act'[OF that(1)] by auto
+
+  have start_indices_inc_all_above: "\<not> is_starting_index (time_index \<pi> i) m"
+    if "start_indices ! (length start_indices - 1) < m" "m < length actions" for m
+    apply (rule sip.ys_inc_all_above)
+    using that by auto
+
+  have image_start_indices_conv_actions: "((!) actions) ` set start_indices = planning_sem.starting_actions_at (time_index \<pi> i)"
+    unfolding planning_sem.action_happening_case_defs start_indices 
+    unfolding set_filter image_Collect set_upt
+    unfolding index_case_defs planning_sem.starting_actions_at_def
+    apply (subst set_conv_nth)
+    by auto
+
+  have nat_leE: thesis if  "x \<le> y" "x < y \<Longrightarrow> thesis" "x = y \<Longrightarrow> thesis"  for x y::nat and thesis using that by linarith
+
+
+  show ?thesis
+  proof (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[
+          where R = "happening_pre_start_starts i" 
+            and S = "happening_post_start_starts i"
+            and fs = "map start_edge_effect start_indices"
+            and P = "start_start_pre i o ((!) start_indices)"
+            and Q = "start_start_post i o ((!) start_indices)",
+            simplified length_map nth_map, OF assms(1)], goal_cases)
+    case j: (1 j s)
+      have sij_set: "start_indices ! j \<in> set start_indices"  using j by auto
+      with image_start_indices_conv_actions
+      have *: "(actions ! (start_indices ! j)) \<in> planning_sem.starting_actions_at (time_index \<pi> i)" using j by blast
+      
+      hence sij_starting: "planning_sem.is_starting_action (time_index \<pi> i) (actions ! (start_indices ! j))"  
+        and sij_in_act[intro]: "actions ! (start_indices ! j) \<in> set actions"  using * planning_sem.starting_actions_at_def j by auto
+  
+      have sij_starting_index: "is_starting_index (time_index \<pi> i) (start_indices ! j)" apply (insert sij_set) apply (subst (asm) (2) start_indices) by simp
+  
+      have sij_ran: "start_indices ! j < length actions" 
+        apply (insert sij_set)
+        apply (subst (asm) (2) start_indices)
+        by simp
+
+    show ?case
+    proof (insert j, induction s; rule context_conjI, goal_cases)
+      case (1 L v c)
+      have sij_L: "Suc (start_indices ! j) < length L" using 1
+        unfolding comp_def
+        apply (subst Lv_conds_dests)
+        apply (force intro: start_start_pre_dests start_start_invs_dests happening_invs_dests)
+        using sij_ran by simp
+      show ?case
+        using 1
+        unfolding start_edge_effect_alt comp_def
+        apply -
+      proof(rule start_start_postI, goal_cases)
+        case 1
+        then show ?case 
+          apply - 
+          apply (frule start_start_pre_dests(1))
+          apply (erule start_start_invs_maintained)
+          subgoal apply (erule happening_invs_maintained)
+            subgoal apply (erule Lv_conds_maintained)
+                   apply simp
+                  apply simp
+                 apply (((subst map_upds_apply_nontin | subst fun_upd_other), force)+, simp)
+              subgoal apply (rule upds_map_bounded[rotated])
+                 apply (subst comp_def[of "\<lambda>x. 1" PropVar, symmetric])
+                  apply (subst map_map[symmetric])
+                  apply (rule HOL.refl)
+                using map_of_nta_vars_action_start_add apply fastforce
+                apply (rule upds_map_bounded[rotated])
+                  apply (subst comp_def[of "\<lambda>x. 0" PropVar, symmetric])
+                  apply (subst map_map[symmetric])
+                  apply (rule HOL.refl)
+                using map_of_nta_vars_action_start_del apply fastforce
+                apply (erule single_upd_bounded)
+                  apply (rule map_of_nta_vars_ActsActive)
+                 apply (fastforce simp: start_start_pre_dests)
+                apply (subst start_start_pre_dests, assumption)
+                using updated_active_before_less_if_starting[OF i sij_starting_index sij_ran] by simp
+              done
+            by ((intro strip, (subst nth_list_update_neq)?, (frule index_case_dests_disj)?); (use nth_actions_unique[OF sij_ran] sij_starting_index in force))+
+          subgoal apply (intro strip)
+            apply ((subst map_upds_apply_nontin|subst fun_upd_other), force)+
+            by simp
+          by ((intro strip, (subst nth_list_update_neq)?, (frule index_case_dests_disj)?); (use nth_actions_unique[OF sij_ran] sij_starting_index in force))+
+      next
+        case (2 p)
+        then show ?case 
+          apply -
+          apply (subst starting_part_updated_prop_state_Suc)
+          using i sij_starting_index sij_ran apply auto[4]
+          apply (cases "p \<in> set (adds (at_start (actions ! (start_indices ! j))))")
+           apply (subst map_upds_with_map)
+             apply simp
+            apply simp
+          apply simp
+          apply (subst map_upds_apply_nontin)
+           apply force
+          apply (cases "p \<in> set (dels (at_start (actions ! (start_indices ! j))))")
+           apply (subst map_upds_with_map)
+             apply simp
+            apply simp
+           apply simp
+          apply (subst map_upds_apply_nontin)
+           apply force
+          apply (subst fun_upd_other)
+           apply simp
+          apply (drule start_start_pre_dests(2), assumption)
+          unfolding starting_part_updated_prop_state_def[OF i] prop_state_def starting_part_updated_state_seq_def[OF i]
+          by simp
+      next
+        case 3
+        then show ?case 
+          apply -
+          apply (subst updated_active_before_Suc)
+          using i sij_starting_index sij_ran apply auto[3]
+          apply (subst map_upds_apply_nontin, force)+
+          by (auto simp: start_start_pre_dests)
+      next
+        case (4 k)
+        then show ?case 
+          apply (cases "k = start_indices ! j")
+          using sij_L start_start_pre_dests by auto
+      next
+        case (5 k)
+        then show ?case 
+          apply (cases "k = start_indices ! j")
+          using sij_L start_start_pre_dests by auto
+      next
+        case (6 k)
+        then show ?case 
+          apply (cases "k = start_indices ! j")
+          using sij_L start_start_pre_dests by auto
+      qed
+    next
+      case (2 L v c)
+      then show ?case 
+        apply -
+        unfolding comp_def start_edge_effect_alt
+        apply (rule single_step_intro)
+        unfolding prod.case
+        apply (rule non_t_step_intro[where a = "Internal (STR '''')"])
+        unfolding abs_renum.sem_def
+          apply (rule step_u.step_int)
+        unfolding TAG_def
+                    apply (subst conv_trans[where p = "Suc (start_indices ! j)"])
+        using sij_ran length_actual_autos apply simp
+                    apply (rule image_eqI[where x = "start_edge_spec (actions ! (start_indices ! j))"])
+                     apply (simp add: start_edge_spec_def)
+                    apply (simp add: sij_ran nth_auto_trans)
+                   apply (use conv_committed no_committed in simp)
+    qed
+    
+  next
+    case (2 j s)
+    then show ?case sorry
+  next
+    case (3 x)
+    then show ?case sorry
+  next
+    case (4 x)
+    then show ?case sorry
+  next
+    case (5 x)
+    then show ?case sorry
+  next
+    case (6 x)
+    then show ?case sorry
+  qed
 qed
 
 lemma happening_steps_possible:

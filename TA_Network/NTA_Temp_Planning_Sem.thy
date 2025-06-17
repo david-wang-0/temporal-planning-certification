@@ -2399,23 +2399,6 @@ proof -
     using 1 by simp
 qed
 
-lemma active_during_less_if_starting:
-  assumes "is_starting_action t a"
-      and "a \<in> actions"
-  shows "active_during t < card actions"
-proof -
-  have "closed_open_active_count t a = 0" using assms closed_open_active_count_1_if_starting
-  moreover
-  have "closed_open_active_count t a \<in> set (map (closed_open_active_count t) action_list)" using set_action_list assms by simp
-  moreover
-  have "\<forall>x \<in> set (map (open_active_count t) action_list). x \<in> {0, 1}" using open_active_count_ran set_action_list by auto
-  ultimately
-  show ?thesis
-    unfolding active_before_def
-    using sum_list_binary_less_than_length_if[where xs = "map (open_active_count t) action_list"] length_action_list[symmetric]
-    by simp
-qed
-
 subsubsection \<open>Relating the invariant sequence to the number of locks\<close>
 
 
