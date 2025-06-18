@@ -141,12 +141,39 @@ lemma distinct_sum_list_1_conv_card_set:
   shows "sum_list (map (\<lambda>x. 1) xs) = card (set xs)"
   using assms by (induction xs) simp_all
 
+lemma sum_list_map_if:
+"sum_list (map (\<lambda>x. if P x then (n::int) else m) xs)
+  = sum_list (map (\<lambda>x. n) (filter P xs)) + sum_list (map (\<lambda>x. m) (filter (\<lambda>x. \<not>P x) xs))"
+  unfolding sum_list.eq_foldr
+proof (induction xs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons x xs)
+  then show ?case
+    apply (cases "P x") by auto
+qed
+  
+lemma sum_list_map_if':
+"sum_list (map (\<lambda>x. if P x then (n::nat) else m) xs)
+  = sum_list (map (\<lambda>x. n) (filter P xs)) + sum_list (map (\<lambda>x. m) (filter (\<lambda>x. \<not>P x) xs))"
+  unfolding sum_list.eq_foldr
+proof (induction xs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons x xs)
+  then show ?case
+    apply (cases "P x") by auto
+qed
+
 lemma map_upds_append:
   assumes "length xs = length xs'"
       and "length ys = length ys'"
     shows "f(xs @ ys [\<mapsto>] xs' @ ys') = f(xs [\<mapsto>] xs', ys [\<mapsto>] ys')"
   unfolding map_upds_def using assms map_of_append by simp
 
+find_theorems "sum_list (map (\<lambda>x. 0) ?xs)"
 
 lemma sum_list_max: 
   assumes "\<forall>x \<in> set xs. x \<le> n"

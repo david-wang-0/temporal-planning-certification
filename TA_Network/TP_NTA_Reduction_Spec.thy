@@ -23,6 +23,7 @@ datatype 'action clock =
 datatype 'action location =
   Off 'action |
   StartInstant 'action |
+  PostStart 'action |
   Running 'action |
   EndInstant 'action |
   InitialLocation |

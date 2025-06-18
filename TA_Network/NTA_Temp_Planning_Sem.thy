@@ -1968,7 +1968,16 @@ lemma active_count''_0_if_ending:
 
 lemma active_count''_alt_def:
   "active_count'' = closed_open_active_count - (if is_ending_action t a then 1 else 0)"
-  unfolding active_count''_def closed_open_active_count_def by blast 
+  unfolding active_count''_def closed_open_active_count_def by blast
+
+lemma active_count''_is_closed_active_count:
+  "active_count'' = closed_active_count"
+  apply (rule action_happening_cases[of t a])
+  subgoal using open_active_count_eq_closed_active_count_iff_only_instant_acts using active_count''_def action_happening_case_defs by simp
+  subgoal using closed_active_count_1_if_starting  active_count''_1_if_starting is_starting_action_def by simp
+  subgoal using active_count''_0_if_ending closed_active_count_0_if_end_scheduled is_ending_action_def by simp
+  subgoal using open_active_count_eq_closed_active_count_iff_only_instant_acts using active_count''_def action_happening_case_defs by simp
+  done
 
 lemma active_count''_conv_closed_open_active_count:
   "active_count'' = 1 \<Longrightarrow> \<not>is_ending_action t a \<and> closed_open_active_count = 1"
@@ -2537,6 +2546,12 @@ proof -
   thus ?thesis unfolding active_during_def active_during_minus_ended_def by auto
 qed
 
+lemma active_after_conv_active_during_minus_ended:
+  "active_after t = active_during_minus_ended t"
+  unfolding active_after_def active_during_minus_ended_def
+  apply (rule arg_cong[of _ _ sum_list])
+  using active_count''_is_closed_active_count set_action_list by simp
+
 subsubsection \<open>Relating the invariant sequence to the number of locks\<close>
 
 
@@ -2850,7 +2865,7 @@ proof-
       using plan_state_seq_props 2 unfolding Let_def plan_invs_before_def inv_seq_def by simp
     moreover
     have "plan_state_seq (Suc l) = apply_effects adds dels (plan_state_seq l) (happ_at (plan_happ_seq \<pi> at_start at_end) (time_index \<pi> l))" 
-      using plan_state_seq_props l(1) unfolding Let_def by simp
+      using plan_state_seq_props l(1) unfolding Let_def happ_seq_def[symmetric] by auto
     ultimately
     have "plan_invs_after (time_index \<pi> l) \<subseteq> plan_state_seq l - \<Union> (dels ` happ_at happ_seq (time_index \<pi> l)) \<union> \<Union> (adds ` happ_at happ_seq (time_index \<pi> l))" 
       unfolding apply_effects_def happ_seq_def by simp
