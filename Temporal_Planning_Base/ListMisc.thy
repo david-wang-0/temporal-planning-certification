@@ -218,4 +218,35 @@ next
   thus ?thesis using assms(2) by simp
 qed
 
+
+find_theorems "sum_list (map ?f ?xs)"
+
+
+lemma sum_list_sub_nat_distrib:
+  assumes "\<forall>x \<in> set xs. ((f x)::nat) \<ge> g x"
+  shows "sum_list (map (\<lambda>x. f x - g x) (xs)) = sum_list (map f xs) - sum_list (map g xs)"
+  using assms unfolding sum_list.eq_foldr
+proof (induction xs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons x xs)
+  have "f x - g x + foldr (+) (map (\<lambda>x. f x - g x) xs) 0 = f x + foldr (+) (map f xs) 0 - (g x + foldr (+) (map g xs) 0)" (is "?a = ?b")
+  proof -
+    have "?a = f x - g x + (foldr (+) (map f xs) 0 - foldr (+) (map g xs) 0)" apply (subst Cons.IH) using Cons by auto
+    also have "... = f x - g x + foldr (+) (map f xs) 0 - foldr (+) (map g xs) 0" 
+    proof -
+      have "(foldr (+) (map f xs) 0 \<ge> foldr (+) (map g xs) 0)" using Cons(2) sum_list_mono unfolding sum_list.eq_foldr by fastforce
+      thus ?thesis by simp
+    qed
+    also have "... = f x + foldr (+) (map f xs) 0 - g x - foldr (+) (map g xs) 0" 
+    proof -
+      have "f x \<ge> g x" using Cons by simp
+      thus ?thesis by simp
+    qed
+    also have "... = f x + foldr (+) (map f xs) 0 - (g x + foldr (+) (map g xs) 0)" by simp
+    finally show ?thesis by blast
+  qed
+  then show ?case by simp
+qed
 end

@@ -1914,17 +1914,68 @@ lemma closed_open_active_count_cases:
           "closed_open_active_count = 1 \<Longrightarrow> thesis"
         shows thesis using closed_open_active_count_ran assms by blast
 
+lemma closed_open_active_count_conv_open_active_count:
+  "closed_open_active_count = 1 \<Longrightarrow> is_starting_action t a \<and> open_active_count = 0 \<or> (\<not>is_starting_action t a \<and> open_active_count = 1)"
+  "closed_open_active_count = 0 \<Longrightarrow> \<not>is_starting_action t a \<and> open_active_count = 0"
+  unfolding closed_open_active_count_def by (auto elim: open_active_count_cases, presburger+)
+
 lemma closed_open_active_count_1_if_starting:
   assumes "is_starting_action t a"
   shows "closed_open_active_count = 1"
   using assms closed_open_active_count_ran 
   unfolding closed_open_active_count_def by auto
 
-lemma closed_open_active_count_conv_open_active_count:
-  "closed_open_active_count = 1 \<Longrightarrow> is_starting_action t a \<and> open_active_count = 0 \<or> (\<not>is_starting_action t a \<and> open_active_count = 1)"
-  "closed_open_active_count = 0 \<Longrightarrow> \<not>is_starting_action t a \<and> open_active_count = 0"
-  unfolding closed_open_active_count_def by (auto elim: open_active_count_cases, presburger+)
-    
+lemma closed_open_active_count_is_open_active_count_if_not_starting:
+  assumes "\<not>is_starting_action t a"
+  shows "closed_open_active_count = open_active_count"
+  apply (rule closed_open_active_count_cases)
+  using assms closed_open_active_count_conv_open_active_count by auto
+
+(* active_count'' *)
+lemma active_count''_ran:
+  "active_count'' \<in> {0, 1}"
+proof -
+  have "\<not>1 < active_count''"
+  proof (rule notI)
+    assume "1 < active_count''"
+    hence "open_active_count = 1 \<and> is_starting_action t a" unfolding active_count''_def
+      by (rule contrapos_pp) (use open_active_count_ran in auto)
+    thus False using open_active_count_0_if_start_scheduled is_starting_action_def by auto
+  qed
+  thus ?thesis by auto
+qed
+
+lemma active_count''_cases:
+  assumes "active_count'' = 0 \<Longrightarrow> thesis"
+          "active_count'' = 1 \<Longrightarrow> thesis"
+        shows thesis using active_count''_ran assms by blast
+
+lemma active_count''_1_if_starting:
+  assumes "is_starting_action t a"
+  shows "active_count'' = 1"
+  apply (insert assms active_count''_ran) 
+  apply (frule action_happening_disj)
+  unfolding active_count''_def 
+  by auto
+
+lemma active_count''_0_if_ending:
+  assumes "is_ending_action t a"
+  shows "active_count'' = 0"
+  apply (insert assms active_count''_ran)
+  apply (frule action_happening_disj)
+  unfolding active_count''_def
+  using open_active_count_ran by auto
+
+lemma active_count''_alt_def:
+  "active_count'' = closed_open_active_count - (if is_ending_action t a then 1 else 0)"
+  unfolding active_count''_def closed_open_active_count_def by blast 
+
+lemma active_count''_conv_closed_open_active_count:
+  "active_count'' = 1 \<Longrightarrow> \<not>is_ending_action t a \<and> closed_open_active_count = 1"
+  "active_count'' = 0 \<Longrightarrow> closed_open_active_count = 0 \<or> is_ending_action t a"
+  unfolding active_count''_alt_def 
+  by (fastforce intro: closed_open_active_count_cases)+
+     
 end
 end
 
@@ -1939,7 +1990,7 @@ definition ending_actions_at where
 
 definition starting_actions_at where
 "starting_actions_at t \<equiv> {a \<in> actions. is_starting_action t a}"
-(* technically a \<in> actions not necessary *)
+
 
 definition "instant_snaps_at t = at_start ` instant_actions_at t \<union> at_end ` instant_actions_at t"
 
@@ -1959,6 +2010,17 @@ lemma ending_snaps_happening:
   "ending_snaps_at t \<subseteq> happ_at happ_seq t"
   unfolding ending_snaps_at_def ending_actions_at_def is_ending_action_def by blast
 
+lemma finite_instant_actions_at:
+  "finite (instant_actions_at t)"
+  unfolding instant_actions_at_def using finite_actions by auto
+
+lemma finite_ending_actions_at:
+  "finite (ending_actions_at t)"
+  unfolding ending_actions_at_def using finite_actions by auto
+
+lemma finite_starting_actions_at:
+  "finite (starting_actions_at t)"
+  unfolding starting_actions_at_def using finite_actions by auto
 
 
 subsubsection \<open>Counting how many actions have locked a proposition\<close>
@@ -2336,7 +2398,6 @@ proof -
     by simp
 qed
 
-find_theorems name:"closed_open_active"
 
 subsubsection \<open>Relating the notions of active actions\<close>
 
@@ -2410,6 +2471,70 @@ proof -
     apply (subst (2) set_action_list[symmetric])
     apply (subst distinct_card[OF distinct_action_list])
     using 1 by simp
+qed
+
+lemma active_during_minus_ended_ran:
+  shows "active_during_minus_ended t \<le> card actions"
+proof -
+  have 1: "sum_list (map (active_count'' t) action_list) \<le> length (map (active_count'' t) action_list) * 1"
+    using set_action_list active_count''_ran[where t = t] by (fastforce intro: sum_list_max)
+    
+  show ?thesis
+    unfolding active_during_minus_ended_def
+    apply (subst (2) set_action_list[symmetric])
+    apply (subst distinct_card[OF distinct_action_list])
+    using 1 by simp
+qed
+
+lemma active_during_conv_active_during_minus_ended:
+  "active_during t = active_during_minus_ended t + card (ending_actions_at t)"
+proof -
+  have 1: "\<forall>x\<in>set action_list. (if is_ending_action t x then 1 else 0) \<le> closed_open_active_count t x"
+  proof (intro ballI)
+    fix x
+    assume a: "x \<in> set action_list"
+    show "(if is_ending_action t x then 1 else 0) \<le> closed_open_active_count t x"
+    proof (cases "is_ending_action t x")
+      case True
+      hence "\<not>is_starting_action t x" using action_happening_disj by blast
+      hence "closed_open_active_count t x = open_active_count t x" using closed_open_active_count_is_open_active_count_if_not_starting a set_action_list by blast
+      hence "closed_open_active_count t x = 1" using open_active_count_1_if_ending True  a set_action_list by simp
+      then show ?thesis by simp
+    next
+      case False
+      then show ?thesis by auto
+    qed
+  qed
+  
+  have "sum_list (map (closed_open_active_count t) action_list) = sum_list (map (active_count'' t) action_list) + card (ending_actions_at t)"
+  proof -
+    have "sum_list (map (closed_open_active_count t) action_list) = 
+        sum_list (map (\<lambda>a. active_count'' t a + (if is_ending_action t a then 1 else 0)) action_list)"
+    proof (rule arg_cong[of _ _ sum_list])
+      have "\<forall>x\<in>set action_list. closed_open_active_count t x = active_count'' t x + (if is_ending_action t x then 1 else 0)" 
+        (is "Ball _ (\<lambda>x. ?f x = ?g x)")
+        using 1 active_count''_alt_def set_action_list by simp
+      thus "map (closed_open_active_count t) action_list =
+            map (\<lambda>a. active_count'' t a + (if is_ending_action t a then 1 else 0)) action_list"
+        using map_eq_conv[of ?f _ ?g]
+        by simp
+    qed
+    also
+    have "... = sum_list (map (active_count'' t) action_list) + card (ending_actions_at t)" 
+    proof -
+      have "set (filter (is_ending_action t) action_list) = ending_actions_at t"
+        unfolding ending_actions_at_def using set_action_list by auto
+      hence "card (ending_actions_at t) = (\<Sum>a\<leftarrow>action_list. if is_ending_action t a then 1 else 0)"
+        unfolding ending_actions_at_def
+        apply (subst foldr_map_filter)
+        apply (subst distinct_sum_list_1_conv_card_set)
+        using distinct_action_list by auto
+      thus ?thesis by (simp add: sum_list_addf)
+    qed
+    finally 
+    show ?thesis .
+  qed
+  thus ?thesis unfolding active_during_def active_during_minus_ended_def by auto
 qed
 
 subsubsection \<open>Relating the invariant sequence to the number of locks\<close>
@@ -3253,6 +3378,10 @@ definition "inst_upd_state i \<equiv> app_effs (instant_snaps_at (time_index \<p
 definition "inst_start_upd_state i \<equiv> ((app_effs (starting_snaps_at (time_index \<pi> i))) o (app_effs (instant_snaps_at (time_index \<pi> i)))) (plan_state_seq i)"
 
 definition "upd_state i \<equiv> app_effs (happ_at happ_seq (time_index \<pi> i)) (plan_state_seq i)"
+
+lemma upd_state_conv_inst_start_upd_state:
+  "upd_state i = app_effs (ending_snaps_at (time_index \<pi> i)) (inst_start_upd_state i)"
+  unfolding upd_state_def inst_start_upd_state_def using app_all_dist by simp
 
 lemma state_seq_Suc_is_upd:
   assumes "i < length (htpl \<pi>)"
