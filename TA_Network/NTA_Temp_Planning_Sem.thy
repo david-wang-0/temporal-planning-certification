@@ -2000,6 +2000,10 @@ definition ending_actions_at where
 definition starting_actions_at where
 "starting_actions_at t \<equiv> {a \<in> actions. is_starting_action t a}"
 
+definition not_happening_actions_at where
+"not_happening_actions_at t \<equiv> {a \<in> actions. is_not_happening_action t a}"
+
+lemmas actions_at_defs = instant_actions_at_def ending_actions_at_def starting_actions_at_def not_happening_actions_at_def
 
 definition "instant_snaps_at t = at_start ` instant_actions_at t \<union> at_end ` instant_actions_at t"
 
@@ -2031,6 +2035,31 @@ lemma finite_starting_actions_at:
   "finite (starting_actions_at t)"
   unfolding starting_actions_at_def using finite_actions by auto
 
+
+lemma all_actions_at: "actions = ending_actions_at t \<union> instant_actions_at t \<union> starting_actions_at t \<union> not_happening_actions_at t"
+  using action_happening_cases ending_actions_at_def starting_actions_at_def instant_actions_at_def not_happening_actions_at_def by auto
+
+lemma finite_not_happening_actions_at: "finite (not_happening_actions_at t)"
+  using all_actions_at[of t] finite_subset[OF _ finite_actions]
+  by blast
+
+lemma ending_actions_at_less:
+  assumes "instant_actions_at t \<union> starting_actions_at t \<union> not_happening_actions_at t \<noteq> {}"
+  shows "ending_actions_at t \<subset> actions"
+proof -
+  consider x where "x \<in> instant_actions_at t" | x where "x \<in> starting_actions_at t" | x where "x \<in> not_happening_actions_at t" 
+    using assms by auto
+  hence "\<exists>x. x \<in> actions \<and> x \<notin> ending_actions_at t"
+    apply cases
+    subgoal apply (subst all_actions_at[of t])
+      unfolding actions_at_defs using action_happening_disj by blast
+    subgoal apply (subst all_actions_at[of t])
+      unfolding actions_at_defs using action_happening_disj by blast
+    subgoal apply (subst all_actions_at[of t])
+      unfolding actions_at_defs using action_happening_disj by blast
+    done
+  thus ?thesis using all_actions_at by auto
+qed
 
 subsubsection \<open>Counting how many actions have locked a proposition\<close>
 

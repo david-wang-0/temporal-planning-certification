@@ -108,6 +108,26 @@ definition actual_autos where
 "actual_autos = map get_actual_auto ntas"
 
 
+lemma some_actual_autos: "0 < length actual_autos"
+  unfolding actual_autos_def ntas_def timed_automaton_net_spec_def by simp
+
+lemma actual_autos_alt: "actual_autos = map (snd o snd) (main_auto_spec # map action_to_automaton_spec actions)"
+  unfolding actual_autos_def ntas_def Let_def timed_automaton_net_spec_def prod.case
+  apply -
+  apply (subst map_map[symmetric])
+  apply (subst map_snd_zip)
+   apply simp
+  by simp
+
+lemma length_actual_autos: "length actual_autos = Suc (length actions)" using actual_autos_alt by simp
+
+lemma actual_autos_alt_set: "set actual_autos = (\<lambda>a. snd (snd a)) ` set (main_auto_spec # map action_to_automaton_spec actions)"
+  unfolding actual_autos_def ntas_def Let_def timed_automaton_net_spec_def prod.case comp_apply set_map 
+    apply -
+    apply (subst image_image[symmetric, of _ snd])
+    apply (subst zip_range_id, simp)
+  by simp
+
 lemma in_actual_autosE:
   assumes auto: "auto \<in> set actual_autos"
       and alt:  "\<And>act. auto = (snd o snd) (action_to_automaton_spec act) \<Longrightarrow> act \<in> set actions \<Longrightarrow> thesis"
@@ -310,21 +330,23 @@ proof -
       then show ?thesis
       proof cases
         case act
-        have "trans \<in> set [start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act, instant_trans_edge_spec act]" 
+        have "trans \<in> set [start_edge_spec act, edge_2_spec act, edge_3_spec act, 
+              end_edge_spec act, instant_trans_edge_spec act, leave_start_edge_spec act]" 
           using t[simplified at' act(2)] unfolding comp_apply action_to_automaton_spec_def Let_def prod.case snd_conv fst_conv .
         with x consider
           "x \<in> set (trans_resets (start_edge_spec act))"|
           "x \<in> set (trans_resets (edge_2_spec act))"|
           "x \<in> set (trans_resets (edge_3_spec act))"|
           "x \<in> set (trans_resets (end_edge_spec act))"|
-          "x \<in> set (trans_resets (instant_trans_edge_spec act))" unfolding comp_apply by fastforce
+          "x \<in> set (trans_resets (instant_trans_edge_spec act))"|
+          "x \<in> set (trans_resets (leave_start_edge_spec act))" unfolding comp_apply by fastforce
         thus ?thesis 
           apply cases
           subgoal unfolding start_edge_spec_def comp_apply Let_def prod.case snd_conv fst_conv using act(1) by simp
           subgoal unfolding edge_2_spec_def comp_apply Let_def prod.case snd_conv fst_conv by simp
           subgoal unfolding edge_3_spec_def comp_apply Let_def prod.case snd_conv fst_conv using act(1) by simp
           subgoal unfolding end_edge_spec_def comp_apply Let_def prod.case snd_conv fst_conv by simp
-          unfolding instant_trans_edge_spec_def comp_apply Let_def prod.case snd_conv fst_conv using act(1) by simp
+          unfolding instant_trans_edge_spec_def leave_start_edge_spec_def comp_apply Let_def prod.case snd_conv fst_conv using act(1) by simp+
       next
         case main
         have "trans \<in> set [main_auto_init_edge_spec, main_auto_goal_edge_spec, main_auto_loop_spec]" 
@@ -357,14 +379,15 @@ proof -
       then show ?thesis 
       proof cases
         case act
-        have "trans \<in> set [start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act, instant_trans_edge_spec act]" 
+        have "trans \<in> set [start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act, instant_trans_edge_spec act, leave_start_edge_spec act]" 
           using t[simplified at' act(2)] unfolding comp_apply action_to_automaton_spec_def Let_def prod.case snd_conv fst_conv .
         with x g consider
           "x \<in> fst ` constraint_pair ` set (trans_guards (start_edge_spec act))"|
           "x \<in> fst ` constraint_pair ` set (trans_guards (edge_2_spec act))"|
           "x \<in> fst ` constraint_pair ` set (trans_guards (edge_3_spec act))"|
           "x \<in> fst ` constraint_pair ` set (trans_guards (end_edge_spec act))"|
-          "x \<in> fst ` constraint_pair ` set (trans_guards (instant_trans_edge_spec act))" unfolding comp_apply by fastforce
+          "x \<in> fst ` constraint_pair ` set (trans_guards (instant_trans_edge_spec act))"|
+          "x \<in> fst ` constraint_pair ` set (trans_guards (leave_start_edge_spec act))" unfolding comp_apply by fastforce
         hence "\<exists>act' \<in> set actions. x = ActStart act' \<or> x = ActEnd act'" 
           apply cases
           subgoal unfolding start_edge_spec_def Let_def prod.case comp_apply fst_conv snd_conv int_clocks_spec_def set_map set_append by auto
@@ -378,13 +401,14 @@ proof -
             subgoal for a b by (cases a; cases b) fastforce+
             done
           subgoal unfolding end_edge_spec_def Let_def prod.case comp_apply fst_conv snd_conv by auto
-          unfolding instant_trans_edge_spec_def Let_def prod.case comp_apply fst_conv snd_conv int_clocks_spec_def set_map u_dur_spec_def l_dur_spec_def set_append 
+          unfolding instant_trans_edge_spec_def leave_start_edge_spec_def Let_def prod.case comp_apply fst_conv snd_conv int_clocks_spec_def set_map u_dur_spec_def l_dur_spec_def set_append 
             using act(1) 
             apply (cases "lower act"; cases "upper act")
             subgoal by fastforce
             subgoal for a by (cases a) fastforce+
             subgoal for a by (cases a) fastforce+
             subgoal for a b by (cases a; cases b) fastforce+
+            subgoal by simp
             done
         then show ?thesis by blast
       next
@@ -437,7 +461,7 @@ lemma init_variables:
   "PropVar ` (set init) \<union> PropVar ` (set goal) \<subseteq> PropVar ` (set props)"
   using init_props goal_props by auto
 
-lemma all_vars_spec_exact: "all_vars_spec = [(ActsActive, 0, (length actions)), (PlanningLock, 0, 2)] @ map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props) @
+lemma all_vars_spec_exact: "all_vars_spec = [(ActsActive, 0, int (length actions)), (Effecting, 0, int (length actions)), (PlanningLock, 0, 2)] @ map (\<lambda>p. (PropLock p, 0, int (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props) @
     map (\<lambda>p. (PropVar p, 0, 1)) (filter (\<lambda>x. PropVar x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)" 
 proof -
   have 1: "filter (\<lambda>x. fst x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props) = 
@@ -451,15 +475,14 @@ proof -
   have 2: "map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)
       = map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props)" apply (induction props) by auto
   
-  show "all_vars_spec = [(ActsActive, 0, (length actions)), (PlanningLock, 0, 2)] @ map (\<lambda>p. (PropLock p, 0, (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props) @
-    map (\<lambda>p. (PropVar p, 0, 1)) (filter (\<lambda>x. PropVar x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)" 
+  show ?thesis
     unfolding all_vars_spec_def Let_def fold_union' apply (subst 1)
     apply (subst 2)
     by simp
 qed
 
 
-lemma all_vars_spec_exact_set: "set (map fst all_vars_spec) = {ActsActive, PlanningLock} \<union> (\<Union> (action_vars_spec ` set actions) \<union> PropVar ` set init \<union> PropVar ` set goal)"
+lemma all_vars_spec_exact_set: "set (map fst all_vars_spec) = {ActsActive, Effecting, PlanningLock} \<union> (\<Union> (action_vars_spec ` set actions) \<union> PropVar ` set init \<union> PropVar ` set goal)"
 proof -
   have 1: "set (map fst (filter (\<lambda>x. fst x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props))) 
     = \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)"
@@ -494,14 +517,22 @@ schematic_goal nta_vars_exact: "nta_vars = ?x"
 
 schematic_goal map_of_nta_vars_exact: "map_of nta_vars = ?x"
   apply (subst nta_vars_exact)
-  apply (subst map_of_map)
-  unfolding comp_def map_of_append
+  unfolding map_of_map comp_def map_of_append set_map
   ..
 
 schematic_goal dom_map_of_nta_vars: "dom (map_of nta_vars) = ?d"
   apply (subst dom_map_of_conv_image_fst)
   apply (subst nta_vars')
   apply (subst all_vars_spec_exact_set[simplified set_map])
+  ..
+
+schematic_goal fst_nta_vars: "set (map fst nta_vars) = ?x"
+  apply (subst nta_vars')
+  apply (subst all_vars_spec_exact_set)
+  ..
+
+schematic_goal action_vars_spec_exact: "action_vars_spec = ?x"
+  unfolding action_vars_spec_def Let_def inv_vars_spec_def snap_vars_spec_def set_map map_append set_append set_filter image_Collect
   ..
 
 
@@ -565,29 +596,33 @@ proof (rule equalityI; rule subsetI)
   proof cases
     case act
     with tr
-    have "tr \<in> {start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act, instant_trans_edge_spec act}" unfolding action_to_automaton_spec_def Let_def comp_apply snd_conv by auto
+    have "tr \<in> {start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act, instant_trans_edge_spec act, leave_start_edge_spec act}" 
+      unfolding action_to_automaton_spec_def Let_def comp_apply snd_conv by auto
     with x consider
       "x \<in> trans_vars (start_edge_spec act)" |
       "x \<in> trans_vars (edge_2_spec act)" |
       "x \<in> trans_vars (edge_3_spec act)" |
       "x \<in> trans_vars (end_edge_spec act)" |
-      "x \<in> trans_vars (instant_trans_edge_spec act)" by auto
+      "x \<in> trans_vars (instant_trans_edge_spec act)" |
+      "x \<in> trans_vars (leave_start_edge_spec act)"by auto
     note act_cases = this
     then show ?thesis 
     proof cases
       case 1
       hence "x \<in> \<Union> (vars_of_bexp ` set (map (is_prop_lock_ab 0) (filter (\<lambda>p. p \<notin> set (adds (at_start act))) (dels (at_start act))) @ map (is_prop_ab 1) (pre (at_start act)))) \<union>
-       \<Union> (vars_of_update ` set ((inc_var 1 ActsActive) # map (set_prop_ab 0) (dels (at_start act)) @ map (set_prop_ab 1) (adds (at_start act))))" 
+       \<Union> (vars_of_update ` set ((inc_var 1 ActsActive) # (inc_var 1 Effecting) # map (set_prop_ab 0) (dels (at_start act)) @ map (set_prop_ab 1) (adds (at_start act))))" 
         unfolding trans_vars_def start_edge_spec_def Let_def prod.case fold_union' vars_of_bexp_all set_map by blast
-      hence x: "x \<in> {ActsActive} \<union> PropLock ` (set (dels (at_start act)) - set (adds (at_start act))) \<or> x \<in> PropVar ` (set (pre (at_start act)) \<union> set (dels (at_start act)) \<union> set (adds (at_start act)))"
+      hence x: "x \<in> {ActsActive, Effecting} \<union> PropLock ` (set (dels (at_start act)) - set (adds (at_start act))) \<or> x \<in> PropVar ` (set (pre (at_start act)) \<union> set (dels (at_start act)) \<union> set (adds (at_start act)))"
+        apply (subst (asm) list.set)
         apply (subst (asm) list.set)
         apply (subst (asm) Union_image_insert)
-        apply (subst (asm) update_vars_simps)
+        apply (subst (asm) Union_image_insert)
+        apply (subst (asm) update_vars_simps)+
          using update_vars_simps condition_vars_simps by auto
       have s: "set (pre (at_start act)) \<union> set (dels (at_start act)) \<union> set (adds (at_start act)) \<subseteq> set props" using domain_ref_fluents unfolding fluent_domain_def comp_apply act_ref_fluents_def using act(1) by simp
-      have x': "x \<in> {ActsActive} \<union> fst ` set (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props)" using x s 
+      have x': "x \<in> {ActsActive, Effecting} \<union> fst ` set (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props)" using x s 
         unfolding set_map set_append by blast
-      have x'': "x \<in> {ActsActive} \<union>  fold (\<union>) (map action_vars_spec actions) {} \<union> set (map PropVar init) \<union> set (map PropVar goal)" unfolding action_vars_spec_def using act(1) unfolding fold_union' Let_def using x 
+      have x'': "x \<in> {ActsActive, Effecting} \<union>  fold (\<union>) (map action_vars_spec actions) {} \<union> set (map PropVar init) \<union> set (map PropVar goal)" unfolding action_vars_spec_def using act(1) unfolding fold_union' Let_def using x 
         apply -
         apply (subst snap_vars_spec_def)
         unfolding Let_def map_append set_map 
@@ -595,13 +630,18 @@ proof (rule equalityI; rule subsetI)
       show ?thesis unfolding nta_vars' all_vars_spec_def Let_def prod.case Let_def set_map using x' x'' by auto
     next
       case 2
-      hence "x \<in> \<Union> (vars_of_bexp ` is_prop_ab 1 ` set (over_all act)) \<union> \<Union> (vars_of_update ` inc_prop_lock_ab 1 ` set (over_all act))" 
-        unfolding edge_2_spec_def trans_vars_def Let_def prod.case fold_union' vars_of_bexp_all set_map by blast
-      hence x: "x \<in> PropLock ` set (over_all act) \<or> x \<in> PropVar ` set (over_all act)" using update_vars_simps condition_vars_simps by auto
+      hence "x \<in> {Effecting} \<union> \<Union> (vars_of_bexp ` is_prop_ab 1 ` set (over_all act)) \<union> \<Union> (vars_of_update ` inc_prop_lock_ab 1 ` set (over_all act))" 
+        unfolding edge_2_spec_def trans_vars_def Let_def prod.case fold_union' vars_of_bexp_all set_map 
+        apply -
+        apply (subst (asm) list.set)
+        apply (subst (asm) Union_image_insert)
+        apply (subst (asm) update_vars_simps)
+        by auto
+      hence x: "x = Effecting \<or> x \<in> PropLock ` set (over_all act) \<or> x \<in> PropVar ` set (over_all act)" using update_vars_simps condition_vars_simps by auto
       have s: "set (over_all act) \<subseteq> set props" using domain_ref_fluents unfolding fluent_domain_def comp_apply using act(1) unfolding act_ref_fluents_def by auto
-      have x': "x \<in> fst ` set (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props)" using x s 
+      have x': "x = Effecting \<or> x \<in> fst ` set (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props)" using x s 
         unfolding set_map set_append by blast
-      have x'': "x  \<in> fold (\<union>) (map action_vars_spec actions) {} \<union> set (map PropVar init) \<union> set (map PropVar goal)" 
+      have x'': "x = Effecting \<or> x  \<in> fold (\<union>) (map action_vars_spec actions) {} \<union> set (map PropVar init) \<union> set (map PropVar goal)" 
         unfolding action_vars_spec_def using act(1) unfolding fold_union' Let_def using x 
         apply -
         apply (subst inv_vars_spec_def)
@@ -610,12 +650,17 @@ proof (rule equalityI; rule subsetI)
       show ?thesis unfolding nta_vars' all_vars_spec_def Let_def prod.case Let_def set_map using x' x'' by auto
     next
       case 3
-      hence "x \<in> vars_of_bexp bexp.true \<union> \<Union> (vars_of_update ` inc_prop_lock_ab (- 1) ` set (over_all act))" unfolding edge_3_spec_def trans_vars_def Let_def prod.case fold_union' vars_of_bexp_all set_map by simp
-      hence x: "x \<in> PropLock ` set (over_all act)" using update_vars_simps condition_vars_simps by auto
+      hence "x \<in> vars_of_bexp bexp.true \<union> \<Union> (vars_of_update ` set ((inc_var 1 Effecting) # map (inc_prop_lock_ab (- 1)) (over_all act)))" 
+        unfolding edge_3_spec_def trans_vars_def Let_def prod.case fold_union' vars_of_bexp_all set_map by simp
+      hence x: "x = Effecting \<or> x \<in> PropLock ` set (over_all act)"
+        apply (subst (asm) list.set)
+        apply (subst (asm) Union_image_insert)
+        apply (subst (asm) update_vars_simps)
+        using update_vars_simps condition_vars_simps by auto
       have s: "set (over_all act) \<subseteq> set props" using domain_ref_fluents unfolding fluent_domain_def comp_apply using act(1) unfolding act_ref_fluents_def by auto
-      have x': "x \<in> fst ` set (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props)" using x s 
+      have x': "x = Effecting \<or> x \<in> fst ` set (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props)" using x s 
         unfolding set_map set_append by blast
-      have x'': "x  \<in> fold (\<union>) (map action_vars_spec actions) {} \<union> set (map PropVar init) \<union> set (map PropVar goal)" 
+      have x'': "x = Effecting \<or> x \<in> fold (\<union>) (map action_vars_spec actions) {} \<union> set (map PropVar init) \<union> set (map PropVar goal)" 
         unfolding action_vars_spec_def using act(1) unfolding fold_union' Let_def using x 
         apply -
         apply (subst inv_vars_spec_def)
@@ -625,17 +670,20 @@ proof (rule equalityI; rule subsetI)
     next
       case 4
       hence "x \<in> \<Union> (vars_of_bexp ` set (map (is_prop_lock_ab 0) (filter (\<lambda>p. p \<notin> set (adds (at_end act))) (dels (at_end act))) @ map (is_prop_ab 1) (pre (at_end act)))) \<union>
-       \<Union> (vars_of_update ` set ((inc_var (-1) ActsActive) # map (set_prop_ab 0) (dels (at_end act)) @ map (set_prop_ab 1) (adds (at_end act))))" 
+       \<Union> (vars_of_update ` set ((inc_var (-1) ActsActive) # (inc_var (-1) Effecting) # map (set_prop_ab 0) (dels (at_end act)) @ map (set_prop_ab 1) (adds (at_end act))))" 
         unfolding trans_vars_def end_edge_spec_def Let_def prod.case fold_union' vars_of_bexp_all set_map by blast
-      hence x: "x = ActsActive \<or> x \<in> PropLock ` (set (dels (at_end act)) - set (adds (at_end act))) \<or> x \<in> PropVar ` (set (pre (at_end act)) \<union> set (dels (at_end act)) \<union> set (adds (at_end act)))"
+      hence x: "x = ActsActive \<or> x = Effecting \<or> x \<in> PropLock ` (set (dels (at_end act)) - set (adds (at_end act))) \<or> x \<in> PropVar ` (set (pre (at_end act)) \<union> set (dels (at_end act)) \<union> set (adds (at_end act)))"
+        apply (subst (asm) list.set)
+        apply (subst (asm) Union_image_insert)
+        apply (subst (asm) update_vars_simps)
         apply (subst (asm) list.set)
         apply (subst (asm) Union_image_insert)
         apply (subst (asm) update_vars_simps)
         using update_vars_simps condition_vars_simps by auto
       have s: "set (pre (at_end act)) \<union> set (dels (at_end act)) \<union> set (adds (at_end act)) \<subseteq> set props" using domain_ref_fluents unfolding fluent_domain_def comp_apply act_ref_fluents_def using act(1) by simp
-      have x': "x \<in> {ActsActive} \<union> fst ` set (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props)" using x s 
+      have x': "x \<in> {ActsActive, Effecting} \<union> fst ` set (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props)" using x s 
         unfolding set_map set_append by blast
-      have x'': "x  \<in> {ActsActive} \<union> fold (\<union>) (map action_vars_spec actions) {} \<union> set (map PropVar init) \<union> set (map PropVar goal)" unfolding action_vars_spec_def using act(1) unfolding fold_union' Let_def using x 
+      have x'': "x  \<in> {ActsActive, Effecting} \<union> fold (\<union>) (map action_vars_spec actions) {} \<union> set (map PropVar init) \<union> set (map PropVar goal)" unfolding action_vars_spec_def using act(1) unfolding fold_union' Let_def using x 
         apply -
         apply (subst (2) snap_vars_spec_def)
         unfolding Let_def map_append set_map 
@@ -643,8 +691,15 @@ proof (rule equalityI; rule subsetI)
       show ?thesis unfolding nta_vars' all_vars_spec_def Let_def prod.case Let_def set_map using x' x'' by auto
     next
       case 5
-     then show ?thesis unfolding instant_trans_edge_spec_def trans_vars_def Let_def prod.case fold_union' vars_of_bexp_all set_map by simp 
-    qed
+      then show ?thesis unfolding instant_trans_edge_spec_def trans_vars_def Let_def prod.case fold_union' vars_of_bexp_all set_map by simp 
+    next
+      case 6
+      hence "x \<in> vars_of_exp (var Effecting)  \<union> \<Union> (vars_of_bexp ` is_prop_ab 1 ` set (over_all act))"
+        unfolding leave_start_edge_spec_def trans_vars_def Let_def prod.case fold_union' vars_of_bexp_all set_map vars_of_bexp.simps by simp
+      hence x: "x = Effecting \<or> x \<in> PropVar ` set (over_all act)"
+        using update_vars_simps condition_vars_simps by auto
+      thus ?thesis unfolding fst_nta_vars action_vars_spec_exact using \<open>act \<in> set actions\<close> by fast
+   qed
   next
     case main
     with tr
@@ -725,6 +780,7 @@ next
   assume "x \<in> set (map fst nta_vars)"
   hence "x = ActsActive 
       \<or> x = PlanningLock 
+      \<or> x = Effecting
       \<or> x \<in> fst `
          set (filter (\<lambda>x. fst x \<in> fold (\<union>) (map action_vars_spec actions) {} \<union> PropVar ` set init \<union> PropVar ` set goal)
                (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props))" 
@@ -735,6 +791,7 @@ next
   then consider
     "x = ActsActive"
     | "x = PlanningLock"
+    | "x = Effecting"
     | "x \<in> fst `
          set (filter (\<lambda>x. fst x \<in> fold (\<union>) (map action_vars_spec actions) {} \<union> PropVar ` set init \<union> PropVar ` set goal)
              (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props))" by blast
@@ -778,6 +835,12 @@ next
       unfolding trans_vars_def 
       by simp
   next
+    case 3
+    obtain act where act: "act \<in> set actions" using some_actions by blast
+    have "x \<in> trans_vars (edge_2_spec act)" unfolding trans_vars_def edge_2_spec_def Let_def prod.case fold_union' set_map vars_of_update_def using 3 by simp
+    hence "x \<in> (trans_to_vars o (\<lambda>x. fst (snd (snd x))) o (\<lambda>x. snd (snd x))) (action_to_automaton_spec act)" unfolding action_to_automaton_spec_def Let_def trans_to_vars_def fold_union' by auto
+    thus ?thesis unfolding actual_variables_def ta_trans_def Let_def actual_autos_alt fold_union' set_map using act by auto
+  next
     assume "x \<in> fst `
          set (filter (\<lambda>x. fst x \<in> fold (\<union>) (map action_vars_spec actions) {} \<union> PropVar ` set init \<union> PropVar ` set goal)
              (map (\<lambda>p. (PropLock p, 0, int (length actions))) props @ map (\<lambda>p. (PropVar p, 0, 1)) props))"
@@ -797,20 +860,29 @@ next
         | "x \<in> snap_vars_spec (at_end act)"
         apply (subst (asm) action_vars_spec_def)
         unfolding Let_def fold_union'  set_map set_append by blast
-      hence x: "x \<in> \<Union> (trans_vars ` set [start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act, instant_trans_edge_spec act])" 
+      hence x: "x \<in> \<Union> (trans_vars ` set [start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act, instant_trans_edge_spec act, leave_start_edge_spec act])" 
       proof cases
         case 1
-        hence "x \<in> trans_vars (edge_2_spec act)" unfolding inv_vars_spec_def Let_def set_append set_map edge_2_spec_def trans_vars_def prod.case vars_of_bexp_all fold_union 
-          apply -
-          apply (erule UnE)
-          subgoal 
-            apply (rule UnI2)
+        then consider "x \<in> PropLock ` set (over_all act)" |
+          "x \<in> PropVar ` set (over_all act)" unfolding inv_vars_spec_def Let_def set_append set_map  trans_vars_def prod.case vars_of_bexp_all fold_union by auto
+        then show ?thesis
+        proof (cases)
+          case 1
+          hence "x \<in> trans_vars (edge_2_spec act)" 
+            unfolding edge_2_spec_def Let_def set_append set_map  trans_vars_def prod.case vars_of_bexp_all fold_union 
             using update_vars_simps by auto
-          subgoal 
+          then show ?thesis by simp
+        next
+          case 2
+          hence "x \<in> trans_vars (leave_start_edge_spec act)" 
+            unfolding leave_start_edge_spec_def Let_def set_append set_map  trans_vars_def prod.case vars_of_bexp_all fold_union 
+            apply (subst vars_of_bexp.simps)
             apply (rule UnI1)
-            using condition_vars_simps by auto
-          done
-        then show ?thesis by simp
+            apply (rule UnI2)
+            apply (subst vars_of_bexp_all)
+            using is_prop_ab_def by auto
+          then show ?thesis by simp
+        qed
       next
         case 2
         hence "x \<in> trans_vars (start_edge_spec act)" unfolding snap_vars_spec_def Let_def set_append set_map start_edge_spec_def trans_vars_def prod.case vars_of_bexp_all fold_union 
@@ -1138,26 +1210,6 @@ definition "ta_locs \<equiv> map trans_to_locs ta_trans"
 definition actual_locs where
 "actual_locs \<equiv> fold (\<union>) ta_locs {}"
 
-lemma some_actual_autos: "0 < length actual_autos"
-  unfolding actual_autos_def ntas_def timed_automaton_net_spec_def by simp
-
-lemma actual_autos_alt: "actual_autos = map (snd o snd) (main_auto_spec # map action_to_automaton_spec actions)"
-  unfolding actual_autos_def ntas_def Let_def timed_automaton_net_spec_def prod.case
-  apply -
-  apply (subst map_map[symmetric])
-  apply (subst map_snd_zip)
-   apply simp
-  by simp
-
-lemma length_actual_autos: "length actual_autos = Suc (length actions)" using actual_autos_alt by simp
-
-lemma actual_autos_alt_set: "set actual_autos = (\<lambda>a. snd (snd a)) ` set (main_auto_spec # map action_to_automaton_spec actions)"
-  unfolding actual_autos_def ntas_def Let_def timed_automaton_net_spec_def prod.case comp_apply set_map 
-    apply -
-    apply (subst image_image[symmetric, of _ snd])
-    apply (subst zip_range_id, simp)
-  by simp
-
 
 lemma actual_locs_correct: "set all_ta_states = actual_locs" 
   proof -
@@ -1179,9 +1231,9 @@ lemma actual_locs_correct: "set all_ta_states = actual_locs"
         case act
         obtain trs where
           trs: "trs = (\<lambda>x. fst (snd (snd (snd (snd x))))) (action_to_automaton_spec act)" 
-          "trs = [start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act, instant_trans_edge_spec act]" unfolding action_to_automaton_spec_def Let_def fst_conv snd_conv prod.case Let_def by simp
-        have x: "x \<in> {Off act, StartInstant act, Running act, EndInstant act}" using ls x act unfolding action_to_automaton_spec_def Let_def by simp
-        then consider "x = Off act" | "x = StartInstant act" | "x = Running act" | "x = EndInstant act" by blast
+          "trs = [start_edge_spec act, edge_2_spec act, edge_3_spec act, end_edge_spec act, instant_trans_edge_spec act, leave_start_edge_spec act]" unfolding action_to_automaton_spec_def Let_def fst_conv snd_conv prod.case Let_def by simp
+        have x: "x \<in> {Off act, StartInstant act, Running act, EndInstant act, PostStart act}" using ls x act unfolding action_to_automaton_spec_def Let_def by simp
+        then consider "x = Off act" | "x = StartInstant act" | "x = Running act" | "x = EndInstant act" | "x = PostStart act" by blast
         hence "x \<in> trans_to_locs trs"
           apply cases
           unfolding trs(2) unfolding trans_to_locs_def Let_def set_map fold_union' trans_locs_def
@@ -1189,6 +1241,7 @@ lemma actual_locs_correct: "set all_ta_states = actual_locs"
           subgoal unfolding start_edge_spec_def Let_def list.set by simp
           subgoal unfolding edge_3_spec_def Let_def list.set by simp
           subgoal unfolding edge_3_spec_def Let_def list.set by simp
+          subgoal unfolding leave_start_edge_spec_def by simp
           done
         with trs(1) act
         show ?thesis by auto
@@ -1210,8 +1263,8 @@ lemma actual_locs_correct: "set all_ta_states = actual_locs"
         show ?thesis by simp
       qed
     next
-      have act_locs: "set (fst (snd (action_to_automaton_spec act))) =  {Off act, StartInstant act, Running act, EndInstant act}" for act
-        unfolding action_to_automaton_spec_def fst_conv snd_conv Let_def prod.case by simp
+      have act_locs: "set (fst (snd (action_to_automaton_spec act))) =  {Off act, StartInstant act, Running act, EndInstant act, PostStart act}" for act
+        unfolding action_to_automaton_spec_def fst_conv snd_conv Let_def prod.case by auto
       fix x
       assume "x \<in> \<Union> (trans_to_locs ` (\<lambda>x. fst (snd (snd (snd (snd x))))) ` set (main_auto_spec # map action_to_automaton_spec actions))"
       hence "x \<in> trans_locs main_auto_init_edge_spec
@@ -1221,7 +1274,8 @@ lemma actual_locs_correct: "set all_ta_states = actual_locs"
           \<or> (\<exists>act \<in> set actions. x \<in> trans_locs (edge_2_spec act))
           \<or> (\<exists>act \<in> set actions. x \<in> trans_locs (edge_3_spec act))
           \<or> (\<exists>act \<in> set actions. x \<in> trans_locs (end_edge_spec act))
-          \<or> (\<exists>act \<in> set actions. x \<in> trans_locs (instant_trans_edge_spec act))" 
+          \<or> (\<exists>act \<in> set actions. x \<in> trans_locs (instant_trans_edge_spec act))
+          \<or> (\<exists>act \<in> set actions. x \<in> trans_locs (leave_start_edge_spec act))" 
         unfolding main_auto_spec_def action_to_automaton_spec_def Let_def prod.case 
         apply -
         apply (subst (asm) list.set(2))
@@ -1240,7 +1294,8 @@ lemma actual_locs_correct: "set all_ta_states = actual_locs"
         act where "act \<in> set actions" "x \<in> trans_locs (edge_2_spec act)" |
         act where "act \<in> set actions" "x \<in> trans_locs (edge_3_spec act)" |
         act where "act \<in> set actions" "x \<in> trans_locs (end_edge_spec act)" |
-        act where "act \<in> set actions" "x \<in> trans_locs (instant_trans_edge_spec act)" by auto
+        act where "act \<in> set actions" "x \<in> trans_locs (instant_trans_edge_spec act)" |
+        act where "act \<in> set actions" "x \<in> trans_locs (leave_start_edge_spec act)" by auto
       thus "x \<in> \<Union> (set ` (\<lambda>a. fst (snd a)) ` set (main_auto_spec # map action_to_automaton_spec actions))" 
       proof cases
         case 1
@@ -1282,6 +1337,9 @@ lemma actual_locs_correct: "set all_ta_states = actual_locs"
       next
         case 8 
         then show ?thesis unfolding trans_locs_def instant_trans_edge_spec_def Let_def prod.case using act_locs by auto
+      next
+        case 9
+        then show ?thesis unfolding trans_locs_def leave_start_edge_spec_def Let_def prod.case using act_locs by auto
       qed
     qed
     thus ?thesis
@@ -1729,7 +1787,7 @@ lemma actual_acts_correct: "actual_acts \<subseteq> set nta_actions"
            apply simp
           apply (elim imageE)
           subgoal for _ auto
-            unfolding main_auto_init_edge_spec_def main_auto_goal_edge_spec_def main_auto_loop_spec_def Let_def start_edge_spec_def end_edge_spec_def edge_2_spec_def edge_3_spec_def instant_trans_edge_spec_def
+            unfolding main_auto_init_edge_spec_def main_auto_goal_edge_spec_def main_auto_loop_spec_def Let_def start_edge_spec_def end_edge_spec_def edge_2_spec_def edge_3_spec_def instant_trans_edge_spec_def leave_start_edge_spec_def
             by auto
           done
         done

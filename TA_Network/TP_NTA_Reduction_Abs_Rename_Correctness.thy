@@ -440,15 +440,15 @@ definition "prop_state_after_happ \<equiv> prop_state (planning_sem.upd_state i)
 (* Like application of effects when lists are used to implement sets *)
 definition "apply_snaps hs s \<equiv> s - \<Union> ((set o dels) ` hs) \<union> \<Union> ((set o adds) ` hs)"
 
-(* Intermediate prop states *)
+
+
+(* Intermediate states *)
 definition "actions_before n \<equiv>
   map ((!) actions) [0..<n]
 "
 
-definition "instant_actions_before n \<equiv> 
-  let 
-    instant_actions_before = filter (planning_sem.is_instant_action (time_index \<pi> i)) (actions_before n)
-  in (set instant_actions_before)"
+(* instant actions *)
+definition "instant_actions_before n \<equiv> set (filter (planning_sem.is_instant_action (time_index \<pi> i)) (actions_before n))"
 
 definition "instant_starts_before n \<equiv> at_start ` instant_actions_before n"
 
@@ -481,6 +481,8 @@ definition "starting_part_updated_state_seq n \<equiv> apply_starting_snaps_befo
 
 definition "starting_part_updated_prop_state n \<equiv> prop_state (starting_part_updated_state_seq n)"
 
+definition "starting_actions_after n \<equiv> planning_sem.starting_actions_at (time_index \<pi> i) - starting_actions_before n"
+
 (* ending *)
 definition "ending_actions_before n \<equiv> set (filter (planning_sem.is_ending_action (time_index \<pi> i)) (actions_before n))"
 
@@ -491,6 +493,8 @@ definition "apply_ending_snaps_before n s \<equiv> apply_snaps (ending_snaps_bef
 definition "ending_part_updated_state_seq n \<equiv> apply_ending_snaps_before n (planning_sem.inst_start_upd_state i)"
 
 definition "ending_part_updated_prop_state n \<equiv> prop_state (ending_part_updated_state_seq n)"
+
+definition "ending_actions_after n \<equiv> planning_sem.ending_actions_at (time_index \<pi> i) - ending_actions_before n"
 
 (* all *)
 
@@ -544,6 +548,10 @@ lemma starting_actions_before_all_is_starting_actions:
   unfolding starting_actions_before_def Let_def set_filter set_map set_upt 
     planning_sem.starting_actions_at_def actions_before_def by simp
 
+lemma finite_starting_actions_before:
+  "finite (starting_actions_before n)" 
+  unfolding starting_actions_before_def by auto
+
 lemma starting_snaps_before_all_is_starting_snaps: "starting_snaps_before (length actions) = planning_sem.starting_snaps_at (time_index \<pi> i)"
   unfolding starting_snaps_before_def planning_sem.starting_snaps_at_def  
   using starting_actions_before_all_is_starting_actions by simp
@@ -560,9 +568,20 @@ lemma starting_snaps_before_0_is_none: "starting_snaps_before 0 = {}"
 lemma apply_starting_snaps_before_0_is_id: "apply_starting_snaps_before 0 = id"
   unfolding apply_starting_snaps_before_def apply_snaps_def starting_snaps_before_0_is_none by auto
 
-lemma finite_starting_actions_before:
-  "finite (starting_actions_before n)" 
-  unfolding starting_actions_before_def by auto
+lemma starting_actions_after_0_is_starting_actions:
+  "starting_actions_after 0 = planning_sem.starting_actions_at (time_index \<pi> i)"
+  unfolding starting_actions_after_def using starting_actions_before_0_is_none by auto
+
+lemma starting_actions_after_all_is_none:
+  "starting_actions_after (length actions) = {}"
+  unfolding starting_actions_after_def using starting_actions_before_all_is_starting_actions by auto
+
+lemma finite_starting_actions_after:
+  "finite (starting_actions_after n)"
+  using starting_actions_after_def finite_starting_actions_before 
+    planning_sem.finite_starting_actions_at by auto
+(* starting *)
+
 
 lemma starting_actions_before_mono:
   assumes "n \<le> m"
@@ -599,6 +618,115 @@ lemma starting_actions_before_Suc:
   using assms
   unfolding starting_actions_before_def actions_before_def index_case_defs by simp
 
+lemma starting_actions_before_not_include:
+  assumes "n < length actions"
+    shows "disjnt (starting_actions_before n) {actions ! n}"
+    unfolding disjnt_def starting_actions_before_def actions_before_def
+    using nth_actions_unique assms by auto
+
+lemma card_starting_actions_before_Suc:
+  assumes "is_starting_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "card (starting_actions_before (Suc n)) = card (starting_actions_before n) + 1"
+  using starting_actions_before_Suc assms starting_actions_before_not_include card_Un_disjnt
+    finite_starting_actions_before by auto
+
+(* The anding actions with a greater or equal index *)
+lemma starting_actions_before_not_include:
+  assumes "n < length actions"
+    shows "disjnt (starting_actions_before n) {actions ! n}"
+    unfolding disjnt_def starting_actions_before_def actions_before_def
+    using nth_actions_unique assms by auto
+
+
+lemma card_ending_actions_and_starting_before_less:
+  assumes "is_starting_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "card (planning_sem.ending_actions_at (time_index \<pi> i)) + card (starting_actions_before n) < length actions"
+proof -
+  have "planning_sem.ending_actions_at (time_index \<pi> i) \<union> planning_sem.starting_actions_at (time_index \<pi> i) \<subseteq> set actions" using planning_sem.all_actions_at[of "time_index \<pi> i"] by auto
+  moreover
+  have "disjnt (planning_sem.ending_actions_at (time_index \<pi> i)) (planning_sem.starting_actions_at (time_index \<pi> i))" 
+    unfolding planning_sem.actions_at_defs  disjnt_def
+    using planning_sem.action_happening_disj by blast
+  ultimately
+  have 1: "card (planning_sem.ending_actions_at (time_index \<pi> i)) + card (planning_sem.starting_actions_at (time_index \<pi> i)) \<le> length actions" 
+    apply (subst card_action_set[symmetric])
+    apply (subst card_Un_disjnt[symmetric])
+    using planning_sem.finite_ending_actions_at planning_sem.finite_starting_actions_at apply auto[3]
+    using card_mono by blast
+
+  have "starting_actions_before (Suc n) \<subseteq> planning_sem.starting_actions_at (time_index \<pi> i)" 
+    using starting_actions_before_mono assms starting_actions_before_all_is_starting_actions[symmetric] by simp
+  hence "card (starting_actions_before (Suc n)) \<le> card (planning_sem.starting_actions_at (time_index \<pi> i))" 
+    using planning_sem.finite_starting_actions_at card_mono by auto
+  hence "card (starting_actions_before n \<union> {actions ! n}) \<le> card (planning_sem.starting_actions_at (time_index \<pi> i))" 
+    using assms starting_actions_before_Suc by simp
+  hence "card (starting_actions_before n) < card (planning_sem.starting_actions_at (time_index \<pi> i))"
+    using card_Un_disjnt starting_actions_before_not_include assms finite_starting_actions_before by auto
+  thus ?thesis using 1 by linarith
+qed
+
+lemma starting_actions_before_less_if_starting:
+  assumes "is_starting_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "card (starting_actions_before n) < length actions"
+  using card_ending_actions_and_starting_before_less assms by force
+
+lemma starting_actions_after_pos_if_starting:
+  assumes "is_starting_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "0 < card (starting_actions_after n)"
+proof -
+  have "actions ! n \<in> planning_sem.starting_actions_at (time_index \<pi> i)"
+    using assms index_case_defs planning_sem.starting_actions_at_def by auto
+  hence "actions ! n \<in> starting_actions_after n" using starting_actions_after_def starting_actions_before_not_include assms by auto
+  thus ?thesis using finite_starting_actions_after card_gt_0_iff by blast
+qed
+
+lemma starting_actions_after_Suc:
+  assumes "is_starting_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "starting_actions_after (Suc n) \<union> {actions ! n} = starting_actions_after n"
+proof -
+  have "actions ! n \<in> planning_sem.starting_actions_at (time_index \<pi> i)"
+    using assms index_case_defs planning_sem.starting_actions_at_def by auto
+  moreover
+  have "starting_actions_before (Suc n) = starting_actions_before n \<union> {actions ! n}" 
+    using assms starting_actions_before_Suc by auto
+  moreover
+  have "actions ! n \<notin> starting_actions_before n" using starting_actions_before_not_include assms by auto 
+  ultimately
+  show ?thesis unfolding starting_actions_after_def by blast
+qed
+
+lemma starting_actions_after_Suc_not_include:
+  assumes "n < length actions"
+  shows "disjnt (starting_actions_after (Suc n)) {actions ! n}"
+proof (cases "is_starting_index (time_index \<pi> i ) n")
+  case True
+  then show ?thesis unfolding starting_actions_after_def using starting_actions_before_Suc assms by simp
+next
+  case False
+  then show ?thesis unfolding starting_actions_after_def planning_sem.starting_actions_at_def index_case_defs by auto
+qed
+
+lemma card_starting_actions_after_Suc:
+  assumes "is_starting_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "card (starting_actions_after (Suc n)) + 1 = card (starting_actions_after n)"
+  using starting_actions_after_Suc assms 
+    card_Un_disjnt[OF finite_starting_actions_after _ starting_actions_after_Suc_not_include]
+  by force
+
+lemma starting_actions_after_inv:
+  assumes "n \<le> m"
+      and "\<forall>j a. n \<le> j \<and> j < m \<longrightarrow> \<not>(is_starting_index (time_index \<pi> i) j)" 
+    shows "starting_actions_after n = starting_actions_after m"
+  unfolding starting_actions_after_def
+  using starting_actions_before_inv[OF assms] by simp
+
+
 (* ending  *)
 
 lemma ending_actions_before_all_is_ending_actions: 
@@ -615,6 +743,23 @@ lemma apply_ending_snaps_before_all_is_apply_ending_snaps: "apply_ending_snaps_b
 
 lemma ending_actions_before_0_is_none: "ending_actions_before 0 = {}"
   using ending_actions_before_def actions_before_def by auto
+
+lemma finite_ending_actions_before:
+  "finite (ending_actions_before n)"
+  unfolding ending_actions_before_def actions_before_def by blast
+
+lemma ending_actions_after_0_is_ending_actions:
+  "ending_actions_after 0 = planning_sem.ending_actions_at (time_index \<pi> i)"
+  unfolding ending_actions_after_def using ending_actions_before_0_is_none by auto
+
+lemma ending_actions_after_all_is_none:
+  "ending_actions_after (length actions) = {}"
+  unfolding ending_actions_after_def using ending_actions_before_all_is_ending_actions by auto
+
+lemma finite_ending_actions_after:
+  "finite (ending_actions_after n)"
+  using ending_actions_after_def finite_ending_actions_before 
+    planning_sem.finite_ending_actions_at by auto
 
 lemma ending_snaps_before_0_is_none: "ending_snaps_before 0 = {}" 
   using ending_snaps_before_def ending_actions_before_0_is_none by blast
@@ -657,21 +802,120 @@ lemma ending_actions_before_Suc:
   using assms
   unfolding ending_actions_before_def actions_before_def index_case_defs by simp
 
-lemma finite_ending_actions_before:
-  shows "finite (ending_actions_before n)"
-  unfolding ending_actions_before_def actions_before_def by blast
+lemma ending_actions_before_not_include:
+  assumes "n < length actions"
+    shows "disjnt (ending_actions_before n) {actions ! n}"
+    unfolding disjnt_def ending_actions_before_def actions_before_def
+    using nth_actions_unique assms by auto
 
+lemma card_ending_actions_before_Suc:
+  assumes "is_ending_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "card (ending_actions_before (Suc n)) = card (ending_actions_before n) + 1"
+  using ending_actions_before_Suc assms ending_actions_before_not_include card_Un_disjnt
+    finite_ending_actions_before by auto
+
+lemma ending_actions_before_less_if_ending:
+  assumes "is_ending_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "card (ending_actions_before n) < length actions"
+proof -
+  have "ending_actions_before (Suc n) \<subseteq> planning_sem.ending_actions_at (time_index \<pi> i)" 
+    using ending_actions_before_mono assms ending_actions_before_all_is_ending_actions[symmetric] by simp
+  hence "ending_actions_before (Suc n) \<subseteq> set actions" using planning_sem.all_actions_at by blast
+  hence "card (ending_actions_before (Suc n)) \<le> length actions" unfolding card_action_set[symmetric]
+    using card_mono finite_ending_actions_before by blast
+  hence 1: "card (ending_actions_before n \<union> {actions ! n}) \<le> length actions" using assms ending_actions_before_Suc by auto
+  thus ?thesis using card_Un_disjnt ending_actions_before_not_include assms finite_ending_actions_before by auto
+qed
+
+lemma ending_actions_after_pos_if_ending:
+  assumes "is_ending_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "0 < card (ending_actions_after n)"
+proof -
+  have "actions ! n \<in> planning_sem.ending_actions_at (time_index \<pi> i)"
+    using assms index_case_defs planning_sem.ending_actions_at_def by auto
+  hence "actions ! n \<in> ending_actions_after n" using ending_actions_after_def ending_actions_before_not_include assms by auto
+  thus ?thesis using finite_ending_actions_after card_gt_0_iff by blast
+qed
+
+lemma ending_actions_after_Suc:
+  assumes "is_ending_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "ending_actions_after (Suc n) \<union> {actions ! n} = ending_actions_after n"
+proof -
+  have "actions ! n \<in> planning_sem.ending_actions_at (time_index \<pi> i)"
+    using assms index_case_defs planning_sem.ending_actions_at_def by auto
+  moreover
+  have "ending_actions_before (Suc n) = ending_actions_before n \<union> {actions ! n}" 
+    using assms ending_actions_before_Suc by auto
+  moreover
+  have "actions ! n \<notin> ending_actions_before n" using ending_actions_before_not_include assms by auto 
+  ultimately
+  show ?thesis unfolding ending_actions_after_def by blast
+qed
+
+lemma ending_actions_after_Suc_not_include:
+  assumes "n < length actions"
+  shows "disjnt (ending_actions_after (Suc n)) {actions ! n}"
+proof (cases "is_ending_index (time_index \<pi> i ) n")
+  case True
+  then show ?thesis unfolding ending_actions_after_def using ending_actions_before_Suc assms by simp
+next
+  case False
+  then show ?thesis unfolding ending_actions_after_def planning_sem.ending_actions_at_def index_case_defs by auto
+qed
+
+lemma card_ending_actions_after_Suc:
+  assumes "is_ending_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "card (ending_actions_after (Suc n)) + 1 = card (ending_actions_after n)"
+  using ending_actions_after_Suc assms 
+    card_Un_disjnt[OF finite_ending_actions_after _ ending_actions_after_Suc_not_include]
+  by force
+
+lemma ending_actions_after_inv:
+  assumes "n \<le> m"
+      and "\<forall>j a. n \<le> j \<and> j < m \<longrightarrow> \<not>(is_ending_index (time_index \<pi> i) j)" 
+    shows "ending_actions_after n = ending_actions_after m"
+  unfolding ending_actions_after_def
+  using ending_actions_before_inv[OF assms] by simp
+
+lemma card_ending_actions_less:
+  assumes "is_instant_index (time_index \<pi> i) n \<or> is_starting_index (time_index \<pi> i) n \<or> is_not_happening_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "card (planning_sem.ending_actions_at (time_index \<pi> i)) < length actions"
+proof -
+  from assms
+  have "actions ! n \<in> planning_sem.instant_actions_at (time_index \<pi> i) 
+    \<or> actions ! n \<in> planning_sem.starting_actions_at (time_index \<pi> i) 
+    \<or> actions ! n \<in> planning_sem.not_happening_actions_at (time_index \<pi> i)" unfolding index_case_defs planning_sem.actions_at_defs by simp
+  with planning_sem.ending_actions_at_less
+  have "planning_sem.ending_actions_at (time_index \<pi> i) \<subset> set actions" by auto
+  thus ?thesis 
+    apply (subst card_action_set[symmetric])
+    by (auto intro: psubset_card_mono)
+qed
+
+lemma card_starting_actions_and_ending_after_le:
+  assumes "is_ending_index (time_index \<pi> i) n"
+      and "n < length actions"
+    shows "card (planning_sem.starting_actions_at (time_index \<pi> i)) + card (ending_actions_after n) \<le> length actions"
+proof -
+  from assms
+  have "actions ! n \<in> planning_sem.instant_actions_at (time_index \<pi> i) 
+    \<or> actions ! n \<in> planning_sem.starting_actions_at (time_index \<pi> i) 
+    \<or> actions ! n \<in> planning_sem.not_happening_actions_at (time_index \<pi> i)" unfolding index_case_defs planning_sem.actions_at_defs by simp
+  with planning_sem.ending_actions_at_less
+  have "planning_sem.ending_actions_at (time_index \<pi> i) \<subset> set actions" by auto
+  thus ?thesis 
+    apply (subst card_action_set[symmetric])
+    by (auto intro: psubset_card_mono)
+qed
+  
 (* indices *)
 
-definition "instant_indices_before n \<equiv> filter (is_instant_index (time_index \<pi> i)) [0..<n]"
-
-definition "starting_indices_before n \<equiv> filter (is_starting_index (time_index \<pi> i)) [0..<n]"
-
-definition "ending_indices_before n \<equiv> filter (is_ending_index (time_index \<pi> i)) [0..<n]"
-
-lemma instant_actions_before_alt: "instant_actions_before n = set (map ((!) actions) (instant_indices_before n))"
-  unfolding instant_actions_before_def instant_indices_before_def set_map set_filter 
-    Let_def is_instant_index_def actions_before_def by blast
 
 lemma instant_snaps_before_is_in_happ_seq: 
   assumes "n < length actions"
@@ -1510,6 +1754,8 @@ in (L', v', c')
 "
 definition "start_edge_effect n = edge_effect (Suc n) (start_edge_spec (actions ! n))"
 
+definition "leave_start_edge_effect n \<equiv> edge_effect (Suc n) (leave_start_edge_spec (actions ! n))"
+
 definition "edge_2_effect n = edge_effect (Suc n) (edge_2_spec (actions ! n))"
 
 definition "edge_3_effect n = edge_effect (Suc n) (edge_3_spec (actions ! n))"
@@ -1524,7 +1770,7 @@ definition "main_auto_goal_edge_effect = edge_effect 0 main_auto_goal_edge_spec"
 
 lemma start_edge_effect_alt: "start_edge_effect n (L, v, c) = 
   (L[Suc n := StartInstant (actions ! n)],
-     v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1,
+     v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, Effecting \<mapsto> plus_int (the (v Effecting)) 1,
          map PropVar (dels (at_start (actions ! n))) [\<mapsto>] map (\<lambda>x. 0) (dels (at_start (actions ! n))),
          map PropVar (adds (at_start (actions ! n))) [\<mapsto>] map (\<lambda>x. 1) (adds (at_start (actions ! n)))),
      c(ActStart (actions ! n) := 0))"
@@ -1533,20 +1779,27 @@ lemma start_edge_effect_alt: "start_edge_effect n (L, v, c) =
     map_map comp_def fst_map_prod snd_map_prod id_def list.map map_append fst_conv snd_conv
   by (auto simp: map_upds_append eval.simps)
 
+lemma leave_start_edge_effect_alt: "leave_start_edge_effect n (L, v, c) = (L[Suc n := Running (actions ! n)], v, c)"
+  unfolding leave_start_edge_effect_def leave_start_edge_spec_def
+  unfolding  edge_effect_def Let_def prod.case unzip_def set_prop_ab_def
+    map_map comp_def fst_map_prod snd_map_prod id_def list.map map_append fst_conv snd_conv
+  by simp
+
 lemma edge_2_effect_alt: "edge_2_effect n (L, v, c) = 
-  (L[Suc n := Running (actions ! n)],
-    v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. (the (v x)) + 1) (map PropLock (over_all (actions ! n)))), 
+  (L[Suc n := PostStart (actions ! n)],
+    v(Effecting \<mapsto> plus_int (the (v Effecting)) (-1),
+        map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. (the (v x)) + 1) (map PropLock (over_all (actions ! n)))), 
     c)"
   unfolding edge_2_effect_def edge_2_spec_def
-  unfolding 
-    edge_effect_def Let_def prod.case unzip_def set_prop_ab_def
-    map_map comp_def fst_map_prod snd_map_prod id_def list.map map_append
-    comp_def fst_conv snd_conv unzip_def inc_prop_lock_ab_def eval.simps
-  by auto
+  unfolding edge_effect_def Let_def prod.case unzip_def set_prop_ab_def
+    map_map comp_def fst_map_prod snd_map_prod id_def list.map map_append fst_conv snd_conv 
+    inc_prop_lock_ab_def
+  by (auto simp: map_upds_append eval.simps)
 
 lemma edge_3_effect_alt: "edge_3_effect n (L, v, c) = 
   (L[Suc n := EndInstant (actions ! n)],
-    v(map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) (- 1)) (map PropLock (over_all (actions ! n)))),
+    v(Effecting \<mapsto> plus_int (the (v Effecting)) 1,
+      map PropLock (over_all (actions ! n)) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) (- 1)) (map PropLock (over_all (actions ! n)))),
     c(ActEnd (actions ! n) := 0))"
   unfolding edge_3_effect_def edge_3_spec_def
   unfolding 
@@ -1557,7 +1810,7 @@ lemma edge_3_effect_alt: "edge_3_effect n (L, v, c) =
 
 lemma end_edge_effect_alt: "end_edge_effect n (L, v, c) = 
   (L[Suc n := Off (actions ! n)],
-    v(ActsActive \<mapsto> plus_int (the (v ActsActive)) (- 1),
+    v(ActsActive \<mapsto> plus_int (the (v ActsActive)) (- 1), Effecting \<mapsto> plus_int (the (v Effecting)) (-1),
       map PropVar (dels (at_end (actions ! n))) [\<mapsto>] map (\<lambda>x. 0) (map PropVar (dels (at_end (actions ! n)))),
       map PropVar (adds (at_end (actions ! n))) [\<mapsto>] map (\<lambda>x. 1) (map PropVar (adds (at_end (actions ! n))))),
     c)"
@@ -2274,6 +2527,10 @@ lemma map_of_nta_vars_ActsActive:
 lemma map_of_nta_vars_PlanningLock:
   "map_of nta_vars PlanningLock = Some (0, 2)" using nta_vars_exact by simp
 
+lemma map_of_nta_vars_Effecting:
+  "map_of nta_vars Effecting = Some (0, int (length actions))" using nta_vars_exact by simp
+  
+
 lemma map_prop_var_simp: "map (\<lambda>p. (PropVar p, 0, 1)) xs = map (\<lambda>(v, b). (v, id b)) (map (\<lambda>v. (v, 0, 1)) (map PropVar xs))"
   by simp
 
@@ -2321,9 +2578,8 @@ proof-
      apply (rule imageE)
       apply simp
      apply simp
-      apply (subst 4)
-      apply (subst 2)
-      by simp
+    using 4 2 unfolding set_map 
+    by metis
 qed
 
 
@@ -2407,12 +2663,7 @@ proof -
      apply simp
     apply (subst map_add_find_left)
      apply (rule map_of_NoneI)
-     apply (subst set_map)
-     apply (subst image_image)
-     apply (subst fst_conv)
-     apply blast
-    apply (subst 1[simplified p])
-    by simp
+    using 1 p unfolding set_map by auto
 qed
 
 lemma map_of_nta_vars_action_start_add:
@@ -2454,12 +2705,7 @@ proof -
      apply simp
     apply (subst map_add_find_left)
      apply (rule map_of_NoneI)
-     apply (subst set_map)
-     apply (subst image_image)
-     apply (subst fst_conv)
-     apply blast
-    apply (subst 1[simplified p])
-    by simp
+    using 1 p unfolding set_map by auto
 qed
 
 lemma map_of_nta_vars_action_start_del_lock:
@@ -2490,7 +2736,7 @@ proof -
     unfolding map_of_nta_vars_exact p
     apply (subst map_add_find_left, simp)
     apply (subst map_add_find_right)
-    using 1 p(3) by fast+
+    using 1 p(3) unfolding set_map by fast+
 qed
 
 lemma map_of_nta_vars_action_end_del:
@@ -2524,24 +2770,17 @@ proof -
     apply (intro UnI1)
     apply (rule UnionI[of "action_vars_spec a"])
     using a_in_actions apply simp
-    unfolding action_vars_spec_def Let_def
-    apply (rule UnI2)
-    apply (rule UnI2)
+    unfolding action_vars_spec_def 
     unfolding snap_vars_spec_def Let_def set_append set_map
-    apply (intro UnI2)
-    using p by blast
+    using p by auto
   show ?thesis 
     unfolding map_of_nta_vars_exact p
     apply (subst map_add_find_left)
      apply simp
     apply (subst map_add_find_left)
      apply (rule map_of_NoneI)
-     apply (subst set_map)
-     apply (subst image_image)
-     apply (subst fst_conv)
-     apply blast
-    apply (subst 1[simplified p])
-    by simp
+    using 1 unfolding set_map p
+    by auto
 qed
 
 lemma map_of_nta_vars_action_end_add:
@@ -2570,12 +2809,8 @@ proof -
      apply simp
     apply (subst map_add_find_left)
      apply (rule map_of_NoneI)
-     apply (subst set_map)
-     apply (subst image_image)
-     apply (subst fst_conv)
-     apply blast
-    apply (subst 1[simplified p])
-    by simp
+    using 1 p unfolding set_map
+    by auto
 qed
 
 lemma map_of_nta_vars_action_end_del_lock:
@@ -2603,7 +2838,8 @@ proof -
     unfolding map_of_nta_vars_exact p
     apply (subst map_add_find_left, simp)
     apply (subst map_add_find_right)
-    using 1 p(3) by fast+
+    using 1 p unfolding set_map
+    by auto
 qed
 
 lemma map_of_nta_vars_action_end_pre:
@@ -2634,9 +2870,8 @@ proof -
     apply (subst map_add_find_left)
     apply (subst map_of_eq_None_iff)
      apply fastforce
-    unfolding p(2)[symmetric]
-    apply (subst 1)
-    by simp
+    using 1 p unfolding set_map
+    by auto
 qed
 
 
@@ -2669,9 +2904,8 @@ proof -
     apply (subst map_add_find_left)
     apply (subst map_of_eq_None_iff)
      apply fastforce
-    unfolding p(2)[symmetric]
-    apply (subst 1)
-    by simp
+    using 1 p unfolding set_map
+    by auto
 qed
 
 subsubsection \<open>The initial transition\<close>
@@ -3222,6 +3456,7 @@ let
   (L, v, c) = Lvc;
 
   acts_active = v ActsActive = Some 0;
+  effecting = v Effecting = Some 0;
 
   locs = (L = Planning # map Off actions); 
   true_props = (\<forall>p \<in> set init. v (PropVar p) = Some 1);
@@ -3233,6 +3468,7 @@ let
 in 
   Lv_conds L v 
 \<and> acts_active 
+\<and> effecting
 \<and> locs 
 \<and> true_props 
 \<and> false_props 
@@ -3244,6 +3480,7 @@ let
   (L, v, c) = Lvc;
 
   acts_active = v ActsActive = Some 0;
+  effecting = v Effecting = Some 0;
 
   locs = (L = Planning # map Off actions); 
 
@@ -3255,6 +3492,7 @@ let
 in 
   Lv_conds L v 
 \<and> acts_active
+\<and> effecting
 \<and> locs
 \<and> prop_state
 \<and> lock_state
@@ -3312,6 +3550,7 @@ let
   lock_state = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_before t p)));
 
   active = (v ActsActive = Some (int (planning_sem.active_before t)));
+  effecting = v Effecting = Some 0;
 
   active_locs = (\<forall>i < length actions. planning_sem.open_active_count t (actions ! i) = 0 \<longrightarrow> L ! Suc i = (Off (actions ! i)));
   inactive_locs = (\<forall>i < length actions. planning_sem.open_active_count t (actions ! i) = 1  \<longrightarrow> L ! Suc i = (Running (actions ! i)));
@@ -3320,7 +3559,7 @@ let
   end_time = (\<forall>i < length actions. act_clock_pre_happ_spec c (ActEnd (actions ! i)) t)
 in Lv_conds L v
   \<and> prop_state \<and> lock_state 
-  \<and> active 
+  \<and> active \<and> effecting
   \<and> active_locs \<and> inactive_locs
   \<and> start_time \<and> end_time"
 
@@ -3342,6 +3581,7 @@ let
   lock_state = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_after t p)));
 
   active = (v ActsActive = Some (int (planning_sem.active_after t)));
+  effecting = v Effecting = Some 0;
 
   active_locs = (\<forall>i < length actions. planning_sem.closed_active_count t (actions ! i) = 0 \<longrightarrow> L ! Suc i = (Off (actions ! i)));
   inactive_locs = (\<forall>i < length actions. planning_sem.closed_active_count t (actions ! i) = 1  \<longrightarrow> L ! Suc i = (Running (actions ! i)));
@@ -3350,7 +3590,7 @@ let
   end_time = (\<forall>i < length actions. act_clock_post_happ_spec c (ActEnd (actions ! i)) t)
 in Lv_conds L v
   \<and> prop_state \<and> lock_state 
-  \<and> active 
+  \<and> active \<and> effecting
   \<and> active_locs \<and> inactive_locs
   \<and> start_time \<and> end_time"
 
@@ -3406,6 +3646,7 @@ let
   (L, v, c) = Lvc;
 
   locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_before t p)));
+  effecting = v Effecting = Some 0;
 
   ending_loc = (\<forall>i < length actions. is_ending_index t i \<longrightarrow> L ! Suc i = (Running (actions ! i)));
 
@@ -3413,6 +3654,7 @@ let
 
 in end_start_invs n Lvc
   \<and> locked 
+  \<and> effecting
   \<and> ending_loc
   \<and> ending_end_time"
 
@@ -3422,6 +3664,7 @@ let
   (L, v, c) = Lvc;
 
   locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during t p)));
+  effecting = v Effecting = Some (card (planning_sem.ending_actions_at t));
 
   ending_loc = (\<forall>i < length actions. is_ending_index t i \<longrightarrow> L ! Suc i = (EndInstant (actions ! i)));
 
@@ -3429,6 +3672,7 @@ let
 
 in end_start_invs n Lvc
   \<and> locked 
+  \<and> effecting
   \<and> ending_loc
   \<and> ending_end_time"
 
@@ -3438,6 +3682,7 @@ let
   (L, v, c) = Lvc;
 
   locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (partially_updated_locked_before t p i));
+  effecting = v Effecting = Some (card (ending_actions_before n i));
 
   updated_locs = (\<forall>j. j < i \<and> is_ending_index t j \<longrightarrow> L ! Suc j = (EndInstant (actions ! j)));
   not_updated_locs = (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index t j \<longrightarrow> L ! Suc j = (Running (actions ! j)));
@@ -3447,6 +3692,7 @@ let
 
 in end_start_invs n Lvc
   \<and> locked 
+  \<and> effecting
   \<and> updated_locs
   \<and> not_updated_locs
   \<and> updated_clocks
@@ -3488,6 +3734,7 @@ let
   prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_before_happ n p));
 
   active = (v ActsActive = Some (int (planning_sem.active_before t)));
+  effecting = v Effecting = Some (card (planning_sem.ending_actions_at t));
 
   instant_start_time = (\<forall>i < length actions. is_instant_index t i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) t);
   instant_end_time =  (\<forall>i < length actions. is_instant_index t i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) t);
@@ -3496,6 +3743,7 @@ let
 in instant_action_invs n Lvc
   \<and> prop_state
   \<and> active 
+  \<and> effecting
   \<and> instant_start_time \<and> instant_end_time
   \<and> instant_loc"
 
@@ -3507,6 +3755,7 @@ let
   prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ n p));
 
   active = (v ActsActive = Some (int (planning_sem.active_before t)));
+  effecting = v Effecting = Some (card (planning_sem.ending_actions_at t));
 
   instant_start_time = (\<forall>i < length actions. is_instant_index t i \<longrightarrow> c (ActStart (actions ! i)) = 0);
   instant_end_time =  (\<forall>i < length actions. is_instant_index t i \<longrightarrow> c (ActEnd (actions ! i)) = 0);
@@ -3515,6 +3764,7 @@ let
 in instant_action_invs n Lvc
   \<and> prop_state
   \<and> active 
+  \<and> effecting
   \<and> instant_start_time \<and> instant_end_time
   \<and> instant_loc"
                           
@@ -3526,6 +3776,7 @@ let
   prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_part_updated_prop_state n j p));
 
   active = (v ActsActive = Some (int (planning_sem.active_before t)));
+  effecting = v Effecting = Some (card (planning_sem.ending_actions_at t));
 
   updated_start_time = (\<forall>i. i < j \<and> is_instant_index t i \<longrightarrow> c (ActStart (actions ! i)) = 0);
   updated_end_time = (\<forall>i. i < j \<and> is_instant_index t i \<longrightarrow> c (ActEnd (actions ! i)) = 0);
@@ -3537,6 +3788,7 @@ let
 in instant_action_invs n Lvc
   \<and> prop_state 
   \<and> active 
+  \<and> effecting
   \<and> updated_start_time \<and> updated_end_time
   \<and> not_updated_start_time \<and> not_updated_end_time
   \<and> instant_loc"
@@ -3555,6 +3807,7 @@ let
   prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_intermediate_prop_state n j p));
 
   active = (v ActsActive = Some (int (planning_sem.active_before t + 1)));
+  effecting = v Effecting = Some (card (planning_sem.ending_actions_at t) + 1);
 
   updated_start_time = (\<forall>i. i \<le> j \<and> is_instant_index t i \<longrightarrow> c (ActStart (actions ! i)) = 0);
   updated_end_time = (\<forall>i. i < j \<and> is_instant_index t i \<longrightarrow> c (ActEnd (actions ! i)) = 0);
@@ -3566,7 +3819,7 @@ let
   other_instant_loc = (\<forall>i < length actions. i \<noteq> j \<and> is_instant_index t i \<longrightarrow> L ! Suc i = (Off (actions ! i)))
 in instant_action_invs n Lvc
   \<and> prop_state 
-  \<and> active 
+  \<and> active \<and> effecting
   \<and> updated_start_time \<and> updated_end_time
   \<and> not_updated_start_time \<and> not_updated_end_time
   \<and> loc
@@ -3580,6 +3833,7 @@ let
   prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_intermediate_prop_state n j p));
 
   active = (v ActsActive = Some (int (planning_sem.active_before t + 1)));
+  effecting = v Effecting = Some (card (planning_sem.ending_actions_at t) + 1);
 
   updated_start_time = (\<forall>i. i \<le> j \<and> is_instant_index t i \<longrightarrow> c (ActStart (actions ! i)) = 0);
   updated_end_time = (\<forall>i. i \<le> j \<and> is_instant_index t i \<longrightarrow> c (ActEnd (actions ! i)) = 0);
@@ -3591,7 +3845,7 @@ let
   other_instant_loc = (\<forall>i < length actions. i \<noteq> j \<and> is_instant_index t i \<longrightarrow> L ! Suc i = (Off (actions ! i)))
 in instant_action_invs n Lvc
   \<and> prop_state 
-  \<and> active 
+  \<and> active \<and> effecting
   \<and> updated_start_time \<and> updated_end_time
   \<and> not_updated_start_time \<and> not_updated_end_time
   \<and> loc
@@ -3628,12 +3882,14 @@ let
   prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ n p));
 
   active = (v ActsActive = Some (int (planning_sem.active_before t)));
+  effecting = v Effecting = Some (card (planning_sem.ending_actions_at t));
 
   starting_start_time = (\<forall>i < length actions. is_starting_index t i  \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) t);
 
   starting_loc = (\<forall>i < length actions. is_starting_index t i \<longrightarrow> L ! Suc i = (Off (actions ! i)))
 in start_start_invs n Lvc
   \<and> prop_state \<and> active 
+  \<and> effecting
   \<and> starting_start_time
   \<and> starting_loc"
 
@@ -3645,6 +3901,7 @@ let
   prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (starting_part_updated_prop_state n j p));
 
   active = (v ActsActive = Some (int (updated_active_before n j)));
+  effecting = v Effecting = Some (card (planning_sem.ending_actions_at t) + card (starting_actions_before n j));
 
   updated_start_time = (\<forall>i. i < j \<and> is_starting_index t i \<longrightarrow> c (ActStart (actions ! i)) = 0);
   not_updated_start_time = (\<forall>i. j \<le> i \<longrightarrow> i  < length actions \<longrightarrow> is_starting_index t i  \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) t);
@@ -3653,6 +3910,7 @@ let
   updated_start_loc = (\<forall>i. j \<le> i \<longrightarrow> i < length actions \<longrightarrow> is_starting_index t i  \<longrightarrow> L ! Suc i = (Off (actions ! i)))
 in start_start_invs n Lvc
   \<and> prop_state \<and> active 
+  \<and> effecting
   \<and> not_updated_start_time \<and> updated_start_time
   \<and> not_updated_start_loc \<and> updated_start_loc"
 
@@ -3668,12 +3926,14 @@ let
   prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_instant_start_happ n p));
 
   active = (v ActsActive = Some (int (planning_sem.active_during t)));
+  effecting = v Effecting = Some (card (planning_sem.ending_actions_at t) + card (planning_sem.starting_actions_at t));
 
   starting_start_time = (\<forall>i < length actions. is_starting_index t i  \<longrightarrow> c (ActStart (actions ! i)) = 0);
 
   starting_loc = (\<forall>i < length actions. is_starting_index t i \<longrightarrow> L ! Suc i = (StartInstant (actions ! i)))
 in start_start_invs n Lvc
   \<and> prop_state \<and> active 
+  \<and> effecting
   \<and> starting_start_time
   \<and> starting_loc"
 
@@ -3707,6 +3967,7 @@ let
   t = time_index \<pi> n;
   (L, v, c) = Lvc;
 
+  effecting = v Effecting = Some (card (planning_sem.ending_actions_at t) + card (planning_sem.starting_actions_at t));
   prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_instant_start_happ n p));
 
   active = (v ActsActive = Some (int (planning_sem.active_during t)));
@@ -3715,6 +3976,7 @@ let
 
 in end_end_invs n Lvc
   \<and> prop_state \<and> active
+  \<and> effecting
   \<and> ending_loc"
 
 definition "end_end_cond n j Lvc \<equiv>
@@ -3725,12 +3987,14 @@ let
   prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (ending_part_updated_prop_state n j p));
 
   active = (v ActsActive = Some (int (updated_active_during n j)));
+  effecting = v Effecting = Some (card (planning_sem.starting_actions_at t) + card (ending_actions_after n j));
 
   not_upd_loc = (\<forall>i. j \<le> i \<longrightarrow> i < length actions \<longrightarrow> is_ending_index t i \<longrightarrow> L ! Suc i = (EndInstant (actions ! i)));
   upd_loc = (\<forall>i. i < j \<longrightarrow> is_ending_index t i \<longrightarrow> L ! Suc i = (Off (actions ! i)))
 
 in end_end_invs n Lvc
   \<and> prop_state \<and> active
+  \<and> effecting
   \<and> not_upd_loc \<and> upd_loc"
 
 definition "end_end_pre \<equiv> end_end_cond"
@@ -3745,10 +4009,12 @@ let
   prop_state = (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_happ n p));
 
   active = (v ActsActive = Some (int (planning_sem.active_during_minus_ended t)));
+  effecting = v Effecting = Some (card (planning_sem.starting_actions_at t));
 
   ending_loc = (\<forall>i < length actions. is_ending_index t i \<longrightarrow> L ! Suc i = (Off (actions ! i)))
 in end_end_invs n Lvc
   \<and> prop_state \<and> active
+  \<and> effecting
   \<and> ending_loc"
 
 definition "start_end_invs n Lvc \<equiv>
@@ -3784,10 +4050,12 @@ let
   (L, v, c) = Lvc;
 
   locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during t p)));
+  effecting = v Effecting = Some (card (planning_sem.starting_actions_at t));
 
   starting_loc = (\<forall>i < length actions. is_starting_index t i \<longrightarrow> L ! Suc i = (StartInstant (actions ! i)))
 in start_end_invs n Lvc
   \<and> locked
+  \<and> effecting
   \<and> starting_loc"
 
 definition "start_end_cond n j Lvc \<equiv>
@@ -3796,11 +4064,13 @@ let
   (L, v, c) = Lvc;
 
   locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (updated_locked_during n j p)));
+  effecting = v Effecting = Some (card (starting_actions_after n j));
 
   not_upd_loc = (\<forall>i. j \<le> i \<longrightarrow> i < length actions \<longrightarrow> is_starting_index t i \<longrightarrow> L ! Suc i = (StartInstant (actions ! i)));
-  upd_loc = (\<forall>i. i < j \<longrightarrow> is_starting_index t i \<longrightarrow> L ! Suc i = (Running (actions ! i)))
+  upd_loc = (\<forall>i. i < j \<longrightarrow> is_starting_index t i \<longrightarrow> L ! Suc i = (PostStart (actions ! i)))
 in start_end_invs n Lvc
   \<and> locked
+  \<and> effecting
   \<and> not_upd_loc
   \<and> upd_loc"
 
@@ -3814,15 +4084,16 @@ let
   (L, v, c) = Lvc;
 
   locked = (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_after t p)));
+  effecting = v Effecting = Some 0;
 
-  starting_loc = (\<forall>i < length actions. is_starting_index t i \<longrightarrow> L ! Suc i = (Running (actions ! i)))
+  starting_loc = (\<forall>i < length actions. is_starting_index t i \<longrightarrow> L ! Suc i = (PostStart (actions ! i)))
 in start_end_invs n Lvc
   \<and> locked
+  \<and> effecting
   \<and> starting_loc"
 
 text \<open>rules\<close>
 
-(* To do: these rules are better when forall quantifiers are replaced with meta-logic binders *)
 lemma init_state_propsE: 
   assumes "init_state_props x"
       and "\<And>L v c. x = (L, v, c) \<Longrightarrow> bounded (map_of nta_vars) v \<Longrightarrow> L = InitialLocation # map Off actions \<Longrightarrow> \<forall>x\<in>actual_variables. v x = Some 0 \<Longrightarrow> \<forall>x. x \<notin> actual_variables \<longrightarrow> v x = None \<Longrightarrow> c = (\<lambda>_. 0) \<Longrightarrow> thesis"
@@ -3841,24 +4112,45 @@ lemma init_state_propsI:
 
 lemma init_planning_state_propsE:
   assumes "init_planning_state_props x"
-      and "\<And>L v c. x = (L, v, c) \<Longrightarrow> Lv_conds L v \<Longrightarrow> v ActsActive = Some 0 \<Longrightarrow> L = Planning # map Off actions \<Longrightarrow> (\<forall>p\<in>set init. v (PropVar p) = Some 1) \<Longrightarrow> (\<forall>x\<in>actual_variables - ({PlanningLock, ActsActive} \<union> PropVar ` set init). v x = Some 0) \<Longrightarrow> (\<forall>x. x \<notin> actual_variables \<longrightarrow> v x = None) \<Longrightarrow> c = (\<lambda>_. 0) \<Longrightarrow> thesis"
+      and "\<And>L v c. x = (L, v, c) \<Longrightarrow> Lv_conds L v \<Longrightarrow> v ActsActive = Some 0 \<Longrightarrow> v Effecting = Some 0 
+      \<Longrightarrow> L = Planning # map Off actions \<Longrightarrow> (\<forall>p\<in>set init. v (PropVar p) = Some 1) 
+      \<Longrightarrow> (\<forall>x\<in>actual_variables - ({PlanningLock, ActsActive} \<union> PropVar ` set init). v x = Some 0) 
+      \<Longrightarrow> (\<forall>x. x \<notin> actual_variables \<longrightarrow> v x = None) \<Longrightarrow> c = (\<lambda>_. 0) \<Longrightarrow> thesis"
     shows thesis 
   using assms unfolding init_planning_state_props_def Let_def prod.case by blast
 
 lemma init_planning_state_propsI:
-  assumes "x = (L, v, c)" "Lv_conds L v" "v ActsActive = Some 0" "L = Planning # map Off actions" "\<And>p. p\<in>set init \<Longrightarrow> v (PropVar p) = Some 1" "\<And>x. x \<in> actual_variables \<Longrightarrow> x \<notin> {PlanningLock, ActsActive} \<Longrightarrow> x \<notin> PropVar ` set init \<Longrightarrow> v x = Some 0" "\<And>x. x \<notin> actual_variables \<Longrightarrow> v x = None" "c = (\<lambda>_. 0)"
+  assumes "x = (L, v, c)" 
+    "Lv_conds L v" 
+    "v ActsActive = Some 0" 
+    "v Effecting = Some 0"  
+    "L = Planning # map Off actions"
+    "\<And>p. p\<in>set init \<Longrightarrow> v (PropVar p) = Some 1" 
+    "\<And>x. x \<in> actual_variables \<Longrightarrow> x \<notin> {PlanningLock, ActsActive} \<Longrightarrow> x \<notin> PropVar ` set init \<Longrightarrow> v x = Some 0" 
+    "\<And>x. x \<notin> actual_variables \<Longrightarrow> v x = None" "c = (\<lambda>_. 0)"
   shows "init_planning_state_props x"  
   using assms unfolding init_planning_state_props_def by auto
 
 
 lemma init_planning_state_props'E:
   assumes "init_planning_state_props' x"
-      and "\<And>L v c. x = (L, v, c) \<Longrightarrow> Lv_conds L v \<Longrightarrow> v ActsActive = Some 0 \<Longrightarrow> L = Planning # map Off actions \<Longrightarrow> (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state (set init) p)) \<Longrightarrow> (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some 0) \<Longrightarrow> (\<forall>i<length actions. c (ActStart (actions ! i)) = 0) \<Longrightarrow> (\<forall>i<length actions. c (ActEnd (actions ! i)) = 0) \<Longrightarrow> thesis"
+      and "\<And>L v c. x = (L, v, c) \<Longrightarrow> Lv_conds L v \<Longrightarrow> v ActsActive = Some 0 \<Longrightarrow> v Effecting = Some 0 
+      \<Longrightarrow> L = Planning # map Off actions \<Longrightarrow> (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state (set init) p)) 
+      \<Longrightarrow> (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some 0) \<Longrightarrow> (\<forall>i<length actions. c (ActStart (actions ! i)) = 0) 
+      \<Longrightarrow> (\<forall>i<length actions. c (ActEnd (actions ! i)) = 0) \<Longrightarrow> thesis"
     shows thesis 
   using assms unfolding init_planning_state_props'_def by auto
 
 lemma init_planning_state_props'I:
-  assumes "x = (L, v, c)" "Lv_conds L v" "v ActsActive = Some 0 " "L = Planning # map Off actions " "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state (set init) p))" "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some 0)" "(\<forall>i<length actions. c (ActStart (actions ! i)) = 0)" "(\<forall>i<length actions. c (ActEnd (actions ! i)) = 0)"
+  assumes "x = (L, v, c)" 
+    "Lv_conds L v" 
+    "v ActsActive = Some 0 " 
+    "v Effecting = Some 0" 
+    "L = Planning # map Off actions " 
+    "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state (set init) p))" 
+    "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some 0)" 
+    "(\<forall>i<length actions. c (ActStart (actions ! i)) = 0)" 
+    "(\<forall>i<length actions. c (ActEnd (actions ! i)) = 0)"
   shows "init_planning_state_props' x"  
   apply (subst assms(1)) 
   unfolding init_planning_state_props'_def Let_def prod.case using assms by blast
@@ -3908,7 +4200,9 @@ lemma goal_state_condsI:
   
 lemma Lv_condsE:
   assumes "Lv_conds L v"
-    and "length L = Suc (length actions) \<Longrightarrow> L ! 0 = Planning \<Longrightarrow> Simple_Network_Language.bounded (map_of nta_vars) v \<Longrightarrow> v PlanningLock = Some 1 \<Longrightarrow> thesis"
+    and "length L = Suc (length actions) \<Longrightarrow> L ! 0 = Planning 
+    \<Longrightarrow> Simple_Network_Language.bounded (map_of nta_vars) v 
+    \<Longrightarrow> v PlanningLock = Some 1 \<Longrightarrow> thesis"
   shows thesis
   using assms unfolding Lv_conds_def by blast
 
@@ -3920,12 +4214,18 @@ lemma Lv_condsD:
 
 lemma Lv_conds_dests:
   assumes "Lv_conds L v"
-  shows "length L = Suc (length actions)" "L ! 0 = Planning" "Simple_Network_Language.bounded (map_of nta_vars) v" "v PlanningLock = Some 1"
+  shows "length L = Suc (length actions)" 
+    "L ! 0 = Planning" 
+    "Simple_Network_Language.bounded (map_of nta_vars) v" 
+    "v PlanningLock = Some 1"
   using assms unfolding Lv_conds_def by auto
 
 
 lemma Lv_condsI:
-  assumes "length L = Suc (length actions)" "L ! 0 = Planning" "Simple_Network_Language.bounded (map_of nta_vars) v" "v PlanningLock = Some 1"
+  assumes "length L = Suc (length actions)" 
+    "L ! 0 = Planning" 
+    "Simple_Network_Language.bounded (map_of nta_vars) v" 
+    "v PlanningLock = Some 1"
   shows "Lv_conds L v"
   using Lv_conds_def assms by blast
 
@@ -3935,6 +4235,7 @@ lemma happening_pre_pre_delayI:
     "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_before_happ n p))"
     "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_before (time_index \<pi> n) p)))"
     "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+    "v Effecting = Some 0"
     "(\<forall>i<length actions. planning_sem.open_active_count (time_index \<pi> n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = Off (actions ! i))"
     "(\<forall>i<length actions. planning_sem.open_active_count (time_index \<pi> n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = Running (actions ! i))" 
     "(\<forall>i<length actions. act_clock_pre_happ_spec (c \<oplus> get_delay n) (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -3950,6 +4251,7 @@ lemma happening_pre_pre_delayE:
     \<Longrightarrow> (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_before_happ n p))
     \<Longrightarrow> (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_before (time_index \<pi> n) p)))
     \<Longrightarrow> v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))
+    \<Longrightarrow> v Effecting = Some 0
     \<Longrightarrow> (\<forall>i<length actions. planning_sem.open_active_count (time_index \<pi> n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = Off (actions ! i))
     \<Longrightarrow> (\<forall>i<length actions. planning_sem.open_active_count (time_index \<pi> n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = Running (actions ! i))
     \<Longrightarrow> (\<forall>i<length actions. act_clock_pre_happ_spec (c \<oplus> get_delay n) (ActStart (actions ! i)) (time_index \<pi> n))
@@ -3970,6 +4272,7 @@ lemma happening_pre_pre_delay_dests:
     "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_before_happ n p))"
     "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_before (time_index \<pi> n) p)))"
     "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+    "v Effecting = Some 0"
     "(\<forall>i<length actions. planning_sem.open_active_count (time_index \<pi> n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = Off (actions ! i))"
     "(\<forall>i<length actions. planning_sem.open_active_count (time_index \<pi> n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = Running (actions ! i))"
     "(\<forall>i<length actions. act_clock_pre_happ_spec (c \<oplus> get_delay n) (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -3983,6 +4286,7 @@ lemma happening_pre_post_delay_dests:
     "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_before_happ n p))"
     "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_before (time_index \<pi> n) p)))"
     "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+    "v Effecting = Some 0"
     "(\<forall>i<length actions. planning_sem.open_active_count (time_index \<pi> n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = Off (actions ! i))"
     "(\<forall>i<length actions. planning_sem.open_active_count (time_index \<pi> n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = Running (actions ! i))"
     "(\<forall>i<length actions. act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -3996,6 +4300,7 @@ lemma happening_pre_post_delayI:
     "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_before_happ n p))"
     "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_before (time_index \<pi> n) p)))"
     "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+    "v Effecting = Some 0"
     "(\<forall>i<length actions. planning_sem.open_active_count (time_index \<pi> n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = Off (actions ! i))"
     "(\<forall>i<length actions. planning_sem.open_active_count (time_index \<pi> n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = Running (actions ! i))"
     "(\<forall>i<length actions. act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -4009,6 +4314,7 @@ lemma happening_postI:
       "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_happ t p))"
       "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_after (time_index \<pi> t) p)))"
       "v ActsActive = Some (int (planning_sem.active_after (time_index \<pi> t)))"
+      "v Effecting = Some 0"
       "(\<forall>i<length actions. planning_sem.closed_active_count (time_index \<pi> t) (actions ! i) = 0 \<longrightarrow> L ! Suc i = Off (actions ! i))"
       "(\<forall>i<length actions. planning_sem.closed_active_count (time_index \<pi> t) (actions ! i) = 1 \<longrightarrow> L ! Suc i = Running (actions ! i))" 
       "(\<forall>i<length actions. act_clock_post_happ_spec c (ActStart (actions ! i)) (time_index \<pi> t))"
@@ -4025,6 +4331,7 @@ lemma happening_postE:
       \<Longrightarrow> (\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_happ n p))
       \<Longrightarrow> (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_after (time_index \<pi> n) p)))
       \<Longrightarrow> v ActsActive = Some (int (planning_sem.active_after (time_index \<pi> n)))
+      \<Longrightarrow> v Effecting = Some 0
       \<Longrightarrow> (\<forall>i<length actions. planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = Off (actions ! i))
       \<Longrightarrow> (\<forall>i<length actions. planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = Running (actions ! i))
       \<Longrightarrow> (\<forall>i<length actions. act_clock_post_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))
@@ -4047,6 +4354,7 @@ lemma happening_post_dests:
       "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_happ n p))"
       "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_after (time_index \<pi> n) p)))"
       "v ActsActive = Some (int (planning_sem.active_after (time_index \<pi> n)))"
+      "v Effecting = Some 0"
       "(\<forall>i<length actions. planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = Off (actions ! i))"
       "(\<forall>i<length actions. planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = Running (actions ! i))"
       "(\<forall>i<length actions. act_clock_post_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -4147,6 +4455,7 @@ lemma end_start_preE:
   assumes "end_start_pre n i x"
     and "\<And>L v c. x = (L, v, c) \<Longrightarrow>
     end_start_invs n (L, v, c) \<Longrightarrow>
+    v Effecting = Some (card (ending_actions_before n i)) \<Longrightarrow>
     (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (partially_updated_locked_before (time_index \<pi> n) p i))) \<Longrightarrow>
     (\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j)) \<Longrightarrow>
     (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j)) \<Longrightarrow>
@@ -4159,6 +4468,7 @@ lemma end_start_preE:
 lemma end_start_preD:
   assumes "end_start_pre n i (L, v, c)"
   shows "end_start_invs n (L, v, c) \<and>
+    v Effecting = Some (card (ending_actions_before n i)) \<and>
     (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (partially_updated_locked_before (time_index \<pi> n) p i))) \<and>
     (\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j)) \<and>
     (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j)) \<and>
@@ -4169,6 +4479,7 @@ lemma end_start_preD:
 lemma end_start_pre_dests:
   assumes "end_start_pre n i (L, v, c)"
   shows "end_start_invs n (L, v, c)"
+    "v Effecting = Some (card (ending_actions_before n i))"
     "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (partially_updated_locked_before (time_index \<pi> n) p i)))"
     "(\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j))"
     "(\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j))"
@@ -4179,6 +4490,7 @@ lemma end_start_pre_dests:
 lemma end_start_preI:
   assumes "x = (L, v, c)"
     "end_start_invs n x"
+    "v Effecting = Some (card (ending_actions_before n i))"
     "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (partially_updated_locked_before (time_index \<pi> n) p i)))"
     "(\<forall>j. j < i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j))"
     "(\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j))"
@@ -4191,6 +4503,7 @@ lemma end_start_postE:
   assumes "end_start_post n i x"
     and "x = (L, v, c)"
     and "end_start_invs n x \<Longrightarrow>    
+    v Effecting = Some (card (ending_actions_before n (Suc i))) \<Longrightarrow>
     (\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (partially_updated_locked_before (time_index \<pi> n) p (Suc i)))) \<Longrightarrow>
     (\<forall>j. j \<le> i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j)) \<Longrightarrow>
     (\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j)) \<Longrightarrow>
@@ -4204,6 +4517,7 @@ lemma end_start_post_dests:
   assumes "end_start_post n i x"
     and "x = (L, v, c)"
   shows "end_start_invs n x"
+    "v Effecting = Some (card (ending_actions_before n (Suc i)))"
     "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (partially_updated_locked_before (time_index \<pi> n) p (Suc i))))"
     "(\<forall>j. j \<le> i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j))"
     "(\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j))"
@@ -4214,6 +4528,7 @@ lemma end_start_post_dests:
 lemma end_start_postI:
   assumes "x = (L, v, c)"
     and "end_start_invs n x"
+    "v Effecting = Some (card (ending_actions_before n (Suc i)))"
     "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (partially_updated_locked_before (time_index \<pi> n) p (Suc i))))"
     "(\<forall>j. j \<le> i \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = EndInstant (actions ! j))"
     "(\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (time_index \<pi> n) j \<longrightarrow> L ! Suc j = Running (actions ! j))"
@@ -4226,6 +4541,7 @@ lemma happening_pre_end_starts_dests:
   assumes "happening_pre_end_starts n x"
       and "x = (L, v, c)"
   shows "end_start_invs n (L, v, c)"
+        "v Effecting = Some 0"
         "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_before (time_index \<pi> n) p)))"
         "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Running (actions ! i))" 
         "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
@@ -4234,6 +4550,7 @@ lemma happening_pre_end_starts_dests:
 lemma happening_pre_end_startsI:
   assumes "x = (L, v, c)"
     "end_start_invs n (L, v, c)"
+    "v Effecting = Some 0"
     "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_before (time_index \<pi> n) p)))"
     "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Running (actions ! i))" 
     "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
@@ -4244,6 +4561,7 @@ lemma happening_post_end_starts_dests:
   assumes "happening_post_end_starts n x"
     and "x = (L, v, c)"
   shows "end_start_invs n (L, v, c)"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)))"
     "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during (time_index \<pi> n) p)))"
     "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = EndInstant (actions ! i))"
     "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
@@ -4253,6 +4571,7 @@ lemma happening_post_end_starts_dests:
 lemma happening_post_end_startsI:
   assumes  "x = (L, v, c)"
   and "end_start_invs n (L, v, c)"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)))"
       "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during (time_index \<pi> n) p)))"
       "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = EndInstant (actions ! i))"
       "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
@@ -4264,6 +4583,7 @@ lemma happening_pre_instants_dests:
   shows "instant_action_invs n (L, v, c)"
   "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_before_happ n p))"
   "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)))"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))"
@@ -4275,6 +4595,7 @@ lemma happening_pre_instantsI:
     "instant_action_invs n (L, v, c)"
     "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_before_happ n p))"
     "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)))"
     "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
     "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
     "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))"
@@ -4306,6 +4627,7 @@ lemma instant_pre_dests:
   shows "instant_action_invs n (L, v, c)"
   "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_part_updated_prop_state n j p))"
   "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+  "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)))"
   "(\<forall>i. i < j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
   "(\<forall>i. i < j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
   "(\<forall>i. j \<le> i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -4318,6 +4640,7 @@ lemma instant_preI:
     "instant_action_invs n (L, v, c)"
     "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_part_updated_prop_state n j p))"
     "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)))"
     "(\<forall>i. i < j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
     "(\<forall>i. i < j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
     "(\<forall>i. j \<le> i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -4331,6 +4654,7 @@ lemma instant_post_dests:
   shows "instant_action_invs n (L, v, c)"
   "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_part_updated_prop_state n (Suc j) p))"
   "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+  "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)))"
   "(\<forall>i. i < Suc j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
   "(\<forall>i. i < Suc j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
   "(\<forall>i. Suc j \<le> i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -4342,6 +4666,7 @@ lemma instant_postI:
   assumes "instant_action_invs n (L, v, c)"
     "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_part_updated_prop_state n (Suc j) p))"
     "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)))"
     "(\<forall>i. i \<le> j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
     "(\<forall>i. i \<le> j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
     "(\<forall>i. j < i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -4355,6 +4680,7 @@ lemma instant_starting_cond_dests:
   shows "instant_action_invs n (L, v, c)"
   "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_intermediate_prop_state n j p))"
   "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n) + 1))"
+  "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)) + 1)"
   "(\<forall>i. i \<le> j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
   "(\<forall>i. i < j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
   "(\<forall>i. j < i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -4367,6 +4693,7 @@ lemma instant_starting_condI:
   assumes "instant_action_invs n (L, v, c)"
     "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_intermediate_prop_state n j p))"
     "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n) + 1))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)) + 1)"
     "(\<forall>i. i \<le> j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
     "(\<forall>i. i < j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
     "(\<forall>i. j < i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -4381,6 +4708,7 @@ lemma instant_ending_cond_dests:
   shows "instant_action_invs n (L, v, c)"
     "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_intermediate_prop_state n j p))"
     "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n) + 1))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)) + 1)"
     "(\<forall>i. i \<le> j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
     "(\<forall>i. i \<le> j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
     "(\<forall>i. j < i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -4394,6 +4722,7 @@ lemma instant_ending_condI:
   assumes "instant_action_invs n (L, v, c)"
     "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (instant_intermediate_prop_state n j p))"
     "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n) + 1))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)) + 1)"
     "(\<forall>i. i \<le> j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
     "(\<forall>i. i \<le> j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
     "(\<forall>i. j < i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
@@ -4466,6 +4795,7 @@ lemma happening_post_instants_dests:
   shows "instant_action_invs n (L, v, c)"
   "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ n p))"
   "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+  "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)))"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))"  
@@ -4475,6 +4805,7 @@ lemma happening_post_instantsI:
   assumes "instant_action_invs n (L, v, c)"
   "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ n p))"
   "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> n)))"
+  "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> n)))"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))" 
@@ -4486,6 +4817,7 @@ lemma happening_pre_start_starts_dests:
   shows "start_start_invs i (L, v, c)"
   "PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ i p)"
   "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> i)))"
+  "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)))"
   "j<length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) j \<Longrightarrow>  act_clock_pre_happ_spec c (ActStart (actions ! j)) (time_index \<pi> i)"
   "j<length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) j \<Longrightarrow>  L ! Suc j = Off (actions ! j)"
   using assms unfolding happening_pre_start_starts_def by auto
@@ -4494,6 +4826,7 @@ lemma happening_pre_start_startsI:
   assumes "start_start_invs i (L, v, c)"
       "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (prop_state_after_instant_happ i p)"
       "v ActsActive = Some (int (planning_sem.active_before (time_index \<pi> i)))"
+      "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)))"
       "\<And>ia. ia < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) ia \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! ia)) (time_index \<pi> i)"
       "\<And>ia. ia < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) ia \<Longrightarrow> L ! Suc ia = Off (actions ! ia)"
   shows "happening_pre_start_starts i (L, v, c)"
@@ -4537,6 +4870,7 @@ lemma start_start_preI:
   assumes "start_start_invs i (L, v, c)"
     "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (starting_part_updated_prop_state i n p)"
     "v ActsActive = Some (int (updated_active_before i n))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)) + card (starting_actions_before i n))"
     "\<And>k. k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
     "\<And>k. n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! k)) (time_index \<pi> i)"
     "\<And>k. k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
@@ -4550,6 +4884,7 @@ lemma start_start_pre_dests:
   shows "start_start_invs i (L, v, c)"
     "PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (starting_part_updated_prop_state i n p)"
     "v ActsActive = Some (int (updated_active_before i n))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)) + card (starting_actions_before i n))"
     "k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
     "n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! k)) (time_index \<pi> i)"
     "k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
@@ -4560,6 +4895,7 @@ lemma start_start_postI:
   assumes "start_start_invs i (L, v, c)"
     "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (starting_part_updated_prop_state i (Suc n) p)"
     "v ActsActive = Some (int (updated_active_before i (Suc n)))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)) + card (starting_actions_before i (Suc n)))"
     "\<And>k. k < Suc n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
     "\<And>k. Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! k)) (time_index \<pi> i)"
     "\<And>k. k < Suc n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
@@ -4573,6 +4909,7 @@ lemma start_start_post_dests:
   shows "start_start_invs i (L, v, c)"
     "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (starting_part_updated_prop_state i (Suc n) p)"
     "v ActsActive = Some (int (updated_active_before i (Suc n)))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)) + card (starting_actions_before i (Suc n)))"
     "\<And>k. k < Suc n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
     "\<And>k. Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! k)) (time_index \<pi> i)"
     "\<And>k. k < Suc n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
@@ -4583,6 +4920,7 @@ lemma happening_post_start_startsI:
   assumes "start_start_invs i (L, v, c)"
     "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (prop_state_after_instant_start_happ i p)"
     "v ActsActive = Some (int (planning_sem.active_during (time_index \<pi> i)))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)) + card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "\<And>k. k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
     "\<And>k. k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
   shows "happening_post_start_starts i (L, v, c)"
@@ -4594,6 +4932,7 @@ lemma happening_post_start_starts_dests:
   shows "start_start_invs i (L, v, c)"
     "PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (prop_state_after_instant_start_happ i p)"
     "v ActsActive = Some (int (planning_sem.active_during (time_index \<pi> i)))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)) + card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
     "k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
   using assms unfolding happening_post_start_starts_def by auto
@@ -4602,6 +4941,7 @@ lemma happening_pre_end_endsI:
   assumes "end_end_invs i (L, v, c)"
     "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (prop_state_after_instant_start_happ i p)"
     "v ActsActive = Some (int (planning_sem.active_during (time_index \<pi> i)))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)) + card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "\<And>k. k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
   shows "happening_pre_end_ends i (L, v, c)"
   using assms unfolding happening_pre_end_ends_def Let_def prod.case
@@ -4612,6 +4952,7 @@ lemma happening_pre_end_ends_dests:
   shows "end_end_invs i (L, v, c)"
     "PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (prop_state_after_instant_start_happ i p)"
     "v ActsActive = Some (int (planning_sem.active_during (time_index \<pi> i)))"
+    "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)) + card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
   using assms unfolding happening_pre_end_ends_def Let_def prod.case
   by auto
@@ -4660,6 +5001,7 @@ lemma end_end_preI:
   assumes "end_end_invs i (L, v, c)"
     "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (ending_part_updated_prop_state i n p)"
      "v ActsActive = Some (int (updated_active_during i n))"
+    "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)) + card (ending_actions_after i n))"
     "\<And>k. n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
     "\<And>k. k < n \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
   shows "end_end_pre i n (L, v, c)"
@@ -4669,7 +5011,8 @@ lemma end_end_pre_dests:
   assumes "end_end_pre i n (L, v, c)"
   shows "end_end_invs i (L, v, c)"
     "PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (ending_part_updated_prop_state i n p)"
-     "v ActsActive = Some (int (updated_active_during i n))"
+    "v ActsActive = Some (int (updated_active_during i n))"
+    "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)) + card (ending_actions_after i n))"
     "n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
     "k < n \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
   using assms unfolding end_end_pre_def end_end_cond_def by auto
@@ -4677,7 +5020,8 @@ lemma end_end_pre_dests:
 lemma end_end_postI:
   assumes "end_end_invs i (L, v, c)"
     "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (ending_part_updated_prop_state i (Suc n) p)"
-     "v ActsActive = Some (int (updated_active_during i (Suc n)))"
+    "v ActsActive = Some (int (updated_active_during i (Suc n)))"
+    "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)) + card (ending_actions_after i (Suc n)))"
     "\<And>k. Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
     "\<And>k. k < Suc n \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
   shows "end_end_post i n (L, v, c)"
@@ -4688,6 +5032,7 @@ lemma end_end_post_dests:
   shows "end_end_invs i (L, v, c)"
     "PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (ending_part_updated_prop_state i (Suc n) p)"
     "v ActsActive = Some (int (updated_active_during i (Suc n)))"
+    "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)) + card (ending_actions_after i (Suc n)))"
     "Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
     "k < Suc n \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
   using assms unfolding end_end_post_def end_end_cond_def by auto
@@ -4696,6 +5041,7 @@ lemma happening_post_end_endsI:
   assumes "end_end_invs i (L, v, c)"
     "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (prop_state_after_happ i p)"
     "v ActsActive = Some (int (planning_sem.active_during_minus_ended (time_index \<pi> i)))"
+    "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "\<And>k. k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
   shows "happening_post_end_ends i (L, v, c)"
   using assms unfolding happening_post_end_ends_def  by auto
@@ -4705,11 +5051,13 @@ lemma happening_post_end_ends_dests:
   shows "end_end_invs i (L, v, c)"
     "PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (prop_state_after_happ i p)"
     "v ActsActive = Some (int (planning_sem.active_during_minus_ended (time_index \<pi> i)))"
+    "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
   using assms unfolding happening_post_end_ends_def by auto
 
 lemma happening_pre_start_endsI:
   assumes "start_end_invs i (L, v, c)"
+    "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "\<And>p. PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during (time_index \<pi> i) p))"
     "\<And>k. k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
   shows "happening_pre_start_ends i (L, v, c)"
@@ -4718,6 +5066,7 @@ lemma happening_pre_start_endsI:
 lemma happening_pre_start_ends_dests:
   assumes "happening_pre_start_ends i (L, v, c)"
   shows "start_end_invs i (L, v, c)"
+    "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during (time_index \<pi> i) p))"
     "k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
   using assms unfolding happening_pre_start_ends_def by auto
@@ -4767,35 +5116,55 @@ lemma start_end_invs_maintained:
 
 lemma start_end_preI:
   assumes "start_end_invs i (L, v, c)"
+    "v Effecting = Some (card (starting_actions_after i n))"
     "\<And>p. PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (updated_locked_during i n p))"
     "\<And>k. n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
-    "\<And>k. k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Running (actions ! k)"
+    "\<And>k. k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = PostStart (actions ! k)"
   shows "start_end_pre i n (L, v, c)"
   using assms unfolding start_end_pre_def start_end_cond_def by auto
 
 lemma start_end_pre_dests:
   assumes "start_end_pre i n (L, v, c)"
   shows "start_end_invs i (L, v, c)"
+    "v Effecting = Some (card (starting_actions_after i n))"
     "PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (updated_locked_during i n p))"
     "n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
-    "k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Running (actions ! k)"
+    "k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = PostStart (actions ! k)"
   using assms unfolding start_end_pre_def start_end_cond_def by auto
 
 lemma start_end_postI:
   assumes "start_end_invs i (L, v, c)"
+    "v Effecting = Some (card (starting_actions_after i (Suc n)))"
     "\<And>p. PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (updated_locked_during i (Suc n) p))"
     "\<And>k. (Suc n) \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
-    "\<And>k. k < (Suc n) \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Running (actions ! k)"
+    "\<And>k. k < (Suc n) \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = PostStart (actions ! k)"
   shows "start_end_post i n (L, v, c)"
   using assms unfolding start_end_post_def start_end_cond_def by auto
 
 lemma start_end_post_dests:
   assumes "start_end_post i n (L, v, c)"
   shows "start_end_invs i (L, v, c)"
+    "v Effecting = Some (card (starting_actions_after i (Suc n)))"
     "PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (updated_locked_during i (Suc n) p))"
     "(Suc n) \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
-    "k < (Suc n) \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Running (actions ! k)"
+    "k < (Suc n) \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = PostStart (actions ! k)"
   using assms unfolding start_end_post_def start_end_cond_def by auto
+
+lemma happening_post_start_endsI:
+  assumes "start_end_invs i (L, v, c)"
+      "\<And>p. PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_after (time_index \<pi> i) p))"
+      "v Effecting = Some 0"
+      "\<And>k. k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = PostStart (actions ! k)"
+  shows "happening_post_start_ends i (L, v, c)"
+  using assms unfolding happening_post_start_ends_def by auto
+
+lemma happening_post_start_ends_dests:
+  assumes "happening_post_start_ends i (L, v, c)"
+  shows "start_end_invs i (L, v, c)"
+      "PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_after (time_index \<pi> i) p))"
+      "v Effecting = Some 0"
+      "k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = PostStart (actions ! k)"
+  using assms unfolding happening_post_start_ends_def by auto
 
 text \<open>The rules used to show that the composition of sequences results in a run\<close>
 interpretation steps_seq: sequence_rules abs_renum.urge_bisim.A.steps
@@ -4842,7 +5211,8 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
         apply (intro conjI allI impI)
               apply assumption
              apply assumption
-            apply assumption
+             apply assumption
+        apply simp
         subgoal for p
           apply (subst (asm) dom_map_of_conv_image_fst)
           apply (subst (asm) set_map)
@@ -4902,12 +5272,14 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
           apply (subst map_upds_apply_nontin)
           by auto
         subgoal by (subst map_upds_apply_nontin) auto
-            apply simp
+             apply simp
+        subgoal apply (subst map_upds_apply_nontin) apply force 
+          unfolding actual_variables_exact by simp
         subgoal by (fastforce intro!: map_upds_with_map)
-          apply simp
+        subgoal by (fastforce intro!: map_upds_with_map)
         subgoal for x
           apply (subst map_upds_apply_nontin)
-          subgoal apply (rule)
+          subgoal apply rule
             apply (frule set_mp[THEN in_actual_variablesI, rotated, of x])
             using init_props by auto
           apply (subst fun_upd_other)
@@ -4916,7 +5288,13 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
             defer
             apply simp
           unfolding actual_variables_exact by blast+
-        by simp
+        subgoal for x 
+          apply (subst map_upds_apply_nontin)
+          subgoal apply rule
+            apply (frule set_mp[THEN in_actual_variablesI, rotated, of x])
+            using init_props by auto
+          using actual_variables_exact by auto
+        by auto
       done
     moreover
     have "abs_renum.urge_bisim.A.steps [x, main_auto_init_edge_effect x]"
@@ -5110,7 +5488,7 @@ proof -
       using p_in_vars by simp
   
 
-    define v' where "v' = (v(map PropLock (over_all (actions ! (end_indices ! j))) [\<mapsto>] map (\<lambda>x. (the \<circ> v) x - 1) (map PropLock (over_all (actions ! (end_indices ! j))))))"
+    define v' where "v' = (v(Effecting \<mapsto> plus_int (the (v Effecting)) 1, map PropLock (over_all (actions ! (end_indices ! j))) [\<mapsto>] map (\<lambda>x. (the \<circ> v) x - 1) (map PropLock (over_all (actions ! (end_indices ! j))))))"
     
     have variables_locked_after:"v' (PropLock p) = Some (int (partially_updated_locked_before (time_index \<pi> i) p (Suc (end_indices ! j))))" 
       if p_in_vars: "PropLock p \<in> dom (map_of nta_vars)" 
@@ -5169,13 +5547,23 @@ proof -
       ultimately
       show ?thesis using v_PropLock p_in_vars by presburger
     qed
+
+    have vE: "(v Effecting) = Some (card (ending_actions_before i (end_indices ! j)))" using esp s end_start_pre_dests by auto
     
     have bounded_after: "Simple_Network_Language.bounded (map_of nta_vars) v'"
     proof (rule updated_bounded[OF _ _ v'_def], goal_cases)
       case 1
-      then show ?case 
-        apply (insert esp) unfolding s 
-        by (auto dest: end_start_pre_dests end_start_invs_dests happening_invs_dests Lv_conds_dests)
+      have x: "Simple_Network_Language.bounded (map_of nta_vars) v"
+        using esp s 
+        by (auto intro: esp Lv_conds_dests happening_invs_dests end_start_invs_dests end_start_pre_dests)
+      have vE: "(v Effecting) = Some (card (ending_actions_before i (end_indices ! j)))" using esp s end_start_pre_dests by auto
+      show ?case 
+        apply (rule single_upd_bounded)
+           apply (rule x)
+          apply (rule map_of_nta_vars_Effecting)
+        unfolding vE
+        apply simp
+        using ending_actions_before_less_if_ending i eij_ending eij_in_act by fastforce
     next
       case 2
       then show ?case by simp
@@ -5193,9 +5581,35 @@ proof -
           using variables_locked_after map_of_nta_vars_action_inv[OF eij_in_act(2)] partially_updated_locked_before_ran by fastforce+
         done
       done
-    qed 
+  qed 
 
-    have plus_minus_rule: "(\<lambda>x. plus_int x (-1)) = (\<lambda>x. x - 1)" by auto
+  have is_upds: "is_upds v ((Effecting, binop plus_int (var Effecting) (exp.const 1)) # map (inc_prop_lock_ab (- 1)) (over_all (actions ! (end_indices ! j))))
+     (v(Effecting \<mapsto> plus_int (the (v Effecting)) 1, map PropLock (over_all (actions ! (end_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) (- 1)) (map PropLock (over_all (actions ! (end_indices ! j))))))"
+  proof (rule is_upds.intros)
+    show "is_upd v (Effecting, binop plus_int (var Effecting) (exp.const 1)) (v(Effecting \<mapsto> the (v Effecting) + 1))"
+      unfolding is_upd_def 
+      using vE 
+      by (simp add: is_val_simps)
+    show "is_upds (v(Effecting \<mapsto> plus_int (the (v Effecting)) 1)) (map (inc_prop_lock_ab (- 1)) (over_all (actions ! (end_indices ! j))))
+     (v(Effecting \<mapsto> plus_int (the (v Effecting)) 1, map PropLock (over_all (actions ! (end_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) (- 1)) (map PropLock (over_all (actions ! (end_indices ! j))))))"
+      apply (rule is_upds_inc_vars)
+        apply (rule subsetI)
+        apply (frule map_of_nta_vars_action_inv[rotated])
+         apply (rule eij_in_act)
+      using esp s end_start_pre_dests(3) apply fastforce
+        apply (rule distinct_inj_map)
+      using distinct_over_all eij_in_act apply blast
+      using inj_def apply blast
+       apply (subst inc_prop_lock_ab_def)
+       apply (subst map_map[symmetric])
+      apply (rule HOL.refl)
+      unfolding map_map comp_def
+      apply (subst fun_upd_other)
+      by auto
+  qed
+
+  have plus_minus_rule: "(\<lambda>x. plus_int x (-1)) = (\<lambda>x. x - 1)" by auto
+
     show ?case
       apply (rule conjI)
       subgoal
@@ -5270,6 +5684,11 @@ proof -
               using eij_ending nth_actions_unique eij_in_act 
               by auto
             done
+          subgoal apply (subst card_ending_actions_before_Suc)
+            using eij_ending i eij_in_act apply auto[3]
+            unfolding vE 
+            apply (subst map_upds_apply_nontin, force)+
+            by auto
           subgoal by (auto dest!: variables_locked_after simp: comp_def v'_def)
           subgoal apply (intro allI impI)
             subgoal for k
@@ -5280,19 +5699,19 @@ proof -
                apply (drule Lv_condsD) 
               using eij_in_act apply simp
               apply (cases "k < end_indices ! j")
-              by (auto dest: end_start_pre_dests(3))
+              by (auto dest: end_start_pre_dests)
             done
           subgoal apply (intro allI impI)
             subgoal for k
               apply (cases "k < end_indices ! j")
-              by (auto dest: end_start_pre_dests(4))
+              by (auto dest: end_start_pre_dests)
             done
           subgoal apply (intro allI impI)
             subgoal for k
               apply (cases "k < end_indices ! j")
-              by (auto dest: end_start_pre_dests(5))
+              by (auto dest: end_start_pre_dests)
             done
-          subgoal by (auto simp: nth_actions_unique dest: end_start_pre_dests(6))
+          subgoal by (auto simp: nth_actions_unique dest: end_start_pre_dests)
           done
         subgoal apply (insert esp j)
           apply (rule single_step_intro)
@@ -5317,32 +5736,18 @@ proof -
             subgoal apply (rule ending_actions_sat_mutex_const_specs)
                     apply (auto intro: eij_in_act intro: eij_ending simp: is_ending_index_def[symmetric])[2]
                   apply (auto dest!: end_start_pre_dests(1) end_start_invs_dests(1) dest: happening_invs_dests(2,3,4,5) simp: index_case_defs set_conv_nth)[4]
-              by (auto dest!: end_start_pre_dests(6) intro: eij_in_act eij_ending)[1]
+              by (auto dest!: end_start_pre_dests intro: eij_in_act eij_ending)[1]
             subgoal apply (rule ending_actions_sat_mutex_const_specs)
                     apply (auto intro: eij_in_act intro: eij_ending simp: is_ending_index_def[symmetric])[2]
                   apply (auto dest!: end_start_pre_dests(1) end_start_invs_dests(1) dest: happening_invs_dests(2,3,4,5) simp: index_case_defs set_conv_nth)[4]
-              by (auto dest!: end_start_pre_dests(6) intro: eij_in_act eij_ending)[1]
+              by (auto dest!: end_start_pre_dests intro: eij_in_act eij_ending)[1]
             done
           subgoal using no_invs by simp
-          subgoal using eij_in_act eij_ending by (blast dest: end_start_pre_dests(4))
+          subgoal using eij_in_act eij_ending by (blast dest: end_start_pre_dests)
           subgoal using eij_in_act by (auto dest!: end_start_pre_dests(1) end_start_invs_dests(1) happening_invs_dests(1) Lv_conds_dests(1))
           subgoal by blast
           subgoal by simp
-          subgoal 
-            apply (rule is_upds_inc_vars[rotated, rotated])
-               apply (subst inc_prop_lock_ab_def) 
-               apply (subst map_map[symmetric, of _ PropLock])
-               apply blast
-              apply (subst map_map)+
-              apply (subst comp_def)+
-            apply blast
-             apply (rule subsetI)
-            subgoal for x
-              apply (drule end_start_pre_dests(2))
-              apply (frule map_of_nta_vars_action_inv[rotated])
-               apply (rule eij_in_act)
-              by auto
-            by (auto intro: distinct_inj_map simp: distinct_over_all eij_in_act inj_def)
+          subgoal using is_upds by blast
           using bounded_after unfolding map_map v'_def comp_apply by auto
         done
   next
@@ -5355,22 +5760,27 @@ proof -
         apply (rule end_start_preI, simp)
         subgoal by (drule end_start_post_dests(1), simp)
         subgoal apply (drule end_start_post_dests(2), simp)
+          apply (subst ending_actions_before_inv[symmetric])
+             prefer 4 apply (assumption)
+          using i apply simp
+          using eip.ys_Suc apply force
+          using end_indices_inc_all by simp
+        subgoal apply (drule end_start_post_dests(3), simp)
           apply (subst partially_updated_locked_before_inv[where n = "(Suc (end_indices ! i))", symmetric])
           using eip.ys_mono[rotated] apply fastforce
           using end_indices_inc_all is_ending_index_def by auto
-        subgoal apply (drule end_start_post_dests(3), simp)
-          apply (intro impI allI, elim conjE)
-          subgoal for j
-            by (cases "j \<le> end_indices ! i") (auto simp: end_indices_inc_all)
-          done
         subgoal apply (drule end_start_post_dests(4), simp)
-          by (auto dest: eip.ys_mono[rotated])
-        subgoal apply (drule end_start_post_dests(5), simp)
           apply (intro impI allI, elim conjE)
           subgoal for j
             by (cases "j \<le> end_indices ! i") (auto simp: end_indices_inc_all)
           done
+        subgoal by (drule end_start_post_dests) (auto dest: eip.ys_mono[rotated])
         subgoal apply (drule end_start_post_dests(6), simp)
+          apply (intro impI allI, elim conjE)
+          subgoal for j
+            by (cases "j \<le> end_indices ! i") (auto simp: end_indices_inc_all)
+          done
+        subgoal apply (drule end_start_post_dests(7), simp)
           by (auto dest: eip.ys_mono[rotated])
         done
       done
@@ -5383,15 +5793,20 @@ proof -
         apply (rule end_start_preI, simp)
         subgoal by (drule happening_pre_end_starts_dests(1)) simp+
         subgoal apply (drule happening_pre_end_starts_dests(2), simp)
+          apply (subst ending_actions_before_inv[symmetric, of _ 0])
+          using i apply auto[2]
+          using end_indices_inc_all_below apply blast
+          using ending_actions_before_0_is_none i by auto
+        subgoal apply (drule happening_pre_end_starts_dests(3), simp)
           apply (subst partially_updated_locked_before_inv[where n = 0, symmetric], simp)
           using end_indices_inc_all_below[simplified is_ending_index_def] apply blast
           using partially_updated_locked_before_0_is_locked_before by simp
-        subgoal apply (drule happening_pre_end_starts_dests(3), simp)
-          by (auto simp: end_indices_inc_all_below)
-        subgoal by (drule happening_pre_end_starts_dests(3), simp+)
-        subgoal apply (drule happening_pre_end_starts_dests(4), simp)
+        subgoal apply (drule happening_pre_end_starts_dests(5), simp)
           by (auto simp: end_indices_inc_all_below)
         subgoal by (drule happening_pre_end_starts_dests(4), simp+)
+        subgoal apply (drule happening_pre_end_starts_dests(4), simp)
+          by (auto simp: end_indices_inc_all_below)
+        subgoal by (drule happening_pre_end_starts_dests, simp+)
         done
       done
   next
@@ -5402,7 +5817,15 @@ proof -
         unfolding comp_def
         apply (rule happening_post_end_startsI, simp)
         subgoal by (drule end_start_post_dests(1), simp+)
-        subgoal apply (drule end_start_post_dests(2), simp)
+        subgoal apply (subst ending_actions_before_all_is_ending_actions[symmetric])
+          using i apply simp
+          apply (subst ending_actions_before_inv[symmetric, of _ "Suc (end_indices ! (length end_indices - 1))"])
+             apply (rule i)
+          apply (rule Suc_leI)
+          using eip.nth_ys_ran apply simp
+          using end_indices_inc_all_above apply simp
+          by (auto dest: end_start_post_dests)
+        subgoal apply (drule end_start_post_dests(3), simp)
           apply (subst partially_updated_locked_before_by_all_actions_is_locked_during[symmetric])
           apply (subst partially_updated_locked_before_inv[symmetric, where n = "Suc (end_indices ! (length end_indices - 1))"])
           subgoal using eip.nth_ys_ran by (force intro: Suc_leI)
@@ -5410,12 +5833,12 @@ proof -
         subgoal apply (intro allI impI)
           subgoal for k
             by (cases "k \<le> end_indices ! (length end_indices - 1)"; 
-              force dest!: end_indices_inc_all_above[rotated] end_start_post_dests(3))
+              force dest!: end_indices_inc_all_above[rotated] end_start_post_dests(4))
           done
       subgoal apply (intro allI impI)
         subgoal for k
           by (cases "k \<le> end_indices ! (length end_indices - 1)"; 
-              force dest!: end_indices_inc_all_above[rotated] end_start_post_dests(5))
+              force dest!: end_indices_inc_all_above[rotated] end_start_post_dests(6))
         done
       done
     done
@@ -5433,6 +5856,9 @@ proof -
         subgoal apply (drule happening_pre_end_starts_dests(2), simp)
           using planning_sem.locked_before_and_during_if_none_ending
           using image_end_indices_conv_actions by auto
+        subgoal apply (drule happening_pre_end_starts_dests(3), simp)
+          using planning_sem.locked_before_and_during_if_none_ending
+          using image_end_indices_conv_actions by auto
         using end_indices by auto
       done
   next
@@ -5441,16 +5867,8 @@ proof -
       apply (induction x)
       subgoal for L v c
       apply (rule happening_pre_instantsI, simp)
-        subgoal 
-          apply (rule instant_action_invsI, simp)
-          subgoal by (auto dest!: happening_post_end_starts_dests(1) dest: end_start_invs_dests)
-          subgoal using happening_post_end_starts_dests(2) by auto
-          subgoal by (auto dest!: happening_post_end_starts_dests(1) dest: end_start_invs_dests)
-          subgoal by (force dest: happening_post_end_starts_dests)
-          subgoal by (auto dest!: happening_post_end_starts_dests(1) dest: end_start_invs_dests)
-          subgoal by (force simp: happening_post_end_starts_dests)
-          done
-        by (auto dest!: happening_post_end_starts_dests(1) dest: end_start_invs_dests)
+        apply (rule instant_action_invsI, simp)
+        by (intro end_start_invs_dests happening_post_end_starts_dests, simp, simp)+
       done
   qed
 qed
@@ -5619,6 +6037,8 @@ proof -
       thus ?thesis using check_bexp_all by blast
     qed
 
+    have all_exI: "\<forall>x. (\<exists>y. x = f y \<and> P y) \<longrightarrow> Q x" if "\<forall>y. P y \<longrightarrow> Q (f y)" for P Q f using that by blast
+
     show ?case 
       apply (insert 2)
       apply (subst last_ConsR[symmetric, where x = s, OF seq_apply_not_Nil, OF list.distinct(2)])
@@ -5646,13 +6066,21 @@ proof -
              apply (rule upds_map_bounded)
                prefer 2
                apply (rule HOL.refl)
-              apply (rule single_upd_bounded)
+                    apply (rule single_upd_bounded)
+                       apply (rule single_upd_bounded)
                  apply simp
                 apply (rule map_of_nta_vars_ActsActive)
                      apply (drule instant_ending_cond_dests(3)) 
-                  apply simp
+                        apply simp
             subgoal using planning_sem.active_before_less_if_scheduled iij_instant iij_in_act instant_ending_cond_dests(3)
               by (fastforce simp: planning_sem.action_happening_case_defs card_action_set)
+            apply (rule map_of_nta_vars_Effecting)
+            subgoal apply (subst instant_ending_cond_dests(4))
+               apply simp
+              using instant_ending_cond_dests(4) card_ending_actions_less i iij_instant_index iij_ran by fastforce
+            subgoal apply (subst instant_ending_cond_dests(4))
+               apply simp
+              using instant_ending_cond_dests(4) card_ending_actions_less i iij_instant_index iij_ran by fastforce
             subgoal by (force intro: map_of_nta_vars_action_end_del iij_instant iij_in_act)+
             subgoal by (force intro: map_of_nta_vars_action_end_add iij_instant iij_in_act)+
             done
@@ -5714,6 +6142,7 @@ proof -
           done
         done
       subgoal by (subst map_upds_apply_nontin, force)+ (use instant_ending_cond_dests(3) in fastforce)
+      subgoal by (subst map_upds_apply_nontin, force)+ (use instant_ending_cond_dests(4) in fastforce)
       subgoal by (auto dest: instant_ending_cond_dests)
       subgoal by (auto dest: instant_ending_cond_dests)
       subgoal by (auto dest: instant_ending_cond_dests)
@@ -5763,7 +6192,19 @@ proof -
             apply (erule instant_ending_cond_dests)
           apply (rule check_bexp_is_val.intros)
          apply (rule HOL.refl)
-        apply (subst instant_ending_cond_dests, assumption)
+        apply (rule is_upds.intros)
+         apply (subst is_upd_def)
+         apply (intro exI conjI)
+           apply simp
+          apply (subst is_val_simps)
+          apply (intro exI conjI)
+        apply (rule HOL.refl)
+           apply (rule check_bexp_is_val.intros)
+           apply (subst fun_upd_other)
+            apply simp
+            apply (erule instant_ending_cond_dests)
+          apply (rule check_bexp_is_val.intros)
+         apply (rule HOL.refl)
         apply (rule is_upds_appendI)
          apply (rule is_upds_set_vars_map)
           apply (subst set_prop_ab_def)
@@ -5774,7 +6215,8 @@ proof -
         apply (subst set_prop_ab_def)
          apply (subst map_map[symmetric])
          apply (rule HOL.refl)
-        by simp
+        unfolding map_map comp_def option.sel
+        by (subst instant_ending_cond_dests, simp, simp)+
       subgoal by (auto intro: instant_post_dests(1) instant_action_invs_dests(1) happening_invs_dests(1) Lv_conds_dests)
       subgoal by (auto intro: instant_ending_cond_dests(1) instant_action_invs_dests(1) happening_invs_dests(1) Lv_conds_dests)
       done
@@ -5796,11 +6238,12 @@ proof -
       subgoal by (auto dest: instant_starting_cond_dests(2))
       subgoal by (auto dest: instant_starting_cond_dests intro: map_upds_apply_nontin) 
       subgoal by (auto dest: index_case_dests_disj instant_starting_cond_dests)
-      subgoal by (auto dest!: instant_starting_cond_dests(5) elim: nat_leE)
-      subgoal by (auto dest: instant_starting_cond_dests)
+      subgoal by (auto intro!: instant_starting_cond_dests(5) elim: nat_leE)
+      subgoal using instant_starting_cond_dests(6) nth_actions_unique  by (auto elim: nat_leE)
       subgoal using nth_actions_unique by (auto dest!: instant_starting_cond_dests(7)) 
+      subgoal using nth_actions_unique by (auto dest!: instant_starting_cond_dests(8)) 
       subgoal by (auto dest!: instant_starting_cond_dests(1) instant_action_invs_dests(1) happening_invs_dests(1) dest: Lv_conds_dests simp: iij_ran)
-      subgoal by (auto dest!: instant_starting_cond_dests(1,9) instant_action_invs_dests(1) happening_invs_dests(1) dest: Lv_conds_dests simp: iij_ran)
+      subgoal by (auto dest!: instant_starting_cond_dests(1,10) instant_action_invs_dests(1) happening_invs_dests(1) dest: Lv_conds_dests simp: iij_ran)
       done
     done
   subgoal for x 
@@ -5828,24 +6271,24 @@ proof -
           apply (rule l_dur_spec_sat_if)
           apply (rule planning_sem.instant_act_sat_dur_bounds)
           using iij_instant iij_instant_index iij_in_act
-          by (auto dest!: instant_starting_cond_dests(4))
+          by (auto dest!: instant_starting_cond_dests(5))
         subgoal 
           apply (rule u_dur_spec_sat_if)
           apply (rule planning_sem.instant_act_sat_dur_bounds)
           using iij_instant iij_instant_index iij_in_act
-          by (auto dest!: instant_starting_cond_dests(4))
+          by (auto dest!: instant_starting_cond_dests(5))
         subgoal apply (rule instant_action_sat_mutex_end)
                  apply (rule iij_in_act)
                 apply (rule iij_instant)
           unfolding set_conv_nth
                apply (auto simp: index_case_defs dest!: instant_starting_cond_dests(1) instant_action_invs_dests(1) dest: happening_invs_dests)[4]
-          by (auto dest!: instant_starting_cond_dests(7) simp: iij_instant_index iij_ran )
+          by (auto dest!: instant_starting_cond_dests(8) simp: iij_instant_index iij_ran )
         subgoal apply (rule instant_action_sat_mutex_end)
                  apply (rule iij_in_act)
                 apply (rule iij_instant)
           unfolding set_conv_nth
                apply (auto simp: index_case_defs dest!: instant_starting_cond_dests(1) instant_action_invs_dests(1) dest: happening_invs_dests)[4]
-          by (auto dest!: instant_starting_cond_dests(7) simp: iij_instant_index iij_ran)
+          by (auto dest!: instant_starting_cond_dests(8) simp: iij_instant_index iij_ran)
         done
       subgoal using conv_invs no_invs by auto
       subgoal by (force dest: instant_starting_cond_dests)
@@ -5873,11 +6316,15 @@ proof -
              apply simp
             apply (rule upds_map_bounded'[OF _ _ HOL.refl])
               apply (rule upds_map_bounded'[OF _ _ HOL.refl])
-                apply (erule single_upd_bounded)
+                apply (rule single_upd_bounded)
+                   apply (erule single_upd_bounded)
                   apply (rule map_of_nta_vars_ActsActive)
             subgoal using instant_pre_dests(3) by fastforce
             subgoal using planning_sem.active_before_less_if_scheduled iij_instant iij_in_act card_action_set planning_sem.action_happening_case_defs 
               by (fastforce dest:instant_pre_dests(3))
+                  apply (rule map_of_nta_vars_Effecting)
+            subgoal apply (subst instant_pre_dests, assumption) by simp
+            subgoal apply (subst instant_pre_dests, assumption) using card_ending_actions_less[OF i] iij_instant_index iij_ran by fastforce 
             using iij_instant map_of_nta_vars_action_start_del map_of_nta_vars_action_start_add iij_in_act
             by (auto dest: instant_pre_dests)
           using iij_instant_index iij_ran nth_actions_unique
@@ -5909,9 +6356,12 @@ proof -
       done
     subgoal 
       apply ((subst map_upds_apply_nontin | subst fun_upd_other), force)+
-      by (force dest: instant_pre_dests(3))
+      by (force dest: instant_pre_dests)
+    subgoal 
+      apply ((subst map_upds_apply_nontin | subst fun_upd_other), force)+
+      by (force dest: instant_pre_dests)
     subgoal using instant_pre_dests iij_instant by (auto elim: nat_leE)
-    subgoal by (auto dest: instant_pre_dests(5))
+    subgoal by (auto dest: instant_pre_dests)
     subgoal using nth_actions_unique iij_instant iij_ran 
       by (auto dest: instant_pre_dests)
     subgoal by (auto dest: instant_pre_dests)
@@ -5944,9 +6394,21 @@ proof -
         subgoal apply (drule instant_pre_dests(1)) by (auto intro: v_pre_conds_sat v_lock_conds_sat dest: instant_action_invs_dests)
         subgoal by (auto intro: v_pre_conds_sat v_lock_conds_sat dest: instant_pre_dests)
         done
-      subgoal apply (intro guard_append instant_action_sat_mutex_start[OF iij_in_act iij_instant])
-        using iij_ran iij_instant_index instant_pre_dests(6)
-        by (auto dest!: instant_pre_dests(1)[THEN instant_action_invs_dests(1)] dest: happening_invs_dests simp: index_case_defs set_conv_nth)
+      subgoal apply (intro guard_append instant_action_sat_mutex_start[OF iij_in_act iij_instant]; ((subst set_conv_nth, subst ball_simps(8))?, (intro all_exI)?))
+        unfolding index_case_defs[symmetric]
+        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
+        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
+        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
+        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
+        subgoal using instant_pre_dests(7) iij_instant_index iij_ran by blast 
+        subgoal by simp
+        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
+        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
+        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
+        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
+        subgoal using instant_pre_dests(7) iij_instant_index iij_ran by blast 
+        subgoal by simp
+        done
       subgoal using conv_invs no_invs by auto
       subgoal by (auto dest: instant_pre_dests simp: iij_ran iij_instant_index)
       subgoal by (subst Lv_conds_dests, auto intro: instant_pre_dests instant_action_invs_dests happening_invs_dests simp: iij_ran)
@@ -5960,6 +6422,16 @@ proof -
           apply (rule check_bexp_is_val.intros)
            apply (rule check_bexp_is_val.intros(12)[where v= "the (v ActsActive)"])
            apply (drule instant_pre_dests(3), simp)
+          apply (subst is_val.simps)
+          apply simp
+         apply simp
+        apply (rule is_upds.intros(2))
+         apply (subst is_upd_def)
+         apply (intro exI conjI)
+           apply simp
+          apply (rule check_bexp_is_val.intros)
+           apply (rule check_bexp_is_val.intros(12)[where v= "the (v Effecting)"])
+           apply (drule instant_pre_dests(4), simp)
           apply (subst is_val.simps)
           apply simp
          apply simp
@@ -5993,6 +6465,7 @@ proof -
           apply (subst instant_part_upd_prop_state_inv[OF i, symmetric, of "Suc (instant_indices ! j)"])
           using instant_indices_inc_all is_instant_index_def by (auto simp: Suc_le_eq intro: iip.ys_Suc)
         subgoal using instant_post_dests by blast
+        subgoal using instant_post_dests by fast
         subgoal apply (drule Suc_lessI)
           apply (intro strip, elim conjE)
           subgoal for k
@@ -6052,10 +6525,11 @@ proof -
           using i instant_indices_inc_all_below index_case_defs 
           by (auto dest: happening_pre_instants_dests(2) simp: instant_part_upd_prop_state_0_is_prop_state_before i)
         subgoal using happening_pre_instants_dests by blast
+        subgoal using happening_pre_instants_dests by blast
         subgoal using instant_indices_inc_all_below by auto
         subgoal using instant_indices_inc_all_below by auto
-        subgoal using happening_pre_instants_dests instant_indices_inc_all_below by blast
-        subgoal by (drule happening_pre_instants_dests(5)) (use instant_indices_inc_all_below in auto)
+        subgoal using happening_pre_instants_dests instant_indices_inc_all_below by fast
+        subgoal by (drule happening_pre_instants_dests) (use instant_indices_inc_all_below in auto)
         subgoal by (drule happening_pre_instants_dests) (use instant_indices_inc_all_below in auto)
         done
       done
@@ -6078,6 +6552,7 @@ proof -
            apply (rule instant_indices_inc_all_above[simplified index_case_defs])
           using i by auto
         subgoal using instant_post_dests by blast
+        subgoal using instant_post_dests by fast
         subgoal apply (intro allI impI)
           subgoal for k
             apply (cases "k < Suc (instant_indices ! (length instant_indices - 1))") 
@@ -6104,9 +6579,10 @@ proof -
       apply -
       apply (induction x)
       subgoal for L v c
-        apply (rule happening_pre_start_startsI)
+        apply (intro happening_pre_start_startsI)
         subgoal by (rule start_start_invsI) (auto dest: happening_post_instants_dests instant_action_invs_dests)
-        subgoal by (auto dest: happening_post_instants_dests)
+        subgoal by (auto dest: happening_post_instants_dests instant_action_invs_dests)
+        subgoal by (auto intro: happening_post_instants_dests)
         subgoal using happening_post_instants_dests by simp
         by (auto dest!: happening_post_instants_dests(1) dest: instant_action_invs_dests)
       done
@@ -6214,11 +6690,16 @@ proof -
                   apply (subst map_map[symmetric])
                   apply (rule HOL.refl)
                 using map_of_nta_vars_action_start_del apply fastforce
-                apply (erule single_upd_bounded)
+                apply (rule single_upd_bounded)
+                   apply (erule single_upd_bounded)
                   apply (rule map_of_nta_vars_ActsActive)
                  apply (fastforce simp: start_start_pre_dests)
                 apply (subst start_start_pre_dests, assumption)
-                using updated_active_before_less_if_starting[OF i sij_starting_index sij_ran] by simp
+                subgoal using updated_active_before_less_if_starting[OF i sij_starting_index sij_ran] by simp
+                  apply (rule map_of_nta_vars_Effecting)
+                 apply (fastforce simp: start_start_pre_dests)
+                apply (subst start_start_pre_dests, assumption)
+                using card_ending_actions_and_starting_before_less sij_starting_index sij_ran i by fastforce
               done
             by ((intro strip, (subst nth_list_update_neq)?, (frule index_case_dests_disj)?); (use nth_actions_unique[OF sij_ran] sij_starting_index in force))+
           subgoal apply (intro strip)
@@ -6254,27 +6735,32 @@ proof -
         case 3
         then show ?case 
           apply -
-          apply (subst updated_active_before_Suc)
-          using i sij_starting_index sij_ran apply auto[3]
           apply (subst map_upds_apply_nontin, force)+
+          using updated_active_before_Suc i sij_starting_index sij_ran
           by (auto simp: start_start_pre_dests)
       next
-        case (4 k)
+        case 4
+        then show ?case 
+          apply (subst map_upds_apply_nontin, force)+
+          using card_starting_actions_before_Suc i sij_starting_index sij_ran
+          by (auto simp: start_start_pre_dests)
+      next
+        case (5 k)
         then show ?case 
           apply (cases "k = start_indices ! j")
           using sij_L start_start_pre_dests by auto
       next
-        case (5 k)
+        case (6 k)
         then show ?case
           using nth_actions_unique 
-          using sij_L start_start_pre_dests(5) by auto
-      next
-        case (6 k)
-        then show ?case 
-          apply (cases "k = start_indices ! j")
           using sij_L start_start_pre_dests by auto
       next
         case (7 k)
+        then show ?case 
+          apply (cases "k = start_indices ! j")
+          using sij_L start_start_pre_dests by auto
+      next
+        case (8 k)
         thus ?case
           apply (cases "k = start_indices ! j")
           using sij_L start_start_pre_dests by auto
@@ -6336,6 +6822,56 @@ proof -
         thus ?thesis using check_bexp_all by blast
       qed
 
+      have is_upds: "is_upds v ((ActsActive, binop plus_int (var ActsActive) (exp.const 1)) # (Effecting, binop plus_int (var Effecting) (exp.const 1)) # map (set_prop_ab 0) (dels (at_start (actions ! (start_indices ! j)))) @ map (set_prop_ab 1) (adds (at_start (actions ! (start_indices ! j)))))
+     (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, Effecting \<mapsto> plus_int (the (v Effecting)) 1, map PropVar (dels (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 0) (dels (at_start (actions ! (start_indices ! j)))),
+          map PropVar (adds (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 1) (adds (at_start (actions ! (start_indices ! j))))))"
+      proof (rule is_upds.intros)
+        have def: "\<exists>x. v ActsActive = Some x" 
+                  "\<exists>x. v Effecting = Some x" using 2 start_start_pre_dests(3,4) by fastforce+
+        show "is_upd v (ActsActive, binop plus_int (var ActsActive) (exp.const 1)) (v(ActsActive \<mapsto> the (v ActsActive) + 1))"
+          unfolding is_upd_def
+          apply (intro exI conjI)
+            apply simp
+           defer
+           apply simp
+          apply rule
+           apply rule
+          using def
+          by (auto intro: check_bexp_is_val.intros)
+        show "is_upds (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1)) ((Effecting, binop plus_int (var Effecting) (exp.const 1)) # map (set_prop_ab 0) (dels (at_start (actions ! (start_indices ! j)))) @ map (set_prop_ab 1) (adds (at_start (actions ! (start_indices ! j)))))
+           (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, Effecting \<mapsto> plus_int (the (v Effecting)) 1, map PropVar (dels (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 0) (dels (at_start (actions ! (start_indices ! j)))),
+                map PropVar (adds (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 1) (adds (at_start (actions ! (start_indices ! j))))))"
+        proof (rule is_upds.intros)
+          show "is_upd (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1)) (Effecting, binop plus_int (var Effecting) (exp.const 1)) (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, Effecting \<mapsto> plus_int (the (v Effecting)) 1))"
+          unfolding is_upd_def
+          apply (intro exI conjI)
+            apply simp
+           defer
+           apply simp
+          apply rule
+           apply rule
+          using def
+          by (auto intro: check_bexp_is_val.intros)
+        show "is_upds (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, Effecting \<mapsto> plus_int (the (v Effecting)) 1)) (map (set_prop_ab 0) (dels (at_start (actions ! (start_indices ! j)))) @ map (set_prop_ab 1) (adds (at_start (actions ! (start_indices ! j)))))
+     (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, Effecting \<mapsto> plus_int (the (v Effecting)) 1, map PropVar (dels (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 0) (dels (at_start (actions ! (start_indices ! j)))),
+          map PropVar (adds (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 1) (adds (at_start (actions ! (start_indices ! j))))))"
+          apply (rule is_upds_appendI)
+          unfolding set_prop_ab_def
+           apply (rule is_upds_set_vars_map)
+            apply (subst map_map[symmetric])
+            apply (rule HOL.refl)
+           apply simp
+          apply (rule is_upds_appendI)
+          unfolding set_prop_ab_def
+           apply (rule is_upds_set_vars_map)
+            apply (subst map_map[symmetric])
+            apply (rule HOL.refl)
+          apply simp
+          unfolding comp_def map_map by blast
+        qed
+
+      qed
+
       show ?case 
         apply (insert 2)
         unfolding comp_def start_edge_effect_alt
@@ -6371,28 +6907,19 @@ proof -
         subgoal using sij_L by simp
         subgoal by simp
         subgoal by simp
-        subgoal apply (rule is_upds.intros(2)[rotated])
-           apply (rule is_upds_appendI[rotated])
-            apply (rule is_upds_set_vars_map[rotated])
-             apply (subst comp_def[of "\<lambda>x. 1" PropVar, symmetric])
-             apply (subst map_map[symmetric])
-             apply (rule HOL.refl)
-            apply (subst map_map)
-            apply (subst comp_def)
-            apply (simp add: set_prop_ab_def)
-           apply (rule is_upds_set_vars_map[rotated])
-             apply (subst comp_def[of "\<lambda>x. 0" PropVar, symmetric])
-            apply (subst map_map[symmetric])
-            apply (rule HOL.refl)
-           apply (simp add: set_prop_ab_def)
-          by (auto dest: start_start_pre_dests(3) simp: is_val_simps is_upd_def)
+        subgoal using is_upds by auto
         subgoal apply (rule upds_map_bounded'[OF _ _ HOL.refl])
             apply (rule upds_map_bounded'[OF _ _ HOL.refl])
           subgoal apply (rule single_upd_bounded)
+            subgoal
+               apply (rule single_upd_bounded)
                  apply (blast intro: Lv_conds_dests happening_invs_dests start_start_invs_dests start_start_pre_dests)
                 apply (rule map_of_nta_vars_ActsActive)
                apply (force dest: start_start_pre_dests)
             by (drule start_start_pre_dests(3), use  updated_active_before_less_if_starting sij_starting_index i sij_ran in fastforce)
+                apply (rule map_of_nta_vars_Effecting)
+           apply (force dest: start_start_pre_dests)
+          using start_start_pre_dests(4) card_ending_actions_and_starting_before_less[OF i sij_starting_index sij_ran] by fastforce
              apply simp
           subgoal unfolding set_map apply (intro ballI exI conjI)
               apply (rule map_of_nta_vars_action_start_del)
@@ -6426,6 +6953,10 @@ proof -
           apply (intro allI impI, elim conjE ssubst)
            apply (rule start_indices_inc_all)
           by (auto intro: start_start_post_dests)
+        subgoal apply (subst starting_actions_before_inv[OF i, where n = "Suc (start_indices ! j)", symmetric])
+          using sip.ys_Suc apply fastforce
+          using start_indices_inc_all sip.ys_Suc
+          by (auto simp: start_start_post_dests)
         subgoal for k
           apply (cases "k < Suc (start_indices ! j)")
           using start_indices_inc_all 
@@ -6460,6 +6991,10 @@ proof -
           apply (subst (asm) updated_active_before_0_is_active_before[symmetric, OF i])
           apply (subst updated_active_before_inv[symmetric, where n = 0])
           using i start_indices_inc_all_below by auto
+        subgoal apply (subst starting_actions_before_inv[OF i, where n = 0, symmetric])
+          apply simp
+          using start_indices_inc_all_below sip.ys_Suc apply fast
+          using happening_pre_start_starts_dests(4) starting_actions_before_0_is_none i by force
         subgoal using start_indices_inc_all_below by auto
         subgoal by (rule happening_pre_start_starts_dests)
         subgoal using start_indices_inc_all_below by auto
@@ -6488,6 +7023,12 @@ proof -
           using start_indices_inc_all_above apply simp
           apply (subst (asm) updated_active_before_all_is_active_during)
           using i by auto
+        subgoal apply (subst starting_actions_before_all_is_starting_actions[symmetric, OF i])
+          apply (subst starting_actions_before_inv[symmetric, where n = "Suc (start_indices ! (length start_indices - 1))"])
+          using i apply simp
+          using sip.nth_ys_ran[simplified set_upt, THEN spec, of "length start_indices - 1"] apply simp
+          using start_indices_inc_all_above index_case_defs apply simp
+          by (auto simp: start_start_post_dests)
         subgoal for k 
           apply (cases "k < Suc (start_indices ! (length start_indices - 1))")
           using start_indices_inc_all_above by (auto intro: start_start_post_dests)
@@ -6521,6 +7062,7 @@ proof -
           using i no_starting by (auto intro: happening_pre_start_starts_dests)
         subgoal apply (subst active_before_is_active_during_if_no_start[symmetric])
           using i no_starting by (auto intro: happening_pre_start_starts_dests)
+        subgoal using no_starting by (auto intro: happening_pre_start_starts_dests)
         using not_starting by auto
       done
   next
@@ -6626,6 +7168,7 @@ proof -
                  prefer 3
                  apply blast
                 apply (rule single_upd_bounded)
+            apply (rule single_upd_bounded)
                    apply simp
                   apply (rule map_of_nta_vars_ActsActive)
             subgoal apply (subst end_end_pre_dests, assumption)
@@ -6633,6 +7176,12 @@ proof -
             subgoal apply (subst end_end_pre_dests, assumption)
               using updated_active_during_ran[where n = "end_indices ! j"] i
               by fastforce
+                  apply (rule map_of_nta_vars_Effecting)
+            subgoal apply (subst end_end_pre_dests, assumption)
+              using ending_actions_after_pos_if_ending[OF i eij_ending_index eij_ran] by auto
+            subgoal apply (subst end_end_pre_dests, assumption)
+              using card_ending_actions_after_Suc[OF i eij_ending_index eij_ran] 
+
             by (force intro: map_of_nta_vars_action_end_del map_of_nta_vars_action_end_add)+
                      apply auto[4]
           subgoal apply (intro strip)?

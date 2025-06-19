@@ -13,6 +13,7 @@ datatype 'proposition variable =
   PropVar 'proposition |
   PropLock 'proposition |
   ActsActive |
+  Effecting |
   PlanningLock
 
 datatype 'action clock =
@@ -258,7 +259,7 @@ let
   
   add_upds = map (set_prop_ab 1) (adds start_snap);
   del_upds = map (set_prop_ab 0) (dels start_snap);
-  upds = (inc_var 1 ActsActive) # del_upds @ add_upds;
+  upds = (inc_var 1 ActsActive) # (inc_var 1 Effecting) # del_upds @ add_upds;
 
   resets = [ActStart a]
 in (off, var_check, guard, Sil (STR ''''), upds, resets, start_inst)"
@@ -266,16 +267,21 @@ in (off, var_check, guard, Sil (STR ''''), upds, resets, start_inst)"
 definition edge_2_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
 "edge_2_spec a \<equiv> 
 let 
-  start_inst = StartInstant a;
-  pass_time = Running a;
-
-  check_invs = bexp_and_all (map (is_prop_ab 1) (over_all a));
-  lock_invs = map (inc_prop_lock_ab 1) (over_all a)
+  upds = (inc_var (-1) Effecting) # map (inc_prop_lock_ab 1) (over_all a)
 in
-  (start_inst, check_invs, [], Sil (STR ''''), lock_invs, [], pass_time)
+  (StartInstant a, bexp.true, [], Sil (STR ''''), upds, [],  PostStart a)
 "
 
 find_theorems name: "Option*map"
+
+definition leave_start_edge_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
+"leave_start_edge_spec a \<equiv> 
+let 
+  effects_applied = var_is 0 Effecting;
+  check_invs = bexp_and_all (map (is_prop_ab 1) (over_all a))
+in
+  (PostStart a, bexp.and effects_applied check_invs, [], Sil (STR ''''), [], [], Running a)
+"
 
 definition l_dur_spec::"'action \<Rightarrow> ('action clock, int) acconstraint list" where
 "l_dur_spec act \<equiv> (case lower act of 
@@ -298,11 +304,11 @@ let
 
   guard = l_dur_spec a @ u_dur_spec a @ int_clocks;
 
-  unlock_invs = map (inc_prop_lock_ab (-1)) (over_all a);
+  upds = (inc_var 1 Effecting) # map (inc_prop_lock_ab (-1)) (over_all a);
   
   resets = [ActEnd a]
 in 
-  (Running a, bexp.true, guard, Sil (STR ''''), unlock_invs, resets, EndInstant a)
+  (Running a, bexp.true, guard, Sil (STR ''''), upds , resets, EndInstant a)
 "
 
 (* Checking that no interfering snap-action is starting is done using the clock constraints. 
@@ -344,9 +350,10 @@ let
   check = bexp_and_all (not_locked_check @ pre_check);
   
   add_upds = map (set_prop_ab 1) (adds end_snap);
-  del_upds = map (set_prop_ab 0) (dels end_snap)
+  del_upds = map (set_prop_ab 0) (dels end_snap);
+  upds = (inc_var (-1) ActsActive) # (inc_var (-1) Effecting) # del_upds @ add_upds
 in
-  (end_instant, check, [], Sil (STR ''''), (inc_var (-1) ActsActive) # del_upds @ add_upds, [], off)
+  (end_instant, check, [], Sil (STR ''''), upds, [], off)
 "
 
 
@@ -374,10 +381,10 @@ definition action_to_automaton_spec::"'action \<Rightarrow>
 "action_to_automaton_spec a \<equiv>
 let 
   init_loc = Off a;
-  locs = [Off a, StartInstant a, Running a, EndInstant a];
+  locs = [Off a, StartInstant a, Running a, EndInstant a, PostStart a];
   committed_locs = (Nil::'action location list);
-  urgent_locs = [StartInstant a, EndInstant a];
-  edges = [start_edge_spec a, edge_2_spec a, edge_3_spec a, end_edge_spec a, instant_trans_edge_spec a];
+  urgent_locs = [StartInstant a, EndInstant a, PostStart a];
+  edges = [start_edge_spec a, edge_2_spec a, edge_3_spec a, end_edge_spec a, instant_trans_edge_spec a, leave_start_edge_spec a];
   invs = []
 in 
   (init_loc, locs, committed_locs, urgent_locs, edges, invs)"
@@ -485,9 +492,10 @@ let
 
   prop_var_defs = (prop_lock_var_defs @ prop_var_var_defs) |> filter (\<lambda>x. fst x \<in> vars_occ);
   acts_active_var = (ActsActive, 0, int (length actions));
+  effecting_var = (Effecting, 0, int (length actions));
   planning_lock_var = (PlanningLock, 0, 2::int)
 in
-  [acts_active_var, planning_lock_var] @ prop_var_defs"
+  [acts_active_var, effecting_var, planning_lock_var] @ prop_var_defs"
 
 definition timed_automaton_net_spec::"
   (
