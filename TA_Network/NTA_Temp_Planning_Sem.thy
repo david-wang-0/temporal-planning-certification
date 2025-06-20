@@ -3516,45 +3516,22 @@ proof -
       thus ?thesis using \<open>0 \<le> d\<close> by fastforce
     qed
     note d = this d
-    find_theorems name: "lock*final"
-    { fix p
-      assume "p \<in> over_all a"
-      hence "p \<in> plan_invs_after t"
-        unfolding plan_invs_after_def invs_at_def invs_after_def using d by fastforce
-      hence "0 < locked_after t p" using in_invs_after_iff_locked_after by blast
-      hence "0 < locked_before (time_index \<pi> (Suc i)) p" 
-      proof -
-        from \<open>0 < locked_after t p\<close> t i
-        have "i < length (htpl \<pi>) - 1"
-        proof -
-          { assume "i = length (htpl \<pi>) - 1"
-            with \<open>0 < locked_after t p\<close> t 
-            have False using locked_after_final_is_0 by simp
-          }
-          thus ?thesis using i by fastforce
-        qed
-        with \<open>0 < locked_after t p\<close>
-        show ?thesis using locked_after_indexed_timepoint_is_locked_before_Suc t by simp
-      qed
-      hence "p \<in> plan_invs_before (time_index \<pi> (Suc i))" using in_invs_before_iff_locked_before by blast
-      hence "p \<in> invs_at (plan_inv_seq \<pi> over_all) (time_index \<pi> (Suc i))"  unfolding plan_invs_before_def inv_seq_def by simp
-    }
-    hence *: "over_all a \<subseteq> invs_at (plan_inv_seq \<pi> over_all) (time_index \<pi> (Suc i))" by blast
-    
+
     show ?thesis 
     proof (cases "over_all a = {}")
       case True
       then show ?thesis by simp
     next
       case False
-      have "Suc i < length (htpl \<pi>)"
-      proof - 
-        from False obtain p where
-          "p \<in> over_all a" by auto
+      show ?thesis
+      proof (rule subsetI)
+        fix p
+        assume "p \<in> over_all a"
         hence "p \<in> plan_invs_after t"
           unfolding plan_invs_after_def invs_at_def invs_after_def using d by fastforce
         hence "0 < locked_after t p" using in_invs_after_iff_locked_after by blast
-        thus ?thesis
+  
+        have "Suc i < length (htpl \<pi>)"
         proof -
           { assume "i = length (htpl \<pi>) - 1"
             with \<open>0 < locked_after t p\<close> t 
@@ -3562,10 +3539,18 @@ proof -
           }
           thus ?thesis using i by fastforce
         qed
+  
+        have "0 < locked_before (time_index \<pi> (Suc i)) p" 
+          using \<open>0 < locked_after t p\<close> \<open>Suc i < length (htpl \<pi>)\<close> locked_after_indexed_timepoint_is_locked_before_Suc t by simp
+  
+        hence "p \<in> plan_invs_before (time_index \<pi> (Suc i))" using in_invs_before_iff_locked_before by blast
+        hence "p \<in> invs_at (plan_inv_seq \<pi> over_all) (time_index \<pi> (Suc i))"  unfolding plan_invs_before_def inv_seq_def by simp
+        with plan_state_seq_props \<open>Suc i < length (htpl \<pi>)\<close>
+        show "p \<in> plan_state_seq (Suc i)" by auto
       qed
-      then show ?thesis using * plan_state_seq_props by auto
     qed
   qed
+  thus ?thesis using state_seq_Suc_is_upd_state i by blast
 qed
 
 end                       
