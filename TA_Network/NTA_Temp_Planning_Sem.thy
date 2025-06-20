@@ -2212,6 +2212,29 @@ proof -
   show ?thesis unfolding locked_during_and_before locked_after_def locked_before_def by simp
 qed
 
+lemma locked_after_and_during': "locked_after t p = locked_during t p + card {a \<in> starting_actions_at t. p \<in> over_all a}"
+proof -
+  have "sum_list (map (\<lambda>a. (if is_starting_action t a then (1::nat) else 0)) (locked_by p)) = card {a \<in> starting_actions_at t. p \<in> over_all a}"
+  proof -
+    
+    have "sum_list (map (\<lambda>a. (if is_starting_action t a then (1::nat) else 0)) (locked_by p)) = 
+        sum_list (map (\<lambda>a. 1) (filter (is_starting_action t) (locked_by p)))
+        + sum_list (map (\<lambda>a. 0) (filter (\<lambda>a. \<not>is_starting_action t a) (locked_by p)))"
+      using sum_list_map_if' by blast
+    also have "... = sum_list (map (\<lambda>a. 1) (filter (is_starting_action t) (locked_by p)))" using sum_list_0 by simp
+    also have "... = card (set (filter (is_starting_action t) (locked_by p)))"
+      apply (subst distinct_sum_list_1_conv_card_set)
+      using distinct_filter unfolding locked_by_def using distinct_action_list by auto
+    finally have "(\<Sum>a\<leftarrow>locked_by p. if is_starting_action t a then 1 else 0) = card (set (filter (is_starting_action t) (locked_by p)))" by auto
+    moreover
+    have "{a \<in> starting_actions_at t. p \<in> over_all a} = set (filter (is_starting_action t) (locked_by p))"
+      unfolding set_filter locked_by_def set_action_list starting_actions_at_def by auto
+    ultimately
+    show ?thesis by auto
+  qed
+  thus ?thesis using locked_after_and_during by auto
+qed
+
 text \<open>Range\<close>
 
 
@@ -3427,7 +3450,7 @@ lemma upd_state_conv_inst_start_upd_state:
   "upd_state i = app_effs (ending_snaps_at (time_index \<pi> i)) (inst_start_upd_state i)"
   unfolding upd_state_def inst_start_upd_state_def using app_all_dist by simp
 
-lemma state_seq_Suc_is_upd:
+lemma state_seq_Suc_is_upd_state:
   assumes "i < length (htpl \<pi>)"
   shows "plan_state_seq (Suc i) = upd_state i"
   using plan_state_seq_valid valid_state_seqE assms
@@ -3468,6 +3491,81 @@ proof -
   qed
   ultimately
   show ?thesis unfolding state app_effs_def apply_effects_def by auto
+qed
+
+lemma inv_sat_by_upd_state:
+  assumes starting: "is_starting_action t a"
+      and a: "a \<in> actions"
+      and i: "i < length (htpl \<pi>)"
+      and t: "t = (time_index \<pi> i)"
+  shows "over_all a \<subseteq> upd_state i"
+proof -
+  have "over_all a \<subseteq> plan_state_seq (Suc i)"
+  proof -
+    from starting[THEN is_starting_action_dests(1)] at_start_in_happ_seqE''[THEN ex1_implies_ex, THEN exE, OF a]
+    obtain d where
+      d: "(a, t, d) \<in> ran \<pi>" by auto
+    hence "0 \<le> d" using plan_durations by auto
+    hence "0 < d" 
+    proof -
+      { assume "0 = d"
+        with d have "(t, at_end a) \<in> happ_seq" using in_happ_seqI happ_seq_def by fastforce
+        with starting
+        have False using is_starting_action_dests by simp
+      }
+      thus ?thesis using \<open>0 \<le> d\<close> by fastforce
+    qed
+    note d = this d
+    find_theorems name: "lock*final"
+    { fix p
+      assume "p \<in> over_all a"
+      hence "p \<in> plan_invs_after t"
+        unfolding plan_invs_after_def invs_at_def invs_after_def using d by fastforce
+      hence "0 < locked_after t p" using in_invs_after_iff_locked_after by blast
+      hence "0 < locked_before (time_index \<pi> (Suc i)) p" 
+      proof -
+        from \<open>0 < locked_after t p\<close> t i
+        have "i < length (htpl \<pi>) - 1"
+        proof -
+          { assume "i = length (htpl \<pi>) - 1"
+            with \<open>0 < locked_after t p\<close> t 
+            have False using locked_after_final_is_0 by simp
+          }
+          thus ?thesis using i by fastforce
+        qed
+        with \<open>0 < locked_after t p\<close>
+        show ?thesis using locked_after_indexed_timepoint_is_locked_before_Suc t by simp
+      qed
+      hence "p \<in> plan_invs_before (time_index \<pi> (Suc i))" using in_invs_before_iff_locked_before by blast
+      hence "p \<in> invs_at (plan_inv_seq \<pi> over_all) (time_index \<pi> (Suc i))"  unfolding plan_invs_before_def inv_seq_def by simp
+    }
+    hence *: "over_all a \<subseteq> invs_at (plan_inv_seq \<pi> over_all) (time_index \<pi> (Suc i))" by blast
+    
+    show ?thesis 
+    proof (cases "over_all a = {}")
+      case True
+      then show ?thesis by simp
+    next
+      case False
+      have "Suc i < length (htpl \<pi>)"
+      proof - 
+        from False obtain p where
+          "p \<in> over_all a" by auto
+        hence "p \<in> plan_invs_after t"
+          unfolding plan_invs_after_def invs_at_def invs_after_def using d by fastforce
+        hence "0 < locked_after t p" using in_invs_after_iff_locked_after by blast
+        thus ?thesis
+        proof -
+          { assume "i = length (htpl \<pi>) - 1"
+            with \<open>0 < locked_after t p\<close> t 
+            have False using locked_after_final_is_0 by simp
+          }
+          thus ?thesis using i by fastforce
+        qed
+      qed
+      then show ?thesis using * plan_state_seq_props by auto
+    qed
+  qed
 qed
 
 end                       
