@@ -63,6 +63,17 @@ lemma fold_ext_seq_comp_seq_apply_not_Nil[simp]:
   "xs \<noteq> [] \<Longrightarrow> fold (ext_seq o seq_apply) fs xs \<noteq> []"
   by (induction fs arbitrary: xs) auto
 
+lemma hd_ext_seq:
+  assumes "xs \<noteq> []"
+  shows "hd (ext_seq f xs) = hd xs"
+  unfolding ext_seq_def using assms by auto
+
+lemma last_ext_seq:
+  assumes "xs \<noteq> []"
+  shows "f (last xs) \<noteq> [] \<Longrightarrow> last (ext_seq f xs) = last (f (last xs))"
+        "f (last xs) = [] \<Longrightarrow> last (ext_seq f xs) =last xs" 
+  using assms unfolding ext_seq_def by simp_all
+
 lemma seq_apply_nth_conv_fold:
   assumes "i < length fs"
   shows "(seq_apply fs x) ! i = fold id (take (Suc i) fs) x"
@@ -474,9 +485,60 @@ lemma ext_seq'_take_Suc:
   by simp
 
 lemma tl_ext_seq'_single:
-  "tl (ext_seq' [] [x]) = []"
+  "tl (ext_seq' [] xs) = tl xs"
   apply (subst ext_seq'_with_Nil)
   by simp
+
+lemma tl_ext_seq':
+  assumes "\<forall>x f'. f' \<in> set (f#fs) \<longrightarrow> f' x \<noteq> []"
+      and "xs \<noteq> []" 
+    shows "tl (ext_seq' (f#fs) xs) = ext_seq' fs (tl (ext_seq f xs))"
+  using assms
+proof (induction fs arbitrary: f xs)
+  case Nil
+  then show ?case 
+   apply (subst ext_seq'_Cons)
+   apply (subst ext_seq'_with_Nil)+
+    by simp
+next
+  case (Cons f' fs')
+  show ?case 
+    apply (subst ext_seq'_Cons)
+    apply (subst Cons.IH)
+    using Cons apply simp
+     apply (rule ext_seq_not_Nil)
+    using Cons apply simp
+    apply (subst ext_seq'_Cons)
+    apply (subst tl_ext_seq)
+    apply (rule ext_seq_not_Nil)
+    using Cons apply simp
+    apply (subst (3) ext_seq_def)
+    apply (subst (2) ext_seq_def)
+    apply (subst last_appendR)
+     apply (simp add: Cons)
+    apply (subst (3) tl_ext_seq)
+     apply (simp add: Cons)
+    apply (subst last_appendR)
+     apply (simp add: Cons)
+    by blast
+qed
+
+lemma hd_ext_seq':
+  assumes "xs \<noteq> []"
+  shows "hd (ext_seq' fs xs) = hd xs"
+  using assms
+proof (induction fs arbitrary: xs)
+  case Nil
+  then show ?case 
+    by (simp add: ext_seq'_with_Nil)
+next
+  case (Cons f' fs')
+  show ?case 
+    apply (subst ext_seq'_Cons)
+    apply (subst Cons.IH)
+    using ext_seq_not_Nil Cons apply simp
+    unfolding ext_seq_def using Cons by simp
+qed
 
 lemma tl_fold_ext_seq_Nil:
   "tl (fold ext_seq [] xs) = tl xs" 
@@ -606,7 +668,8 @@ lemma seq_apply'_not_Nil:
     by auto
   done
 
-lemma fold_ext_seq_comp_seq_apply_conv_ext_seq'_map_seq_apply: "fold (ext_seq o seq_apply) fs xs = ext_seq' (map seq_apply fs) xs"
+lemma fold_ext_seq_comp_seq_apply_conv_ext_seq'_map_seq_apply: 
+  "fold (ext_seq o seq_apply) fs xs = ext_seq' (map seq_apply fs) xs"
   unfolding ext_seq'_def apply (induction fs arbitrary: xs)
    apply simp
   subgoal for f fs

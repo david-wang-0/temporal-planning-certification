@@ -478,6 +478,26 @@ lemma is_instant_action_dests:
   shows "(t, at_start a) \<in> happ_seq" "(t, at_end a) \<in> happ_seq"
   using is_instant_action_def assms by blast+
 
+lemma is_instant_action_planE:
+  assumes "is_instant_action t a"
+      and a: "a \<in> actions"
+    shows "(a, t, 0) \<in> ran \<pi>"
+proof -
+  from assms is_instant_action_def
+  have "(t, at_start a) \<in> happ_seq" "(t, at_end a) \<in> happ_seq" by auto
+   obtain ds where
+    ds: "(a, t, ds) \<in> ran \<pi>" using a at_start_in_happ_seqE'' \<open>(t, at_start a) \<in> happ_seq\<close> by blast
+    
+
+  from \<open>(t, at_end a) \<in> happ_seq\<close> at_end_in_happ_seqE'' a
+  obtain te de where
+    tede: "(a, te, de) \<in> ran \<pi>" "t = te + de" by blast
+
+  from nso_start_end[OF nso valid_plan_durs(1)[OF vp] ds tede(1)] tede
+  have "ds = 0" by auto
+  thus ?thesis using ds by simp
+qed
+
 lemma is_starting_actionI: "(t, at_start a) \<in> happ_seq \<Longrightarrow> (t, at_end a) \<notin> happ_seq \<Longrightarrow> is_starting_action t a"
   using is_starting_action_def by simp
 
@@ -486,6 +506,30 @@ lemma is_starting_action_dests:
   shows "(t, at_start a) \<in> happ_seq" "(t, at_end a) \<notin> happ_seq"
   using is_starting_action_def assms by blast+
 
+lemma is_starting_action_planE:
+  assumes "is_starting_action t a"
+      and a: "a \<in> actions"
+    shows "\<exists>da. (a, t, da) \<in> ran \<pi> \<and> 0 < da"
+proof -
+  from assms is_starting_action_def
+  have "(t, at_start a) \<in> happ_seq" "(t, at_end a) \<notin> happ_seq" by auto
+  then obtain d where
+    d: "(a, t, d) \<in> ran \<pi>" using a at_start_in_happ_seqE'' by blast
+  moreover
+  have "0 < d"
+  proof -
+    have "0 \<le> d" using d plan_durations by auto
+    moreover
+    { assume "0 = d"
+      hence False using at_end_in_happ_seqI d \<open>(t, at_end a) \<notin>  happ_seq\<close> by force
+    }
+    ultimately
+    show ?thesis by force
+  qed
+  ultimately
+  show ?thesis by blast
+qed
+
 lemma is_ending_actionI: "(t, at_start a) \<notin> happ_seq \<Longrightarrow> (t, at_end a) \<in> happ_seq \<Longrightarrow> is_ending_action t a"
   using is_ending_action_def by simp
 
@@ -493,6 +537,30 @@ lemma is_ending_action_dests:
   assumes "is_ending_action t a" 
   shows "(t, at_start a) \<notin> happ_seq" "(t, at_end a) \<in> happ_seq"
   using is_ending_action_def assms by blast+
+
+lemma is_ending_action_planE:
+  assumes "is_ending_action t a"
+      and a: "a \<in> actions"
+    shows "\<exists>ta da. (a, ta, da) \<in> ran \<pi> \<and> ta < t \<and> t = ta + da"
+proof -
+  from assms is_ending_action_def
+  have "(t, at_start a) \<notin> happ_seq" "(t, at_end a) \<in> happ_seq" by auto
+  then obtain ta da where
+    tada: "(a, ta, da) \<in> ran \<pi>" "t = ta + da" using a at_end_in_happ_seqE'' by blast
+  moreover
+  have "0 < da"
+  proof -
+    have "0 \<le> da" using tada plan_durations by auto
+    moreover
+    { assume "0 = da"
+      hence False using at_start_in_happ_seqI tada \<open>(t, at_start a) \<notin> happ_seq\<close> by force
+    }
+    ultimately
+    show ?thesis by force
+  qed
+  ultimately
+  show ?thesis by fastforce
+qed
 
 lemma is_not_happening_actionI: "(t, at_start a) \<notin> happ_seq \<Longrightarrow> (t, at_end a) \<notin> happ_seq \<Longrightarrow> is_not_happening_action t a"
   using is_not_happening_action_def by simp
@@ -1763,6 +1831,39 @@ proof -
   thus ?thesis using closed_active_count_ran by simp
 qed
 
+lemma closed_active_count_0_happening_casesE:
+  assumes "closed_active_count = 0"
+      and "is_not_happening_action t a \<Longrightarrow> thesis"
+      and "is_ending_action t a \<Longrightarrow> thesis"
+      and "is_instant_action t a \<Longrightarrow> thesis"
+    shows thesis
+proof -
+  presume "is_starting_action t a \<Longrightarrow> thesis"
+  thus thesis using assms action_happening_cases by auto
+next
+  assume "is_starting_action t a"
+  hence "(t, at_start a) \<in> happ_seq" "(t, at_end a) \<notin>  happ_seq" using is_starting_action_def by auto
+  with at_start_in_happ_seqE'' \<open>a \<in> actions\<close>
+  obtain d where
+    d: "(a, t, d) \<in> ran \<pi>" by blast
+  moreover
+  have "0 < d"
+  proof -
+    have "0 \<le> d" using d plan_durations by auto
+    moreover
+    { assume "0 = d"
+      hence False using at_end_in_happ_seqI d \<open>(t, at_end a) \<notin>  happ_seq\<close> by force
+    }
+    ultimately
+    show ?thesis by force
+  qed
+  moreover
+  have "\<not>(\<exists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' \<le> t \<and> t < t' + d')" using assms closed_active_count_0_iff by auto
+  ultimately
+  have "False" by auto
+  thus thesis by simp
+qed
+
 lemma closed_active_count_1_if_starting:
   assumes "(t, at_start a) \<in> happ_seq"
       and "(t, at_end a) \<notin> happ_seq"
@@ -1894,6 +1995,44 @@ lemma open_active_count_eq_closed_active_count_iff_only_instant_acts:
   "open_active_count = closed_active_count \<longleftrightarrow> ((t, at_start a) \<in> happ_seq \<longleftrightarrow> (t, at_end a) \<in> happ_seq)"
   using open_active_count_eq_closed_active_count_if_only_instant_acts 
     only_instant_acts_if_open_active_count_eq_closed_active_count by blast
+
+lemma closed_active_count_1_happening_casesE:
+  assumes "closed_active_count = 1"
+      and "is_starting_action t a \<Longrightarrow> thesis"
+      and "is_not_happening_action t a \<Longrightarrow> thesis"
+    shows thesis
+proof -
+  presume "is_ending_action t a \<Longrightarrow> False" "is_instant_action t a \<Longrightarrow> False"
+  thus thesis using assms action_happening_cases by auto
+next
+  assume "is_ending_action t a"
+  with is_ending_action_planE \<open>a \<in> actions\<close>
+  obtain te de where
+    tede: "(a, te, de) \<in> ran \<pi>" "te < t" "t = te + de" by blast
+
+  from assms closed_active_count_1E
+  obtain ta da where
+    tada: "(a, ta, da) \<in> ran \<pi>" "ta \<le> t" "t < ta + da" by blast
+
+  from nso_double_act_spec[OF nso vp[THEN valid_plan_durs(1)] tede(1) tada(1)] 
+  have "te \<noteq> ta \<or> de \<noteq> da \<Longrightarrow> ta + da < te \<or> te + de < ta" by auto
+  moreover
+  have "te = ta \<Longrightarrow> de \<noteq> da" using tede tada by auto
+  ultimately
+  have "ta + da < te \<or> te + de < ta" by auto
+  with tede tada 
+  show False apply - by (erule disjE; order)
+next
+  assume "is_instant_action t a"
+  with is_instant_action_planE \<open>a \<in> actions\<close>
+  have t0: "(a, t, 0) \<in> ran \<pi>" by auto
+
+  from assms closed_active_count_1E
+  obtain ta da where
+    tada: "(a, ta, da) \<in> ran \<pi>" "ta \<le> t" "t < ta + da" by blast
+  with nso_double_act_spec[OF nso vp[THEN valid_plan_durs(1)] t0 tada(1)] 
+  show False by fastforce
+qed
 
   text \<open>closed_open_active_count\<close>
 lemma closed_open_active_count_ran:
@@ -2994,7 +3133,7 @@ proof -
     using pt_def by force
 qed
 
-lemma a_not_in_b_exec_time_unchanged: "(t, a) \<notin> happ_seq \<Longrightarrow> exec_time a t = exec_time' a t"
+lemma a_not_in_b_exec_time'_unchanged: "(t, a) \<notin> happ_seq \<Longrightarrow> exec_time a t = exec_time' a t"
   using a_not_in_b_last_unchanged unfolding exec_time_def exec_time'_def by simp
 
 lemma a_in_b_last_now: "(t, a) \<in> happ_seq \<Longrightarrow> last_snap_exec' a t = t"
@@ -3295,6 +3434,17 @@ proof -
   with 1
   show ?thesis unfolding exec_time_def pt_def by (auto simp: Let_def)
 qed
+
+lemma action_happening_exec_times: 
+  "is_not_happening_action t a \<Longrightarrow> exec_time (at_start a) t = exec_time' (at_start a) t"
+  "is_not_happening_action t a \<Longrightarrow> exec_time (at_end a) t = exec_time' (at_end a) t"
+  "is_starting_action t a \<Longrightarrow> exec_time (at_end a) t = exec_time' (at_end a) t"
+  "is_starting_action t a \<Longrightarrow> exec_time' (at_start a) t = 0"
+  "is_ending_action t a \<Longrightarrow> exec_time (at_start a) t = exec_time' (at_start a) t"
+  "is_ending_action t a \<Longrightarrow> exec_time' (at_end a) t = 0"
+  "is_instant_action t a \<Longrightarrow> exec_time' (at_start a) t = 0"
+  "is_instant_action t a \<Longrightarrow> exec_time' (at_end a) t = 0"
+  by (intro a_not_in_b_exec_time'_unchanged a_in_b_exec_time'_0, elim action_happening_case_dests)+
 
 subsection \<open>Propositional states, updates, and commutativity\<close>
 

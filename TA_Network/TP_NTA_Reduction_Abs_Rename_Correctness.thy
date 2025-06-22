@@ -373,7 +373,13 @@ lemma index_case_disj:
   "is_not_happening_index t n \<Longrightarrow> \<not>is_instant_index t n \<and> \<not>is_starting_index t n \<and> \<not>is_ending_index t n"
   using planning_sem.action_happening_disj unfolding index_case_defs by blast+
 
-
+lemma index_case_conv_action:
+  "(\<forall>i < length actions. is_not_happening_index t i \<longrightarrow> P (actions ! i)) = (\<forall>a \<in> set actions. planning_sem.is_not_happening_action t a \<longrightarrow> P a)"
+  "(\<forall>i < length actions. is_instant_index t i \<longrightarrow> P (actions ! i)) = (\<forall>a \<in> set actions. planning_sem.is_instant_action t a \<longrightarrow> P a)"
+  "(\<forall>i < length actions. is_ending_index t i \<longrightarrow> P (actions ! i)) = (\<forall>a \<in> set actions. planning_sem.is_ending_action t a \<longrightarrow> P a)"
+  "(\<forall>i < length actions. is_starting_index t i \<longrightarrow> P (actions ! i)) = (\<forall>a \<in> set actions. planning_sem.is_starting_action t a \<longrightarrow> P a)"
+    unfolding set_conv_nth index_case_defs
+    by auto
 
 text \<open>A lemma\<close>
 lemma partially_updated_locked_before_pos: 
@@ -3465,11 +3471,23 @@ section \<open>Applying happenings\<close>
 
 
 
-(* This should record t + \<epsilon> + c for unexecuted actions. What about plans of length 0? Clock valuations
-  do not matter for some plans. *)
 fun act_clock_post_happ_spec::"('action clock, real) cval \<Rightarrow> 'action clock \<Rightarrow> rat \<Rightarrow> bool" where
 "act_clock_post_happ_spec c (ActStart a) t = (c (ActStart a) = real_of_rat (planning_sem.exec_time' (at_start a) t))" |
 "act_clock_post_happ_spec c (ActEnd a) t = (c (ActEnd a) = real_of_rat (planning_sem.exec_time' (at_end a) t))"
+
+lemma act_clock_post_happ_spec_intros: 
+  "(planning_sem.is_instant_action t a \<Longrightarrow> c (ActStart a) = 0)
+\<Longrightarrow> (planning_sem.is_starting_action t a \<Longrightarrow> c (ActStart a) = 0)
+\<Longrightarrow> (planning_sem.is_ending_action t a \<Longrightarrow> act_clock_pre_happ_spec c (ActStart a) t)
+\<Longrightarrow> (planning_sem.is_not_happening_action t a \<Longrightarrow> act_clock_pre_happ_spec c (ActStart a) t)
+\<Longrightarrow> act_clock_post_happ_spec c (ActStart a) t"
+
+    "(planning_sem.is_instant_action t a \<Longrightarrow> c (ActEnd a) = 0) 
+\<Longrightarrow> (planning_sem.is_starting_action t a \<Longrightarrow> act_clock_pre_happ_spec c (ActEnd a) t) 
+\<Longrightarrow> (planning_sem.is_ending_action t a \<Longrightarrow> c (ActEnd a) = 0) 
+\<Longrightarrow> (planning_sem.is_not_happening_action t a \<Longrightarrow> act_clock_pre_happ_spec c (ActEnd a) t) 
+\<Longrightarrow> act_clock_post_happ_spec c (ActEnd a) t"
+  by (rule planning_sem.action_happening_cases[of t a]; use planning_sem.action_happening_exec_times in force)+
 
 (* The properties of the state once the initial transition has been taken *)
 
@@ -4390,14 +4408,14 @@ lemma happening_pre_post_delayI:
 lemma happening_postI:
   assumes "x = (L, v, c)"
   and "Lv_conds L v"
-      "(\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropVar p) = Some (prop_state_after_happ t p))"
-      "(\<forall>p. PropLock p \<in> dom (map_of nta_vars) \<longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_after (time_index \<pi> t) p)))"
-      "v ActsActive = Some (int (planning_sem.active_after (time_index \<pi> t)))"
-      "v Effecting = Some 0"
-      "(\<forall>i<length actions. planning_sem.closed_active_count (time_index \<pi> t) (actions ! i) = 0 \<longrightarrow> L ! Suc i = Off (actions ! i))"
-      "(\<forall>i<length actions. planning_sem.closed_active_count (time_index \<pi> t) (actions ! i) = 1 \<longrightarrow> L ! Suc i = Running (actions ! i))" 
-      "(\<forall>i<length actions. act_clock_post_happ_spec c (ActStart (actions ! i)) (time_index \<pi> t))"
-      "(\<forall>i<length actions. act_clock_post_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> t))"
+    "\<And>p. PropVar p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropVar p) = Some (prop_state_after_happ t p)"
+    "\<And>p. PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_after (time_index \<pi> t) p))"
+    "v ActsActive = Some (int (planning_sem.active_after (time_index \<pi> t)))"
+    "v Effecting = Some 0"
+    "\<And>i. i < length actions \<Longrightarrow> planning_sem.closed_active_count (time_index \<pi> t) (actions ! i) = 0 \<Longrightarrow> L ! Suc i = Off (actions ! i)"
+    "\<And>i. i < length actions \<Longrightarrow> planning_sem.closed_active_count (time_index \<pi> t) (actions ! i) = 1 \<Longrightarrow> L ! Suc i = Running (actions ! i)"
+    "\<And>i. i < length actions \<Longrightarrow> act_clock_post_happ_spec c (ActStart (actions ! i)) (time_index \<pi> t)"
+    "\<And>i. i < length actions \<Longrightarrow> act_clock_post_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> t)"
   shows "happening_post t x"
   unfolding happening_post_def Let_def 
   using assms by blast
@@ -4510,25 +4528,27 @@ lemma happening_invsE:
 lemma happening_invs_dests:
   assumes "happening_invs n (L, v, c)"
   shows "Lv_conds L v"
-      "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
-      "(\<forall>i<length actions. is_starting_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
-      "(\<forall>i<length actions. is_not_happening_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
-      "(\<forall>i<length actions. is_not_happening_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
-      "(\<forall>i<length actions. is_not_happening_index (time_index \<pi> n) i \<longrightarrow> planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = Off (actions ! i))"
-      "(\<forall>i<length actions. is_not_happening_index (time_index \<pi> n) i \<longrightarrow> planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = Running (actions ! i))"
-  using assms by (auto simp: happening_invs_def)
+    "i < length actions \<Longrightarrow> is_ending_index (time_index \<pi> n) i \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n)"
+    "i < length actions \<Longrightarrow> is_starting_index (time_index \<pi> n) i \<Longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n)"
+    "i < length actions \<Longrightarrow> is_not_happening_index (time_index \<pi> n) i \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n)"
+    "i < length actions \<Longrightarrow> is_not_happening_index (time_index \<pi> n) i \<Longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n)"
+    "i < length actions \<Longrightarrow> is_not_happening_index (time_index \<pi> n) i \<Longrightarrow> planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 0 \<Longrightarrow> L ! Suc i = Off (actions ! i)"
+    "i < length actions \<Longrightarrow> is_not_happening_index (time_index \<pi> n) i \<Longrightarrow> planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 1 \<Longrightarrow> L ! Suc i = Running (actions ! i)"
+  using assms 
+  by (auto simp: happening_invs_def)
 
 lemma happening_invsI:
   assumes "x = (L, v, c)"
     "Lv_conds L v"
-    "(\<forall>i<length actions. is_ending_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
-    "(\<forall>i<length actions. is_starting_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
-    "(\<forall>i<length actions. is_not_happening_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
-    "(\<forall>i<length actions. is_not_happening_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
-    "(\<forall>i<length actions. is_not_happening_index (time_index \<pi> n) i \<longrightarrow> planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = Off (actions ! i))"
-    "(\<forall>i<length actions. is_not_happening_index (time_index \<pi> n) i \<longrightarrow> planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = Running (actions ! i))"
+    "\<And>i. i < length actions \<Longrightarrow> is_ending_index (time_index \<pi> n) i \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n)"
+    "\<And>i. i < length actions \<Longrightarrow> is_starting_index (time_index \<pi> n) i \<Longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n)"
+    "\<And>i. i < length actions \<Longrightarrow> is_not_happening_index (time_index \<pi> n) i \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n)"
+    "\<And>i. i < length actions \<Longrightarrow> is_not_happening_index (time_index \<pi> n) i \<Longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n)"
+    "\<And>i. i < length actions \<Longrightarrow> is_not_happening_index (time_index \<pi> n) i \<Longrightarrow> planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 0 \<Longrightarrow> L ! Suc i = Off (actions ! i)"
+    "\<And>i. i < length actions \<Longrightarrow> is_not_happening_index (time_index \<pi> n) i \<Longrightarrow> planning_sem.closed_active_count (time_index \<pi> n) (actions ! i) = 1 \<Longrightarrow> L ! Suc i = Running (actions ! i)"
   shows "happening_invs n x"
-  using assms by (auto simp: happening_invs_def)
+  using assms
+  by (auto simp: happening_invs_def)
 
 lemma end_start_preE:
   assumes "end_start_pre n i x"
@@ -6172,7 +6192,32 @@ proof -
       thus ?thesis using check_bexp_all by blast
     qed
 
-    have all_exI: "\<forall>x. (\<exists>y. x = f y \<and> P y) \<longrightarrow> Q x" if "\<forall>y. P y \<longrightarrow> Q (f y)" for P Q f using that by blast
+
+    have mutex_conds_sat: "c \<turnstile> map (conv_ac \<circ> (\<lambda>x. acconstraint.GT x 0)) (int_clocks_spec (at_start (actions ! (instant_indices ! j)))) @ map (conv_ac \<circ> (\<lambda>x. acconstraint.GE x \<epsilon>)) (int_clocks_spec (at_start (actions ! (instant_indices ! j))))" 
+      if "instant_pre i (instant_indices ! j) (L, v, c)" for L v c
+    proof (intro guard_append)
+      have 1: "\<forall>b\<in>set actions. planning_sem.is_ending_action (time_index \<pi> i) b \<longrightarrow> act_clock_pre_happ_spec c (ActStart b) (time_index \<pi> i)"
+          unfolding index_case_conv_action[symmetric] 
+          by (blast intro:  instant_pre_dests instant_action_invs_dests happening_invs_dests that)
+      have 2: "\<forall>b\<in>set actions. planning_sem.is_not_happening_action (time_index \<pi> i) b \<longrightarrow> act_clock_pre_happ_spec c (ActStart b) (time_index \<pi> i)"
+        unfolding index_case_conv_action[symmetric] 
+        by (blast intro:  instant_pre_dests instant_action_invs_dests happening_invs_dests that)
+      have 3: "\<forall>b\<in>set actions. planning_sem.is_starting_action (time_index \<pi> i) b \<longrightarrow> act_clock_pre_happ_spec c (ActEnd b) (time_index \<pi> i)"
+        unfolding index_case_conv_action[symmetric] 
+        by (blast intro:  instant_pre_dests instant_action_invs_dests happening_invs_dests that)
+      have 4: "\<forall>b\<in>set actions. planning_sem.is_not_happening_action (time_index \<pi> i) b \<longrightarrow> act_clock_pre_happ_spec c (ActEnd b) (time_index \<pi> i)"
+        unfolding index_case_conv_action[symmetric] 
+        by (blast intro:  instant_pre_dests instant_action_invs_dests happening_invs_dests that)
+      have 5: "act_clock_pre_happ_spec c (ActStart (actions ! (instant_indices ! j))) (time_index \<pi> i)"
+        unfolding index_case_conv_action[symmetric] 
+        using that instant_pre_dests iij_instant_index iij_ran by auto
+      show "c \<turnstile> map (conv_ac \<circ> (\<lambda>x. acconstraint.GT x 0)) (int_clocks_spec (at_start (actions ! (instant_indices ! j))))"
+        apply  (rule instant_action_sat_mutex_start[OF iij_in_act iij_instant])
+        using 1 2 3 4 5 by auto
+      show "c \<turnstile> map (conv_ac \<circ> (\<lambda>x. acconstraint.GE x \<epsilon>)) (int_clocks_spec (at_start (actions ! (instant_indices ! j))))"
+        apply  (rule instant_action_sat_mutex_start[OF iij_in_act iij_instant])
+        using 1 2 3 4 5 by auto
+    qed
 
     show ?case 
       apply (insert 2)
@@ -6529,21 +6574,7 @@ proof -
         subgoal apply (drule instant_pre_dests(1)) by (auto intro: v_pre_conds_sat v_lock_conds_sat dest: instant_action_invs_dests)
         subgoal by (auto intro: v_pre_conds_sat v_lock_conds_sat dest: instant_pre_dests)
         done
-      subgoal apply (intro guard_append instant_action_sat_mutex_start[OF iij_in_act iij_instant]; ((subst set_conv_nth, subst ball_simps(8))?, (intro all_exI)?))
-        unfolding index_case_defs[symmetric]
-        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
-        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
-        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
-        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
-        subgoal using instant_pre_dests(7) iij_instant_index iij_ran by blast 
-        subgoal by simp
-        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
-        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
-        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
-        subgoal apply (intro instant_pre_dests instant_action_invs_dests happening_invs_dests) by simp
-        subgoal using instant_pre_dests(7) iij_instant_index iij_ran by blast 
-        subgoal by simp
-        done
+      subgoal using mutex_conds_sat by blast
       subgoal using conv_invs no_invs by auto
       subgoal by (auto dest: instant_pre_dests simp: iij_ran iij_instant_index)
       subgoal by (subst Lv_conds_dests, auto intro: instant_pre_dests instant_action_invs_dests happening_invs_dests simp: iij_ran)
@@ -6907,6 +6938,19 @@ proof -
         apply (subst Lv_conds_dests)
         apply (force intro: start_start_pre_dests start_start_invs_dests happening_invs_dests)
         using sij_ran by simp
+      have sij_set: "start_indices ! j \<in> set start_indices"  using j by auto
+      with image_start_indices_conv_actions
+      have *: "(actions ! (start_indices ! j)) \<in> planning_sem.starting_actions_at (time_index \<pi> i)" using j by blast
+      
+      hence sij_starting: "planning_sem.is_starting_action (time_index \<pi> i) (actions ! (start_indices ! j))"  
+        and sij_in_act[intro]: "actions ! (start_indices ! j) \<in> set actions"  using * planning_sem.starting_actions_at_def j by auto
+  
+      have sij_starting_index: "is_starting_index (time_index \<pi> i) (start_indices ! j)" apply (insert sij_set) apply (subst (asm) (2) start_indices) by simp
+  
+      have sij_ran: "start_indices ! j < length actions" 
+        apply (insert sij_set)
+        apply (subst (asm) (2) start_indices)
+        by simp
 
      have v_pre_conds_sat: "Simple_Expressions.check_bexp v' (bexp_and_all (map (is_prop_ab 1) (pre (at_start (actions ! (start_indices ! j)))))) True"
         if prop_state: "\<forall>p. PropVar p \<in> dom (map_of nta_vars) \<longrightarrow> v' (PropVar p) = Some (starting_part_updated_prop_state i (start_indices ! j) p)" for v'
@@ -6957,55 +7001,94 @@ proof -
         thus ?thesis using check_bexp_all by blast
       qed
 
-      have is_upds: "is_upds v ((ActsActive, binop plus_int (var ActsActive) (exp.const 1)) # (Effecting, binop plus_int (var Effecting) (exp.const 1)) # map (set_prop_ab 0) (dels (at_start (actions ! (start_indices ! j)))) @ map (set_prop_ab 1) (adds (at_start (actions ! (start_indices ! j)))))
-     (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, Effecting \<mapsto> plus_int (the (v Effecting)) 1, map PropVar (dels (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 0) (dels (at_start (actions ! (start_indices ! j)))),
-          map PropVar (adds (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 1) (adds (at_start (actions ! (start_indices ! j))))))"
+      let ?dels = "dels (at_start (actions ! (start_indices ! j)))"
+      let ?adds = "adds (at_start (actions ! (start_indices ! j)))"
+    
+      have is_upds: "is_upds v 
+        ((ActsActive, binop plus_int (var ActsActive) (exp.const 1)) 
+          # (Effecting, binop plus_int (var Effecting) (exp.const 1)) 
+          # map (set_prop_ab 0) ?dels @ map (set_prop_ab 1) ?adds)
+       (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, 
+          Effecting \<mapsto> plus_int (the (v Effecting)) 1, 
+          map PropVar ?dels [\<mapsto>] map (\<lambda>x. 0) ?dels,
+          map PropVar ?adds [\<mapsto>] map (\<lambda>x. 1) ?adds))"
       proof (rule is_upds.intros)
+
         have def: "\<exists>x. v ActsActive = Some x" 
                   "\<exists>x. v Effecting = Some x" using 2 start_start_pre_dests(3,4) by fastforce+
+        have is_val: "is_val v (var ActsActive) (the (v ActsActive))"
+                     "is_val (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1)) (var Effecting) (the (v Effecting))"
+            using def
+            by (auto intro: check_bexp_is_val.intros)
+
         show "is_upd v (ActsActive, binop plus_int (var ActsActive) (exp.const 1)) (v(ActsActive \<mapsto> the (v ActsActive) + 1))"
           unfolding is_upd_def
-          apply (intro exI conjI)
-            apply simp
-           defer
-           apply simp
-          apply rule
-           apply rule
-          using def
-          by (auto intro: check_bexp_is_val.intros)
-        show "is_upds (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1)) ((Effecting, binop plus_int (var Effecting) (exp.const 1)) # map (set_prop_ab 0) (dels (at_start (actions ! (start_indices ! j)))) @ map (set_prop_ab 1) (adds (at_start (actions ! (start_indices ! j)))))
-           (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, Effecting \<mapsto> plus_int (the (v Effecting)) 1, map PropVar (dels (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 0) (dels (at_start (actions ! (start_indices ! j)))),
-                map PropVar (adds (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 1) (adds (at_start (actions ! (start_indices ! j))))))"
+          by (auto intro: check_bexp_is_val.intros is_val)
+        show "is_upds (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1)) 
+            ((Effecting, binop plus_int (var Effecting) (exp.const 1)) 
+              # map (set_prop_ab 0) ?dels 
+              @ map (set_prop_ab 1) ?adds)
+            (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1,
+                Effecting \<mapsto> plus_int (the (v Effecting)) 1, 
+                map PropVar ?dels [\<mapsto>] map (\<lambda>x. 0) ?dels,
+                map PropVar ?adds [\<mapsto>] map (\<lambda>x. 1) ?adds))"
         proof (rule is_upds.intros)
-          show "is_upd (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1)) (Effecting, binop plus_int (var Effecting) (exp.const 1)) (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, Effecting \<mapsto> plus_int (the (v Effecting)) 1))"
-          unfolding is_upd_def
-          apply (intro exI conjI)
+          show "is_upd (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1)) 
+              (Effecting, binop plus_int (var Effecting) (exp.const 1)) 
+              (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, 
+                  Effecting \<mapsto> plus_int (the (v Effecting)) 1))"
+            unfolding is_upd_def
+            by (auto intro: check_bexp_is_val.intros is_val)
+          show "is_upds 
+            (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, 
+                Effecting \<mapsto> plus_int (the (v Effecting)) 1)) 
+            (map (set_prop_ab 0) ?dels @ map (set_prop_ab 1) ?adds)
+            (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, 
+                Effecting \<mapsto> plus_int (the (v Effecting)) 1, 
+                map PropVar ?dels [\<mapsto>] map (\<lambda>x. 0) ?dels,
+                map PropVar ?adds [\<mapsto>] map (\<lambda>x. 1) ?adds))"
+            apply (rule is_upds_appendI)
+            unfolding set_prop_ab_def
+             apply (rule is_upds_set_vars_map)
+              apply (subst map_map[symmetric])
+              apply (rule HOL.refl)
+             apply simp
+            unfolding set_prop_ab_def
+             apply (rule is_upds_set_vars_map)
+              apply (subst map_map[symmetric])
+              apply (rule HOL.refl)
             apply simp
-           defer
-           apply simp
-          apply rule
-           apply rule
-          using def
-          by (auto intro: check_bexp_is_val.intros)
-        show "is_upds (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, Effecting \<mapsto> plus_int (the (v Effecting)) 1)) (map (set_prop_ab 0) (dels (at_start (actions ! (start_indices ! j)))) @ map (set_prop_ab 1) (adds (at_start (actions ! (start_indices ! j)))))
-     (v(ActsActive \<mapsto> plus_int (the (v ActsActive)) 1, Effecting \<mapsto> plus_int (the (v Effecting)) 1, map PropVar (dels (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 0) (dels (at_start (actions ! (start_indices ! j)))),
-          map PropVar (adds (at_start (actions ! (start_indices ! j)))) [\<mapsto>] map (\<lambda>x. 1) (adds (at_start (actions ! (start_indices ! j))))))"
-          apply (rule is_upds_appendI)
-          unfolding set_prop_ab_def
-           apply (rule is_upds_set_vars_map)
-            apply (subst map_map[symmetric])
-            apply (rule HOL.refl)
-           apply simp
-          apply (rule is_upds_appendI)
-          unfolding set_prop_ab_def
-           apply (rule is_upds_set_vars_map)
-            apply (subst map_map[symmetric])
-            apply (rule HOL.refl)
-          apply simp
-          unfolding comp_def map_map by blast
-        qed
-
+            unfolding comp_def map_map by blast
       qed
+    qed
+
+    have mutex_conds_sat: "c \<turnstile> map (conv_ac \<circ> (\<lambda>x. acconstraint.GT x 0)) (int_clocks_spec (at_start (actions ! (start_indices ! j)))) 
+      @ map (conv_ac \<circ> (\<lambda>x. acconstraint.GE x \<epsilon>)) (int_clocks_spec (at_start (actions ! (start_indices ! j))))"
+    proof (rule guard_append)
+      have ssp: "start_start_pre i (start_indices ! j) (L, v, c)" "j < length start_indices" using 2 by auto
+      have 1: "\<forall>b\<in>set actions. planning_sem.is_ending_action (time_index \<pi> i) b \<longrightarrow> act_clock_pre_happ_spec c (ActStart b) (time_index \<pi> i)"
+        unfolding index_case_conv_action[symmetric] 
+        by (blast intro: start_start_pre_dests start_start_invs_dests happening_invs_dests ssp)
+      have 2: "\<forall>b\<in>set actions. planning_sem.is_not_happening_action (time_index \<pi> i) b \<longrightarrow> act_clock_pre_happ_spec c (ActStart b) (time_index \<pi> i)"
+        unfolding index_case_conv_action[symmetric] 
+        by (blast intro: start_start_pre_dests start_start_invs_dests happening_invs_dests ssp)
+      have 3: "\<forall>b\<in>set actions. planning_sem.is_starting_action (time_index \<pi> i) b \<longrightarrow> act_clock_pre_happ_spec c (ActEnd b) (time_index \<pi> i)"
+        unfolding index_case_conv_action[symmetric] 
+        by (blast intro: start_start_pre_dests start_start_invs_dests happening_invs_dests ssp)
+      have 4: "\<forall>b\<in>set actions. planning_sem.is_not_happening_action (time_index \<pi> i) b \<longrightarrow> act_clock_pre_happ_spec c (ActEnd b) (time_index \<pi> i)"
+        unfolding index_case_conv_action[symmetric] 
+        by (blast intro: start_start_pre_dests start_start_invs_dests happening_invs_dests ssp)
+      have 5: "act_clock_pre_happ_spec c (ActStart (actions ! (start_indices ! j))) (time_index \<pi> i)"
+        unfolding index_case_conv_action[symmetric] 
+        by (blast intro: start_start_pre_dests ssp sij_ran sij_starting_index)
+
+      show "c \<turnstile> map (conv_ac \<circ> (\<lambda>x. acconstraint.GT x 0)) (int_clocks_spec (at_start (actions ! (start_indices ! j))))"
+        apply (rule starting_action_sat_mutex_start[OF sij_in_act sij_starting])
+        using 1 2 3 4 5 by auto
+      show "c \<turnstile> map (conv_ac \<circ> (\<lambda>x. acconstraint.GE x \<epsilon>)) (int_clocks_spec (at_start (actions ! (start_indices ! j))))"
+        apply (rule starting_action_sat_mutex_start[OF sij_in_act sij_starting])
+        using 1 2 3 4 5 by auto
+    qed
 
       show ?case 
         apply (insert 2)
@@ -7023,20 +7106,7 @@ proof -
                     apply (simp add: sij_ran nth_auto_trans)
                    apply (use conv_committed no_committed in simp)
         subgoal by (auto intro: check_bexp_all_append v_pre_conds_sat v_lock_conds_sat start_start_pre_dests start_start_invs_dests)
-        subgoal apply (intro guard_append starting_action_sat_mutex_start[OF sij_in_act sij_starting, simplified set_conv_nth] ballI impI, elim CollectE exE conjE)
-          subgoal by (blast dest: happening_invs_dests[simplified index_case_defs] start_start_invs_dests[simplified index_case_defs] start_start_pre_dests[simplified index_case_defs])
-          subgoal by (blast dest: happening_invs_dests[simplified index_case_defs] start_start_invs_dests[simplified index_case_defs] start_start_pre_dests[simplified index_case_defs])
-          subgoal by (blast dest: happening_invs_dests[simplified index_case_defs] start_start_invs_dests[simplified index_case_defs] start_start_pre_dests[simplified index_case_defs])
-          subgoal by (blast dest: happening_invs_dests[simplified index_case_defs] start_start_invs_dests[simplified index_case_defs] start_start_pre_dests[simplified index_case_defs])
-          subgoal by (intro start_start_pre_dests[simplified index_case_defs]) (use sij_starting sij_ran in auto)
-          subgoal by simp
-          subgoal by (blast dest: happening_invs_dests[simplified index_case_defs] start_start_invs_dests[simplified index_case_defs] start_start_pre_dests[simplified index_case_defs])
-          subgoal by (blast dest: happening_invs_dests[simplified index_case_defs] start_start_invs_dests[simplified index_case_defs] start_start_pre_dests[simplified index_case_defs])
-          subgoal by (blast dest: happening_invs_dests[simplified index_case_defs] start_start_invs_dests[simplified index_case_defs] start_start_pre_dests[simplified index_case_defs])
-          subgoal by (blast dest: happening_invs_dests[simplified index_case_defs] start_start_invs_dests[simplified index_case_defs] start_start_pre_dests[simplified index_case_defs])
-          subgoal by (intro start_start_pre_dests[simplified index_case_defs]) (use sij_starting sij_ran in auto)
-          subgoal by simp
-          done
+        subgoal using mutex_conds_sat by auto
         subgoal using conv_invs no_invs by auto
         subgoal by (auto intro: start_start_pre_dests sij_starting_index sij_ran)
         subgoal using sij_L by simp
@@ -7869,24 +7939,27 @@ proof -
       subgoal for L v c
         apply (rule happening_postI, simp)
         subgoal by (intro inv_check_post_dests start_end_invs_dests happening_invs_dests)
-        subgoal apply (subst updated_locked_during_all_is_locked_after[OF i, symmetric])
-          apply (subst updated_locked_during_inv[OF i, symmetric, where n = "Suc (start_indices ! (length start_indices - 1))"])
-          apply (rule Suc_leI)
-          using sip.nth_ys_ran 
-          using start_indices_inc_all_above
-          by (auto intro: start_end_post_dests)
-        subgoal apply (frule start_end_post_dests(2))
-          apply (subst (asm) starting_actions_after_inv[OF i, where m = "length actions"])
-          apply (rule Suc_leI)
-          using starting_actions_after_all_is_none[THEN arg_cong[of _ _ card], simplified card.empty, symmetric, OF i]
-          using sip.nth_ys_ran 
-          using start_indices_inc_all_above
-          by (auto intro: start_end_post_dests)
-        subgoal for k
-          apply (erule start_end_post_dests)
-           apply (rule ccontr)
-          using start_indices_inc_all_above 
-          by auto
+        subgoal by (intro inv_check_post_dests start_end_invs_dests happening_invs_dests)
+        subgoal by (intro inv_check_post_dests start_end_invs_dests happening_invs_dests)
+        subgoal by (intro inv_check_post_dests start_end_invs_dests happening_invs_dests)
+        subgoal by (intro inv_check_post_dests start_end_invs_dests happening_invs_dests)
+        subgoal for k apply (rule planning_sem.closed_active_count_0_happening_casesE[rotated], assumption)
+          unfolding index_case_defs[symmetric]
+          apply (blast intro: happening_invs_dests start_end_invs_dests inv_check_post_dests)+
+          by simp
+        subgoal for k apply (rule planning_sem.closed_active_count_1_happening_casesE[rotated], assumption)
+          unfolding index_case_defs[symmetric]
+          subgoal apply (erule inv_check_post_dests)
+            apply (rule ccontr)
+            using start_indices_inc_all_above by auto
+          apply (blast intro: happening_invs_dests start_end_invs_dests inv_check_post_dests)
+          by simp
+        subgoal for k apply (rule act_clock_post_happ_spec_intros)
+          unfolding index_case_defs[symmetric]
+          by (blast intro: happening_invs_dests start_end_invs_dests inv_check_post_dests)+
+        subgoal for k apply (rule act_clock_post_happ_spec_intros)
+          unfolding index_case_defs[symmetric]
+          by (blast intro: happening_invs_dests start_end_invs_dests inv_check_post_dests)+
         done
       done
   next
@@ -7908,11 +7981,29 @@ proof -
       apply (insert 5)
       apply (induction x)
       subgoal for L v c
-        apply (intro happening_post_start_endsI)
-        subgoal by (rule happening_pre_start_ends_dests)
-        subgoal using happening_pre_start_ends_dests planning_sem.locked_after_and_during' no_starting by simp
-        subgoal using no_starting by (auto simp: happening_pre_start_ends_dests)
-        using not_starting by auto
+        apply (intro happening_postI, simp)
+        subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
+        subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
+        subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
+        subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
+        subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
+        subgoal for k apply (rule planning_sem.closed_active_count_0_happening_casesE[rotated], assumption)
+          unfolding index_case_defs[symmetric]
+          apply (blast intro: happening_invs_dests start_end_invs_dests happening_post_start_ends_dests)+
+          by simp
+        subgoal for k apply (rule planning_sem.closed_active_count_1_happening_casesE[rotated], assumption)
+          unfolding index_case_defs[symmetric] 
+          using not_starting 
+          by (fastforce intro: happening_invs_dests start_end_invs_dests happening_post_start_ends_dests)+
+        subgoal for k apply (rule act_clock_post_happ_spec_intros)
+          unfolding index_case_defs[symmetric] 
+          using not_starting
+          by (fastforce intro: happening_invs_dests start_end_invs_dests happening_post_start_ends_dests)+
+        subgoal for k apply (rule act_clock_post_happ_spec_intros)
+          unfolding index_case_defs[symmetric] 
+          using not_starting
+          by (fastforce intro: happening_invs_dests start_end_invs_dests happening_post_start_ends_dests)+
+        done
       done
   next
     case (6 x)
@@ -8485,16 +8576,13 @@ let ?seq = "(ext_seq \<circ> seq_apply) (map leave_start_edge_effect (filter (is
       done
   qed
   show "abs_renum.urge_bisim.A.steps ?seq \<and> happening_post i (last ?seq)"
-    apply (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable)
-          apply (rule start_ends_possible)
-            apply (rule end_ends_possible)
-              apply (rule start_starts_possible)
-                apply (rule instant_actions_possible)
-                  apply (rule end_starts_possible)
-                    apply (auto intro!: abs_renum.urge_bisim.A.steps.intros pres')[1]
-                   apply simp
-    using i apply simp
-    sorry
+    apply (rule inv_check_possible)
+      apply (rule start_ends_possible)
+        apply (rule end_ends_possible)
+          apply (rule start_starts_possible)
+            apply (rule instant_actions_possible)
+              apply (rule end_starts_possible)
+    by (auto intro!: i abs_renum.urge_bisim.A.steps.intros pres')
 qed
 
 
@@ -8539,7 +8627,7 @@ proof (rule steps_seq.ext_seq'_induct_list_prop_and_post[
     using x by simp
 next
   case (2 i s)
-  then show ?case sorry
+  then show ?case using happening_steps_possible by simp
 next
   case (3 i s)
   then show ?case 
@@ -8548,7 +8636,7 @@ next
     subgoal for L v c
       apply (erule happening_pre_pre_delayI)
              apply simp
-      subgoal by (auto simp: prop_state_after_happ_def prop_state_before_happ_def planning_sem.state_seq_Suc_is_upd)
+      subgoal by (auto simp: prop_state_after_happ_def prop_state_before_happ_def planning_sem.state_seq_Suc_is_upd_state)
       subgoal by (auto simp: planning_sem.locked_after_indexed_timepoint_is_locked_before_Suc[symmetric])
       subgoal by (auto simp: planning_sem.active_after_indexed_timepoint_is_active_before_Suc[symmetric])
       subgoal by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
@@ -8623,11 +8711,11 @@ next
         done
           subgoal
             apply (rule exI[of _ "planning_sem.upd_state (length (htpl \<pi>) - 1)"])
-            apply (subst planning_sem.state_seq_Suc_is_upd[symmetric], simp)+
+            apply (subst planning_sem.state_seq_Suc_is_upd_state[symmetric], simp)+
             apply (rule conjI)
             using planning_sem.plan_state_seq_valid apply fastforce
             apply (subst (asm) prop_state_after_happ_def, simp)
-            apply (subst (asm) planning_sem.state_seq_Suc_is_upd[symmetric], simp)+
+            apply (subst (asm) planning_sem.state_seq_Suc_is_upd_state[symmetric], simp)+
             by blast
           unfolding planning_sem.locked_after_final_is_0 int_of_nat_def
           by simp
@@ -8738,57 +8826,70 @@ lemma all_steps_possible: "abs_renum.urge_bisim.A.steps plan_steps \<and> goal_s
     by (rule initial_step_possible)
 
 
+lemma goal_run_is_run: "abs_renum.urge_bisim.A.run (goal_run (last plan_steps))"
+proof -
+  have x: "goal_state_conds (shd (goal_run (last plan_steps)))"  using all_steps_possible by simp
+  
+  show ?thesis
+  proof (rule abs_renum.urge_bisim.A.run.coinduct[where X = "\<lambda>x. goal_state_conds (shd x) \<and> x = goal_run (shd x)"], goal_cases)
+    case 1
+    then show ?case using x by auto
+  next
+    case (2 x)
+    hence "goal_state_conds (shd x)" "x = goal_run (shd x)" by auto
 
-find_theorems name: "abs_renum.urge_bisim.A.steps*"
+    have ctr: "x = shd x ## shd x ## (goal_run (shd x))" 
+    proof -
+      have 1: "shd x ## (goal_run (shd x)) = (goal_run (shd x))"
+        apply (subst (2) goal_run.ctr)
+        by simp
+      with \<open>x = goal_run (shd x)\<close>
+      show ?thesis by auto
+    qed
+    obtain L v c where
+      Lvc: "shd x = (L, v, c)" using prod_cases3 by blast
+    hence conds: "goal_state_conds (L, v, c)" using 2 by auto
 
-(* delay and apply forces the delay on the first state *)
-lemma "abs_renum.urge_bisim.A.steps ((L, v, c) # apply_nth_happening i (L, v, c \<oplus> real_of_rat (get_delay i)))"
-  unfolding delay_and_apply_def Let_def
-  apply (subst apply_nth_happening_def) 
-  apply (subst Let_def)+
-  sorry
+    have trans: "abs_renum.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow> \<langle>L, v, c\<rangle>"
+      apply (rule non_t_step_intro[where a = "Internal (STR '''')"])
+      unfolding abs_renum.sem_def
+        apply (rule step_int[where p = 0])
+      unfolding TAG_def
+                  apply (subst conv_trans)
+      using some_actual_autos apply simp
+                  apply (subst main_auto_trans)
+                  apply (rule image_eqI[where x = main_auto_loop_spec])
+                   apply (subst main_auto_loop_spec_def)
+                   apply simp
+                  apply simp
+      subgoal using conv_committed no_committed by auto
+      subgoal by (simp add: check_bexp_simps)
+               apply simp
+      subgoal using conv_invs no_invs by simp
+      subgoal using conds goal_state_condsE by fastforce
+      subgoal using conds goal_state_condsE by fastforce
+      subgoal using conds goal_state_condsE by fastforce
+      subgoal using conds goal_state_condsE by fastforce
+      subgoal by rule
+      subgoal using conds goal_state_condsE by fastforce
+      subgoal using conds goal_state_condsE by fastforce
+      by auto
+    have conds': "goal_state_conds (shd (shd x ## goal_run (shd x)))" 
+      apply (subst stream.sel) using 2 by auto
+
+    have ctr': "shd x ## (goal_run (shd x)) = goal_run (shd ((shd x) ## (goal_run (shd x))))"
+      using goal_run.ctr stream.sel
+      by simp
+    show ?case
+      apply (intro exI conjI)
+        apply (rule ctr)
+       apply (subst Lvc)+
+      unfolding prod.case
+      using trans ctr' conds' by simp+
+  qed
+qed
 
 
-
-(* Define the pre- and post-conditions when executing:
-  - all ending transitions
-  - all instant transitions
-  - all starting transitions
-  - all ending' transitions
-  - all starting' transitions
-*)
-
-(* Define the pre- and post-conditions when executing:
-  - a happening
-  - a plan
-*)
-
-
-
-thm nta_vars_exact[no_vars]
-thm action_vars_spec_def[no_vars]
-thm snap_vars_spec_def[no_vars]
-
-(* What happens when the ending snap-actions are applied? *)
-
-
-
-thm plan_steps_def[simplified Let_def ext_seq''_alt]
-
-lemma plan_steps_are_steps: "abs_renum.urge_bisim.A.steps plan_steps"
-  unfolding plan_steps_def Let_def
-  sorry
-
-lemma end_of_steps_is_run: "abs_renum.urge_bisim.A.run (goal_run (last plan_steps))" sorry
-
-lemma "abs_renum.urge_bisim.A.run (goal_run goal_state)" sorry
-
-
-lemma "abs_renum.urge_bisim.A.steps (undefined # undefined # undefined)"
-  find_theorems intro name: "steps"
-  apply (rule abs_renum.urge_bisim.A.stepsI)
-  using abs_renum.urge_bisim.A.steps.intros
-  sorry
 
 lemma state_seq_sat_goal: "ev (holds (\<lambda>(L, s, _). check_sexp (sexp.loc 0 GoalLocation) L (the \<circ> s))) plan_state_sequence"
   find_theorems intro name: "ev" sorry
@@ -8810,8 +8911,6 @@ proof -
     unfolding formula.case
     find_theorems name: "abs_renumEx_ev"
     apply (subst abs_renum.urge_bisim.A.Ex_ev_def)
-    find_theorems (200) name: "abs_renum*run"
-    find_theorems name: deadlock
     apply (rule exI)
     apply (rule conjI)
      apply (coinduction rule: abs_renum.urge_bisim.A.run.coinduct) sorry
@@ -8830,21 +8929,70 @@ find_theorems  name: "LTL*ev"
 
 thm Graph_Defs.Ex_ev_def Graph_Defs.extend_run' Sequence_LTL.ev_alt_def
 
-lemma "abs_renum.sem, abs_renum.a\<^sub>0 \<Turnstile> form"
+lemma valid_plan_imp_form_holds': "abs_renum.sem, abs_renum.a\<^sub>0 \<Turnstile> form"
 proof -
+  have plan_steps_not_Nil: "plan_steps \<noteq> []" unfolding plan_steps_def 
+    apply (rule ext_seq_not_Nil(2))
+    apply (rule seq_apply_not_Nil)
+    by simp
+
+  have plan_steps_alt: "abs_renum.a\<^sub>0 # (tl plan_steps) = plan_steps"
+  proof -
+     have "abs_renum.a\<^sub>0 = hd plan_steps" unfolding plan_steps_def 
+      apply (subst hd_ext_seq)
+       apply (rule ext_seq'_not_Nil)
+       apply simp
+      apply (subst hd_ext_seq')
+       apply simp
+      apply (subst hd_ext_seq)
+       by simp+
+     thus ?thesis using hd_Cons_tl plan_steps_not_Nil by auto
+   qed
+
+  have run_alt: "abs_renum.a\<^sub>0 ## (stl (plan_steps @- (goal_run (last plan_steps)))) = (plan_steps @- (goal_run (last plan_steps)))"
+    apply (subst shift_simps(2))
+    apply (subst if_not_P)
+     apply (rule plan_steps_not_Nil)
+    apply (subst shift.simps(2)[symmetric])
+    apply (subst plan_steps_alt)
+    by blast
+
+  have steps: "abs_renum.urge_bisim.A.steps plan_steps" using all_steps_possible by blast
+
+  have run: "abs_renum.urge_bisim.A.run (plan_steps @- (goal_run (last plan_steps)))"
+  proof (rule Graph_Defs.extend_run')
+    show "abs_renum.urge_bisim.A.steps plan_steps" using all_steps_possible by blast
+    show "abs_renum.urge_bisim.A.run (goal_run (last plan_steps))" using goal_run_is_run by blast
+    show "last plan_steps = shd (goal_run (last plan_steps))" using goal_run.ctr by simp
+    show "plan_steps @- stl (goal_run (last plan_steps)) = plan_steps @- goal_run (last plan_steps)" using goal_run.ctr by simp
+  qed
+  hence run': "abs_renum.urge_bisim.A.run (abs_renum.a\<^sub>0 ## (stl (plan_steps @- (goal_run (last plan_steps)))))" using run_alt by auto
+
+  have form_holds: "holds (\<lambda>(L, v, _). check_sexp (sexp.loc 0 GoalLocation) L (the \<circ> v)) (goal_run (last plan_steps))"
+  proof -
+    obtain L v c where
+      Lvc: "shd (goal_run (last plan_steps)) = (L, v, c)" using prod_cases3 by blast
+    hence  "last (plan_steps) = (L, v, c)" using goal_run.sel by auto
+    hence "goal_state_conds (L, v, c)" using all_steps_possible by auto
+    hence "L ! 0 = GoalLocation" using goal_state_condsE by force
+    hence "check_sexp (sexp.loc 0 GoalLocation) L (the \<circ> v)" by auto
+    thus ?thesis using holds.simps Lvc by fastforce
+  qed
   show "?thesis" unfolding form_alt 
     unfolding models_def 
     unfolding formula.case
-    find_theorems name: "abs_renumEx_ev"
     apply (subst abs_renum.urge_bisim.A.Ex_ev_def)
-    find_theorems (200) name: "abs_renum*run"
-    find_theorems name: deadlock
-    apply (intro exI conjI)
-     prefer 2
-    apply (subst ev_alt_def)
-    find_theorems intro
-     apply (coinduction rule: abs_renum.urge_bisim.A.run.coinduct) sorry
-  qed
-
+    apply (subst Sequence_LTL.ev_alt_def)
+    using run' run_alt form_holds by blast
+qed
 end
+theorem valid_plan_imp_form_holds:
+  assumes "\<exists> \<pi>. valid_plan \<pi> (set init) (set goal) at_start at_end (set \<circ> over_all) lower_sem upper_sem (set \<circ> pre) (set \<circ> adds) (set \<circ> dels) (Rat.of_int \<epsilon>) \<and> plan_actions_in_problem \<pi> (set actions) \<and> no_self_overlap \<pi>" 
+  shows "abs_renum.sem,abs_renum.a\<^sub>0 \<Turnstile> form" using valid_plan_imp_form_holds' assms by auto
+
+corollary form_not_sat_imp_no_valid_plan:
+  assumes "\<not>abs_renum.sem,abs_renum.a\<^sub>0 \<Turnstile> form"
+  shows "\<not>(\<exists> \<pi>. valid_plan \<pi> (set init) (set goal) at_start at_end (set \<circ> over_all) lower_sem upper_sem (set \<circ> pre) (set \<circ> adds) (set \<circ> dels) (Rat.of_int \<epsilon>) \<and> plan_actions_in_problem \<pi> (set actions) \<and> no_self_overlap \<pi>)"
+  using assms valid_plan_imp_form_holds by auto
+
 end
