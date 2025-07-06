@@ -3703,5 +3703,6 @@ proof -
   thus ?thesis using state_seq_Suc_is_upd_state i by blast
 qed
 
-end                       
+end
+
 end

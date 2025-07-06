@@ -860,7 +860,8 @@ begin
 
 end
 
-
+thm seq_apply_pre_post_induct_steps_post[no_vars]
+thm seq_apply_pre_post_induct_strengthen_pre_weaken_post[no_vars]
 
 locale sequence_rules =
   fixes LP
@@ -1141,7 +1142,7 @@ proof -
     using 1 2 step by fastforce
 qed
 
-
+thm ext_seq_induct_list_prop[no_vars, simplified comp_apply[symmetric, of ext_seq seq_apply]]
 
 end
 

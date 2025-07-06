@@ -31,7 +31,7 @@ datatype 'action location =
   Planning |
   GoalLocation
 
-lemma variable_UNIV: "(UNIV::'a variable set) = PropVar ` (UNIV::'a set) \<union> PropLock ` UNIV \<union> {ActsActive, PlanningLock}" 
+lemma variable_UNIV: "(UNIV::'a variable set) = PropVar ` (UNIV::'a set) \<union> PropLock ` UNIV \<union> {ActsActive, PlanningLock, Effecting}" 
   apply (rule UNIV_eq_I)
   subgoal for x by (cases x; blast)
   done
@@ -59,8 +59,13 @@ lemma infinite_clock: "infinite (UNIV::'a set) \<Longrightarrow> infinite (UNIV:
   apply (rule injI)
   by simp
 
-lemma location_UNIV: "(UNIV::'a location set) = Off ` (UNIV::'a set) \<union> StartInstant ` UNIV \<union> Running ` UNIV \<union> EndInstant ` UNIV
-\<union> {InitialLocation, Planning, GoalLocation}" 
+lemma location_UNIV: "(UNIV::'a location set) = 
+  Off ` (UNIV::'a set) 
+  \<union> StartInstant ` UNIV 
+  \<union> Running ` UNIV
+  \<union> EndInstant ` UNIV
+  \<union> PostStart ` UNIV
+  \<union> {InitialLocation, Planning, GoalLocation}" 
   apply (rule UNIV_eq_I)
   subgoal for x by (cases x; blast)
   done
@@ -246,33 +251,30 @@ in
 definition start_edge_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
 "start_edge_spec a \<equiv> 
 let 
-  off = Off a;
-  start_inst = StartInstant a;
-
   start_snap = at_start a;
   
   guard = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec start_snap) @ map (\<lambda>x. acconstraint.GE x \<epsilon>) (int_clocks_spec start_snap);
   
   not_locked_check = map (is_prop_lock_ab 0) (filter (\<lambda>p. p \<notin> set (adds start_snap)) (dels start_snap));
   pre_check = map (is_prop_ab 1) (pre start_snap);
-  var_check = bexp_and_all (not_locked_check @ pre_check);
+  var_check = bexp_and_all (not_locked_check @ pre_check );
   
   add_upds = map (set_prop_ab 1) (adds start_snap);
   del_upds = map (set_prop_ab 0) (dels start_snap);
   upds = (inc_var 1 ActsActive) # (inc_var 1 Effecting) # del_upds @ add_upds;
 
   resets = [ActStart a]
-in (off, var_check, guard, Sil (STR ''''), upds, resets, start_inst)"
+in (Off a, var_check, guard, Sil (STR ''''), upds, resets, StartInstant a)"
 
 definition edge_2_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
 "edge_2_spec a \<equiv> 
 let 
+  check_invs = bexp_and_all (map (is_prop_ab 1) (over_all a));
   upds = (inc_var (-1) Effecting) # map (inc_prop_lock_ab 1) (over_all a)
 in
-  (StartInstant a, bexp.true, [], Sil (STR ''''), upds, [],  PostStart a)
+  (StartInstant a, check_invs, [], Sil (STR ''''), upds, [], Running a)
 "
 
-find_theorems name: "Option*map"
 
 definition leave_start_edge_spec::"'action \<Rightarrow> 'action location \<times> ('proposition variable, int) Simple_Expressions.bexp \<times> ('action clock, int) acconstraint list \<times> String.literal act \<times> ('proposition variable \<times> ('proposition variable, int) exp) list \<times> 'action clock list \<times> 'action location" where
 "leave_start_edge_spec a \<equiv> 
