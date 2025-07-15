@@ -1,6 +1,6 @@
 theory TP_NTA_Reduction_Spec
   imports NTA_Temp_Planning_Sem
-      TA_Code.Simple_Network_Language_Export_Code
+      Munta_Model_Checker.Simple_Network_Language_Export_Code
 
 begin
 (* To do: implement the compilation abstractly or directly using show? *)

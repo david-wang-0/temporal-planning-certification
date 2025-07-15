@@ -2,7 +2,6 @@ theory Sequences
   imports Base
 begin
 
-(* to do: move into locale *)
 definition "seq_apply fs x = map (\<lambda>i. (fold (id) (take i fs) x)) [1..<length fs + 1]"
 
 definition "ext_seq f xs \<equiv> xs @ f (last xs)"

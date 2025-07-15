@@ -4730,7 +4730,7 @@ lemma instant_pre_dests:
   "(\<forall>i. j \<le> i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
   "(\<forall>i. j \<le> i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))"
-  using assms unfolding instant_pre_def instant_cond_def by auto
+  using assms unfolding instant_pre_def instant_cond_def Let_def prod.case by blast+
 
 lemma instant_preI:
   assumes "x = (L, v, c)"
@@ -4744,7 +4744,7 @@ lemma instant_preI:
     "(\<forall>i. j \<le> i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
     "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))"
   shows "instant_pre n j x" 
-  using assms unfolding instant_pre_def instant_cond_def by fastforce
+  using assms unfolding instant_pre_def instant_cond_def Let_def prod.case by blast+
 
 lemma instant_post_dests:
   assumes "instant_post n j (L, v, c)"
@@ -4757,7 +4757,7 @@ lemma instant_post_dests:
   "(\<forall>i. Suc j \<le> i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! i)) (time_index \<pi> n))"
   "(\<forall>i. Suc j \<le> i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))" 
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))"
-  using assms unfolding instant_post_def comp_def instant_cond_def by auto
+  using assms unfolding instant_post_def comp_def instant_cond_def Let_def prod.case by blast+
 
 lemma instant_postI:
   assumes "instant_action_invs n (L, v, c)"
@@ -4784,7 +4784,7 @@ lemma instant_starting_cond_dests:
   "(\<forall>i. j \<le> i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
   "L ! Suc j = StartInstant (actions ! j)"
   "(\<forall>i<length actions. i \<noteq> j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))"
-  using assms unfolding instant_starting_cond_def by auto
+  using assms unfolding instant_starting_cond_def Let_def prod.case by blast+
 
 lemma instant_starting_condI:
   assumes "instant_action_invs n (L, v, c)"
@@ -4812,7 +4812,7 @@ lemma instant_ending_cond_dests:
     "(\<forall>i. j < i \<and> i < length actions \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> act_clock_pre_happ_spec c (ActEnd (actions ! i)) (time_index \<pi> n))"
     "L ! Suc j = EndInstant (actions ! j)"
     "(\<forall>i<length actions. i \<noteq> j \<and> is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))"
-  using assms unfolding instant_ending_cond_def by auto
+  using assms unfolding instant_ending_cond_def Let_def prod.case by blast+
 
 
 lemma instant_ending_condI:
@@ -4868,9 +4868,10 @@ lemma end_start_invs_maintained:
           "\<forall>i<length actions. is_starting_index (time_index \<pi> n) i \<longrightarrow> L' ! Suc i = L ! Suc i"
           "\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L' ! Suc i = L ! Suc i"
   shows "end_start_invs n (L', v', c')"
-  apply (insert assms(1))
   apply (rule end_start_invsI, simp)
-  by (auto dest: end_start_invs_dests simp: happ_invs p aa clock Loc)
+         apply (rule happ_invs, rule end_start_invs_dests, simp add: assms(1))
+  unfolding act_clock_pre_happ_spec.simps
+  by (auto simp: clock[THEN spec, THEN mp, THEN mp] p[THEN spec, THEN mp] aa Loc[THEN spec, THEN mp, THEN mp] end_start_invs_dests[OF assms(1), simplified act_clock_pre_happ_spec.simps])
 
 lemma instant_action_invs_maintained:
   assumes "instant_action_invs n (L, v, c)"
@@ -4896,7 +4897,7 @@ lemma happening_post_instants_dests:
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActStart (actions ! i)) = 0)"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))"  
-  using assms unfolding happening_post_instants_def by auto
+  using assms unfolding happening_post_instants_def Let_def prod.case by blast+
   
 lemma happening_post_instantsI:
   assumes "instant_action_invs n (L, v, c)"
@@ -4907,7 +4908,7 @@ lemma happening_post_instantsI:
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> c (ActEnd (actions ! i)) = 0)"
   "(\<forall>i<length actions. is_instant_index (time_index \<pi> n) i \<longrightarrow> L ! Suc i = Off (actions ! i))" 
   shows "happening_post_instants n (L, v, c)" 
-  using assms unfolding happening_post_instants_def by auto
+  using assms unfolding happening_post_instants_def Let_def prod.case by blast+
 
 lemma happening_pre_start_starts_dests:
   assumes "happening_pre_start_starts i (L, v, c)"
@@ -4917,7 +4918,7 @@ lemma happening_pre_start_starts_dests:
   "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)))"
   "j<length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) j \<Longrightarrow>  act_clock_pre_happ_spec c (ActStart (actions ! j)) (time_index \<pi> i)"
   "j<length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) j \<Longrightarrow>  L ! Suc j = Off (actions ! j)"
-  using assms unfolding happening_pre_start_starts_def by auto
+  using assms unfolding happening_pre_start_starts_def Let_def prod.case by blast+
 
 lemma happening_pre_start_startsI:
   assumes "start_start_invs i (L, v, c)"
@@ -4927,7 +4928,7 @@ lemma happening_pre_start_startsI:
       "\<And>ia. ia < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) ia \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! ia)) (time_index \<pi> i)"
       "\<And>ia. ia < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) ia \<Longrightarrow> L ! Suc ia = Off (actions ! ia)"
   shows "happening_pre_start_starts i (L, v, c)"
-  unfolding happening_pre_start_starts_def using assms by auto
+  unfolding happening_pre_start_starts_def using assms unfolding Let_def prod.case by blast+
 
 lemma start_start_invs_maintained:
   assumes "start_start_invs i (L, v, c)"
@@ -4961,7 +4962,7 @@ lemma start_start_invs_dests:
     "\<And>k. k < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) k \<Longrightarrow> c (ActEnd (actions ! k)) = 0"
     "\<And>k. k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
     "\<And>k. k < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
-  using assms unfolding start_start_invs_def by auto
+  using assms unfolding start_start_invs_def Let_def prod.case by blast+
 
 lemma start_start_preI:
   assumes "start_start_invs i (L, v, c)"
@@ -4986,7 +4987,7 @@ lemma start_start_pre_dests:
     "n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! k)) (time_index \<pi> i)"
     "k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
     "n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
-  using assms unfolding start_start_pre_def start_start_cond_def by auto
+  using assms unfolding start_start_pre_def start_start_cond_def Let_def prod.case by blast+
 
 lemma start_start_postI:
   assumes "start_start_invs i (L, v, c)"
@@ -5011,7 +5012,7 @@ lemma start_start_post_dests:
     "\<And>k. Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> act_clock_pre_happ_spec c (ActStart (actions ! k)) (time_index \<pi> i)"
     "\<And>k. k < Suc n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
     "\<And>k. Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
-  using assms unfolding start_start_post_def start_start_cond_def by auto
+  using assms unfolding start_start_post_def start_start_cond_def Let_def prod.case by blast+
 
 lemma happening_post_start_startsI:
   assumes "start_start_invs i (L, v, c)"
@@ -5032,7 +5033,7 @@ lemma happening_post_start_starts_dests:
     "v Effecting = Some (card (planning_sem.ending_actions_at (time_index \<pi> i)) + card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> c (ActStart (actions ! k)) = 0"
     "k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
-  using assms unfolding happening_post_start_starts_def by auto
+  using assms unfolding happening_post_start_starts_def Let_def prod.case by blast+
 
 lemma happening_pre_end_endsI:
   assumes "end_end_invs i (L, v, c)"
@@ -5102,7 +5103,7 @@ lemma end_end_preI:
     "\<And>k. n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
     "\<And>k. k < n \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
   shows "end_end_pre i n (L, v, c)"
-  using assms unfolding end_end_pre_def end_end_cond_def by auto
+  using assms unfolding end_end_pre_def end_end_cond_def Let_def prod.case by blast+
 
 lemma end_end_pre_dests:
   assumes "end_end_pre i n (L, v, c)"
@@ -5112,7 +5113,7 @@ lemma end_end_pre_dests:
     "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)) + card (ending_actions_after i n))"
     "n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
     "k < n \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
-  using assms unfolding end_end_pre_def end_end_cond_def by auto
+  using assms unfolding end_end_pre_def end_end_cond_def Let_def prod.case by blast+
   
 lemma end_end_postI:
   assumes "end_end_invs i (L, v, c)"
@@ -5122,7 +5123,7 @@ lemma end_end_postI:
     "\<And>k. Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
     "\<And>k. k < Suc n \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
   shows "end_end_post i n (L, v, c)"
-  using assms unfolding end_end_post_def end_end_cond_def by auto
+  using assms unfolding end_end_post_def end_end_cond_def Let_def prod.case by blast+
 
 lemma end_end_post_dests:
   assumes "end_end_post i n (L, v, c)"
@@ -5132,7 +5133,7 @@ lemma end_end_post_dests:
     "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)) + card (ending_actions_after i (Suc n)))"
     "Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = EndInstant (actions ! k)"
     "k < Suc n \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
-  using assms unfolding end_end_post_def end_end_cond_def by auto
+  using assms unfolding end_end_post_def end_end_cond_def Let_def prod.case by blast+
 
 lemma happening_post_end_endsI:
   assumes "end_end_invs i (L, v, c)"
@@ -5141,7 +5142,7 @@ lemma happening_post_end_endsI:
     "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "\<And>k. k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
   shows "happening_post_end_ends i (L, v, c)"
-  using assms unfolding happening_post_end_ends_def  by auto
+  using assms unfolding happening_post_end_ends_def Let_def prod.case by blast+
 
 lemma happening_post_end_ends_dests:
   assumes "happening_post_end_ends i (L, v, c)"
@@ -5150,7 +5151,7 @@ lemma happening_post_end_ends_dests:
     "v ActsActive = Some (int (planning_sem.active_during_minus_ended (time_index \<pi> i)))"
     "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
-  using assms unfolding happening_post_end_ends_def by auto
+  using assms unfolding happening_post_end_ends_def Let_def prod.case by blast+
 
 lemma happening_pre_start_endsI:
   assumes "start_end_invs i (L, v, c)"
@@ -5158,7 +5159,7 @@ lemma happening_pre_start_endsI:
     "\<And>p. PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during (time_index \<pi> i) p))"
     "\<And>k. k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
   shows "happening_pre_start_ends i (L, v, c)"
-  using assms unfolding happening_pre_start_ends_def by auto
+  using assms unfolding happening_pre_start_ends_def Let_def prod.case by blast+
 
 lemma happening_pre_start_ends_dests:
   assumes "happening_pre_start_ends i (L, v, c)"
@@ -5166,7 +5167,7 @@ lemma happening_pre_start_ends_dests:
     "v Effecting = Some (card (planning_sem.starting_actions_at (time_index \<pi> i)))"
     "PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_during (time_index \<pi> i) p))"
     "k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
-  using assms unfolding happening_pre_start_ends_def by auto
+  using assms unfolding happening_pre_start_ends_def Let_def prod.case by blast+
 
 lemma start_end_invsI:
   assumes "happening_invs i (L, v, c)"
@@ -5179,7 +5180,7 @@ lemma start_end_invsI:
     "\<And>k. k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
     "\<And>k. k < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
   shows "start_end_invs i (L, v, c)"
-  using assms unfolding start_end_invs_def by auto
+  using assms unfolding start_end_invs_def Let_def prod.case by blast+
 
 lemma start_end_invs_dests:
   assumes "start_end_invs i (L, v, c)"
@@ -5192,7 +5193,7 @@ lemma start_end_invs_dests:
     "k < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) k \<Longrightarrow> c (ActEnd (actions ! k)) = 0"
     "k < length actions \<Longrightarrow> is_ending_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
     "k < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
-  using assms unfolding start_end_invs_def by auto
+  using assms unfolding start_end_invs_def Let_def prod.case by blast+
 
 lemma start_end_invs_maintained:
   assumes prev: "start_end_invs i (L, v, c)"

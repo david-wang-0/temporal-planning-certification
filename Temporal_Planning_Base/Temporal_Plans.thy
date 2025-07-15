@@ -838,7 +838,7 @@ qed
 subsubsection \<open>Non-Interference w.r.t the Happening Sequence\<close>
 
 
-text \<open>This definition comes from the statement in \<^cite>\<open>Gigante2020\<close>, that every at-start 
+text \<open>This definition comes from the statement in \<^cite>\<open>gigante_decidability_2022\<close>, that every at-start 
 snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
 snap-actions. Moreover, in their definition of a planning problem, the assumption is made that 
 no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at_end(b) and at-start(a) \<noteq> at-end(a).\<close>
@@ -2685,7 +2685,7 @@ begin
     using finite_fluent_domain
     unfolding fluent_domain_def act_ref_fluents_def 
       const_valid_domain_def act_mod_fluents_def inj_on_def 
-      init'_def goal'_def over_all'_def pre'_def 
+      init'_def goal'_def over_all'_def pre'_def  snap_mod_fluents_def
     by auto
 
   abbreviation pre_imp'::"'action snap_action \<Rightarrow> 'proposition set" where
@@ -2704,7 +2704,9 @@ begin
     unfolding fluent_domain_def act_ref_fluents_def 
       const_valid_domain_def act_mod_fluents_def inj_on_def 
     unfolding add_imp_def pre_imp_def del_imp_def init'_def goal'_def over_all'_def
-    using finite_fluent_domain unfolding const_valid_domain_def act_mod_fluents_def by auto
+    using finite_fluent_domain 
+    unfolding const_valid_domain_def act_mod_fluents_def snap_mod_fluents_def 
+    by auto
   
   sublocale us: unique_snaps_temp_planning_problem
       init' goal' AtStart AtEnd over_all' lower upper
