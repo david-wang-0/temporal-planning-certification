@@ -5077,7 +5077,7 @@ lemma end_end_invs_dests:
     "k < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) k \<Longrightarrow> c (ActEnd (actions ! k)) = 0"
     "k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
     "k < length actions \<Longrightarrow> is_instant_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Off (actions ! k)"
-  using assms unfolding end_end_invs_def Let_def prod.case by auto
+  using assms unfolding end_end_invs_def Let_def prod.case by blast+
 
 lemma end_end_invs_maintained:
   assumes "end_end_invs i (L, v, c)"
@@ -5228,7 +5228,7 @@ lemma start_end_pre_dests:
     "PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (updated_locked_during i n p))"
     "n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = StartInstant (actions ! k)"
     "k < n \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Running (actions ! k)"
-  using assms unfolding start_end_pre_def start_end_cond_def by auto
+  using assms unfolding start_end_pre_def start_end_cond_def Let_def prod.case by blast+
 
 lemma start_end_postI:
   assumes "start_end_invs i (L, v, c)"
@@ -5254,7 +5254,7 @@ lemma happening_post_start_endsI:
       "v Effecting = Some 0"
       "\<And>k. k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Running (actions ! k)"
   shows "happening_post_start_ends i (L, v, c)"
-  using assms unfolding happening_post_start_ends_def by auto
+  using assms unfolding happening_post_start_ends_def Let_def prod.case by blast+
 
 lemma happening_post_start_ends_dests:
   assumes "happening_post_start_ends i (L, v, c)"
@@ -5262,7 +5262,7 @@ lemma happening_post_start_ends_dests:
       "PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_after (time_index \<pi> i) p))"
       "v Effecting = Some 0"
       "k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Running (actions ! k)"
-  using assms unfolding happening_post_start_ends_def by auto
+  using assms unfolding happening_post_start_ends_def Let_def prod.case by blast+
 
 lemma happening_post_inv_checkI:
   assumes "start_end_invs i (L, v, c)"
@@ -5278,7 +5278,7 @@ lemma happening_post_inv_check_dests:
       "PropLock p \<in> dom (map_of nta_vars) \<Longrightarrow> v (PropLock p) = Some (int (planning_sem.locked_after (time_index \<pi> i) p))"
       "v Effecting = Some 0"
       "k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> i) k \<Longrightarrow> L ! Suc k = Running (actions ! k)"
-  using assms unfolding happening_post_inv_check_def by auto
+  using assms unfolding happening_post_inv_check_def Let_def prod.case by blast+
 
 lemma inv_check_condI:
   assumes "start_end_invs n (L, v, c)"
@@ -5297,8 +5297,7 @@ lemma inv_check_cond_dests:
     "v Effecting = Some 0"
     "\<And>k. k < i \<Longrightarrow> is_starting_index (time_index \<pi> n) k \<Longrightarrow> L ! Suc k = Running (actions ! k)"
     "\<And>k. i \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> n) k \<Longrightarrow> L ! Suc k = PostStart (actions ! k)"
-  using assms unfolding inv_check_cond_def
-  by auto
+  using assms unfolding inv_check_cond_def Let_def prod.case by blast+
 
 lemma inv_check_postI:
   assumes "start_end_invs n (L, v, c)"
@@ -5317,8 +5316,7 @@ lemma inv_check_post_dests:
     "v Effecting = Some 0"
     "\<And>k. k < Suc i \<Longrightarrow> is_starting_index (time_index \<pi> n) k \<Longrightarrow> L ! Suc k = Running (actions ! k)"
     "\<And>k. Suc i \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (time_index \<pi> n) k \<Longrightarrow> L ! Suc k = PostStart (actions ! k)"
-  using assms unfolding inv_check_post_def inv_check_cond_def
-  by auto
+  using assms unfolding inv_check_post_def inv_check_cond_def Let_def prod.case by blast+
 
 text \<open>The rules used to show that the composition of sequences results in a run\<close>
 interpretation steps_seq: sequence_rules abs_renum.urge_bisim.A.steps
@@ -8693,4 +8691,5 @@ corollary form_not_sat_imp_no_valid_plan:
       \<and> no_self_overlap \<pi>)"
   using assms valid_plan_imp_form_holds by auto
 
+end
 end
