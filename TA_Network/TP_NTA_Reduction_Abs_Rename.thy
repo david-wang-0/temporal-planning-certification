@@ -9,7 +9,7 @@ subsubsection \<open>Some functions for renumbering\<close>
 instance rat::time 
   apply standard 
   using dense_order_class.dense apply blast
-  using verit_eq_simplify(24) by blast
+  using verit_eq_simplify(*(24) 1 \<noteq> 0 *) by blast
 
 definition mk_renum::"'a list \<Rightarrow> 'a \<Rightarrow> nat" where
 "mk_renum l \<equiv>

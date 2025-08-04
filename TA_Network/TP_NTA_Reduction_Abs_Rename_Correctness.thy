@@ -8394,10 +8394,8 @@ next
             apply (auto simp: planning_sem.plan_state_seq_props prop_state_before_happ_def 
               int_of_nat_def planning_sem.locked_before_initial_is_0 planning_sem.active_before_initial_is_0 planning_sem.open_active_count_initial_is_0)[7]
       subgoal 
-        apply (subst act_clock_pre_happ_spec.simps)
-        apply (subst cval_add_def)
-        apply (subst planning_sem.exec_time_at_init)
-        by (auto simp: get_delay_def card_htps_len_htpl of_rat_add Rat.of_int_def)
+        by (subst act_clock_pre_happ_spec.simps  cval_add_def planning_sem.exec_time_at_init)+ 
+          (auto simp: get_delay_def card_htps_len_htpl of_rat_add Rat.of_int_def)
       subgoal 
         apply (subst act_clock_pre_happ_spec.simps)
         apply (subst cval_add_def)
