@@ -46,13 +46,7 @@ locale action_defs =
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
 
-locale action_set_defs = action_defs
-  where pre = pre and lower = lower
-    for pre::     "'snap_action \<Rightarrow> 'proposition set" 
-    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound" +
-  fixes actions:: "'action set"
-
-
+text \<open>First, we define things w.r.t. a plan\<close>
 locale temp_plan_defs = action_defs at_start at_end over_all lower upper pre adds dels
     for at_start::"'action  \<Rightarrow> 'snap_action"
     and at_end::  "'action  \<Rightarrow> 'snap_action"
@@ -482,26 +476,26 @@ proof -
 qed
 end
 
-locale valid_plan_props = temp_plan_defs 
-  where pre = pre and lower = lower and \<pi> = \<pi>
-    for pre::     "'snap_action \<Rightarrow> 'proposition set" 
+locale finite_temp_plan = temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
     and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and \<pi>::       "('i, 'action, 'time) temp_plan" +
-  assumes vp: "valid_plan"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
+  assumes fp: finite_plan
 begin
-subsubsection \<open>Finite Plans\<close>
-
-
-lemma valid_plan_state_seq: "\<exists>M.  valid_state_sequence M \<and> M 0 = init \<and> goal \<subseteq> M (length htpl)"
-  and valid_plan_durs: "durations_ge_0" "valid_plan \<Longrightarrow> durations_valid"
-  and valid_plan_mutex: "mutex_valid_plan"
-  and valid_plan_finite: "finite_plan" using vp unfolding valid_plan_def by blast+
-
 
 lemma finite_plan: 
   "finite (dom \<pi>)"
   "finite (ran \<pi>)"
-  using vp finite_plan_def valid_plan_finite finite_ran by auto 
+  using fp finite_plan_def finite_ran by auto 
 text \<open>Finite happening sequences\<close>
 
 lemma finite_acts_imp_finite_happ_seq: "finite (plan_happ_seq)"
@@ -662,10 +656,38 @@ proof -
 qed
 end
 
-text \<open>Another thing we need to prove is the relationship between at_start, at_end, 
-  pre, adds, and dels.\<close>
+subsubsection \<open>Plan validity\<close>
+text \<open>Plan validity is just a proposition\<close>
+locale valid_temp_plan = temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
+  assumes vp: valid_plan
+begin
+subsubsection \<open>Finite Plans\<close>
 
-locale plan_equivalence = action_defs at_start at_end over_all lower upper pre adds dels + 
+lemma valid_plan_state_seq: "\<exists>M.  valid_state_sequence M \<and> M 0 = init \<and> goal \<subseteq> M (length htpl)"
+  and valid_plan_durs: "durations_ge_0" 
+    "durations_valid"
+  and valid_plan_mutex: "mutex_valid_plan"
+  and valid_plan_finite: "finite_plan" using vp unfolding valid_plan_def by blast+
+
+sublocale finite_temp_plan using valid_plan_finite vp 
+  by unfold_locales
+end
+
+text \<open>Plan validity is equivalent if actions behave equivalently\<close>
+
+locale plan_validity_equivalence = temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> + 
     action_defs at_start' at_end' over_all lower upper pre' adds' dels'
     for at_start::"'action  \<Rightarrow> 'snap_action"
     and at_end::  "'action  \<Rightarrow> 'snap_action"
@@ -675,16 +697,15 @@ locale plan_equivalence = action_defs at_start at_end over_all lower upper pre a
     and pre::     "'snap_action \<Rightarrow> 'proposition set"
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan"
     and at_start'::"'action \<Rightarrow> 'snap_action_1"
     and at_end'::  "'action  \<Rightarrow> 'snap_action_1"
     and pre'::     "'snap_action_1 \<Rightarrow> 'proposition set"
     and adds'::    "'snap_action_1 \<Rightarrow> 'proposition set"
-    and dels'::    "'snap_action_1 \<Rightarrow> 'proposition set" +
-  fixes init::"'proposition set"
-    and goal::"'proposition set"
-    and \<epsilon>::"'time"
-    and \<pi>::"('i, 'action, 'time::time) temp_plan"
-  assumes eps_ran: "0 \<le> \<epsilon>"
+    and dels'::    "'snap_action_1 \<Rightarrow> 'proposition set"  +
   assumes start_snap_replacement: 
     "\<forall>(a, t, d) \<in> ran \<pi>. pre (at_start a) = pre' (at_start' a)"
     "\<forall>(a, t, d) \<in> ran \<pi>. adds (at_start a) = adds' (at_start' a)"
@@ -696,24 +717,21 @@ locale plan_equivalence = action_defs at_start at_end over_all lower upper pre a
 begin
 
 
-sublocale plan1: temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
-  apply standard by (rule eps_ran)
-
 sublocale plan2: temp_plan_defs at_start' at_end' over_all lower upper pre' adds' dels' init goal \<epsilon> \<pi>
   by standard
 
 lemma f_transfer_1: 
   assumes "\<forall>(a, t, d) \<in> ran \<pi>. f (at_start a) = f' (at_start' a)"
       and "\<forall>(a, t, d) \<in> ran \<pi>. f (at_end a) = f' (at_end' a)"
-    shows "\<Union>(f ` plan1.happ_at plan1.plan_happ_seq t) \<subseteq> \<Union>(f' ` plan2.happ_at plan2.plan_happ_seq t)"
+    shows "\<Union>(f ` happ_at plan_happ_seq t) \<subseteq> \<Union>(f' ` plan2.happ_at plan2.plan_happ_seq t)"
 proof (rule subsetI)
   fix x
-  assume "x \<in> \<Union> (f ` plan1.happ_at plan1.plan_happ_seq t)"
+  assume "x \<in> \<Union> (f ` happ_at plan_happ_seq t)"
   then obtain h where
     x: "x \<in> f h"
-    and x_happ: "(t, h) \<in> plan1.plan_happ_seq" by blast
+    and x_happ: "(t, h) \<in> plan_happ_seq" by blast
   have "\<exists>h. x \<in> f' h \<and> h \<in> plan2.happ_at plan2.plan_happ_seq t" 
-    apply (cases rule: plan1.in_happ_seqE[OF x_happ])
+    apply (cases rule: in_happ_seqE[OF x_happ])
     using assms x unfolding plan2.plan_happ_seq_def by blast+
   thus "x \<in> \<Union> (f' ` plan2.happ_at plan2.plan_happ_seq t)" by blast
 qed
@@ -721,23 +739,23 @@ qed
 lemma f_transfer_2:
   assumes "\<forall>(a, t, d) \<in> ran \<pi>. f (at_start a) = f' (at_start' a)"
       and "\<forall>(a, t, d) \<in> ran \<pi>. f (at_end a) = f' (at_end' a)"
-    shows "\<Union>(f' ` plan2.happ_at plan2.plan_happ_seq t) \<subseteq> \<Union>(f ` plan1.happ_at plan1.plan_happ_seq t)"
+    shows "\<Union>(f' ` plan2.happ_at plan2.plan_happ_seq t) \<subseteq> \<Union>(f ` happ_at plan_happ_seq t)"
 proof (rule subsetI)
   fix x
   assume "x \<in> \<Union> (f' ` plan2.happ_at plan2.plan_happ_seq t)"
   then obtain h where
     x: "x \<in> f' h"
     and x_happ: "(t, h) \<in> plan2.plan_happ_seq" by blast
-  have "\<exists>h. x \<in> f h \<and> h \<in> plan1.happ_at plan1.plan_happ_seq t" 
+  have "\<exists>h. x \<in> f h \<and> h \<in> happ_at plan_happ_seq t" 
     apply (cases rule: plan2.in_happ_seqE[OF x_happ])
-    using assms x unfolding plan1.plan_happ_seq_def by blast+
-  thus "x \<in> \<Union> (f ` plan1.happ_at plan1.plan_happ_seq t)" by blast
+    using assms x unfolding plan_happ_seq_def by blast+
+  thus "x \<in> \<Union> (f ` happ_at plan_happ_seq t)" by blast
 qed
 
 lemma f_transfer:
   assumes "\<forall>(a, t, d) \<in> ran \<pi>. f (at_start a) = f' (at_start' a)"
       and "\<forall>(a, t, d) \<in> ran \<pi>. f (at_end a) = f' (at_end' a)"
-    shows "\<Union>(f ` plan1.happ_at plan1.plan_happ_seq t) = \<Union>(f' ` plan2.happ_at plan2.plan_happ_seq t)"
+    shows "\<Union>(f ` happ_at plan_happ_seq t) = \<Union>(f' ` plan2.happ_at plan2.plan_happ_seq t)"
   apply (rule equalityI) using f_transfer_1[OF assms] f_transfer_2[OF assms] by auto
 
 lemmas pre_transfer = f_transfer[OF start_snap_replacement(1) end_snap_replacement(1)]
@@ -745,32 +763,36 @@ lemmas adds_transfer = f_transfer[OF start_snap_replacement(2) end_snap_replacem
 lemmas dels_transfer = f_transfer[OF start_snap_replacement(3) end_snap_replacement(3)]
 
 lemma vss_equiv_if_snaps_functionally_equiv:
-  "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS \<longleftrightarrow> valid_state_sequence \<pi> at_start' at_end' over_all pre' adds' dels' MS"
-  unfolding valid_state_sequence_def  using adds_transfer dels_transfer pre_transfer unfolding Let_def apply_effects_def by simp
+  "valid_state_sequence MS \<longleftrightarrow> plan2.valid_state_sequence MS"
+  unfolding valid_state_sequence_def plan2.valid_state_sequence_def 
+  using adds_transfer dels_transfer pre_transfer 
+  unfolding Let_def 
+  unfolding apply_effects_def plan2.apply_effects_def
+  by simp
 
 lemma in_happ_seq_trans_1:  
-  assumes "h \<in> happ_at (plan_happ_seq \<pi> at_start at_end) time" 
-    shows "\<exists>h' \<in> happ_at (plan_happ_seq \<pi> at_start' at_end') time. pre h = pre' h' \<and> adds h = adds' h' \<and> dels h = dels' h'"
+  assumes "h \<in> happ_at plan_happ_seq time" 
+    shows "\<exists>h' \<in> plan2.happ_at plan2.plan_happ_seq time. pre h = pre' h' \<and> adds h = adds' h' \<and> dels h = dels' h'"
   apply (cases rule: in_happ_seqE[OF assms[simplified]])
-  unfolding plan_happ_seq_def using start_snap_replacement apply blast
+  unfolding plan2.plan_happ_seq_def using start_snap_replacement apply blast
   using end_snap_replacement by fastforce
 
 lemma in_happ_seqE1:
-  assumes "h \<in> happ_at (plan_happ_seq \<pi> at_start at_end) time" 
-      and "\<And>h'. h' \<in> happ_at (plan_happ_seq \<pi> at_start' at_end') time \<Longrightarrow> pre h = pre' h' \<Longrightarrow> adds h = adds' h' \<Longrightarrow> dels h = dels' h' \<Longrightarrow> thesis"
+  assumes "h \<in> happ_at plan_happ_seq time" 
+      and "\<And>h'. h' \<in> plan2.happ_at plan2.plan_happ_seq time \<Longrightarrow> pre h = pre' h' \<Longrightarrow> adds h = adds' h' \<Longrightarrow> dels h = dels' h' \<Longrightarrow> thesis"
     shows thesis
   using in_happ_seq_trans_1 assms by blast
 
 lemma in_happ_seq_trans_2:  
-  assumes "h \<in> happ_at (plan_happ_seq \<pi> at_start' at_end') time" 
-    shows "\<exists>h' \<in> happ_at (plan_happ_seq \<pi> at_start at_end) time. pre h' = pre' h \<and> adds h' = adds' h \<and> dels h' = dels' h"
-  apply (rule in_happ_seqE[OF assms[simplified]])
+  assumes "h \<in> plan2.happ_at plan2.plan_happ_seq time" 
+    shows "\<exists>h' \<in> happ_at plan_happ_seq time. pre h' = pre' h \<and> adds h' = adds' h \<and> dels h' = dels' h"
+  apply (rule plan2.in_happ_seqE[OF assms[simplified]])
   unfolding plan_happ_seq_def using start_snap_replacement apply blast
   using end_snap_replacement by fastforce
 
 lemma in_happ_seqE2:  
-  assumes "h \<in> happ_at (plan_happ_seq \<pi> at_start' at_end') time" 
-      and "\<And>h'. h' \<in> happ_at (plan_happ_seq \<pi> at_start at_end) time \<Longrightarrow> pre h' = pre' h \<Longrightarrow> adds h' = adds' h \<Longrightarrow> dels h' = dels' h \<Longrightarrow> thesis"
+  assumes "h \<in> plan2.happ_at plan2.plan_happ_seq time" 
+      and "\<And>h'. h' \<in> happ_at plan_happ_seq time \<Longrightarrow> pre h' = pre' h \<Longrightarrow> adds h' = adds' h \<Longrightarrow> dels h' = dels' h \<Longrightarrow> thesis"
     shows thesis
   using assms in_happ_seq_trans_2 by blast
 
@@ -779,8 +801,8 @@ lemma mutex_snap_action_equiv:
       and b: "\<exists>t d. (b, t, d) \<in> ran \<pi>"
       and h: "h = at_start a \<and> h' = at_start' a \<or> h = at_end a \<and> h' = at_end' a"
       and i: "i = at_start b \<and> i' = at_start' b \<or> i = at_end b \<and> i' = at_end' b"
-    shows "mutex_snap_action pre adds dels h i
-    \<longleftrightarrow> mutex_snap_action pre' adds' dels' h' i'"
+    shows "mutex_snap_action h i
+    \<longleftrightarrow> plan2.mutex_snap_action h' i'"
 proof -
   have "pre h = pre' h'" using h a start_snap_replacement end_snap_replacement by auto
   moreover
@@ -794,18 +816,18 @@ proof -
   moreover 
   have "dels i = dels' i'" using i b start_snap_replacement end_snap_replacement by auto
   ultimately
-  show ?thesis unfolding mutex_snap_action_def by simp
+  show ?thesis unfolding mutex_snap_action_def plan2.mutex_snap_action_def by simp
 qed
 
 lemma mutex_valid_plan_equiv_if_snaps_functionally_equiv:
-  "mutex_valid_plan \<pi> at_start at_end pre adds dels \<epsilon> 
-\<longleftrightarrow> mutex_valid_plan \<pi> at_start' at_end' pre' adds' dels' \<epsilon>"
+  "mutex_valid_plan
+\<longleftrightarrow> plan2.mutex_valid_plan"
 proof -
-  have "(\<forall>(a, t, d)\<in>ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not> mutex_snap_action pre adds dels (at_start a) (at_end a))
-    \<longleftrightarrow> (\<forall>(a, t, d)\<in>ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not> mutex_snap_action pre' adds' dels' (at_start' a) (at_end' a))"
+  have "(\<forall>(a, t, d)\<in>ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not> mutex_snap_action (at_start a) (at_end a))
+    \<longleftrightarrow> (\<forall>(a, t, d)\<in>ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not> plan2.mutex_snap_action (at_start' a) (at_end' a))"
     using mutex_snap_action_equiv by fast
   moreover
-  have "mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db \<longleftrightarrow> mutex_sched at_start' at_end' pre' adds' dels' \<epsilon> a ta da b tb db" if 
+  have "mutex_sched a ta da b tb db \<longleftrightarrow> plan2.mutex_sched a ta da b tb db" if 
     "i \<in> dom \<pi>" "j \<in> dom \<pi>" "i \<noteq> j" 
     "\<pi> i = Some (a, ta, da)" 
     "\<pi> j = Some (b, tb, db)" for i j a ta da b tb db
@@ -814,8 +836,8 @@ proof -
        using that ranI by fast+
     show ?thesis 
          proof 
-      assume as: "mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db"
-      have "\<not> mutex_snap_action pre' adds' dels' sa sb" 
+      assume as: "mutex_sched a ta da b tb db"
+      have "\<not> plan2.mutex_snap_action sa sb" 
         if "sa = at_start' a \<and> t = ta \<or> sa = at_end' a \<and> t = ta + da" 
            "sb = at_start' b \<and> u = tb \<or> sb = at_end' b \<and> u = tb + db" 
         and t:  "t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u" for sa sb t u
@@ -830,34 +852,34 @@ proof -
         proof (cases)
           case 1
           with t as
-          have "\<not>mutex_snap_action pre adds dels (at_start a) (at_start b)" 
+          have "\<not>mutex_snap_action (at_start a) (at_start b)" 
             unfolding mutex_sched_def by blast
           then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 1 by auto
         next
           case 2
           with t as
-          have "\<not>mutex_snap_action pre adds dels (at_start a) (at_end b)" 
+          have "\<not>mutex_snap_action (at_start a) (at_end b)" 
             unfolding mutex_sched_def by blast
           then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 2 by auto
         next
           case 3
           with t as
-          have "\<not>mutex_snap_action pre adds dels (at_end a) (at_start b)" 
+          have "\<not>mutex_snap_action (at_end a) (at_start b)" 
             unfolding mutex_sched_def by blast
           then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 3 by auto
         next
           case 4
           with t as
-          have "\<not>mutex_snap_action pre adds dels (at_end a) (at_end b)" 
+          have "\<not>mutex_snap_action (at_end a) (at_end b)" 
             unfolding mutex_sched_def by blast
           then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 4 by auto
         qed
       qed
-      thus "mutex_sched at_start' at_end' pre' adds' dels' \<epsilon> a ta da b tb db" 
-        unfolding mutex_sched_def by blast
+      thus "plan2.mutex_sched a ta da b tb db" 
+        unfolding plan2.mutex_sched_def by blast
     next
-      assume as: "mutex_sched at_start' at_end' pre' adds' dels' \<epsilon> a ta da b tb db"
-      have "\<not> mutex_snap_action pre adds dels sa sb" 
+      assume as: "plan2.mutex_sched a ta da b tb db"
+      have "\<not> mutex_snap_action sa sb" 
         if "sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da" 
            "sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db" 
         and t:  "t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u" for sa sb t u
@@ -872,53 +894,48 @@ proof -
         proof (cases)
           case 1
           with t as
-          have "\<not>mutex_snap_action pre' adds' dels' (at_start' a) (at_start' b)" 
-            unfolding mutex_sched_def by blast
+          have "\<not>plan2.mutex_snap_action (at_start' a) (at_start' b)" 
+            unfolding plan2.mutex_sched_def by blast
           then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 1 by auto
         next
           case 2
           with t as
-          have "\<not>mutex_snap_action pre' adds' dels' (at_start' a) (at_end' b)" 
-            unfolding mutex_sched_def by blast
+          have "\<not>plan2.mutex_snap_action (at_start' a) (at_end' b)" 
+            unfolding plan2.mutex_sched_def by blast
           then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 2 by auto
         next
           case 3
           with t as
-          have "\<not>mutex_snap_action pre' adds' dels' (at_end' a) (at_start' b)" 
-            unfolding mutex_sched_def by blast
+          have "\<not>plan2.mutex_snap_action (at_end' a) (at_start' b)" 
+            unfolding plan2.mutex_sched_def by blast
           then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 3 by auto
         next
           case 4
           with t as
-          have "\<not>mutex_snap_action pre' adds' dels' (at_end' a) (at_end' b)" 
-            unfolding mutex_sched_def by blast
+          have "\<not>plan2.mutex_snap_action (at_end' a) (at_end' b)" 
+            unfolding plan2.mutex_sched_def by blast
           then show ?thesis using mutex_snap_action_equiv[OF ab_ran] 4 by auto
         qed
       qed
-      thus "mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db" 
+      thus "mutex_sched a ta da b tb db" 
         unfolding mutex_sched_def by blast
     qed
   qed
-  hence "(\<forall>i j a ta da b tb db. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db) \<longrightarrow> mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db) 
-  \<longleftrightarrow> (\<forall>i j a ta da b tb db. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db) \<longrightarrow> mutex_sched at_start' at_end' pre' adds' dels' \<epsilon> a ta da b tb db)" by blast
+  hence "(\<forall>i j a ta da b tb db. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db) \<longrightarrow> mutex_sched a ta da b tb db) 
+  \<longleftrightarrow> (\<forall>i j a ta da b tb db. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db) \<longrightarrow> plan2.mutex_sched a ta da b tb db)" by blast
   ultimately
-  show ?thesis unfolding mutex_valid_plan_eq mutex_valid_plan_alt_def by argo
+  show ?thesis unfolding mutex_valid_plan_eq mutex_valid_plan_alt_def plan2.mutex_valid_plan_eq plan2.mutex_valid_plan_alt_def by argo
 qed
 
 lemma valid_plan_equiv_if_snaps_functionally_equiv:
-  "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon>
-  \<longleftrightarrow> valid_plan \<pi> init goal at_start' at_end' over_all lower upper pre' adds' dels' \<epsilon>"
-  unfolding valid_plan_def
+  "valid_plan \<longleftrightarrow> plan2.valid_plan"
+  unfolding valid_plan_def plan2.valid_plan_def
   using vss_equiv_if_snaps_functionally_equiv mutex_valid_plan_equiv_if_snaps_functionally_equiv
   by simp
 end
 
-
-locale no_self_overlap_plan_props = temp_plan_defs 
-  where pre = pre and lower = lower and \<pi> = \<pi>
-    for pre::     "'snap_action \<Rightarrow> 'proposition set" 
-    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and \<pi>::       "('i, 'action, 'time) temp_plan" +
+text \<open>If there is no self overlap, then the mutex condition can be asserted on the annotated action sequence\<close>
+locale no_self_overlap_temp_plan = temp_plan_defs +
   assumes nso: "no_self_overlap"
 begin 
   
@@ -938,23 +955,28 @@ lemma no_self_overlap_ran:
   shows
     "(t > u \<or> u > t + d)"
   using no_self_overlap_spec[OF assms] by fastforce
+end
 
+
+
+locale no_self_overlap_and_dur_ge0_temp_plan = 
+  no_self_overlap_temp_plan +
+  assumes dg0: durations_ge_0
+begin
 
 lemma nso_double_act_spec:
-  assumes dg0: durations_ge_0
-    and a: "(a, t, d) \<in> ran \<pi>"
+  assumes a: "(a, t, d) \<in> ran \<pi>"
     "(a, u, e) \<in> ran \<pi>"
     "t \<noteq> u \<or> d \<noteq> e"
   shows "u + e < t \<or> t + d < u"
 proof -
-  from no_self_overlap_ran[OF a(1) a(2)] no_self_overlap_ran[OF a(2) a(1)] a
+  from no_self_overlap_ran[OF a(1)] no_self_overlap_ran[OF a(2)] a
   have "u < t \<or> t + d < u" "t < u \<or> u + e < t" by blast+
   thus ?thesis by auto
 qed
 
 lemma nso_no_double_sched:
-  assumes dg0: durations_ge_0
-    and a: "(a, t, d) \<in> ran \<pi>"
+  assumes a: "(a, t, d) \<in> ran \<pi>"
     "(a, t, e) \<in> ran \<pi>"
   shows "d = e"
 proof -
@@ -965,16 +987,14 @@ proof -
 qed
 
 lemma nso_no_double_start:
-  assumes dg0: durations_ge_0
-    and a: "(a, t, d) \<in> ran \<pi>"
+  assumes a: "(a, t, d) \<in> ran \<pi>"
            "(b, t, e) \<in> ran \<pi>"
     and "(a, t, d) \<noteq> (b, t, e)"
   shows "a \<noteq> b"
   using assms nso_no_double_sched by blast
 
 lemma nso_start_end:
-  assumes dg0: durations_ge_0
-    and a: "(a, t, d) \<in> ran \<pi>"
+  assumes a: "(a, t, d) \<in> ran \<pi>"
            "(b, s, e) \<in> ran \<pi>"
            "(a, t, d) \<noteq> (b, s, e)"
            "t = s + e"
@@ -982,7 +1002,7 @@ lemma nso_start_end:
 proof 
   assume e: "a = b"
   hence "t \<noteq> s \<or> d \<noteq> e" using a by blast
-  hence "t + d < s" using nso_double_act_spec[OF dg0 a(1) a(2)[simplified e[symmetric]]] a(4) by blast
+  hence "t + d < s" using nso_double_act_spec[OF a(1) a(2)[simplified e[symmetric]]] a(4) by blast
   moreover
   have "0 \<le> e" "0 \<le> d" using dg0[simplified durations_ge_0_def] a(1,2) by auto
   ultimately
@@ -993,8 +1013,7 @@ proof
 qed
 
 lemma nso_ends:
-  assumes dg0: durations_ge_0
-    and a: "(a, t, d) \<in> ran \<pi>"
+  assumes  a: "(a, t, d) \<in> ran \<pi>"
            "(b, s, e) \<in> ran \<pi>"
            "(a, t, d) \<noteq> (b, s, e)"
            "t + d = s + e"
@@ -1005,14 +1024,13 @@ proof
   moreover
   have "t \<noteq> s \<or> d \<noteq> e" using a e by blast
   then consider "s + e < t" | "t + d < s" 
-    using nso_double_act_spec[OF dg0 a(1) a(2)[simplified e[symmetric]]] a(4) by blast
+    using nso_double_act_spec[OF a(1) a(2)[simplified e[symmetric]]] a(4) by blast
   hence "s + e < t + d \<or> t + d < s + e" apply (cases) using ed 
     by (simp add: add.commute add_strict_increasing2)+
   thus False using \<open>t + d = s + e\<close> by simp
 qed
 
 lemma nso_imp_inj:
-  assumes dg0: durations_ge_0
   shows "inj_on \<pi> (dom \<pi>)"
 proof -
 { fix i j
@@ -1045,9 +1063,7 @@ qed
 
 
 
-lemma nso_mutex_cond:
-  assumes dg0: local.durations_ge_0
-    shows "mutex_valid_plan \<longleftrightarrow> nm_anno_act_seq"
+lemma nso_mutex_eq_nm_anno_act_seq: "mutex_valid_plan \<longleftrightarrow> nm_anno_act_seq"
 proof -
   have "mutex_valid_plan_inj \<longleftrightarrow> nm_anno_act_seq"
   proof
@@ -1344,8 +1360,9 @@ proof -
     ultimately
     show mutex_valid_plan_inj unfolding mutex_valid_plan_inj_def by blast
   qed
-  thus ?thesis using assms nso_imp_inj inj_mutex_def by blast
-qed 
+  thus ?thesis using nso_imp_inj inj_mutex_def by blast
+qed
+
  (*  lemma at_start_in_happ_seqE: 
     assumes in_happ_seq: "(s, at_start a) \<in> plan_happ_seq"
         and a_in_actions: "a \<in> plan_actions"
@@ -1421,14 +1438,22 @@ qed
  *)
 end
 
-locale unique_snaps_temp_plan_props = temp_plan_defs 
-  where pre = pre and lower = lower and \<pi> = \<pi>
-    for pre::     "'snap_action \<Rightarrow> 'proposition set" 
+locale unique_snaps_temp_plan = temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
     and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and \<pi>::       "('i, 'action, 'time) temp_plan" +
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
   assumes at_start_inj_on:  "inj_on at_start plan_actions"
-    and at_end_inj_on:      "inj_on at_end plan_actions"
-    and snaps_disj:         "(at_start ` plan_actions) \<inter> (at_end ` plan_actions) = {}"
+      and at_end_inj_on:      "inj_on at_end plan_actions"
+      and snaps_disj:         "(at_start ` plan_actions) \<inter> (at_end ` plan_actions) = {}"
 begin 
 
 subsubsection \<open>Non-Interference w.r.t the Happening Sequence\<close>
@@ -1462,12 +1487,27 @@ proof -
     by force
   thus ?thesis unfolding nm_happ_seq_def using assms by blast
 qed
+end
+
+locale unique_snaps_and_dg0_temp_plan = unique_snaps_temp_plan at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
+  assumes dg0: durations_ge_0
+begin
 
 text \<open>If snap actions are uniquely identifiable, then the mutex condition on the happening sequence
 is the same as that asserted on the annotated action sequence\<close>
-lemma in_snaps_mutex_happ_seq:
-  assumes dg0: durations_ge_0
-    shows "nm_anno_act_seq \<longleftrightarrow> nm_happ_seq plan_happ_seq"
+lemma nm_anno_act_seq_eq_nm_happ_seq: "nm_anno_act_seq \<longleftrightarrow> nm_happ_seq plan_happ_seq"
 proof 
   assume a: "nm_anno_act_seq"
   have "\<not>local.mutex_snap_action h i" 
@@ -1733,54 +1773,22 @@ next
 qed
 end
 
-
-locale valid_plan_for_actions = 
-    valid_plan_props where pre = pre and lower = lower and \<pi> = \<pi>
-    for pre::     "'snap_action \<Rightarrow> 'proposition set" 
-    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and \<pi>::       "('i, 'action, 'time) temp_plan" +
-  fixes actions:: "'action set"
-  assumes pap: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
-begin
-
-lemma exists_actions_happening_at_time_index:
-  assumes "i < length htpl"
-  shows "\<exists>a \<in> actions. (time_index i, at_start a) \<in> plan_happ_seq \<or> (time_index i, at_end a) \<in> plan_happ_seq"
-  apply (insert time_index_htpsD[OF assms])
-  apply (erule htpsE)
-  subgoal for a t d
-    apply (rule bexI[of _ a])
-    apply (rule disjI1)
-    unfolding plan_happ_seq_def apply blast
-    using pap unfolding plan_actions_in_problem_def by blast
-  subgoal for a t d
-    apply (rule bexI[of _ a])
-    apply (rule disjI2)
-    unfolding plan_happ_seq_def apply blast
-    using pap unfolding plan_actions_in_problem_def by blast
-  done
-lemma actions_at_time_index_cases:
-  assumes  "i < length htpl"
-    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> thesis"
-    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
-  shows thesis using assms exists_actions_happening_at_time_index by blast
-
-lemma actions_at_time_index_exhaustive_cases:
-  assumes "i < length htpl"
-    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
-    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<notin> plan_happ_seq \<Longrightarrow> thesis"
-    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<notin> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
-  shows thesis using assms exists_actions_happening_at_time_index by blast
-end
-
-
 subsection \<open>Fluents and Constants in a plan\<close>
 
-locale plans_and_fluents_def = temp_plan_defs 
-  where pre = pre and lower = lower and \<pi> = \<pi>
-    for pre::     "'snap_action \<Rightarrow> 'proposition set" 
+locale plans_and_fluents_def = 
+  temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
     and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and \<pi>::       "('i, 'action, 'time) temp_plan" +
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
   fixes props::   "'proposition set"
 begin
 
@@ -1793,14 +1801,14 @@ definition act_mod_props where
     snap_mod_props (at_start a)
   \<and> snap_mod_props (at_end a)"
 
-definition const_valid_plan where
-"const_valid_plan \<equiv> (\<forall>(a, t, d) \<in> ran \<pi>. act_mod_props a)"
+definition const_resp_plan where
+"const_resp_plan \<equiv> (\<forall>(a, t, d) \<in> ran \<pi>. act_mod_props a)"
 
-definition const_valid_happ_seq where
-"const_valid_happ_seq \<equiv> \<forall>t. (\<forall>h \<in> happ_at plan_happ_seq t. snap_mod_props h)"
+definition const_resp_happ_seq where
+"const_resp_happ_seq \<equiv> \<forall>t. (\<forall>h \<in> happ_at plan_happ_seq t. snap_mod_props h)"
 
-lemma cv_plan_imp_cv_hs: "const_valid_plan \<Longrightarrow> const_valid_happ_seq"
-  unfolding const_valid_plan_def act_mod_props_def  plan_happ_seq_def const_valid_happ_seq_def
+lemma cr_plan_imp_cr_hs: "const_resp_plan \<Longrightarrow> const_resp_happ_seq"
+  unfolding const_resp_plan_def act_mod_props_def  plan_happ_seq_def const_resp_happ_seq_def
   by blast
 
 text \<open>Actions only refer to fluent propositions. The entire problem is fluent.\<close>
@@ -1878,9 +1886,9 @@ lemma app_fluent_valid_snaps:
     shows "apply_effects (M \<inter> props) H = (M' \<inter> props)" 
   using assms unfolding apply_effects_def by blast
 
-lemma fluent_plan_is_const_valid: "fluent_plan \<Longrightarrow> const_valid_plan" 
+lemma fluent_plan_is_const_valid: "fluent_plan \<Longrightarrow> const_resp_plan" 
   unfolding fluent_plan_def act_ref_props_def  
-    const_valid_plan_def act_mod_props_def snap_mod_props_def 
+    const_resp_plan_def act_mod_props_def snap_mod_props_def 
   by blast
 
 lemma fluent_plan_consts:
@@ -1889,15 +1897,15 @@ lemma fluent_plan_consts:
   using assms unfolding fluent_plan_def plan_consts_def act_ref_props_def 
   by (auto simp: Let_def)
 
-lemma cv_plan_consts:
-  assumes "const_valid_plan"
+lemma cr_plan_consts:
+  assumes "const_resp_plan"
   shows "plan_consts = \<Union> ((\<lambda>a. pre (at_start a) \<union> pre (at_end a) \<union> over_all a) ` {a|a t d. (a, t, d) \<in> ran \<pi>}) - props"
-  using assms unfolding const_valid_plan_def plan_consts_def act_mod_props_def snap_mod_props_def by fast
+  using assms unfolding const_resp_plan_def plan_consts_def act_mod_props_def snap_mod_props_def by fast
 
-lemma cv_domain_consts:
-  assumes "const_valid_plan"
+lemma cr_domain_consts:
+  assumes "const_resp_plan"
   shows "domain_consts = \<Union> ((\<lambda>a. pre (at_start a) \<union> pre (at_end a) \<union> over_all a) ` {a|a t d. (a, t, d) \<in> ran \<pi>}) - props \<union> (goal - props) \<union> (init - props)"
-  using cv_plan_consts assms domain_consts_def by simp
+  using cr_plan_consts assms domain_consts_def by simp
 
 lemma plan_and_happ_seq_consts:
   "plan_consts = (happ_seq_consts \<union> \<Union>(over_all ` {a| a t d. (a, t, d) \<in> ran \<pi>})) - props"
@@ -1909,23 +1917,50 @@ lemma plan_and_happ_seq_consts:
     using in_happ_seqE_act by fast
   done
 
-lemma cv_plan_cv_happ_seq:
-  "const_valid_plan = const_valid_happ_seq" unfolding const_valid_plan_def const_valid_happ_seq_def 
+lemma cr_plan_cr_happ_seq:
+  "const_resp_plan = const_resp_happ_seq" unfolding const_resp_plan_def const_resp_happ_seq_def 
   plan_happ_seq_def act_mod_props_def by fast
 
-lemma cv_happ_seq_consts:
-  assumes "const_valid_happ_seq"
+lemma cr_happ_seq_consts:
+  assumes "const_resp_happ_seq"
   shows "happ_seq_consts = \<Union>(pre ` {s|t s. (t, s) \<in> plan_happ_seq}) - props"
-  using assms unfolding const_valid_happ_seq_def  happ_seq_consts_def snap_mod_props_def
+  using assms unfolding const_resp_happ_seq_def  happ_seq_consts_def snap_mod_props_def
   by blast
 
 lemma plan_consts_not_fluent:
   "props \<inter> plan_consts = {}" unfolding plan_consts_def by blast
 
 lemma domain_consts_not_fluent:
-  "props \<inter> domain_consts = {}" unfolding domain_consts_def using plan_consts_not_fluent by blast
-(* 
+  "props \<inter> domain_consts = {}" 
+  using plan_consts_not_fluent domain_consts_def by blast
+end
 
+text \<open>
+- Assume we have identified a set of fluents that a plan modifies.
+- Assume that the constants that the goal refers to are a subset of those the initial state refers to.
+- Assume that the constants that the plan refers to are a subset of those the initial state refers to.
+
+The plan validity is equivalent if the 
+\<close>
+locale plan_and_fluents_restr =
+  plans_and_fluents_def at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> props
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan"
+    and props::  "'proposition set" + 
+  assumes crp: const_resp_plan
+    and goal_consts_in_init_consts: "goal - props \<subseteq> init - props"
+    and plan_consts_in_init_consts: "plan_consts \<subseteq> init - props"
+begin
 text \<open>
 The idea behind this abstraction is to maintain the shape of the plan, the time points, and the 
 happening sequence, while changing which propositions exist in the states and are modified by the
@@ -1934,117 +1969,122 @@ happenings.
 A plan that is "const_valid" (does not modify some constants, if they exist) can be used when
 equality is a proposition. The same plan must be valid, if we restrict the preconditions to the set of fluents. 
 
-Equalities in PDDL can simply be compiled away to constants.
+It's part of a simple preprocessing step to reduce the number of propositions present.
 \<close>
 
-context
-  fixes over_all'
-    and pre' 
-  assumes cvp: "const_valid_plan"
-      and over_all'_def: "over_all' = (\<lambda>a. over_all a \<inter> fluents)"
-      and pre'_def: "pre' = (\<lambda>s. pre s \<inter> fluents)"
-begin
+definition "over_all_restr = (\<lambda>a. over_all a \<inter> props)"
+definition "pre_restr = (\<lambda>s. pre s \<inter> props)"
 
-lemma cvp_state_seq:
-  assumes MS'_p: "\<forall>i \<le> length htpl. MS' i = MS i \<inter> fluents"
+sublocale pf1: plans_and_fluents_def at_start at_end over_all_restr lower upper pre_restr adds dels "fluent_state init" "fluent_state goal" \<epsilon> \<pi> props
+  using local.plans_and_fluents_def_axioms .
+
+lemma crp_state_seq:
+  assumes MS'_p: "\<forall>i \<le> length htpl. MS' i = MS i \<inter> props"
       and vss: "(valid_state_sequence MS)"
-    shows "(valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS' 
-    \<and> fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels
-    \<and> fluent_state_seq \<pi> fluents MS')"
+    shows "(pf1.valid_state_sequence MS' \<and> pf1.fluent_plan
+    \<and> pf1.fluent_state_seq MS')"
 proof -
 
-  let ?B = "plan_happ_seq \<pi> at_start at_end"
-  let ?t = "time_index \<pi>"
+  let ?B = "plan_happ_seq"
+  let ?t = "time_index"
 
-  let ?Inv = "plan_inv_seq \<pi> over_all"
-  let ?Inv' = "plan_inv_seq \<pi> over_all'"
+  let ?Inv = "plan_inv_seq"
+  let ?Inv' = "pf1.plan_inv_seq"
   
-  from cvp cv_plan_imp_cv_hs
-  have cv_hs: "\<forall>t. (\<forall>h \<in> happ_at ?B t. snap_mod_fluents fluents adds dels h)" unfolding const_valid_happ_seq_def by blast
+  from crp cr_plan_imp_cr_hs
+  have cr_hs: "\<forall>t. (\<forall>h \<in> happ_at ?B t. snap_mod_props h)" unfolding const_resp_happ_seq_def by blast
 
-  have app_eff: "apply_effects adds dels (MS i) (happ_at ?B (?t i)) = MS (Suc i)"
+  have app_eff: "apply_effects (MS i) (happ_at ?B (?t i)) = MS (Suc i)"
        and invs: "invs_at ?Inv (?t i) \<subseteq> MS i"
        and pres: "\<Union> (pre ` happ_at ?B (?t i)) \<subseteq> MS i"
-       if "i < length (htpl \<pi>)" for i using that vss unfolding valid_state_sequence_def by (auto simp: Let_def)
+       if "i < length htpl" for i using that vss unfolding valid_state_sequence_def by (auto simp: Let_def)
 
-    have "fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels" 
-      unfolding fluent_plan_def act_ref_fluents_def 
-    using cvp over_all'_def pre'_def unfolding const_valid_plan_def act_mod_fluents_def snap_mod_fluents_def by fast
+  have "pf1.fluent_plan" 
+    using crp 
+    unfolding pf1.fluent_plan_def pf1.act_ref_props_def 
+    unfolding over_all_restr_def pre_restr_def 
+    unfolding pf1.const_resp_plan_def act_mod_props_def snap_mod_props_def by simp
   moreover
-  have "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'"
-       "fluent_state_seq \<pi> fluents MS'" 
+  have "pf1.valid_state_sequence MS'"
+       "fluent_state_seq MS'" 
   proof -
-    show "fluent_state_seq \<pi> fluents MS'" using MS'_p unfolding fluent_state_seq_def by simp
-    have "apply_effects adds dels (MS' i) (happ_at ?B (?t i)) = MS' (Suc i)" (is "apply_effects adds dels (MS' i) ?S = MS' (Suc i)")
+    show "fluent_state_seq  MS'" using MS'_p unfolding fluent_state_seq_def by simp
+    have "apply_effects (MS' i) (happ_at ?B (?t i)) = MS' (Suc i)" (is "apply_effects (MS' i) ?S = MS' (Suc i)")
        and "invs_at ?Inv' (?t i) \<subseteq> MS' i"
-       and "\<Union> (pre' ` happ_at ?B (?t i)) \<subseteq> MS' i"
-       if i_ran: "i < length (htpl \<pi>)" for i
+       and "\<Union> (pre_restr ` happ_at ?B (?t i)) \<subseteq> MS' i"
+       if i_ran: "i < length htpl" for i
     proof -
-      show "apply_effects adds dels (MS' i) ?S = MS' (Suc i)" 
+      show "apply_effects (MS' i) ?S = MS' (Suc i)" 
       proof -
-        have "\<Union>(adds ` ?S) \<subseteq> fluents" 
-             "\<Union>(dels ` ?S) \<subseteq> fluents" using i_ran cv_hs unfolding fluent_state_seq_def snap_mod_fluents_def by auto
-        hence "\<forall>s\<in>happ_at (plan_happ_seq \<pi> at_start at_end) (time_index \<pi> i). snap_mod_fluents fluents adds dels s" unfolding  snap_mod_fluents_def by blast
-        thus "apply_effects adds dels (MS' i) ?S = MS' (Suc i)" using app_fluent_valid_snaps[OF _ app_eff[OF that]] using MS'_p that unfolding snap_mod_fluents_def by simp
+        have "\<Union>(adds ` ?S) \<subseteq> props" 
+             "\<Union>(dels ` ?S) \<subseteq> props" using i_ran cr_hs 
+          unfolding fluent_state_seq_def snap_mod_props_def by auto
+        hence "\<forall>s\<in>happ_at plan_happ_seq (time_index i). snap_mod_props s" 
+          unfolding snap_mod_props_def by blast
+        thus "apply_effects (MS' i) ?S = MS' (Suc i)" 
+          using app_fluent_valid_snaps[OF _ app_eff[OF that]] 
+          using MS'_p that unfolding snap_mod_props_def by simp
       qed
       show "invs_at ?Inv' (?t i) \<subseteq> MS' i" 
       proof -
-        have "invs_at (plan_inv_seq \<pi> over_all') (time_index \<pi> i) = invs_at (plan_inv_seq \<pi> over_all) (time_index \<pi> i) \<inter> fluents" 
-          unfolding invs_at_def plan_inv_seq_def over_all'_def by auto
+        have "invs_at pf1.plan_inv_seq (time_index i) = invs_at plan_inv_seq (time_index i) \<inter> props" 
+          unfolding invs_at_def
+          unfolding local.plan_inv_seq_def pf1.plan_inv_seq_def 
+          unfolding over_all_restr_def by auto
         thus "invs_at ?Inv' (?t i) \<subseteq> MS' i" using invs MS'_p i_ran by auto
       qed
-      show "\<Union> (pre' ` ?S) \<subseteq> MS' i" 
+      show "\<Union> (pre_restr ` ?S) \<subseteq> MS' i" 
       proof -
-        have "\<Union> (pre ` ?S) \<inter> fluents =  \<Union> (pre' ` ?S)" unfolding  plan_happ_seq_def pre'_def by auto
-        thus "\<Union> (pre' ` ?S) \<subseteq> MS' i" using pres MS'_p i_ran by auto
+        have "\<Union> (pre ` ?S) \<inter> props =  \<Union> (pre_restr ` ?S)" 
+          unfolding plan_happ_seq_def pre_restr_def by auto
+        thus "\<Union> (pre_restr ` ?S) \<subseteq> MS' i" using pres MS'_p i_ran by auto
       qed
     qed
-    thus "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'" unfolding valid_state_sequence_def by (auto simp: Let_def)
+    thus "pf1.valid_state_sequence MS'" unfolding pf1.valid_state_sequence_def by (auto simp: Let_def)
   qed
   ultimately
-  show "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS' \<and>
-  fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels \<and> fluent_state_seq \<pi> fluents MS'" by (auto intro: exI[where x = "\<lambda>i. (MS i \<inter> fluents)"])
+  show "pf1.valid_state_sequence MS' \<and> pf1.fluent_plan \<and> pf1.fluent_state_seq MS'" 
+    by (auto intro: exI[where x = "\<lambda>i. (MS i \<inter> props)"])
 qed
 
-lemma cvp_state_seq':
-  assumes MS'_p: "\<forall>i \<le> length (htpl \<pi>). MS' i \<inter> fluents = MS i \<inter> fluents" 
-                 "\<forall>i \<le> length (htpl \<pi>). (MS i - fluents) = (MS' i - fluents) \<union> domain_consts \<pi> fluents init goal at_start at_end over_all pre adds dels" 
-    and vss: "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'"
-  shows "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS"
+lemma crp_state_seq':
+  assumes MS'_p: "\<forall>i \<le> length htpl. MS' i \<inter> props = MS i \<inter> props" 
+                 "\<forall>i \<le> length htpl. (MS i - props) = (MS' i - props) \<union> domain_consts" 
+    and vss: "pf1.valid_state_sequence MS'"
+  shows "valid_state_sequence MS"
 proof -
 
-  let ?B = "plan_happ_seq \<pi> at_start at_end"
-  let ?t = "time_index \<pi>"
+  let ?B = "plan_happ_seq"
+  let ?t = "time_index"
 
-  let ?Inv = "plan_inv_seq \<pi> over_all"
-  let ?Inv' = "plan_inv_seq \<pi> over_all'"
+  let ?Inv = "plan_inv_seq"
+  let ?Inv' = "pf1.plan_inv_seq"
 
-  let ?dc = "domain_consts \<pi> fluents init goal at_start at_end over_all pre adds dels"
+  let ?dc = "domain_consts"
 
   from MS'_p
-  have MS'_p': "\<forall>i \<le> length (htpl \<pi>). MS' i \<union> ?dc = MS i" by auto
+  have MS'_p': "\<forall>i \<le> length htpl. MS' i \<union> ?dc = MS i" by auto
 
-  from cvp cv_plan_imp_cv_hs
-  have cv_hs: "\<forall>t. (\<forall>h \<in> happ_at ?B t. snap_mod_fluents fluents adds dels h)" unfolding const_valid_happ_seq_def by blast
+  from crp cr_plan_imp_cr_hs
+  have cr_hs: "\<forall>t. (\<forall>h \<in> happ_at ?B t. snap_mod_props h)" unfolding const_resp_happ_seq_def by blast
 
-  from vss[simplified valid_state_sequence_def]
-  have app_eff: "apply_effects adds dels (MS' i) (happ_at ?B (?t i)) = MS' (Suc i)"
+  have app_eff: "apply_effects (MS' i) (happ_at ?B (?t i)) = MS' (Suc i)"
        and invs: "invs_at ?Inv' (?t i) \<subseteq> MS' i"
-       and pres: "\<Union> (pre' ` happ_at ?B (?t i)) \<subseteq> MS' i"
-       if "i < length (htpl \<pi>)" for i using that by (auto simp: Let_def)
+       and pres: "\<Union> (pre_restr ` happ_at ?B (?t i)) \<subseteq> MS' i"
+       if "i < length htpl" for i using that vss unfolding pf1.valid_state_sequence_def Let_def by auto
 
   have dc: "?dc = 
-    \<Union> ((\<lambda>a. pre (at_start a) \<union> pre (at_end a) \<union> over_all a) ` {a|a t d. (a, t, d) \<in> ran \<pi>}) - fluents \<union> (goal - fluents) \<union> (init - fluents)" (is "?dc = ?dc'")
-    using cv_domain_consts cvp by fastforce
-  have "apply_effects adds dels (MS i) (happ_at ?B (?t i)) = MS (Suc i)" (is "apply_effects adds dels (MS i) ?S = MS (Suc i)")
+    \<Union> ((\<lambda>a. pre (at_start a) \<union> pre (at_end a) \<union> over_all a) ` {a|a t d. (a, t, d) \<in> ran \<pi>}) - props \<union> (goal - props) \<union> (init - props)" (is "?dc = ?dc'")
+    using cr_domain_consts crp by fastforce
+  have "apply_effects (MS i) (happ_at ?B (?t i)) = MS (Suc i)" (is "apply_effects (MS i) ?S = MS (Suc i)")
      and "invs_at ?Inv (?t i) \<subseteq> MS i"
      and "\<Union> (pre ` happ_at ?B (?t i)) \<subseteq> MS i"
-     if i_ran: "i < length (htpl \<pi>)" for i
+     if i_ran: "i < length htpl" for i
   proof -
-    show "apply_effects adds dels (MS i) ?S = MS (Suc i)" 
+    show "apply_effects (MS i) ?S = MS (Suc i)" 
     proof -
-      have "\<Union>(adds ` ?S) \<subseteq> fluents" (is "?as \<subseteq> fluents")
-           "\<Union>(dels ` ?S) \<subseteq> fluents" (is "?ds \<subseteq> fluents") using i_ran cv_hs unfolding fluent_state_seq_def snap_mod_fluents_def by auto
+      have "\<Union>(adds ` ?S) \<subseteq> props" (is "?as \<subseteq> props")
+           "\<Union>(dels ` ?S) \<subseteq> props" (is "?ds \<subseteq> props") using i_ran cr_hs unfolding fluent_state_seq_def snap_mod_props_def by auto
       hence "?as \<inter> ?dc = {}"
             "?ds \<inter> ?dc = {}" using dc by auto
       moreover
@@ -2052,12 +2092,14 @@ proof -
       have "(MS' i - ?ds) \<union> ?as = MS' (Suc i)" unfolding apply_effects_def by simp
       ultimately
       have "(MS' i \<union> ?dc) - ?ds \<union> ?as = MS' (Suc i) \<union> ?dc" by auto
-      thus "apply_effects adds dels (MS i) ?S = MS (Suc i)" unfolding apply_effects_def using MS'_p' i_ran by simp
+      thus "apply_effects (MS i) ?S = MS (Suc i)" unfolding apply_effects_def using MS'_p' i_ran by simp
     qed
     show "invs_at ?Inv (?t i) \<subseteq> MS i" 
     proof -
       have "invs_at ?Inv (?t i) \<subseteq> invs_at ?Inv' (?t i) \<union> ?dc" 
-        unfolding invs_at_def plan_inv_seq_def dc over_all'_def by auto
+        unfolding invs_at_def
+        unfolding local.plan_inv_seq_def pf1.plan_inv_seq_def
+        unfolding dc over_all_restr_def by auto
       hence "invs_at ?Inv (?t i) \<subseteq> MS' i \<union> ?dc" using invs i_ran by auto
       thus "invs_at ?Inv (?t i) \<subseteq> MS i" 
         apply -
@@ -2067,66 +2109,68 @@ proof -
     show "\<Union> (pre ` ?S) \<subseteq> MS i" 
     proof -
       from pres i_ran
-      have "\<Union> (pre' ` ?S) \<subseteq> MS' i" by simp
-      hence "\<Union> (pre ` ?S) \<inter> fluents \<subseteq> MS' i" unfolding pre'_def by simp
+      have "\<Union> (pre_restr ` ?S) \<subseteq> MS' i" by simp
+      hence "\<Union> (pre ` ?S) \<inter> props \<subseteq> MS' i" unfolding pre_restr_def by simp
       moreover
-      from cvp[simplified cv_plan_cv_happ_seq, THEN cv_happ_seq_consts]
-      have "\<Union> (pre ` ?S) - fluents \<subseteq> happ_seq_consts \<pi> fluents at_start at_end pre adds dels - fluents" by auto
-      hence "\<Union> (pre ` ?S) - fluents \<subseteq> ?dc" using plan_and_happ_seq_consts unfolding domain_consts_def by fast
+      from crp[simplified cr_plan_cr_happ_seq, THEN cr_happ_seq_consts]
+      have "\<Union> (pre ` ?S) - props \<subseteq> happ_seq_consts - props" by auto
+      hence "\<Union> (pre ` ?S) - props \<subseteq> ?dc" using plan_and_happ_seq_consts unfolding domain_consts_def by fast
       ultimately
       have "\<Union> (pre ` ?S) \<subseteq> MS' i \<union> ?dc" by blast
       thus "\<Union> (pre ` ?S) \<subseteq> MS i" using MS'_p' i_ran by simp
     qed
   qed
-  thus "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS" unfolding valid_state_sequence_def by (auto simp: Let_def)
+  thus "valid_state_sequence MS" unfolding valid_state_sequence_def by (auto simp: Let_def)
 qed
 
-text \<open>Not necessary, probably.\<close>
-lemma cvp_nm_happ_seq_equiv: "nm_happ_seq pre adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end) 
-  \<longleftrightarrow> nm_happ_seq pre' adds dels \<epsilon> (plan_happ_seq \<pi> at_start at_end)"
+
+(* 
+text \<open>Move to other locale\<close>
+lemma crp_nm_happ_seq_equiv: "nm_happ_seq (plan_happ_seq) 
+  \<longleftrightarrow> pf1.nm_happ_seq (plan_happ_seq)"
 proof -
-  from cvp
-  have "const_valid_happ_seq \<pi> fluents at_start at_end adds dels" using cv_plan_cv_happ_seq by blast
-  from this[simplified const_valid_happ_seq_def]
-  have "\<forall>s t a b. a \<in> happ_at (plan_happ_seq \<pi> at_start at_end) s \<and> b \<in> happ_at (plan_happ_seq \<pi> at_start at_end) t
-    \<longrightarrow> (mutex_snap_action pre adds dels a b \<longleftrightarrow> mutex_snap_action pre' adds dels a b)" unfolding mutex_snap_action_def 
+  from crp
+  have "const_resp_happ_seq" using cr_plan_cr_happ_seq by blast
+  from this[simplified const_resp_happ_seq_def]
+  have "\<forall>s t a b. a \<in> happ_at (plan_happ_seq) s \<and> b \<in> happ_at (plan_happ_seq) t
+    \<longrightarrow> (mutex_snap_action a b \<longleftrightarrow> pf1.mutex_snap_action a b)" unfolding mutex_snap_action_def 
     apply -
     apply (intro allI; rule impI; rule iffI; erule conjE)
      apply (elim disjE)
     subgoal for s t a b
       apply (frule spec, drule bspec[where x = a], assumption)
       apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre'_def snap_mod_fluents_def by auto
+      unfolding pre_restr_def snap_mod_props_def by auto
     subgoal for s t a b
       apply (frule spec, drule bspec[where x = a], assumption)
       apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre'_def by auto
+      unfolding pre_restr_def by auto
     subgoal for s t a b
       apply (frule spec, drule bspec[where x = a], assumption)
       apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre'_def snap_mod_fluents_def by auto
+      unfolding pre_restr_def snap_mod_props_def by auto
     subgoal for s t a b
       apply (frule spec, drule bspec[where x = a], assumption)
       apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre'_def by auto
+      unfolding pre_restr_def by auto
     subgoal for s t a b
       apply (frule spec, drule bspec[where x = a], assumption)
       apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre'_def by auto
+      unfolding pre_restr_def by auto
     done
   thus ?thesis unfolding nm_happ_seq_def by blast
 qed
-
+ *)
 
 text \<open>An attempt was made to remove these assumptions by proving that constants in a plan are
       indeed constant. However, this only works for the direction of the proof that does not 
       need it.\<close>
 
-lemma cvp_mutex_plan_equiv:
-  "mutex_valid_plan \<pi> at_start at_end pre adds dels \<epsilon> \<longleftrightarrow> mutex_valid_plan \<pi> at_start at_end pre' adds dels \<epsilon>"
+lemma crp_mutex_plan_equiv:
+  "mutex_valid_plan \<longleftrightarrow> pf1.mutex_valid_plan"
 proof -
-  have mutex_equiv: "mutex_snap_action pre adds dels a b \<longleftrightarrow> mutex_snap_action pre' adds dels a b"
-    if "adds a \<subseteq> fluents" "dels a \<subseteq> fluents" "adds b \<subseteq> fluents" "dels b \<subseteq> fluents" for a b
+  have mutex_equiv: "mutex_snap_action a b \<longleftrightarrow> pf1.mutex_snap_action a b"
+    if "adds a \<subseteq> props" "dels a \<subseteq> props" "adds b \<subseteq> props" "dels b \<subseteq> props" for a b
   proof -
     have i: "\<And>x y s. x \<subseteq> s \<Longrightarrow> y \<subseteq> s \<Longrightarrow> x \<union> y \<subseteq> s" by blast
     have j: "y \<inter> s \<inter> x \<noteq> {}" if "y \<inter> x \<noteq> {}" "x \<subseteq> s" for x y s::"'a set"
@@ -2143,44 +2187,38 @@ proof -
 
     have k: "\<And>x y s. y \<inter> s \<inter> x \<noteq> {} \<Longrightarrow> x \<subseteq> s \<Longrightarrow> y \<inter> x \<noteq> {}" by blast
 
-    show "mutex_snap_action pre adds dels a b \<longleftrightarrow> mutex_snap_action pre' adds dels a b"
-      unfolding mutex_snap_action_def pre'_def
+    show ?thesis
+      unfolding local.mutex_snap_action_def pf1.mutex_snap_action_def
+      unfolding pre_restr_def
       apply (rule iffI; elim disjE)
-      subgoal by (drule j[of _ _ fluents], rule i; simp add: that)
-      subgoal by simp
-      subgoal by (drule j[of _ _ fluents], rule i; simp add: that)
-      subgoal by simp
-      subgoal by (drule k, rule i, simp_all add: that)
-      subgoal by simp
-      subgoal by (drule k, rule i, simp_all add: that)
-      by simp
+      using that by blast+
   qed
 
-  have mutex_equiv': "mutex_snap_action pre adds dels (f a) (g b)
-    \<longleftrightarrow> mutex_snap_action pre' adds dels (f a) (g b)" 
+  have mutex_equiv': "mutex_snap_action (f a) (g b)
+    \<longleftrightarrow> pf1.mutex_snap_action (f a) (g b)" 
     if "\<exists>t d. (a, t, d)\<in>ran \<pi>" "\<exists>t d. (b, t, d)\<in>ran \<pi>" "f = at_start \<or> f = at_end" "g = at_start \<or> g = at_end" for a b f g
     using that
     apply -
     apply (elim disjE; rule mutex_equiv)
-    using cvp unfolding const_valid_plan_def act_mod_fluents_def snap_mod_fluents_def
+    using crp unfolding const_resp_plan_def act_mod_props_def snap_mod_props_def
     by blast+
 
-  have mutex_self: "mutex_snap_action pre adds dels (at_start a) (at_end a) \<longleftrightarrow> mutex_snap_action pre' adds dels (at_start a) (at_end a)" 
+  have mutex_self: "mutex_snap_action (at_start a) (at_end a) \<longleftrightarrow> pf1.mutex_snap_action (at_start a) (at_end a)" 
     if "\<exists>t d. (a, t, d)\<in>ran \<pi>" for a
     using that mutex_equiv'[of a a at_start at_end] by simp
-  hence "(\<forall>(a, t, d)\<in>ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not> mutex_snap_action pre adds dels (at_start a) (at_end a))
-    \<longleftrightarrow> (\<forall>(a, t, d)\<in>ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not> mutex_snap_action pre' adds dels (at_start a) (at_end a))"
+  hence "(\<forall>(a, t, d)\<in>ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not> mutex_snap_action (at_start a) (at_end a))
+    \<longleftrightarrow> (\<forall>(a, t, d)\<in>ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not> pf1.mutex_snap_action (at_start a) (at_end a))"
     by fast
   moreover
   
-  have mutex_sched: "mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db \<longleftrightarrow> mutex_sched at_start at_end pre' adds dels \<epsilon> a ta da b tb db" if 
+  have mutex_sched: "mutex_sched a ta da b tb db \<longleftrightarrow> pf1.mutex_sched a ta da b tb db" if 
     "i \<in> dom \<pi>" "j \<in> dom \<pi>" "i \<noteq> j" "\<pi> i = Some (a, ta, da)" "\<pi> j = Some (b, tb, db)" for i j a ta da b tb db
   proof -
     have ab_ran: "\<exists>t d. (a, t, d) \<in> ran \<pi>" "\<exists>t d. (b, t, d) \<in> ran \<pi>" using that ranI by fast+
     show ?thesis
     proof 
-      assume as: "mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db"
-      have "\<not> mutex_snap_action pre' adds dels sa sb" 
+      assume as: "mutex_sched a ta da b tb db"
+      have "\<not> pf1.mutex_snap_action sa sb" 
         if "sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da" 
            "sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db" 
         and t:  "t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u" for sa sb t u
@@ -2192,23 +2230,16 @@ proof -
           "sa = at_end a \<and> t = ta + da" "sb = at_start b \<and> u = tb" |
           "sa = at_end a \<and> t = ta + da" "sb = at_end b \<and> u = tb + db" by argo
         thus ?thesis
-          apply (cases)
-          subgoal apply (simp add: mutex_equiv'[OF ab_ran, symmetric])
-            using t as[simplified mutex_sched_def] by blast
-          subgoal apply (simp add: mutex_equiv'[OF ab_ran, symmetric])
-            using t as[simplified mutex_sched_def] by blast
-          subgoal apply (simp add: mutex_equiv'[OF ab_ran, symmetric])
-            using t as[simplified mutex_sched_def] by blast
-          subgoal apply (simp add: mutex_equiv'[OF ab_ran, symmetric])
-            using t as[simplified mutex_sched_def] by blast
-          done 
+          apply cases
+          using t as[simplified mutex_sched_def] 
+          by (auto simp: mutex_equiv'[OF ab_ran, symmetric])
       qed
-      thus "mutex_sched at_start at_end pre' adds dels \<epsilon> a ta da b tb db" 
-        unfolding mutex_sched_def by blast
+      thus "pf1.mutex_sched a ta da b tb db" 
+        unfolding pf1.mutex_sched_def by blast
   
     next
-      assume as: "mutex_sched at_start at_end pre' adds dels \<epsilon> a ta da b tb db"
-      have "\<not> mutex_snap_action pre adds dels sa sb" 
+      assume as: "pf1.mutex_sched a ta da b tb db"
+      have "\<not> mutex_snap_action sa sb" 
         if "sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da" 
            "sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db" 
         and t:  "t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u" for sa sb t u
@@ -2220,129 +2251,309 @@ proof -
           "sa = at_end a \<and> t = ta + da" "sb = at_start b \<and> u = tb" |
           "sa = at_end a \<and> t = ta + da" "sb = at_end b \<and> u = tb + db" by argo
         thus ?thesis
-          apply (cases)
-          subgoal apply (simp add: mutex_equiv'[OF ab_ran])
-            using t as[simplified mutex_sched_def] by blast
-          subgoal apply (simp add: mutex_equiv'[OF ab_ran])
-            using t as[simplified mutex_sched_def] by blast
-          subgoal apply (simp add: mutex_equiv'[OF ab_ran])
-            using t as[simplified mutex_sched_def] by blast
-          subgoal apply (simp add: mutex_equiv'[OF ab_ran])
-            using t as[simplified mutex_sched_def] by blast
-          done 
+          apply cases
+          using t as[simplified pf1.mutex_sched_def] 
+          by (auto simp: mutex_equiv'[OF ab_ran])
       qed
-      thus "mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db" 
+      thus "mutex_sched a ta da b tb db" 
         unfolding mutex_sched_def by blast
     qed
   qed
-  hence "(\<forall>i j a ta da b tb db. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db) \<longrightarrow> mutex_sched at_start at_end pre adds dels \<epsilon> a ta da b tb db) \<longleftrightarrow>
-     (\<forall>i j a ta da b tb db. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db) \<longrightarrow> mutex_sched at_start at_end pre' adds dels \<epsilon> a ta da b tb db)"
+  hence "(\<forall>i j a ta da b tb db. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db) \<longrightarrow> mutex_sched a ta da b tb db) \<longleftrightarrow>
+     (\<forall>i j a ta da b tb db. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db) \<longrightarrow> pf1.mutex_sched a ta da b tb db)"
     by blast
   ultimately
   show ?thesis
-    unfolding mutex_valid_plan_eq mutex_valid_plan_alt_def
-    by argo
+    unfolding mutex_valid_plan_eq pf1.mutex_valid_plan_eq
+    unfolding mutex_valid_plan_alt_def pf1.mutex_valid_plan_alt_def
+    unfolding mutex_snap_action_def pf1.mutex_snap_action_def
+    by auto
 qed
 
 
 lemma const_plan_equiv: 
-  assumes "goal - fluents \<subseteq> init - fluents"
-      and "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents"
-    shows "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> \<longleftrightarrow>
-       valid_plan \<pi> (fluent_state fluents init) (fluent_state fluents goal) at_start at_end over_all' lower upper pre' adds dels \<epsilon>" 
-  unfolding valid_plan_def
+    shows "valid_plan \<longleftrightarrow> pf1.valid_plan" 
+  unfolding valid_plan_def pf1.valid_plan_def
 proof
-  assume "\<exists>M. valid_state_sequence \<pi> at_start at_end over_all pre adds dels M \<and>
+  assume "\<exists>M. valid_state_sequence M \<and>
         M 0 = init \<and>
-        goal \<subseteq> M (length (htpl \<pi>)) \<and>
-        durations_ge_0 \<pi> \<and> durations_valid \<pi> lower upper \<and> 
-        mutex_valid_plan \<pi> at_start at_end pre adds dels \<epsilon> \<and> 
-        finite_plan \<pi>"
+        goal \<subseteq> M (length htpl) \<and>
+        durations_ge_0 \<and> durations_valid \<and> 
+        mutex_valid_plan \<and> 
+        finite_plan"
   then obtain MS where
-    vss: "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS"
+    vss: "valid_state_sequence MS"
     and init: "MS 0 = init"
-    and goal: "goal \<subseteq> MS (length (htpl \<pi>))"
-    and dur: "durations_ge_0 \<pi> \<and> durations_valid \<pi> lower upper"
-    and mutex: "mutex_valid_plan \<pi> at_start at_end pre adds dels \<epsilon>"
-    and finite: "finite_plan \<pi>" by blast
+    and goal: "goal \<subseteq> MS (length htpl)"
+    and dur: "durations_ge_0 \<and> durations_valid"
+    and mutex: "mutex_valid_plan"
+    and finite: "finite_plan" by blast
 
-  define MS' where "MS' = (\<lambda>i. if (i \<le> length (htpl \<pi>)) then MS i \<inter> fluents else undefined)"  
-  hence "\<forall>i \<le> length (htpl \<pi>). MS' i = MS i \<inter> fluents" by auto
+  define MS' where "MS' = (\<lambda>i. if (i \<le> length htpl) then MS i \<inter> props else undefined)"  
+  hence "\<forall>i \<le> length htpl. MS' i = MS i \<inter> props" by auto
   with vss 
-  have vss': "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'" 
-    and fss': "fluent_state_seq \<pi> fluents MS'" 
-    and fp: "fluent_plan \<pi> fluents at_start at_end over_all' pre' adds dels"
-    using cvp_state_seq by auto
+  have vss': "pf1.valid_state_sequence MS'" 
+    and fss': "fluent_state_seq MS'" 
+    and fp: "pf1.fluent_plan"
+    using crp_state_seq by auto
 
   from MS'_def goal
-  have goal': "goal \<inter> fluents \<subseteq> MS' (length (htpl \<pi>))" by auto
+  have goal': "goal \<inter> props \<subseteq> MS' (length htpl)" by auto
 
   from MS'_def init
-  have init': "init \<inter> fluents = MS' 0" by simp
+  have init': "init \<inter> props = MS' 0" by simp
 
-  show "\<exists>M. valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels M \<and>
-      M 0 = fluent_state fluents init \<and>
-      fluent_state fluents goal \<subseteq> M (length (htpl \<pi>)) \<and>
-      durations_ge_0 \<pi> \<and> durations_valid \<pi> lower upper \<and>
-      mutex_valid_plan \<pi> at_start at_end pre' adds dels \<epsilon> \<and>
-      finite_plan \<pi>"
-    using vss' cvp_mutex_plan_equiv dur init' goal' mutex finite 
+  show "\<exists>M. pf1.valid_state_sequence M \<and>
+      M 0 = fluent_state init \<and>
+      fluent_state goal \<subseteq> M (length htpl) \<and>
+      durations_ge_0 \<and> durations_valid \<and>
+      pf1.mutex_valid_plan \<and>
+      finite_plan"
+    using vss' crp_mutex_plan_equiv dur init' goal' mutex finite 
     unfolding fluent_state_def by blast
 next
-  assume "\<exists>M. valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels M \<and>
-        M 0 = fluent_state fluents init \<and>
-        fluent_state fluents goal \<subseteq> M (length (htpl \<pi>)) \<and>
-        durations_ge_0 \<pi> \<and> durations_valid \<pi> lower upper \<and>
-        mutex_valid_plan \<pi> at_start at_end pre' adds dels \<epsilon> \<and>
-        finite_plan \<pi>"
+  assume "\<exists>M. pf1.valid_state_sequence M \<and>
+        M 0 = fluent_state init \<and>
+        fluent_state goal \<subseteq> M (length htpl) \<and>
+        durations_ge_0 \<and> durations_valid \<and>
+        pf1.mutex_valid_plan \<and>
+        finite_plan"
   then obtain MS' where
-    vss': "valid_state_sequence \<pi> at_start at_end over_all' pre' adds dels MS'"
-    and init': "MS' 0 = init \<inter> fluents"
-    and goal': "goal \<inter> fluents \<subseteq> MS' (length (htpl \<pi>))"
-    and dur: "durations_ge_0 \<pi> \<and> durations_valid \<pi> lower upper"
-    and mutex: "mutex_valid_plan \<pi> at_start at_end pre' adds dels \<epsilon>"
-    and finite: "finite_plan \<pi>" unfolding fluent_state_def by auto
+    vss': "pf1.valid_state_sequence MS'"
+    and init': "MS' 0 = init \<inter> props"
+    and goal': "goal \<inter> props \<subseteq> MS' (length htpl)"
+    and dur: "durations_ge_0 \<and> durations_valid"
+    and mutex: "pf1.mutex_valid_plan"
+    and finite: "finite_plan" unfolding fluent_state_def by auto
 
-  let ?dc = "domain_consts \<pi> fluents init goal at_start at_end over_all pre adds dels"
+  let ?dc = "domain_consts"
 
-  define MS where "MS \<equiv> \<lambda>i. if (i \<le> length (htpl \<pi>)) then MS' i \<union> ?dc else undefined"
-  have "\<forall>i\<le>length (htpl \<pi>). MS i - fluents = (MS' i - fluents) \<union> ?dc"
+  define MS where "MS \<equiv> \<lambda>i. if (i \<le> length htpl) then MS' i \<union> ?dc else undefined"
+  have "\<forall>i\<le>length htpl. MS i - props = (MS' i - props) \<union> ?dc"
   proof (rule allI; rule impI)
     fix i
-    assume "i \<le> length (htpl \<pi>)"
+    assume "i \<le> length htpl"
     hence "MS i = MS' i \<union> ?dc" using MS_def by simp
-    hence "MS i - fluents = MS' i \<union> ?dc - fluents" by simp
-    hence "MS i - fluents = (MS' i - fluents) \<union> (?dc - fluents)" by auto
-    thus "MS i - fluents = (MS' i - fluents) \<union> ?dc" using domain_consts_not_fluent by fast
+    hence "MS i - props = MS' i \<union> ?dc - props" by simp
+    hence "MS i - props = (MS' i - props) \<union> (?dc - props)" by auto
+    thus "MS i - props = (MS' i - props) \<union> ?dc" using domain_consts_not_fluent by fast
   qed
-  hence vss: "valid_state_sequence \<pi> at_start at_end over_all pre adds dels MS" 
-    using vss' MS_def cvp_state_seq'[where MS = MS and MS' = MS'] by fastforce
+  hence vss: "valid_state_sequence MS" 
+    using vss' MS_def crp_state_seq'[where MS = MS and MS' = MS'] by fastforce
   
-  show "\<exists>M. valid_state_sequence \<pi> at_start at_end over_all pre adds dels M \<and>
-        M 0 = init \<and> goal \<subseteq> M (length (htpl \<pi>)) \<and> durations_ge_0 \<pi> \<and> 
-        durations_valid \<pi> lower upper \<and>
-        mutex_valid_plan \<pi> at_start at_end pre adds dels \<epsilon> \<and>
-        finite_plan \<pi>"
-  proof (cases "length (htpl \<pi>)")
+  show "\<exists>M. valid_state_sequence M \<and>
+        M 0 = init \<and> goal \<subseteq> M (length htpl) \<and> durations_ge_0 \<and> 
+        durations_valid \<and>
+        mutex_valid_plan \<and>
+        finite_plan"
+  proof (cases "length htpl")
     case 0
     define MS where "MS \<equiv> (\<lambda>x. init)" 
     
-    have "goal \<inter> fluents \<subseteq> init \<inter> fluents" using init' goal' 0  by simp
-    hence init_goal: "goal \<subseteq> init" using assms by blast
-    have any: "\<forall>M. valid_state_sequence \<pi> at_start at_end over_all pre adds dels M"
+    have "goal \<inter> props \<subseteq> init \<inter> props" using init' goal' 0  by simp
+    hence init_goal: "goal \<subseteq> init" using goal_consts_in_init_consts by blast
+    have any: "\<forall>M. valid_state_sequence M"
       unfolding valid_state_sequence_def using 0 by (auto simp: Let_def)
-    show ?thesis using init_goal MS_def any dur mutex cvp_mutex_plan_equiv finite by auto
+    show ?thesis using init_goal MS_def any dur mutex crp_mutex_plan_equiv finite by auto
   next
     case (Suc nat)
-    have init: "init = MS 0" unfolding MS_def domain_consts_def using assms Suc using init' by auto
+    have init: "init = MS 0" unfolding MS_def domain_consts_def 
+      using goal_consts_in_init_consts plan_consts_in_init_consts Suc using init' by auto
     moreover
-    have goal: "goal \<subseteq> MS (length (htpl \<pi>))" unfolding MS_def using goal' unfolding domain_consts_def by auto
+    have goal: "goal \<subseteq> MS (length htpl)" unfolding MS_def using goal' 
+      unfolding domain_consts_def by auto
     ultimately
-    show ?thesis using dur mutex cvp_mutex_plan_equiv finite vss by auto
+    show ?thesis using dur mutex crp_mutex_plan_equiv finite vss by auto
   qed
-qed  *)
+qed
 end
 
+locale fluent_temp_plan = plans_and_fluents_def +
+  assumes fluent_plan
+
+locale plan_with_happ_seq_mutex = unique_snaps_temp_plan at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> 
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
+  assumes nm_happ_seq: "nm_happ_seq plan_happ_seq"
+
+
+locale valid_plan_without_self_overlap = 
+    valid_temp_plan at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> +
+    no_self_overlap_and_dur_ge0_temp_plan at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan"
+begin
+
+
+sublocale anno: plan_validity_equivalence at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> AtStart AtEnd pre_imp add_imp del_imp
+  apply unfold_locales
+  unfolding pre_imp_def add_imp_def del_imp_def by auto
+
+interpretation anno_valid: valid_temp_plan AtStart AtEnd over_all lower upper pre_imp add_imp del_imp init goal \<epsilon> \<pi> 
+proof 
+  show "anno.plan2.valid_plan" using vp anno.valid_plan_equiv_if_snaps_functionally_equiv by auto
+qed
+
+interpretation anno_nso: no_self_overlap_and_dur_ge0_temp_plan AtStart AtEnd over_all lower upper pre_imp add_imp del_imp init goal \<epsilon> \<pi>
+  by unfold_locales
+
+interpretation anno_unique: unique_snaps_and_dg0_temp_plan AtStart AtEnd over_all lower upper pre_imp add_imp del_imp init goal \<epsilon> \<pi>
+  apply unfold_locales
+  using dg0 unfolding inj_on_def by auto 
+
+interpretation anno_nm_happ_seq: plan_with_happ_seq_mutex AtStart AtEnd over_all lower upper pre_imp add_imp del_imp init goal \<epsilon> \<pi>
+proof 
+  have "anno.plan2.nm_anno_act_seq" 
+    using anno_nso.nso_mutex_eq_nm_anno_act_seq anno_valid.vp anno_valid.valid_plan_mutex by blast
+  thus "anno_unique.nm_happ_seq anno.plan2.plan_happ_seq"
+    using anno_unique.nm_anno_act_seq_eq_nm_happ_seq by auto
+qed
+end
+
+locale valid_plan_restr_to_fluents = 
+    valid_temp_plan at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> +
+    plan_and_fluents_restr at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> props
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan"
+    and props::  "'proposition set"
+begin
+lemma restr_plan_valid: "pf1.valid_plan" using vp by (simp add: const_plan_equiv)
+
+interpretation vtp: valid_temp_plan at_start at_end over_all_restr lower upper pre_restr adds dels "fluent_state init" "fluent_state goal" \<epsilon> \<pi> 
+  using restr_plan_valid by unfold_locales
+
+interpretation ftp: fluent_temp_plan at_start at_end over_all_restr lower upper pre_restr adds dels "fluent_state init" "fluent_state goal" \<epsilon> \<pi> 
+proof 
+  show "pf1.fluent_plan"
+  proof -
+    obtain MS where "valid_state_sequence MS" using valid_plan_state_seq by blast
+    moreover
+    define MS' where "MS' \<equiv> \<lambda>i. if (i \<le> length htpl) then MS i \<inter> props else MS i" 
+    ultimately
+    show ?thesis using crp_state_seq[of MS' MS] by simp
+  qed
+qed
+end
+
+
+
+locale temp_plan_with_prop_related_assms = 
+  unique_snaps_temp_plan +
+  valid_temp_plan +
+  no_self_overlap_temp_plan +
+  fluent_temp_plan +
+  plan_with_happ_seq_mutex
+
+
+locale temp_plan_for_actions = 
+  temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
+  fixes actions:: "'action set"
+  assumes pap: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
+
+
+locale temp_planning_prob_without_self_overlap_with_finite_props_and_actions = 
+  temp_plan_for_actions +
+  fluent_temp_plan +
+  unique_snaps_temp_plan +
+  valid_temp_plan +
+  no_self_overlap_temp_plan +
+assumes some_props:       "card props > 0"
+    and some_actions:     "card actions > 0"
+    and finite_props:     "finite props"
+    and finite_actions:   "finite actions"
+
+
+(* 
+locale temp_plan_for_actions = 
+  temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
+  fixes actions:: "'action set"
+  assumes pap: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
+begin
+
+lemma exists_actions_happening_at_time_index:
+  assumes "i < length htpl"
+  shows "\<exists>a \<in> actions. (time_index i, at_start a) \<in> plan_happ_seq \<or> (time_index i, at_end a) \<in> plan_happ_seq"
+  apply (insert time_index_htpsD[OF assms])
+  apply (erule htpsE)
+  subgoal for a t d
+    apply (rule bexI[of _ a])
+    apply (rule disjI1)
+    unfolding plan_happ_seq_def apply blast
+    using pap by blast
+  subgoal for a t d
+    apply (rule bexI[of _ a])
+    apply (rule disjI2)
+    unfolding plan_happ_seq_def apply blast
+    using pap by blast
+  done
+lemma actions_at_time_index_cases:
+  assumes  "i < length htpl"
+    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+  shows thesis using assms exists_actions_happening_at_time_index by blast
+
+lemma actions_at_time_index_exhaustive_cases:
+  assumes "i < length htpl"
+    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<notin> plan_happ_seq \<Longrightarrow> thesis"
+    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<notin> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
+  shows thesis using assms exists_actions_happening_at_time_index by blast
+end
+ *)
 
 locale temp_planning_problem =
   fixes init::    "'proposition set"
@@ -2526,21 +2737,21 @@ begin
         and dom_wf: "goal - fluents \<subseteq> init - fluents" 
   begin
   lemma valid_plan_in_finite_props:
-    "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
+    "valid_plan 
   \<longleftrightarrow> valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>"
     unfolding init'_def goal'_def over_all'_def pre'_def
   proof (rule const_plan_equiv[simplified fluent_state_def])
-    show "const_valid_plan \<pi> fluents at_start at_end adds dels" using plan_actions_in_problem 
-        finite_fluent_domain const_valid_plan_def const_valid_domain_def by fast
+    show "const_resp_plan \<pi> fluents at_start at_end adds dels" using plan_actions_in_problem 
+        finite_fluent_domain const_resp_plan_def const_valid_domain_def by fast
     show "plan_consts \<pi> fluents at_start at_end over_all pre adds dels \<subseteq> init - fluents" 
       using plan_actions_in_problem actions_wf unfolding plan_consts_def by blast
   qed (auto simp: dom_wf)
 
   lemma valid_plan_alt:
-    "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon>
+    "valid_plan
       \<longleftrightarrow> valid_plan \<pi> init' goal' AtStart AtEnd over_all' lower upper pre_imp' add_imp' del_imp' \<epsilon>"
   proof -
-    have "valid_plan \<pi> init goal at_start at_end over_all lower upper pre adds dels \<epsilon> 
+    have "valid_plan 
     \<longleftrightarrow> valid_plan \<pi> init' goal' at_start at_end over_all' lower upper pre' adds dels \<epsilon>"
       using valid_plan_in_finite_props plan_actions_in_problem actions_wf dom_wf by blast
     moreover
