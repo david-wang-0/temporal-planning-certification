@@ -36,6 +36,7 @@ type_synonym ('i, 'a, 't) temp_plan = "'i \<rightharpoonup> ('a \<times> 't \<ti
 
 section \<open>Characterisation of some ideas surrounding temporal planning\<close>
 
+subsection \<open>Actions \<close>
 locale action_defs =
   fixes at_start::"'action  \<Rightarrow> 'snap_action"
     and at_end::  "'action  \<Rightarrow> 'snap_action"
@@ -45,9 +46,62 @@ locale action_defs =
     and pre::     "'snap_action \<Rightarrow> 'proposition set"
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
     and dels::    "'snap_action \<Rightarrow> 'proposition set"
+begin
 
-text \<open>First, we define things w.r.t. a plan\<close>
-locale temp_plan_defs = action_defs at_start at_end over_all lower upper pre adds dels
+subsubsection \<open>Mutual exclusivity\<close>
+
+text \<open>We want to define a plan in an abstract manner. This needs to be more abstract.\<close>
+definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" where
+"mutex_snap_action a b = (
+  (pre a) \<inter> ((adds b) \<union> (dels b)) \<noteq> {} \<or>
+  ((adds a) \<inter> (dels b)) \<noteq> {} \<or>
+  (pre b) \<inter> ((adds a) \<union> (dels a)) \<noteq> {} \<or>
+  (adds b) \<inter> (dels a) \<noteq> {}
+)"
+
+fun app_snap::"('snap_action \<Rightarrow> 'proposition set) \<Rightarrow> 'action snap_action \<Rightarrow> 'proposition set" where
+"app_snap f (AtStart a) = f (at_start a)" |
+"app_snap f (AtEnd a) = f (at_end a)"
+
+definition pre_imp::"'action snap_action \<Rightarrow> 'proposition set" where
+"pre_imp x = app_snap pre x"
+
+definition add_imp::"'action snap_action \<Rightarrow> 'proposition set" where
+"add_imp x = app_snap adds x"
+
+definition del_imp::"'action snap_action \<Rightarrow> 'proposition set" where
+"del_imp x = app_snap dels x"
+
+definition mutex_annotated_action where
+"mutex_annotated_action a b = (
+  (pre_imp a) \<inter> ((add_imp b) \<union> (del_imp b)) \<noteq> {} \<or>
+  ((add_imp a) \<inter> (del_imp b)) \<noteq> {} \<or>
+  (pre_imp b) \<inter> ((add_imp a) \<union> (del_imp a)) \<noteq> {} \<or>
+  (add_imp b) \<inter> (del_imp a) \<noteq> {}
+)"
+
+end
+
+locale temp_planning_problem = action_defs +
+  fixes init::    "'proposition set"
+    and goal::    "'proposition set"
+    and \<epsilon>::       "'time::time" 
+  assumes eps_ran: "0 \<le> \<epsilon>"
+
+locale temp_planning_problem_and_fluents = temp_planning_problem +
+  fixes props::"'proposition set"
+
+locale temp_planning_problem_and_finite_fluents = temp_planning_problem_and_fluents +
+  assumes finite_props: "finite props"
+
+locale temp_planning_problem_and_some_fluents = temp_planning_problem_and_fluents +
+  assumes some_props: "0 < card props"
+begin
+sublocale temp_planning_problem_and_finite_fluents apply unfold_locales 
+  using some_props card_ge_0_finite by blast
+end
+
+locale temp_planning_problem_and_actions = temp_planning_problem at_start at_end over_all lower upper pre adds dels init goal \<epsilon> 
     for at_start::"'action  \<Rightarrow> 'snap_action"
     and at_end::  "'action  \<Rightarrow> 'snap_action"
     and over_all::"'action  \<Rightarrow> 'proposition set"
@@ -55,18 +109,50 @@ locale temp_plan_defs = action_defs at_start at_end over_all lower upper pre add
     and upper::   "'action  \<rightharpoonup> 'time upper_bound"
     and pre::     "'snap_action \<Rightarrow> 'proposition set"
     and adds::    "'snap_action \<Rightarrow> 'proposition set"
-    and dels::    "'snap_action \<Rightarrow> 'proposition set" +
-  fixes init::    "'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::    "'proposition set"
     and goal::    "'proposition set"
-    and \<epsilon>::       "'time"
-    and \<pi>::       "('i, 'action, 'time) temp_plan"
-  assumes eps_ran: "0 \<le> \<epsilon>"
+    and \<epsilon>::       "'time" +
+  fixes actions::"'action set"
+
+locale temp_planning_problem_and_finite_actions = temp_planning_problem_and_actions +
+  assumes finite_actions: "finite actions"
+
+locale temp_planning_problem_and_some_actions = temp_planning_problem_and_actions +
+  assumes some_actions: "0 < card actions"
+begin
+sublocale temp_planning_problem_and_finite_actions apply unfold_locales 
+  using some_actions card_ge_0_finite by blast
+end
+
+locale temp_planning_problem_and_actions_with_unique_snaps = temp_planning_problem_and_actions +
+  assumes at_start_inj_on_acts: "inj_on at_start actions"
+      and at_end_inj_on_acts:   "inj_on at_end actions"
+      and snaps_disj_on_acts:   "at_start ` actions \<inter> at_end ` actions = {}"
+
+text \<open>It is possible to reason about plans without relating them to the sets of actions and propositions and
+then adding the assumptions later.\<close>
+
+text \<open>First, we define things w.r.t. a plan\<close>
+locale temp_plan_defs = temp_planning_problem at_start at_end over_all lower upper pre adds dels init goal \<epsilon>
+    for at_start::"'action  \<Rightarrow> 'snap_action"
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::    "'proposition set"
+    and goal::    "'proposition set"
+    and \<epsilon>::       "'time" +
+  fixes \<pi>::       "('i, 'action, 'time) temp_plan"
 begin
 
 definition "plan_actions \<equiv> {a| a t d. (a, t, d) \<in> ran \<pi>}"
 
-definition apply_effects::"'proposition set \<Rightarrow> 'snap_action set \<Rightarrow> 'proposition set" where
-"apply_effects M S \<equiv> (M - \<Union>(dels ` S)) \<union> \<Union>(adds ` S)"
+definition apply_effects::"'snap_action set \<Rightarrow> 'proposition set \<Rightarrow> 'proposition set" where
+"apply_effects S M \<equiv> (M - \<Union>(dels ` S)) \<union> \<Union>(adds ` S)"
 
 definition htps::"'time set" where
 "htps \<equiv> {t |a t d. (a, t, d) \<in> ran \<pi>} \<union> {t + d |a t d. (a, t, d) \<in> ran \<pi>}"
@@ -96,15 +182,6 @@ definition invs_at::"('proposition, 'time) invariant_sequence \<Rightarrow> 'tim
 "invs_at Inv t \<equiv> \<Union>{p | p. (t, p) \<in> Inv}"
 
 subsubsection \<open>Mutual exclusivity\<close>
-
-text \<open>We want to define a plan in an abstract manner. This needs to be more abstract.\<close>
-definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" where
-"mutex_snap_action a b = (
-  (pre a) \<inter> ((adds b) \<union> (dels b)) \<noteq> {} \<or>
-  ((adds a) \<inter> (dels b)) \<noteq> {} \<or>
-  (pre b) \<inter> ((adds a) \<union> (dels a)) \<noteq> {} \<or>
-  (adds b) \<inter> (dels a) \<noteq> {}
-)"
 
 text \<open>This is the most general formulation of actions not interfering. This considers the tuples in the range 
 of the plan to be actions. The contents may be the same (duplicate action/self-overlap), unless this is explicitly
@@ -160,7 +237,7 @@ definition valid_state_sequence::"'proposition state_sequence \<Rightarrow> bool
         pres = \<Union>(pre ` S);
         invs = invs_at Inv (t i)
       in
-        apply_effects (M i) S = (M (Suc i))
+        apply_effects S (M i) = (M (Suc i))
         \<and> invs \<subseteq> (M i)
         \<and> pres \<subseteq> (M i)))
 )"
@@ -228,26 +305,6 @@ definition annotated_action_seq::"('time \<times> 'action snap_action) set" wher
 abbreviation snap_at::"('time \<times> 'action snap_action) set \<Rightarrow> 'time \<Rightarrow> 'action snap_action set" where
 "snap_at B t \<equiv> {s. (t, s) \<in> B}"
 
-fun app_snap::"('snap_action \<Rightarrow> 'proposition set) \<Rightarrow> 'action snap_action \<Rightarrow> 'proposition set" where
-"app_snap f (AtStart a) = f (at_start a)" |
-"app_snap f (AtEnd a) = f (at_end a)"
-
-definition pre_imp::"'action snap_action \<Rightarrow> 'proposition set" where
-"pre_imp x = app_snap pre x"
-
-definition add_imp::"'action snap_action \<Rightarrow> 'proposition set" where
-"add_imp x = app_snap adds x"
-
-definition del_imp::"'action snap_action \<Rightarrow> 'proposition set" where
-"del_imp x = app_snap dels x"
-
-definition mutex_annotated_action where
-"mutex_annotated_action a b = (
-  (pre_imp a) \<inter> ((add_imp b) \<union> (del_imp b)) \<noteq> {} \<or>
-  ((add_imp a) \<inter> (del_imp b)) \<noteq> {} \<or>
-  (pre_imp b) \<inter> ((add_imp a) \<union> (del_imp a)) \<noteq> {} \<or>
-  (add_imp b) \<inter> (del_imp a) \<noteq> {}
-)"
 
 definition nm_anno_act_seq where
 "nm_anno_act_seq \<equiv> let B = annotated_action_seq in 
@@ -289,7 +346,7 @@ next
 qed
 
 text \<open>If something is in the happening sequence, then there must be an action in the plan.\<close>
-lemma in_happ_seqE':
+lemma in_happ_seq_exD:
   assumes in_happ_seq: "(time, snap) \<in> plan_happ_seq"
   shows "\<exists>a t d. (a, t, d) \<in> ran \<pi> \<and> (at_start a = snap \<and> time = t \<or> at_end a = snap \<and> time = t + d)"
   using assms unfolding plan_happ_seq_def by blast
@@ -299,9 +356,9 @@ lemma in_happ_seqE:
     and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> at_start a = snap \<Longrightarrow> time = t \<Longrightarrow> thesis"
     and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> at_end a = snap \<Longrightarrow> time = t + d \<Longrightarrow> thesis"
   shows thesis
-  using in_happ_seqE' assms by blast
+  using in_happ_seq_exD assms by blast
 
-lemma in_happ_seqE_act:
+lemma in_happ_seq_exD_act:
   assumes in_happ_seq: "(time, snap) \<in> plan_happ_seq"
   shows "\<exists>a t d. (a, t, d) \<in> ran \<pi> \<and> (at_start a = snap \<or> at_end a = snap)"
   using assms unfolding plan_happ_seq_def by blast
@@ -343,7 +400,7 @@ lemma happ_seq_conv_htps:
 lemma valid_state_sequenceE: 
   assumes "valid_state_sequence MS"
     and "i < length htpl"
-    and "apply_effects (MS i) (happ_at plan_happ_seq (time_index i)) = MS (Suc i) \<Longrightarrow> invs_at plan_inv_seq (time_index i) \<subseteq> MS i \<Longrightarrow> \<Union> (pre ` happ_at plan_happ_seq (time_index i)) \<subseteq> MS i \<Longrightarrow> thesis"
+    and "apply_effects (happ_at plan_happ_seq (time_index i)) (MS i) = MS (Suc i) \<Longrightarrow> invs_at plan_inv_seq (time_index i) \<subseteq> MS i \<Longrightarrow> \<Union> (pre ` happ_at plan_happ_seq (time_index i)) \<subseteq> MS i \<Longrightarrow> thesis"
   shows thesis
   apply (insert assms(1)) unfolding valid_state_sequence_def valid_state_sequence_def Let_def
   apply (drule spec)
@@ -723,8 +780,7 @@ end
 
 text \<open>Plan validity is equivalent if actions behave equivalently\<close>
 
-locale plan_validity_equivalence = temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> + 
-    action_defs at_start' at_end' over_all lower upper pre' adds' dels'
+locale plan_validity_equivalence = temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
     for at_start::"'action  \<Rightarrow> 'snap_action"
     and at_end::  "'action  \<Rightarrow> 'snap_action"
     and over_all::"'action  \<Rightarrow> 'proposition set"
@@ -736,12 +792,12 @@ locale plan_validity_equivalence = temp_plan_defs at_start at_end over_all lower
     and init::"'proposition set"
     and goal::"'proposition set"
     and \<epsilon>::"'time"
-    and \<pi>::"('i, 'action, 'time::time) temp_plan"
-    and at_start'::"'action \<Rightarrow> 'snap_action_1"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
+  fixes at_start'::"'action \<Rightarrow> 'snap_action_1"
     and at_end'::  "'action  \<Rightarrow> 'snap_action_1"
     and pre'::     "'snap_action_1 \<Rightarrow> 'proposition set"
     and adds'::    "'snap_action_1 \<Rightarrow> 'proposition set"
-    and dels'::    "'snap_action_1 \<Rightarrow> 'proposition set"  +
+    and dels'::    "'snap_action_1 \<Rightarrow> 'proposition set" 
   assumes start_snap_replacement: 
     "\<forall>(a, t, d) \<in> ran \<pi>. pre (at_start a) = pre' (at_start' a)"
     "\<forall>(a, t, d) \<in> ran \<pi>. adds (at_start a) = adds' (at_start' a)"
@@ -1751,12 +1807,13 @@ locale temp_plan_unique_snaps_nso_dg0 = temp_plan_unique_snaps_dg0 at_start at_e
   assumes nso: no_self_overlap
 begin
 sublocale temp_plan_nso_dg0 apply unfold_locales using nso dg0 by auto
+
 lemma at_start_in_happ_seq_exD: 
     assumes in_happ_seq: "(s, at_start a) \<in> plan_happ_seq"
         and a_in_actions: "a \<in> plan_actions"
     shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t"
   proof (rule ex_ex1I)
-    from in_happ_seq in_happ_seqE'
+    from in_happ_seq in_happ_seq_exD
     have "\<exists>(a', t, d) \<in> ran \<pi>. (at_start a' = at_start a \<and> s = t \<or> at_end a' = at_start a \<and> s = t + d)"
       by blast
     with snaps_disj_on_plan a_in_actions plan_actions_def
@@ -1817,13 +1874,13 @@ lemma at_start_in_happ_seq_exD:
     ultimately
     show ?thesis apply - by (rule ex1I, auto)
   qed
- 
 end
 
 subsection \<open>Fluents and Constants in a plan\<close>
 
 locale temp_plan_and_fluents_defs = 
-  temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
+  temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> +
+  temp_planning_problem_and_fluents at_start  at_end over_all lower upper pre adds dels init goal \<epsilon> props
     for at_start::"'action  \<Rightarrow> 'snap_action" 
     and at_end::  "'action  \<Rightarrow> 'snap_action"
     and over_all::"'action  \<Rightarrow> 'proposition set"
@@ -1835,8 +1892,8 @@ locale temp_plan_and_fluents_defs =
     and init::"'proposition set"
     and goal::"'proposition set"
     and \<epsilon>::"'time"
-    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
-  fixes props::   "'proposition set"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan" 
+    and props::   "'proposition set"
 begin
 
 text \<open>Actions only modify fluent propositions. The problem can have constants.\<close>
@@ -1918,7 +1975,7 @@ definition fluent_state_seq::"'proposition state_sequence \<Rightarrow> bool" wh
 lemma app_valid_snap_to_fluent_state:
   assumes "M \<subseteq> props"
       and "\<forall>s \<in> H. snap_mod_props s"
-    shows "apply_effects M H \<subseteq> props"
+    shows "apply_effects H M \<subseteq> props"
 proof -
   have "M - \<Union> (dels ` H) \<subseteq> props" using assms by blast
   moreover
@@ -1929,8 +1986,8 @@ qed
 
 lemma app_fluent_valid_snaps:
   assumes "\<forall>s \<in> H. adds s \<union> dels s \<subseteq> props"
-      and "apply_effects M H = M'"
-    shows "apply_effects (M \<inter> props) H = (M' \<inter> props)" 
+      and "apply_effects H M = M'"
+    shows "apply_effects H (M \<inter> props) = (M' \<inter> props)" 
   using assms unfolding apply_effects_def by blast
 
 lemma fluent_plan_is_const_valid: "fluent_plan \<Longrightarrow> const_resp_plan" 
@@ -1961,7 +2018,7 @@ lemma plan_and_happ_seq_consts:
   subgoal for x
     unfolding plan_happ_seq_def by fast
   subgoal for x
-    using in_happ_seqE_act by fast
+    using in_happ_seq_exD_act by fast
   done
 
 lemma cr_plan_cr_happ_seq:
@@ -1982,16 +2039,34 @@ lemma domain_consts_not_fluent:
   using plan_consts_not_fluent domain_consts_def by blast
 end
 
-locale temp_plan_for_finite_fluents = temp_plan_and_fluents_defs +
+
+locale temp_plan_and_finite_fluents_defs = temp_plan_and_fluents_defs +
   assumes finite_props: "finite props"
 
-locale temp_plan_for_some_fluents = temp_plan_and_fluents_defs +
+locale temp_plan_and_some_fluents_defs = temp_plan_and_fluents_defs +
   assumes some_props: "0 < card props"
 begin
-sublocale temp_plan_for_finite_fluents
+sublocale temp_plan_and_finite_fluents_defs
   apply unfold_locales
   using some_props card_ge_0_finite by blast
 end
+
+
+locale temp_plan_fluent = temp_plan_and_fluents_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> props
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time::time) temp_plan"
+    and props::   "'proposition set" +
+  assumes flp: fluent_plan
 
 text \<open>
 - Assume we have identified a set of fluents that a plan modifies.
@@ -2053,7 +2128,7 @@ proof -
   from crp cr_plan_imp_cr_hs
   have cr_hs: "\<forall>t. (\<forall>h \<in> happ_at ?B t. snap_mod_props h)" unfolding const_resp_happ_seq_def by blast
 
-  have app_eff: "apply_effects (MS i) (happ_at ?B (?t i)) = MS (Suc i)"
+  have app_eff: "apply_effects (happ_at ?B (?t i)) (MS i) = MS (Suc i)"
        and invs: "invs_at ?Inv (?t i) \<subseteq> MS i"
        and pres: "\<Union> (pre ` happ_at ?B (?t i)) \<subseteq> MS i"
        if "i < length htpl" for i using that vss unfolding valid_state_sequence_def by (auto simp: Let_def)
@@ -2068,19 +2143,19 @@ proof -
        "fluent_state_seq MS'" 
   proof -
     show "fluent_state_seq  MS'" using MS'_p unfolding fluent_state_seq_def by simp
-    have "apply_effects (MS' i) (happ_at ?B (?t i)) = MS' (Suc i)" (is "apply_effects (MS' i) ?S = MS' (Suc i)")
+    have "apply_effects (happ_at ?B (?t i)) (MS' i) = MS' (Suc i)" (is "apply_effects ?S (MS' i) = MS' (Suc i)")
        and "invs_at ?Inv' (?t i) \<subseteq> MS' i"
        and "\<Union> (pre_restr ` happ_at ?B (?t i)) \<subseteq> MS' i"
        if i_ran: "i < length htpl" for i
     proof -
-      show "apply_effects (MS' i) ?S = MS' (Suc i)" 
+      show "apply_effects ?S (MS' i) = MS' (Suc i)" 
       proof -
         have "\<Union>(adds ` ?S) \<subseteq> props" 
              "\<Union>(dels ` ?S) \<subseteq> props" using i_ran cr_hs 
           unfolding fluent_state_seq_def snap_mod_props_def by auto
         hence "\<forall>s\<in>happ_at plan_happ_seq (time_index i). snap_mod_props s" 
           unfolding snap_mod_props_def by blast
-        thus "apply_effects (MS' i) ?S = MS' (Suc i)" 
+        thus "apply_effects ?S (MS' i) = MS' (Suc i)" 
           using app_fluent_valid_snaps[OF _ app_eff[OF that]] 
           using MS'_p that unfolding snap_mod_props_def by simp
       qed
@@ -2127,7 +2202,7 @@ proof -
   from crp cr_plan_imp_cr_hs
   have cr_hs: "\<forall>t. (\<forall>h \<in> happ_at ?B t. snap_mod_props h)" unfolding const_resp_happ_seq_def by blast
 
-  have app_eff: "apply_effects (MS' i) (happ_at ?B (?t i)) = MS' (Suc i)"
+  have app_eff: "apply_effects (happ_at ?B (?t i)) (MS' i) = MS' (Suc i)"
        and invs: "invs_at ?Inv' (?t i) \<subseteq> MS' i"
        and pres: "\<Union> (pre_restr ` happ_at ?B (?t i)) \<subseteq> MS' i"
        if "i < length htpl" for i using that vss unfolding rtf.valid_state_sequence_def Let_def by auto
@@ -2135,12 +2210,12 @@ proof -
   have dc: "?dc = 
     \<Union> ((\<lambda>a. pre (at_start a) \<union> pre (at_end a) \<union> over_all a) ` {a|a t d. (a, t, d) \<in> ran \<pi>}) - props \<union> (goal - props) \<union> (init - props)" (is "?dc = ?dc'")
     using cr_domain_consts crp by fastforce
-  have "apply_effects (MS i) (happ_at ?B (?t i)) = MS (Suc i)" (is "apply_effects (MS i) ?S = MS (Suc i)")
+  have "apply_effects (happ_at ?B (?t i)) (MS i) = MS (Suc i)" (is "apply_effects ?S (MS i) = MS (Suc i)")
      and "invs_at ?Inv (?t i) \<subseteq> MS i"
      and "\<Union> (pre ` happ_at ?B (?t i)) \<subseteq> MS i"
      if i_ran: "i < length htpl" for i
   proof -
-    show "apply_effects (MS i) ?S = MS (Suc i)" 
+    show "apply_effects ?S (MS i) = MS (Suc i)" 
     proof -
       have "\<Union>(adds ` ?S) \<subseteq> props" (is "?as \<subseteq> props")
            "\<Union>(dels ` ?S) \<subseteq> props" (is "?ds \<subseteq> props") using i_ran cr_hs unfolding fluent_state_seq_def snap_mod_props_def by auto
@@ -2151,7 +2226,7 @@ proof -
       have "(MS' i - ?ds) \<union> ?as = MS' (Suc i)" unfolding apply_effects_def by simp
       ultimately
       have "(MS' i \<union> ?dc) - ?ds \<union> ?as = MS' (Suc i) \<union> ?dc" by auto
-      thus "apply_effects (MS i) ?S = MS (Suc i)" unfolding apply_effects_def using MS'_p' i_ran by simp
+      thus "apply_effects ?S (MS i) = MS (Suc i)" unfolding apply_effects_def using MS'_p' i_ran by simp
     qed
     show "invs_at ?Inv (?t i) \<subseteq> MS i" 
     proof -
@@ -2427,35 +2502,6 @@ next
 qed
 end
 
-locale temp_plan_fluent = temp_plan_and_fluents_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> props
-    for at_start::"'action  \<Rightarrow> 'snap_action" 
-    and at_end::  "'action  \<Rightarrow> 'snap_action"
-    and over_all::"'action  \<Rightarrow> 'proposition set"
-    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
-    and pre::     "'snap_action \<Rightarrow> 'proposition set"
-    and adds::    "'snap_action \<Rightarrow> 'proposition set"
-    and dels::    "'snap_action \<Rightarrow> 'proposition set"
-    and init::"'proposition set"
-    and goal::"'proposition set"
-    and \<epsilon>::"'time"
-    and \<pi>::"('i, 'action, 'time::time) temp_plan"
-    and props::   "'proposition set" +
-  assumes flp: fluent_plan
-begin
-(* sublocale pf_defs_ref: temp_plan_and_fluents_defs AtStart AtEnd over_all lower upper pre_imp add_imp del_imp init goal \<epsilon> \<pi> props
-  by standard
-
-sublocale fluent_plan_ref: temp_plan_fluent AtStart AtEnd over_all lower upper pre_imp add_imp del_imp init goal \<epsilon> \<pi> props
-  apply unfold_locales
-  using flp
-  unfolding pf_defs_ref.fluent_plan_def local.fluent_plan_def
-  unfolding pf_defs_ref.act_ref_props_def local.act_ref_props_def
-  unfolding pre_imp_def add_imp_def del_imp_def
-  by au to
-   *)
-end
-
 locale temp_plan_mutex_happ_seq = temp_plan_unique_snaps at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> 
     for at_start::"'action  \<Rightarrow> 'snap_action" 
     and at_end::  "'action  \<Rightarrow> 'snap_action"
@@ -2620,71 +2666,20 @@ end
 subsection \<open>Now the plans for planning problems, which limit the actions to some set\<close>
 
 
-locale temp_plan_for_action_defs = 
-  temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> 
-    for at_start::"'action  \<Rightarrow> 'snap_action" 
-    and at_end::  "'action  \<Rightarrow> 'snap_action"
-    and over_all::"'action  \<Rightarrow> 'proposition set"
-    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
-    and pre::     "'snap_action \<Rightarrow> 'proposition set"
-    and adds::    "'snap_action \<Rightarrow> 'proposition set"
-    and dels::    "'snap_action \<Rightarrow> 'proposition set"
-    and init::"'proposition set"
-    and goal::"'proposition set"
-    and \<epsilon>::"'time"
-    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
-  fixes actions:: "'action set"
+locale temp_plan_for_action_defs =
+  temp_plan_defs +
+  temp_planning_problem_and_actions
 begin
   definition "plan_actions_in_problem \<equiv> \<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
 end
-    
 
 locale temp_plan_for_actions = 
-  temp_plan_for_action_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> actions
-    for at_start::"'action  \<Rightarrow> 'snap_action" 
-    and at_end::  "'action  \<Rightarrow> 'snap_action"
-    and over_all::"'action  \<Rightarrow> 'proposition set"
-    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
-    and pre::     "'snap_action \<Rightarrow> 'proposition set"
-    and adds::    "'snap_action \<Rightarrow> 'proposition set"
-    and dels::    "'snap_action \<Rightarrow> 'proposition set"
-    and init::"'proposition set"
-    and goal::"'proposition set"
-    and \<epsilon>::"'time"
-    and \<pi>::"('i, 'action, 'time::time) temp_plan"
-    and actions:: "'action set" +
+  temp_plan_for_action_defs +
   assumes pap: plan_actions_in_problem
 
-locale temp_plan_for_finite_actions = temp_plan_for_actions +
-  assumes finite_actions: "finite actions"
-
-locale temp_plan_for_some_actions = temp_plan_for_actions +
-  assumes some_actions: "0 < card actions"
-begin
-sublocale temp_plan_for_finite_actions
-  apply unfold_locales using some_actions card_ge_0_finite by blast
-end
-
 locale temp_plan_for_actions_with_unique_snaps =
-  temp_plan_for_actions at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> actions
-    for at_start::"'action  \<Rightarrow> 'snap_action" 
-    and at_end::  "'action  \<Rightarrow> 'snap_action"
-    and over_all::"'action  \<Rightarrow> 'proposition set"
-    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
-    and pre::     "'snap_action \<Rightarrow> 'proposition set"
-    and adds::    "'snap_action \<Rightarrow> 'proposition set"
-    and dels::    "'snap_action \<Rightarrow> 'proposition set"
-    and init::"'proposition set"
-    and goal::"'proposition set"
-    and \<epsilon>::"'time"
-    and \<pi>::"('i, 'action, 'time::time) temp_plan"
-    and actions:: "'action set" +
-  assumes at_start_inj_on_acts: "inj_on at_start actions"
-      and at_end_inj_on_acts:   "inj_on at_end actions"
-      and snaps_disj_on_acts:   "at_start ` actions \<inter> at_end ` actions = {}"
+  temp_plan_for_actions +
+  temp_planning_problem_and_actions_with_unique_snaps
 begin
 sublocale temp_plan_unique_snaps
 proof unfold_locales
@@ -2695,7 +2690,36 @@ proof unfold_locales
 qed
 end
 
-locale valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_actions = 
+locale temp_plan_for_finite_actions = temp_plan_for_actions + temp_planning_problem_and_finite_actions
+
+locale temp_plan_for_some_actions = temp_plan_for_actions + temp_planning_problem_and_some_actions
+begin
+sublocale temp_plan_for_finite_actions by standard
+end
+
+locale temp_plan_for_actions_with_unique_snaps_nso_dg0 =
+  temp_plan_for_actions_with_unique_snaps at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> actions
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and \<pi>::"('i, 'action, 'time) temp_plan"
+    and actions:: "'action set" +
+  assumes nso: no_self_overlap
+      and dg0: durations_ge_0
+begin
+sublocale temp_plan_unique_snaps_nso_dg0
+  apply unfold_locales using nso dg0 by blast+
+end 
+
+locale valid_temp_plan_nso_fluent_mutex_happ_seq_unique_snaps_for_actions = 
   valid_temp_plan +
   temp_plan_nso +
   temp_plan_mutex_happ_seq +
@@ -2704,6 +2728,7 @@ locale valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_actions =
 begin
 sublocale valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq by unfold_locales
 sublocale temp_plan_unique_snaps_nso_dg0 apply unfold_locales using nso valid_plan_durs by auto
+sublocale temp_plan_for_actions_with_unique_snaps_nso_dg0 apply unfold_locales using nso valid_plan_durs by auto
 end
 
 locale abstr_set_impl_temp_plan_for_actions =
@@ -2738,7 +2763,7 @@ lemma "rtf_valid_nso.anno.plan2.valid_plan" using local.rtf_valid_nso.anno_valid
 sublocale pf_defs: temp_plan_and_fluents_defs AtStart AtEnd over_all_restr lower upper rtf.pre_imp rtf.add_imp rtf.del_imp "fluent_state init" "fluent_state goal" \<epsilon> \<pi> 
   by standard
 
-sublocale temp_plan_imp: valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_actions 
+sublocale temp_plan_imp: valid_temp_plan_nso_fluent_mutex_happ_seq_unique_snaps_for_actions 
     AtStart AtEnd over_all_restr lower upper rtf.pre_imp rtf.add_imp rtf.del_imp 
       "fluent_state init" "fluent_state goal" \<epsilon> \<pi> props actions
 proof (unfold_locales)
@@ -2754,51 +2779,212 @@ proof (unfold_locales)
 qed
 end
 
-(* Locale for theory. See theory file. *)
-locale valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_some_fluents_and_actions = 
-  valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_actions at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> props actions +
-  temp_plan_for_some_fluents at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> props +
-  temp_plan_for_some_actions at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> actions
-    for at_start::"'action  \<Rightarrow> 'snap_action" 
-    and at_end::  "'action  \<Rightarrow> 'snap_action"
-    and over_all::"'action  \<Rightarrow> 'proposition set"
-    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
-    and pre::     "'snap_action \<Rightarrow> 'proposition set"
-    and adds::    "'snap_action \<Rightarrow> 'proposition set"
-    and dels::    "'snap_action \<Rightarrow> 'proposition set"
-    and init::"'proposition set"
-    and goal::"'proposition set"
-    and \<epsilon>::"'time"
-    and \<pi>::"('i, 'action, 'time::time) temp_plan"
-    and props::"'proposition set"
-    and actions:: "'action set"
+(* Locale for exact characterisation of plans in relation to planning problems that we need for the proof. See theory file. *)
+locale valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_finite_fluents_and_actions = 
+  valid_temp_plan_nso_fluent_mutex_happ_seq_unique_snaps_for_actions +
+  temp_plan_and_finite_fluents_defs +
+  temp_plan_for_finite_actions
 
 (* Locale to instantiate *)
 locale abstr_set_impl_temp_plan_for_some_actions_and_fluents =
-  abstr_set_impl_temp_plan_for_actions at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> props actions +
-  temp_plan_for_some_fluents at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> props +
-  temp_plan_for_some_actions at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> actions
-    for at_start::"'action  \<Rightarrow> 'snap_action" 
-    and at_end::  "'action  \<Rightarrow> 'snap_action"
-    and over_all::"'action  \<Rightarrow> 'proposition set"
-    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
-    and pre::     "'snap_action \<Rightarrow> 'proposition set"
-    and adds::    "'snap_action \<Rightarrow> 'proposition set"
-    and dels::    "'snap_action \<Rightarrow> 'proposition set"
-    and init::"'proposition set"
-    and goal::"'proposition set"
-    and \<epsilon>::"'time"
-    and \<pi>::"('i, 'action, 'time::time) temp_plan"
-    and props::"'proposition set"
-    and actions:: "'action set" 
+  abstr_set_impl_temp_plan_for_actions +
+  temp_plan_and_finite_fluents_defs +
+  temp_plan_for_finite_actions
 begin
-sublocale valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_some_fluents_and_actions 
+sublocale valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_finite_fluents_and_actions 
     AtStart AtEnd over_all_restr lower upper rtf.pre_imp rtf.add_imp rtf.del_imp 
     "fluent_state init" "fluent_state goal" \<epsilon> \<pi> props actions
   by unfold_locales
 end
+
+subsection \<open>Actual planning problems\<close>
+text \<open>Most things that we are interested in is about how plans interact with planning problems as
+opposed to planning problems in isolation.
+A problem is an initial state, a goal, a set of actions.\<close>
+
+locale temp_planning_problem_for_some_actions_with_unique_snaps_and_some_fluents = 
+  temp_planning_problem_and_some_actions at_start at_end over_all lower upper pre adds dels init goal \<epsilon> actions +
+  temp_planning_problem_and_actions_with_unique_snaps at_start at_end over_all lower upper pre adds dels init goal \<epsilon> actions +
+  temp_planning_problem_and_some_fluents at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props 
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::"'proposition set"
+    and goal::"'proposition set"
+    and \<epsilon>::"'time"
+    and props::"'proposition set"
+    and actions:: "'action set"
+
+locale temp_planning_problem_abstr_set_impl =
+  temp_planning_problem_and_some_actions at_start at_end over_all lower upper pre adds dels init goal \<epsilon> actions +
+  temp_planning_problem_and_some_fluents at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props 
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition set"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition set"
+    and adds::    "'snap_action \<Rightarrow> 'proposition set"
+    and dels::    "'snap_action \<Rightarrow> 'proposition set"
+    and init::    "'proposition set"
+    and goal::    "'proposition set"
+    and \<epsilon>::"'time"
+    and props::"'proposition set"
+    and actions:: "'action set"
+begin
+sublocale temp_planning_problem_imp: temp_planning_problem_for_some_actions_with_unique_snaps_and_some_fluents 
+  AtStart AtEnd over_all lower upper pre_imp add_imp del_imp init goal \<epsilon> props actions 
+  by unfold_locales (blast intro: inj_onI)+
+end
+
+locale action_defs_for_lists = 
+  fixes at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition list"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition list"
+    and adds::    "'snap_action \<Rightarrow> 'proposition list"
+    and dels::    "'snap_action \<Rightarrow> 'proposition list"
+begin
+sublocale action_defs at_start at_end "set o over_all" lower upper "set o pre" "set o adds" "set o dels" 
+  done
+end
+
+locale temp_planning_problem_for_lists = action_defs_for_lists at_start at_end over_all lower upper pre adds dels
+    for at_start::"'action  \<Rightarrow> 'snap_action"
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition list"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition list"
+    and adds::    "'snap_action \<Rightarrow> 'proposition list"
+    and dels::    "'snap_action \<Rightarrow> 'proposition list" +
+  fixes init::    "'proposition list"
+    and goal::    "'proposition list"
+    and \<epsilon>::       "'time"
+  assumes eps_ran: "0 \<le> \<epsilon>"
+begin
+sublocale temp_planning_problem 
+  at_start at_end "set o over_all" lower upper "set o pre" "set o adds" "set o dels" 
+  "set init" "set goal" \<epsilon> 
+  using eps_ran by unfold_locales
+end
+
+locale temp_planning_problem_for_lists_of_props_and_actions = 
+  temp_planning_problem_for_lists at_start at_end over_all lower upper pre adds dels init goal \<epsilon>
+    for at_start::"'action  \<Rightarrow> 'snap_action"
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition list"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition list"
+    and adds::    "'snap_action \<Rightarrow> 'proposition list"
+    and dels::    "'snap_action \<Rightarrow> 'proposition list"
+    and init::    "'proposition list"
+    and goal::    "'proposition list"
+    and \<epsilon>::       "'time" +
+  fixes props::   "'proposition list"
+    and actions:: "'action list"
+begin
+sublocale temp_planning_problem_and_finite_fluents 
+  at_start at_end "set o over_all" lower upper "set o pre" "set o adds" "set o dels" 
+  "set init" "set goal" \<epsilon> "set props" by unfold_locales blast
+
+sublocale temp_planning_problem_and_finite_actions
+  at_start at_end "set o over_all" lower upper "set o pre" "set o adds" "set o dels" 
+  "set init" "set goal" \<epsilon> "set actions" by unfold_locales blast
+end
+
+locale temp_planning_problem_for_some_actions_with_some_fluents_on_lists =
+  temp_planning_problem_for_lists_of_props_and_actions 
+    at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition list"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition list"
+    and adds::    "'snap_action \<Rightarrow> 'proposition list"
+    and dels::    "'snap_action \<Rightarrow> 'proposition list"
+    and init::    "'proposition list"
+    and goal::    "'proposition list"
+    and \<epsilon>::       "'time"
+    and props::   "'proposition list"
+    and actions:: "'action list" +
+  assumes distinct_props: "distinct props"
+      and distinct_actions: "distinct actions"
+      and some_prop_list: "0 < length props"
+      and some_action_list: "0 < length actions"
+begin
+sublocale temp_planning_problem_and_some_fluents 
+  at_start at_end "set o over_all" lower upper "set o pre" "set o adds" "set o dels" 
+  "set init" "set goal" \<epsilon> "set props" apply unfold_locales
+  using distinct_props distinct_actions distinct_card some_prop_list some_action_list by force
+
+
+sublocale temp_planning_problem_and_some_actions
+  at_start at_end "set o over_all" lower upper "set o pre" "set o adds" "set o dels" 
+  "set init" "set goal" \<epsilon> "set actions" apply unfold_locales
+  using distinct_props distinct_actions distinct_card some_prop_list some_action_list by force
+end
+  
+
+locale temp_planning_problem_for_some_actions_with_unique_snaps_and_some_fluents_on_lists =
+  temp_planning_problem_for_some_actions_with_some_fluents_on_lists 
+    at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition list"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition list"
+    and adds::    "'snap_action \<Rightarrow> 'proposition list"
+    and dels::    "'snap_action \<Rightarrow> 'proposition list"
+    and init::    "'proposition list"
+    and goal::    "'proposition list"
+    and \<epsilon>::       "'time"
+    and props::   "'proposition list"
+    and actions:: "'action list" +
+  assumes unique: "temp_planning_problem_and_actions_with_unique_snaps at_start at_end \<epsilon> (set actions)"
+begin
+
+
+sublocale temp_planning_problem_for_some_actions_with_unique_snaps_and_some_fluents
+   at_start at_end "set o over_all" lower upper "set o pre" "set o adds" "set o dels" 
+   "set init" "set goal" \<epsilon> "set props" "set actions" 
+  apply unfold_locales 
+  using unique
+  by ((intro temp_planning_problem_and_actions_with_unique_snaps.at_start_inj_on_acts 
+    temp_planning_problem_and_actions_with_unique_snaps.at_end_inj_on_acts
+    temp_planning_problem_and_actions_with_unique_snaps.snaps_disj_on_acts)?, force)+
+end
+
+locale temp_planning_problem_list_impl = temp_planning_problem_for_some_actions_with_some_fluents_on_lists 
+    at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition list"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition list"
+    and adds::    "'snap_action \<Rightarrow> 'proposition list"
+    and dels::    "'snap_action \<Rightarrow> 'proposition list"
+    and init::    "'proposition list"
+    and goal::    "'proposition list"
+    and \<epsilon>::       "'time"
+    and props::   "'proposition list"
+    and actions:: "'action list" 
+begin
+sublocale temp_planning_problem_for_some_actions_with_unique_snaps_and_some_fluents_on_lists
+  AtStart AtEnd pre_imp
+end
+  
 
 (* 
 locale temp_plan_for_actions = 
@@ -2849,5 +3035,4 @@ lemma actions_at_time_index_exhaustive_cases:
   shows thesis using assms exists_actions_happening_at_time_index by blast
 end
  *)
-
 end

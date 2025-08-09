@@ -1,11 +1,83 @@
 theory Temporal_Plans_Theory
-  imports Temporal_Plans
+  imports Temporal_Plans ListMisc
 begin
 
-context valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_some_fluents_and_actions
-begin
+context temp_plan_for_actions_with_unique_snaps_nso_dg0
+begin 
+lemma at_start_of_act_in_happ_seq_exD: 
+    assumes in_happ_seq: "(s, at_start a) \<in> plan_happ_seq"
+        and a_in_actions: "a \<in> actions"
+    shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t"
+  proof (rule ex_ex1I)
+    from in_happ_seq in_happ_seq_exD
+    have "\<exists>(a', t, d) \<in> ran \<pi>. (at_start a' = at_start a \<and> s = t \<or> at_end a' = at_start a \<and> s = t + d)"
+      by blast
+    hence  "\<exists>(a', t, d) \<in> ran \<pi>. at_start a' = at_start a \<and> s = t" 
+      using snaps_disj_on_acts pap  a_in_actions 
+      unfolding plan_actions_in_problem_def by blast
+    moreover
+    have "\<forall>(a', t, d) \<in> ran \<pi>. at_start a = at_start a' \<longrightarrow> a = a'" 
+      using at_start_inj_on_acts a_in_actions pap 
+      unfolding inj_on_def plan_actions_in_problem_def by blast
+    ultimately
+    show "\<exists>x. case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t" by auto
+  next
+    have "t = t' \<and> d = d'" 
+         if "(a, t, d) \<in> ran \<pi> \<and> s = t" 
+        and "(a, t', d') \<in> ran \<pi> \<and> s = t'" for t d t' d'
+      using that nso dg0 nso_no_double_start by blast
+    thus "\<And>x y. case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t \<Longrightarrow> case y of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t \<Longrightarrow> x = y" by blast
+  qed
+
+  lemma at_end_of_act_in_happ_seq_exD:
+    assumes in_happ_seq: "(s, at_end a) \<in> plan_happ_seq"
+        and a_in_actions: "a \<in> actions"
+      shows "\<exists>!(t,d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"
+  proof -
+    define pair where "pair = (SOME (t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d)"
+    from in_happ_seq[simplified plan_happ_seq_def]
+    consider "(s, at_end a) \<in> {(t, at_start a)|a t d. (a, t, d) \<in> ran \<pi>}" 
+        | "(s, at_end a) \<in>  {(t + d, at_end a) |a t d. (a, t, d) \<in> ran \<pi>}"
+        by blast
+      then
+    have some_in_ran: "(a, pair) \<in> ran \<pi> 
+      \<and> s = fst pair + snd pair"
+    proof cases
+      case 1
+      hence "\<exists>a' d. (s, at_end a) = (s, at_start a') \<and> (a', s, d) \<in> ran \<pi> \<and> a' \<in> plan_actions" 
+        using a_in_actions unfolding plan_actions_def by auto
+      thus ?thesis using snaps_disj_on_acts 1 a_in_actions pap
+          unfolding plan_actions_in_problem_def by blast
+    next
+      case 2
+      hence  "\<exists>a' t d. (s, at_end a) = (t + d, at_end a') \<and> (a', t, d) \<in> ran \<pi> \<and> a' \<in> plan_actions" 
+        using a_in_actions unfolding plan_actions_def by blast
+      hence "\<exists>t d. (a, t, d) \<in> ran \<pi> \<and> s = t + d" using at_end_inj_on_acts a_in_actions pap
+        unfolding inj_on_def plan_actions_in_problem_def by blast
+      thus ?thesis using some_eq_ex[where P = "\<lambda>(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"] pair_def by auto
+    qed
+    moreover
+    have "p = pair" if td_def: "p = (t, d)" and td_in_ran: "(a, t, d) \<in> ran \<pi>" and td_eq_s: "t + d = s" for t d p
+    proof -
+      obtain t' d' where
+        t'd'_def: "pair = (t', d')" by fastforce
+      with some_in_ran
+      have t'd'_in_ran: "(a, t', d') \<in> ran \<pi>"
+        and t'd'_eq_s: "s = t' + d'" by simp+
   
+      from td_eq_s t'd'_eq_s
+      have td_t'd': "t + d = t' + d'" by simp
+      with nso_ends td_in_ran t'd'_in_ran
+      have "t = t'" "d = d'" by blast+
+      thus "p = pair" using t'd'_def td_def by simp
+    qed
+    ultimately
+    show ?thesis apply - by (rule ex1I, auto)
+  qed
+end
 
+context valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_finite_fluents_and_actions
+begin
 
 abbreviation snaps::"'action \<Rightarrow> 'snap_action set" where
 "snaps a \<equiv> {at_start a, at_end a}"
@@ -54,7 +126,7 @@ lemma at_start_in_happ_seqI:
 lemma at_end_in_happ_seqI:
   assumes "(a, t, d) \<in> ran \<pi>"
   shows "(t + d, at_end a) \<in> plan_happ_seq"
-  using assms unfolding plan_happ_seq_def plan_happ_seq_def by blast
+  using assms unfolding plan_happ_seq_def by blast
   
 lemma a_in_plan_is_in_actions:
   assumes "(a, t, d) \<in> ran \<pi>"
@@ -156,7 +228,7 @@ proof -
     from this(2)[simplified plan_happ_seq_def]
     consider "(s, at_start a) \<in> {(t, at_start a)|a t d. (a, t, d) \<in> ran \<pi>}" 
       | "(s, at_start a) \<in>  {(t + d, at_end a) |a t d. (a, t, d) \<in> ran \<pi>}"
-      using at_start_in_happ_seq_exD[OF s(1)] unfolding plan_happ_seq_def by fast
+      using at_start_of_act_in_happ_seq_exD unfolding plan_happ_seq_def by fast
     then
     have "\<exists>d. (a, s, d) \<in> ran \<pi>"
     proof cases
@@ -173,7 +245,7 @@ proof -
     qed
     then obtain d where
       d: "(a, s, d) \<in> ran \<pi>"
-      "(s + d, at_end a) \<in> plan_happ_seq" using plan_happ_seq_def plan_happ_seq_def by fast
+      "(s + d, at_end a) \<in> plan_happ_seq" using plan_happ_seq_def by fast
     with s(4) valid_plan_durs
     have "s + d \<ge> ?te" unfolding durations_ge_0_def by fastforce
     
@@ -215,7 +287,7 @@ proof (rule ccontr)
 
   then obtain t where
     t: "t < time_index 0"
-    "(t, at_start a) \<in> plan_happ_seq" unfolding plan_happ_seq_def exec_state_sequence_def by fast
+    "(t, at_start a) \<in> plan_happ_seq" unfolding exec_state_sequence_def by fast
 
   show False
   proof (cases "card htps")
@@ -223,12 +295,12 @@ proof (rule ccontr)
     with time_index_img_set vp
     have "htps = {}" unfolding valid_plan_def by fastforce
     with t(2) a_in_B_iff_t_in_htps
-    show ?thesis unfolding plan_happ_seq_def by fast
+    show ?thesis by fast
   next
     case (Suc nat)
     hence "0 < card htps" by auto
     from t(2)
-    have "t \<in> htps" using a_in_B_iff_t_in_htps unfolding plan_happ_seq_def  by fast
+    have "t \<in> htps" using a_in_B_iff_t_in_htps by fast
     then obtain i where
       i: "t = time_index i" 
       "i < card htps" using time_index_img_set by blast
@@ -251,20 +323,19 @@ proof (rule notI)
     and not_ended: "\<not>(\<exists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' < t)"
     unfolding exec_state_sequence_def by blast
   
-  from started
-  obtain d where
+  then obtain d where
     as_in_plan: "(a, s, d) \<in> ran \<pi>"
-    using at_start_in_happ_seq_exD assms unfolding plan_happ_seq_def by blast
-  hence "(s + d, at_end a) \<in> plan_happ_seq" unfolding plan_happ_seq_def plan_happ_seq_def by blast
-  hence t_sd: "t \<le> s + d" using vp[THEN valid_plan_durs(1)] as_in_plan not_ended unfolding durations_ge_0_def by fastforce
+    using at_start_of_act_in_happ_seq_exD by blast 
+  hence "(s + d, at_end a) \<in> plan_happ_seq" using in_happ_seqI by blast
+  hence t_sd: "t \<le> s + d" using valid_plan_durs(1) as_in_plan not_ended 
+    unfolding durations_ge_0_def by fastforce
   
-  from snap_in_B
   obtain d' where
     at_in_plan: "(a, t, d') \<in> ran \<pi>" 
-    using at_start_in_happ_seq_exD assms unfolding plan_happ_seq_def by blast
+    using at_start_of_act_in_happ_seq_exD assms by blast
 
   from started as_in_plan t_sd at_in_plan
-  show False using nso[THEN no_self_overlap_spec] by fastforce
+  show False using no_self_overlap_spec by fastforce
 qed
 
 lemma execution_state_unchanging:
@@ -288,7 +359,7 @@ next
   obtain s where  
     s: "a \<in> actions \<and> (s, at_start a) \<in> plan_happ_seq \<and> s \<le> t" 
     and s': "(\<nexists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' \<le> t)" by blast
-  have "s < t" using not_starting s unfolding plan_happ_seq_def
+  have "s < t" using not_starting s
     using order_le_imp_less_or_eq by blast
   moreover 
   have "(\<nexists>s'. (s', at_end a) \<in> plan_happ_seq \<and> s \<le> s' \<and> s' < t)" using s' by auto
@@ -297,13 +368,6 @@ next
 qed
 
 subsubsection \<open>Invariant states\<close>
-
-
-lemma finite_htps: "finite htps"
-  using finite_htps valid_plan_finite[OF vp] by blast
-
-lemma finite_happ_seq: "finite plan_happ_seq"
-  using finite_happ_seq valid_plan_finite[OF vp] plan_happ_seq_def by auto
 
 lemma finite_start_tps: "finite {s'. (s', at_start a) \<in> plan_happ_seq}"
 proof -
@@ -321,8 +385,8 @@ proof -
   show "finite {s'. (s', at_end a) \<in> plan_happ_seq}" unfolding image_Collect by auto
 qed
 
-lemma plan_durations: "(a, t, d) \<in> ran \<pi> \<Longrightarrow> 0 \<le> d" using valid_plan_durs[OF vp] unfolding durations_ge_0_def by blast
-lemmas plan_overlap_cond = nso[THEN no_self_overlap_ran]
+lemma plan_durations: "(a, t, d) \<in> ran \<pi> \<Longrightarrow> 0 \<le> d" using valid_plan_durs
+  unfolding durations_ge_0_def by blast
 
 text \<open>The cases for snap-actions that occur at a timepoint\<close>
 definition "is_instant_action t a \<equiv> (t, at_start a) \<in> plan_happ_seq \<and> (t, at_end a) \<in> plan_happ_seq"
@@ -346,14 +410,14 @@ proof -
   from assms is_instant_action_def
   have "(t, at_start a) \<in> plan_happ_seq" "(t, at_end a) \<in> plan_happ_seq" by auto
    obtain ds where
-    ds: "(a, t, ds) \<in> ran \<pi>" using a at_start_in_happ_seq_exD' \<open>(t, at_start a) \<in> plan_happ_seq\<close> by blast
+    ds: "(a, t, ds) \<in> ran \<pi>" using a at_start_of_act_in_happ_seq_exD \<open>(t, at_start a) \<in> plan_happ_seq\<close> by blast
     
 
-  from \<open>(t, at_end a) \<in> plan_happ_seq\<close> at_end_in_happ_seqE'' a
+  from \<open>(t, at_end a) \<in> plan_happ_seq\<close> at_end_of_act_in_happ_seq_exD a
   obtain te de where
     tede: "(a, te, de) \<in> ran \<pi>" "t = te + de" by blast
 
-  from nso_start_end[OF nso valid_plan_durs(1)[OF vp] ds tede(1)] tede
+  from nso_start_end[OF ds tede(1)] tede
   have "ds = 0" by auto
   thus ?thesis using ds by simp
 qed
@@ -366,7 +430,7 @@ lemma is_starting_action_dests:
   shows "(t, at_start a) \<in> plan_happ_seq" "(t, at_end a) \<notin> plan_happ_seq"
   using is_starting_action_def assms by blast+
 
-lemma is_starting_action_planE:
+lemma is_starting_action_plan_exD:
   assumes "is_starting_action t a"
       and a: "a \<in> actions"
     shows "\<exists>da. (a, t, da) \<in> ran \<pi> \<and> 0 < da"
@@ -374,7 +438,7 @@ proof -
   from assms is_starting_action_def
   have "(t, at_start a) \<in> plan_happ_seq" "(t, at_end a) \<notin> plan_happ_seq" by auto
   then obtain d where
-    d: "(a, t, d) \<in> ran \<pi>" using a at_start_in_happ_seq_exD' by blast
+    d: "(a, t, d) \<in> ran \<pi>" using a at_start_of_act_in_happ_seq_exD by blast
   moreover
   have "0 < d"
   proof -
@@ -406,7 +470,7 @@ proof -
   from assms is_ending_action_def
   have "(t, at_start a) \<notin> plan_happ_seq" "(t, at_end a) \<in> plan_happ_seq" by auto
   then obtain ta da where
-    tada: "(a, ta, da) \<in> ran \<pi>" "t = ta + da" using a at_end_in_happ_seqE'' by blast
+    tada: "(a, ta, da) \<in> ran \<pi>" "t = ta + da" using a at_end_of_act_in_happ_seq_exD by blast
   moreover
   have "0 < da"
   proof -
@@ -538,8 +602,9 @@ proof -
   thus ?thesis by blast
 qed
 
-lemma open_start_list_nth_planE: "\<exists>!(t', d). (a, t', d) \<in> ran \<pi> \<and> (open_start_list) ! i = t'" if "i < length (open_start_list)" for i 
-  using open_start_list_nth_happ_seqE[OF that, THEN at_start_in_happ_seq_exD'[OF a_in_acts]] by simp
+lemma open_start_list_nth_planE: "\<exists>!(t', d). (a, t', d) \<in> ran \<pi> \<and> (open_start_list) ! i = t'" 
+  if "i < length (open_start_list)" for i 
+  using open_start_list_nth_happ_seqE that at_start_of_act_in_happ_seq_exD a_in_acts by simp
 
 lemma open_start_list_nth_ran: "(open_start_list) ! i < t" if "i < length (open_start_list)" for i
 proof -
@@ -548,17 +613,22 @@ proof -
   thus ?thesis by simp
 qed
 
-lemma open_start_list_planI: "\<exists>n < length (open_start_list). (open_start_list) ! n = t'" if "(a, t', d') \<in> ran \<pi>" "t' < t" for t' d'
+lemma open_start_list_planI: "\<exists>n < length (open_start_list). (open_start_list) ! n = t'" 
+  if "(a, t', d') \<in> ran \<pi>" "t' < t" for t' d'
 proof -
   have "t' \<in> {s. s < t \<and> (s, at_start a) \<in> plan_happ_seq}" using that plan_happ_seq_def plan_happ_seq_def by fast
   hence "t' \<in> set (open_start_list)" using open_start_list_def finite_open_started set_sorted_list_of_set by simp
   thus ?thesis using in_set_conv_nth by metis
 qed
    
-lemma closed_start_list_len: "length (closed_start_list) = card {s. s \<le> t \<and> (s, at_start a) \<in> plan_happ_seq}" unfolding closed_start_list_def length_sorted_list_of_set by blast
-lemma closed_start_list_sorted: "sorted (closed_start_list)" using sorted_sorted_list_of_set closed_start_list_def by simp
-lemma closed_start_list_distinct: "distinct (closed_start_list)" using distinct_sorted_list_of_set closed_start_list_def by auto
-lemma set_closed_start_list: "set (closed_start_list) = {s. s \<le> t \<and> (s, at_start a) \<in> plan_happ_seq}" using closed_start_list_def set_sorted_list_of_set finite_closed_started by auto
+lemma closed_start_list_len: "length (closed_start_list) = card {s. s \<le> t \<and> (s, at_start a) \<in> plan_happ_seq}" 
+    unfolding closed_start_list_def length_sorted_list_of_set by blast
+lemma closed_start_list_sorted: "sorted (closed_start_list)" 
+    using sorted_sorted_list_of_set closed_start_list_def by simp
+lemma closed_start_list_distinct: "distinct (closed_start_list)" 
+    using distinct_sorted_list_of_set closed_start_list_def by auto
+lemma set_closed_start_list: "set (closed_start_list) = {s. s \<le> t \<and> (s, at_start a) \<in> plan_happ_seq}" 
+    using closed_start_list_def set_sorted_list_of_set finite_closed_started by auto
 
 lemma closed_start_list_nth_happ_seqE: "((closed_start_list) ! i, at_start a) \<in> plan_happ_seq" if "i < length (closed_start_list)" for i 
 proof -
@@ -568,79 +638,100 @@ proof -
 qed
 
 lemma closed_start_list_nth_planE: "\<exists>!(t', d). (a, t', d) \<in> ran \<pi> \<and> (closed_start_list) ! i = t'" if "i < length (closed_start_list)" for i 
-  using closed_start_list_nth_happ_seqE[OF that, THEN at_start_in_happ_seq_exD'[OF a_in_acts]] by simp
+  using closed_start_list_nth_happ_seqE  that at_start_of_act_in_happ_seq_exD a_in_acts by simp
 
 lemma closed_start_list_nth_ran: "(closed_start_list) ! i \<le> t" if "i < length (closed_start_list)" for i
 proof -
   have "(closed_start_list) ! i \<in> set (closed_start_list)" using that by auto
-  hence "(closed_start_list) ! i \<in> {s. s \<le> t \<and> (s, at_start a) \<in> plan_happ_seq}" using set_sorted_list_of_set finite_closed_started closed_start_list_def by auto
+  hence "(closed_start_list) ! i \<in> {s. s \<le> t \<and> (s, at_start a) \<in> plan_happ_seq}" 
+    using set_sorted_list_of_set finite_closed_started closed_start_list_def by auto
   thus ?thesis by simp
 qed
 
 lemma closed_start_list_planI: "\<exists>n < length (closed_start_list). (closed_start_list) ! n = t'" if "(a, t', d') \<in> ran \<pi>" "t' \<le> t" for t' d'
 proof -
-  have "t' \<in> {s. s \<le> t \<and> (s, at_start a) \<in> plan_happ_seq}" using that plan_happ_seq_def plan_happ_seq_def by fast
-  hence "t' \<in> set (closed_start_list)" using closed_start_list_def finite_closed_started set_sorted_list_of_set by simp
+  have "t' \<in> {s. s \<le> t \<and> (s, at_start a) \<in> plan_happ_seq}" 
+    using that plan_happ_seq_def plan_happ_seq_def by fast
+  hence "t' \<in> set (closed_start_list)" 
+    using closed_start_list_def finite_closed_started set_sorted_list_of_set by simp
   thus ?thesis using in_set_conv_nth by metis
 qed
 
-lemma open_end_list_len: "length (open_end_list) = card {s'. s' < t \<and> (s', at_end a) \<in> plan_happ_seq}" unfolding open_end_list_def length_sorted_list_of_set by blast
-lemma open_end_list_sorted: "sorted (open_end_list)" using sorted_sorted_list_of_set open_end_list_def by auto
-lemma open_end_list_distinct: "distinct (open_end_list)" using distinct_sorted_list_of_set open_end_list_def by auto
-lemma set_open_end_list: "set (open_end_list) = {s'. s' < t \<and> (s', at_end a) \<in> plan_happ_seq}" using open_end_list_def set_sorted_list_of_set finite_open_ended by auto
+lemma open_end_list_len: "length (open_end_list) = card {s'. s' < t \<and> (s', at_end a) \<in> plan_happ_seq}" 
+  unfolding open_end_list_def length_sorted_list_of_set by blast
+lemma open_end_list_sorted: "sorted (open_end_list)" 
+  using sorted_sorted_list_of_set open_end_list_def by auto
+lemma open_end_list_distinct: "distinct (open_end_list)" 
+  using distinct_sorted_list_of_set open_end_list_def by auto
+lemma set_open_end_list: "set (open_end_list) = {s'. s' < t \<and> (s', at_end a) \<in> plan_happ_seq}" 
+  using open_end_list_def set_sorted_list_of_set finite_open_ended by auto
 
 lemma open_end_list_nth_happ_seqE: "((open_end_list) ! i, at_end a) \<in> plan_happ_seq" if "i < length (open_end_list)" for i 
 proof -
   have "(open_end_list) ! i \<in> set (open_end_list)" using that by auto
-  hence "(open_end_list) ! i \<in> {s. s < t \<and> (s, at_end a) \<in> plan_happ_seq}" using set_sorted_list_of_set finite_open_ended open_end_list_def by simp
+  hence "(open_end_list) ! i \<in> {s. s < t \<and> (s, at_end a) \<in> plan_happ_seq}" 
+    using set_sorted_list_of_set finite_open_ended open_end_list_def by simp
   thus ?thesis by blast
 qed
 
 lemma open_end_list_nth_planE: "\<exists>!(t', d). (a, t', d) \<in> ran \<pi> \<and> (open_end_list) ! i = t' + d" if "i < length (open_end_list)" for i 
-  using open_end_list_nth_happ_seqE[OF that] at_end_in_happ_seqE''[OF a_in_acts] by simp
+  using open_end_list_nth_happ_seqE that at_end_of_act_in_happ_seq_exD a_in_acts by simp
 
 lemma open_end_list_nth_ran: "(open_end_list) ! i < t" if "i < length (open_end_list)" for i
 proof -
   from that
   have "(open_end_list) ! i \<in> set (open_end_list)" using that by auto
-  hence "(open_end_list) ! i \<in> {s. s < t \<and> (s, at_end a) \<in> plan_happ_seq}" using set_sorted_list_of_set finite_open_ended open_end_list_def by auto
+  hence "(open_end_list) ! i \<in> {s. s < t \<and> (s, at_end a) \<in> plan_happ_seq}" 
+    using set_sorted_list_of_set finite_open_ended open_end_list_def by auto
   thus ?thesis by simp
 qed
 
 lemma open_end_list_planI: "\<exists>n < length (open_end_list). (open_end_list) ! n = t' + d'" if "(a, t', d') \<in> ran \<pi>" "t' + d' < t" for t' d'
 proof -
-  have "t' + d'\<in> {s. s < t \<and> (s, at_end a) \<in> plan_happ_seq}" using that plan_happ_seq_def plan_happ_seq_def by fast
-  hence "t' + d' \<in> set (open_end_list)" using open_end_list_def finite_open_ended set_sorted_list_of_set by simp
+  have "t' + d'\<in> {s. s < t \<and> (s, at_end a) \<in> plan_happ_seq}" 
+    using that plan_happ_seq_def plan_happ_seq_def by fast
+  hence "t' + d' \<in> set (open_end_list)" 
+    using open_end_list_def finite_open_ended set_sorted_list_of_set by simp
   thus ?thesis using in_set_conv_nth by metis
 qed
 
-lemma closed_end_list_len: "length (closed_end_list) = card {s'. s' \<le> t \<and> (s', at_end a) \<in> plan_happ_seq}" unfolding closed_end_list_def length_sorted_list_of_set by blast
-lemma closed_end_list_sorted: "sorted (closed_end_list)" using sorted_sorted_list_of_set closed_end_list_def by auto
-lemma closed_end_list_distinct: "distinct (closed_end_list)" using distinct_sorted_list_of_set closed_end_list_def by auto
-lemma set_closed_end_list: "set (closed_end_list) = {s'. s' \<le> t \<and> (s', at_end a) \<in> plan_happ_seq}" using closed_end_list_def set_sorted_list_of_set finite_closed_ended by auto
+lemma closed_end_list_len: "length (closed_end_list) = card {s'. s' \<le> t \<and> (s', at_end a) \<in> plan_happ_seq}" 
+  unfolding closed_end_list_def length_sorted_list_of_set by blast
+lemma closed_end_list_sorted: "sorted (closed_end_list)" 
+  using sorted_sorted_list_of_set closed_end_list_def by auto
+lemma closed_end_list_distinct: "distinct (closed_end_list)" 
+  using distinct_sorted_list_of_set closed_end_list_def by auto
+lemma set_closed_end_list: "set (closed_end_list) = {s'. s' \<le> t \<and> (s', at_end a) \<in> plan_happ_seq}" 
+  using closed_end_list_def set_sorted_list_of_set finite_closed_ended by auto
 
-lemma closed_end_list_nth_happ_seqE: "((closed_end_list) ! i, at_end a) \<in> plan_happ_seq" if "i < length (closed_end_list)" for i 
+lemma closed_end_list_nth_happ_seqE: "((closed_end_list) ! i, at_end a) \<in> plan_happ_seq"
+  if "i < length (closed_end_list)" for i 
 proof -
   have "(closed_end_list) ! i \<in> set (closed_end_list)" using that by auto
-  hence "(closed_end_list) ! i \<in> {s. s \<le> t \<and> (s, at_end a) \<in> plan_happ_seq}" using set_sorted_list_of_set finite_closed_ended closed_end_list_def by simp
+  hence "(closed_end_list) ! i \<in> {s. s \<le> t \<and> (s, at_end a) \<in> plan_happ_seq}" 
+    using set_sorted_list_of_set finite_closed_ended closed_end_list_def by simp
   thus ?thesis by blast
 qed
 
-lemma closed_end_list_nth_planE: "\<exists>!(t', d). (a, t', d) \<in> ran \<pi> \<and> (closed_end_list) ! i = t' + d" if "i < length (closed_end_list)" for i 
-  using closed_end_list_nth_happ_seqE[OF that] at_end_in_happ_seqE''[OF a_in_acts] by simp
+lemma closed_end_list_nth_planE: "\<exists>!(t', d). (a, t', d) \<in> ran \<pi> \<and> (closed_end_list) ! i = t' + d" 
+  if "i < length (closed_end_list)" for i 
+  using closed_end_list_nth_happ_seqE that at_end_of_act_in_happ_seq_exD a_in_acts by simp
 
 lemma closed_end_list_nth_ran: "(closed_end_list) ! i \<le> t" if "i < length (closed_end_list)" for i
 proof -
   from that
   have "(closed_end_list) ! i \<in> set (closed_end_list)" using that by auto
-  hence "(closed_end_list) ! i \<in> {s. s \<le> t \<and> (s, at_end a) \<in> plan_happ_seq}" using set_sorted_list_of_set finite_closed_ended closed_end_list_def by auto
+  hence "(closed_end_list) ! i \<in> {s. s \<le> t \<and> (s, at_end a) \<in> plan_happ_seq}" 
+    using set_sorted_list_of_set finite_closed_ended closed_end_list_def by auto
   thus ?thesis by simp
 qed
 
 lemma closed_end_list_planI: "\<exists>n < length (closed_end_list). (closed_end_list) ! n = t' + d'" if "(a, t', d') \<in> ran \<pi>" "t' + d' \<le> t" for t' d'
 proof -
-  have "t' + d'\<in> {s. s \<le> t \<and> (s, at_end a) \<in> plan_happ_seq}" using that plan_happ_seq_def plan_happ_seq_def by fast
-  hence "t' + d' \<in> set (closed_end_list)" using closed_end_list_def finite_closed_ended set_sorted_list_of_set by simp
+  have "t' + d'\<in> {s. s \<le> t \<and> (s, at_end a) \<in> plan_happ_seq}" 
+    using that plan_happ_seq_def plan_happ_seq_def by fast
+  hence "t' + d' \<in> set (closed_end_list)" 
+    using closed_end_list_def finite_closed_ended set_sorted_list_of_set by simp
   thus ?thesis using in_set_conv_nth by metis
 qed
 
@@ -648,7 +739,9 @@ subsubsection \<open>Properties\<close>
 
 lemma open_start_open_end_paired: "\<forall>n \<le> i. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! n = t \<and> open_end_list ! n = t + d) 
           \<and> (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_start_list ! n = t \<longrightarrow> open_end_list ! n = t + d)
-          \<and> (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_end_list ! n = t + d \<longrightarrow> open_start_list ! n = t)" if iel: "i < length open_end_list" and isl: "i < length open_start_list" for i
+          \<and> (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_end_list ! n = t + d \<longrightarrow> open_start_list ! n = t)" 
+    if iel: "i < length open_end_list"
+    and isl: "i < length open_start_list" for i
   using that
 proof (induction i)
   case 0
@@ -676,10 +769,10 @@ proof (induction i)
   hence "te < t" by order
   note tede_t = tede_t this
 
-  from nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)]
+  from no_self_overlap_ran[OF tsds(2) tede(2)]
   have "ts = te \<and> ds = de \<or> te < ts \<or> ts + ds < te" by blast
   moreover
-  from nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+  from no_self_overlap_ran[OF tede(2) tsds(2)]
   have "ts = te \<and> ds = de \<or> ts < te \<or> te + de < ts" by blast
   ultimately
   consider "ts = te \<and> ds = de" | "te < ts" | "ts + ds < te" | "ts < te" | "te + de < ts" by blast
@@ -715,7 +808,7 @@ proof (induction i)
     next
       case False
       hence "te \<le> ts + ds" by simp
-      with nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)] 4 
+      with no_self_overlap_ran[OF tsds(2) tede(2)] 4 
       show ?thesis by fastforce
     qed
   next
@@ -760,10 +853,10 @@ next
   hence "te < t" by order
   note tede_t = tede_t this
 
-  from nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)]
+  from no_self_overlap_ran[OF tsds(2) tede(2)]
   have "ts = te \<and> ds = de \<or> te < ts \<or> ts + ds < te" by blast
   moreover
-  from nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+  from no_self_overlap_ran[OF tede(2) tsds(2)]
   have "ts = te \<and> ds = de \<or> ts < te \<or> te + de < ts" by blast
   ultimately
   consider "ts = te \<and> ds = de" | "te < ts" | "ts + ds < te" | "ts < te" | "te + de < ts" by blast
@@ -798,7 +891,7 @@ next
     next
       case False
       hence "ts \<le> te + de" by simp
-      with 2 nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+      with 2 no_self_overlap_ran[OF tede(2) tsds(2)]
       show ?thesis by fastforce
     qed
   next
@@ -845,7 +938,7 @@ next
     next
       case False
       hence "te \<le> ts + ds" by simp
-      with nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)] 4
+      with no_self_overlap_ran[OF tsds(2) tede(2)] 4
       show ?thesis by fastforce
     qed
   next
@@ -892,13 +985,18 @@ proof -
     define n where "n = card {s'. s' < t \<and> (s', at_end a) \<in> plan_happ_seq}"
     hence n1: "n + 2 \<le> card {s. s < t \<and> (s, at_start a) \<in> plan_happ_seq}" using 1 by simp
     
-    have open_start_list_len: "length open_start_list = card {s. s < t \<and> (s, at_start a) \<in> plan_happ_seq}" unfolding open_start_list_def length_sorted_list_of_set by blast
-    have n_open_start_list: "n + 2 \<le> length open_start_list" using n1 unfolding length_sorted_list_of_set using open_start_list_def by simp
+    have open_start_list_len: "length open_start_list = card {s. s < t \<and> (s, at_start a) \<in> plan_happ_seq}" 
+      unfolding open_start_list_def length_sorted_list_of_set by blast
+    have n_open_start_list: "n + 2 \<le> length open_start_list" using n1 unfolding length_sorted_list_of_set 
+      using open_start_list_def by simp
 
-    have open_end_list_len: "length open_end_list = card {s'. s' < t \<and> (s', at_end a) \<in> plan_happ_seq}" unfolding open_end_list_def length_sorted_list_of_set by blast
-    have n_open_end_list: "n = length open_end_list" using n_def unfolding length_sorted_list_of_set[symmetric] using open_end_list_def by simp
+    have open_end_list_len: "length open_end_list = card {s'. s' < t \<and> (s', at_end a) \<in> plan_happ_seq}" 
+      unfolding open_end_list_def length_sorted_list_of_set by blast
+    have n_open_end_list: "n = length open_end_list" using n_def 
+      unfolding length_sorted_list_of_set[symmetric] using open_end_list_def by simp
     
-    have open_start_list_open_end_list_len: "length open_end_list + 2 \<le> length open_start_list" using n_open_end_list n_open_start_list by blast
+    have open_start_list_open_end_list_len: "length open_end_list + 2 \<le> length open_start_list" 
+      using n_open_end_list n_open_start_list by blast
 
     hence end_start_paired: 
       "\<forall>n < length open_end_list. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! n = t \<and> open_end_list ! n = t + d)" 
@@ -908,9 +1006,11 @@ proof -
     
     have n_ord: "\<forall>i < n. open_start_list ! i < open_start_list ! n"
     proof -
-      have "\<forall>i < n. open_start_list ! i \<le> open_start_list ! n" using open_start_list_sorted sorted_nth_mono n_open_start_list by fastforce
+      have "\<forall>i < n. open_start_list ! i \<le> open_start_list ! n" 
+        using open_start_list_sorted sorted_nth_mono n_open_start_list by fastforce
       moreover
-      have "\<forall>i < n. open_start_list ! i \<noteq> open_start_list ! n" using open_start_list_distinct unfolding distinct_conv_nth using n_open_start_list by simp
+      have "\<forall>i < n. open_start_list ! i \<noteq> open_start_list ! n" using open_start_list_distinct 
+        unfolding distinct_conv_nth using n_open_start_list by simp
       ultimately
       show ?thesis by force
     qed
@@ -931,7 +1031,7 @@ proof -
           "open_start_list ! n = tn" by auto
       
         assume "open_end_list ! i \<ge> open_start_list ! n"
-        with nso[THEN no_self_overlap_ran, OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
+        with no_self_overlap_ran[OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
         have "False" by fastforce
       }
       thus ?thesis by fastforce
@@ -939,9 +1039,11 @@ proof -
 
     have n_Suc_n: "open_start_list ! n < open_start_list ! Suc n" 
     proof -
-      have "open_start_list ! n \<le> open_start_list ! Suc n" using open_start_list_sorted sorted_nth_mono n_open_start_list by fastforce
+      have "open_start_list ! n \<le> open_start_list ! Suc n" 
+        using open_start_list_sorted sorted_nth_mono n_open_start_list by fastforce
       moreover
-      have "open_start_list ! n \<noteq> open_start_list ! Suc n" using open_start_list_distinct unfolding distinct_conv_nth using n_open_start_list by simp
+      have "open_start_list ! n \<noteq> open_start_list ! Suc n" using open_start_list_distinct 
+        unfolding distinct_conv_nth using n_open_start_list by simp
       ultimately
       show ?thesis by force
     qed
@@ -960,7 +1062,7 @@ proof -
     proof (cases "tn + dn < t")
       case True
       with tndn
-      have "tn + dn \<in> set open_end_list" using set_open_end_list unfolding plan_happ_seq_def plan_happ_seq_def by fast
+      have "tn + dn \<in> set open_end_list" using set_open_end_list unfolding plan_happ_seq_def by fast
       then obtain n' where
         "open_end_list ! n' = tn + dn" 
         "n' < length open_end_list" unfolding in_set_conv_nth by blast
@@ -971,7 +1073,7 @@ proof -
       show ?thesis by simp
     next
       case False
-      thus ?thesis using plan_overlap_cond[OF tndn(1) tsndsn(1)] sn_t n_Suc_n tndn(2) tsndsn(2) by fastforce
+      thus ?thesis using no_self_overlap_spec[OF tndn(1) tsndsn(1)] sn_t n_Suc_n tndn(2) tsndsn(2) by fastforce
     qed
   qed
   thus ?thesis by fastforce
@@ -1013,10 +1115,10 @@ proof (induction i)
   hence "te \<le> t" by order
   note tede_t = tede_t this
 
-  from nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)]
+  from no_self_overlap_ran[OF tsds(2) tede(2)]
   have "ts = te \<and> ds = de \<or> te < ts \<or> ts + ds < te" by blast
   moreover
-  from nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+  from no_self_overlap_ran[OF tede(2) tsds(2)]
   have "ts = te \<and> ds = de \<or> ts < te \<or> te + de < ts" by blast
   ultimately
   consider "ts = te \<and> ds = de" | "te < ts" | "ts + ds < te" | "ts < te" | "te + de < ts" by blast
@@ -1052,7 +1154,7 @@ proof (induction i)
     next
       case False
       hence "te \<le> ts + ds" by simp
-      with nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)] 4 
+      with no_self_overlap_ran[OF tsds(2) tede(2)] 4 
       show ?thesis by fastforce
     qed
   next
@@ -1097,10 +1199,10 @@ next
   hence "te \<le> t" by order
   note tede_t = tede_t this
 
-  from nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)]
+  from no_self_overlap_ran[OF tsds(2) tede(2)]
   have "ts = te \<and> ds = de \<or> te < ts \<or> ts + ds < te" by blast
   moreover
-  from nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+  from no_self_overlap_ran[OF tede(2) tsds(2)]
   have "ts = te \<and> ds = de \<or> ts < te \<or> te + de < ts" by blast
   ultimately
   consider "ts = te \<and> ds = de" | "te < ts" | "ts + ds < te" | "ts < te" | "te + de < ts" by blast
@@ -1135,7 +1237,7 @@ next
     next
       case False
       hence "ts \<le> te + de" by simp
-      with 2 nso[THEN no_self_overlap_ran, OF tede(2) tsds(2)]
+      with 2 no_self_overlap_ran[OF tede(2) tsds(2)]
       show ?thesis by fastforce
     qed
   next
@@ -1182,7 +1284,7 @@ next
     next
       case False
       hence "te \<le> ts + ds" by simp
-      with nso[THEN no_self_overlap_ran, OF tsds(2) tede(2)] 4
+      with no_self_overlap_ran[OF tsds(2) tede(2)] 4
       show ?thesis by fastforce
     qed
   next
@@ -1268,7 +1370,7 @@ proof -
           "closed_start_list ! n = tn" by auto
       
         assume "closed_end_list ! i \<ge> closed_start_list ! n"
-        with nso[THEN no_self_overlap_ran, OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
+        with no_self_overlap_ran[OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
         have "False" by fastforce
       }
       thus ?thesis by fastforce
@@ -1297,7 +1399,7 @@ proof -
     proof (cases "tn + dn \<le> t")
       case True
       with tndn
-      have "tn + dn \<in> set closed_end_list" using set_closed_end_list unfolding plan_happ_seq_def plan_happ_seq_def by fast
+      have "tn + dn \<in> set closed_end_list" using set_closed_end_list unfolding plan_happ_seq_def by fast
       then obtain n' where
         "closed_end_list ! n' = tn + dn" 
         "n' < length closed_end_list" unfolding in_set_conv_nth by blast
@@ -1308,7 +1410,7 @@ proof -
       show ?thesis by simp
     next
       case False
-      thus ?thesis using plan_overlap_cond[OF tndn(1) tsndsn(1)] sn_t n_Suc_n tndn(2) tsndsn(2) by fastforce
+      thus ?thesis using no_self_overlap_spec[OF tndn(1) tsndsn(1)] sn_t n_Suc_n tndn(2) tsndsn(2) by fastforce
     qed
   qed
   thus ?thesis by fastforce
@@ -1375,7 +1477,7 @@ proof -
         "open_end_list ! i = ti + di" by auto
     
       assume "open_end_list ! i \<ge> open_start_list ! n"
-      with nso[THEN no_self_overlap_ran, OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
+      with no_self_overlap_ran[OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
       have "False" by fastforce
     }
     thus ?thesis by fastforce
@@ -1409,7 +1511,8 @@ proof -
     proof -
       have "\<forall>i < n. open_end_list ! i \<le> open_end_list ! n" using open_end_list_sorted sorted_nth_mono open_end_list_n by fastforce
       moreover
-      have "\<forall>i < n. open_end_list ! i \<noteq> open_end_list ! n" using open_end_list_distinct unfolding distinct_conv_nth using open_end_list_n by simp
+      have "\<forall>i < n. open_end_list ! i \<noteq> open_end_list ! n" using open_end_list_distinct 
+        unfolding distinct_conv_nth using open_end_list_n by simp
       ultimately
       show ?thesis by force
     qed
@@ -1451,7 +1554,9 @@ proof
 
   define n where "n = card {s'. s' < t \<and> (s', at_end a) \<in> plan_happ_seq}"
   have open_end_list_n: "length open_end_list = n" using n_def open_end_list_len by simp
-  have open_start_list_n: "length open_start_list = n" using assms unfolding open_start_list_len n_def open_active_count_def le_imp_diff_is_add[OF open_ended_le_open_started] by simp
+  have open_start_list_n: "length open_start_list = n" using assms 
+    unfolding open_start_list_len n_def open_active_count_def 
+      le_imp_diff_is_add[OF open_ended_le_open_started] by simp
 
   have end_start_paired: "\<forall>i<n. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> open_start_list ! i = t \<and> open_end_list ! i = t + d)" 
        "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> open_start_list ! i = t \<longrightarrow> open_end_list ! i = t + d)" 
@@ -1464,7 +1569,8 @@ proof
 
   with open_start_list_n td(1) end_start_paired(2)
   have "open_end_list ! i = t' + d'" by blast
-  hence "t' + d' < t" using open_end_list_nth_ran i(1) unfolding open_start_list_n open_end_list_n by fastforce
+  hence "t' + d' < t" using open_end_list_nth_ran i(1) 
+    unfolding open_start_list_n open_end_list_n by fastforce
 
   with td(3)
   show False by simp
@@ -1476,7 +1582,8 @@ lemma closed_active_count_1E:
 proof -
   define n where "n = card {s'. s' \<le> t \<and> (s', at_end a) \<in> plan_happ_seq}"
   have closed_end_list_n: "length closed_end_list = n" using n_def closed_end_list_len by simp
-  have closed_start_list_n: "length closed_start_list = n + 1" using n_def assms closed_start_list_len closed_active_count_def by linarith
+  have closed_start_list_n: "length closed_start_list = n + 1" using n_def assms 
+closed_start_list_len closed_active_count_def by linarith
 
   have end_start_paired: "\<forall>i<n. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! i = t \<and> closed_end_list ! i = t + d)" 
        "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! i = t \<longrightarrow> closed_end_list ! i = t + d)" 
@@ -1490,9 +1597,11 @@ proof -
 
   have n_ord: "\<forall>i < n. closed_start_list ! i < closed_start_list ! n"
   proof -
-    have "\<forall>i < n. closed_start_list ! i \<le> closed_start_list ! n" using closed_start_list_sorted sorted_nth_mono closed_start_list_n by fastforce
+    have "\<forall>i < n. closed_start_list ! i \<le> closed_start_list ! n" 
+      using closed_start_list_sorted sorted_nth_mono closed_start_list_n by fastforce
     moreover
-    have "\<forall>i < n. closed_start_list ! i \<noteq> closed_start_list ! n" using closed_start_list_distinct unfolding distinct_conv_nth using closed_start_list_n by simp
+    have "\<forall>i < n. closed_start_list ! i \<noteq> closed_start_list ! n" using closed_start_list_distinct 
+      unfolding distinct_conv_nth using closed_start_list_n by simp
     ultimately
     show ?thesis by force
   qed
@@ -1509,7 +1618,7 @@ proof -
         "closed_end_list ! i = ti + di" by auto
     
       assume "closed_end_list ! i \<ge> closed_start_list ! n"
-      with nso[THEN no_self_overlap_ran, OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
+      with no_self_overlap_ran[OF tidi(1) tndn(1)] tidi(2,3) tndn(2) sisn
       have "False" by fastforce
     }
     thus ?thesis by fastforce
@@ -1586,7 +1695,9 @@ proof
 
   define n where "n = card {s'. s' \<le> t \<and> (s', at_end a) \<in> plan_happ_seq}"
   have closed_end_list_n: "length closed_end_list = n" using n_def closed_end_list_len by simp
-  have closed_start_list_n: "length closed_start_list = n" using assms unfolding closed_start_list_len n_def closed_active_count_def le_imp_diff_is_add[OF closed_ended_le_closed_started] by simp
+  have closed_start_list_n: "length closed_start_list = n" using assms 
+    unfolding closed_start_list_len n_def 
+      closed_active_count_def le_imp_diff_is_add[OF closed_ended_le_closed_started] by simp
 
   have end_start_paired: "\<forall>i<n. (\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! i = t \<and> closed_end_list ! i = t + d)" 
        "\<forall>i<n. (\<forall>t d. (a, t, d) \<in> ran \<pi> \<and> closed_start_list ! i = t \<longrightarrow> closed_end_list ! i = t + d)" 
@@ -1599,7 +1710,8 @@ proof
 
   with closed_start_list_n td(1) end_start_paired(2)
   have "closed_end_list ! i = t' + d'" by blast
-  hence "t' + d' \<le> t" using closed_end_list_nth_ran i(1) unfolding closed_start_list_n closed_end_list_n by fastforce
+  hence "t' + d' \<le> t" using closed_end_list_nth_ran i(1) 
+    unfolding closed_start_list_n closed_end_list_n by fastforce
 
   with td(3)
   show False by simp
@@ -1621,7 +1733,7 @@ lemma open_active_count_1_if_ending:
   apply (insert assms)
   unfolding is_ending_action_def
   apply (erule conjE)
-  apply (frule at_end_in_happ_seqE''[OF a_in_acts])
+  apply (frule at_end_of_act_in_happ_seq_exD[OF _ a_in_acts])
   apply -
   apply (drule ex1_implies_ex)
   apply (elim exE)
@@ -1649,9 +1761,9 @@ proof -
       using open_active_count_1_iff by auto
     moreover
     obtain d'' where
-      "(a, t, d'') \<in> ran \<pi>" using assms(1) at_start_in_happ_seq_exD' a_in_acts by blast 
+      "(a, t, d'') \<in> ran \<pi>" using assms(1) at_start_of_act_in_happ_seq_exD a_in_acts by blast 
     ultimately
-    show False using nso[THEN no_self_overlap_ran] by fastforce
+    show False using no_self_overlap_ran by fastforce
   qed
   thus ?thesis using open_active_count_ran by simp
 qed
@@ -1680,11 +1792,11 @@ proof -
     moreover
     obtain te de where
       tede: "(a, te, de) \<in> ran \<pi>" 
-        "te + de = t" using assms(1) at_end_in_happ_seqE'' a_in_acts by blast
+        "te + de = t" using assms(1) at_end_of_act_in_happ_seq_exD a_in_acts by blast
     have "te \<le> te + de" using plan_durations tede by auto
     hence  "te \<le> t" using at_start_in_happ_seqI[OF tede(1)] tede(2) assms apply (cases "te = te + de") by auto
     ultimately
-    have "te + de < ta \<or> ta + da < te"  using nso_double_act_spec[OF nso valid_plan_durs(1)[OF vp] tada(1) tede(1)] tada(3) tede(2) by auto
+    have "te + de < ta \<or> ta + da < te"  using nso_double_act_spec[OF tada(1) tede(1)] tada(3) tede(2) by auto
     then consider "te + de < ta" | "ta + da < te" by auto
     thus False using \<open>t < ta + da\<close> \<open>te + de = t\<close> \<open>ta \<le> t\<close> \<open>te \<le> t\<close> apply cases by auto
   qed
@@ -1703,7 +1815,7 @@ proof -
 next
   assume "is_starting_action t a"
   hence "(t, at_start a) \<in> plan_happ_seq" "(t, at_end a) \<notin>  plan_happ_seq" using is_starting_action_def by auto
-  with at_start_in_happ_seq_exD' \<open>a \<in> actions\<close>
+  with at_start_of_act_in_happ_seq_exD \<open>a \<in> actions\<close>
   obtain d where
     d: "(a, t, d) \<in> ran \<pi>" by blast
   moreover
@@ -1731,7 +1843,7 @@ lemma closed_active_count_1_if_starting:
 proof -
   from assms(1)
   obtain d where
-    d: "(a, t, d) \<in> ran \<pi>" using at_start_in_happ_seq_exD' a_in_acts by blast
+    d: "(a, t, d) \<in> ran \<pi>" using at_start_of_act_in_happ_seq_exD a_in_acts by blast
   hence "0 \<le> d" using plan_durations by simp
   moreover
   have "(t + d, at_end a) \<in> plan_happ_seq" using at_end_in_happ_seqI d by simp
@@ -1746,7 +1858,8 @@ lemma open_active_count_eq_closed_active_count_if_only_instant_acts:
   assumes "(t, at_start a) \<in> plan_happ_seq \<longleftrightarrow> (t, at_end a) \<in> plan_happ_seq"
     shows "open_active_count = closed_active_count"
 proof -
-  consider "(t, at_start a) \<in> plan_happ_seq \<and> (t, at_end a) \<in> plan_happ_seq" | "(t, at_start a) \<notin> plan_happ_seq \<and> (t, at_end a) \<notin> plan_happ_seq"  using assms by auto
+  consider "(t, at_start a) \<in> plan_happ_seq \<and> (t, at_end a) \<in> plan_happ_seq" 
+    | "(t, at_start a) \<notin> plan_happ_seq \<and> (t, at_end a) \<notin> plan_happ_seq"  using assms by auto
   thus ?thesis
   proof cases
     case 1
@@ -1789,7 +1902,7 @@ proof -
     have start_cond: "(\<nexists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' < t \<and> t \<le> t' + d')" 
      and end_cond: "(\<nexists>t' d'. (a, t', d') \<in> ran \<pi> \<and> t' \<le> t \<and> t < t' + d')" by auto
     { assume "(t, at_start a) \<in> plan_happ_seq"
-      with at_start_in_happ_seq_exD' a_in_acts
+      with at_start_of_act_in_happ_seq_exD a_in_acts
       obtain ds where
         ds: "(a, t, ds) \<in> ran \<pi>" by blast
       moreover
@@ -1801,7 +1914,7 @@ proof -
     }
     moreover
     { assume "(t, at_end a) \<in> plan_happ_seq"
-      with at_end_in_happ_seqE'' a_in_acts
+      with at_end_of_act_in_happ_seq_exD a_in_acts
       obtain te de where
         tede: "(a, te, de) \<in> ran \<pi>" "t = te + de" by blast
       moreover
@@ -1820,26 +1933,26 @@ proof -
     obtain t1 d1 t2 d2 where
         t1d1: "(a, t1, d1) \<in> ran \<pi>" "t1 < t" "t \<le> t1 + d1"
     and t2d2: "(a, t2, d2) \<in> ran \<pi>" "t2 \<le> t" "t < t2 + d2" by auto
-    from no_self_overlap_ran[OF nso t1d1(1) t2d2(1)] no_self_overlap_ran[OF nso t2d2(1) t1d1(1)]
+    from no_self_overlap_ran[OF t1d1(1) t2d2(1)] no_self_overlap_ran[OF t2d2(1) t1d1(1)]
     have "t1 \<noteq> t2 \<or> d1 \<noteq> d2 \<Longrightarrow> (t2 < t1 \<or> t1 + d1 < t2) \<and> (t1 < t2 \<or> t2 + d2 < t1)" by blast
     with t1d1(2,3) t2d2(2,3)
     have "t1 \<noteq> t2 \<or> d1 \<noteq> d2 \<Longrightarrow> False" by auto 
     hence td: "(a, t1, d1) \<in> ran \<pi>" "t1 < t" "t < t1 + d1" using t1d1 t2d2 by auto
     { assume "(t, at_start a) \<in> plan_happ_seq"
-      with at_start_in_happ_seq_exD' a_in_acts 
+      with at_start_of_act_in_happ_seq_exD a_in_acts 
       obtain d where
         "(a, t, d) \<in> ran \<pi>" by blast
-      from no_self_overlap_spec[OF nso td(1) this] td(2,3)
+      from no_self_overlap_spec[OF td(1) this] td(2,3)
       have "False" by fastforce
     }
     moreover
     { assume "(t, at_end a) \<in> plan_happ_seq"
-      with at_end_in_happ_seqE'' a_in_acts 
+      with at_end_of_act_in_happ_seq_exD a_in_acts 
       obtain te de where
         tede: "(a, te, de) \<in> ran \<pi>" "te + de = t" by blast
       hence "0 \<le> de" using plan_durations by auto 
       note tede = tede this
-      from no_self_overlap_ran[OF nso tede(1) td(1)] no_self_overlap_ran[OF nso td(1) tede(1)]
+      from no_self_overlap_ran[OF tede(1) td(1)] no_self_overlap_ran[OF td(1) tede(1)]
       have "te \<noteq> t1 \<or> de \<noteq> d1 \<Longrightarrow> (t1 < te \<or> te + de < t1) \<and> (te < t1 \<or> t1 + d1 < te)" by auto
       with tede td
       have False using add_strict_increasing2 by fastforce
@@ -1874,7 +1987,7 @@ next
   obtain ta da where
     tada: "(a, ta, da) \<in> ran \<pi>" "ta \<le> t" "t < ta + da" by blast
 
-  from nso_double_act_spec[OF nso vp[THEN valid_plan_durs(1)] tede(1) tada(1)] 
+  from nso_double_act_spec[OF tede(1) tada(1)] 
   have "te \<noteq> ta \<or> de \<noteq> da \<Longrightarrow> ta + da < te \<or> te + de < ta" by auto
   moreover
   have "te = ta \<Longrightarrow> de \<noteq> da" using tede tada by auto
@@ -1890,7 +2003,7 @@ next
   from assms closed_active_count_1E
   obtain ta da where
     tada: "(a, ta, da) \<in> ran \<pi>" "ta \<le> t" "t < ta + da" by blast
-  with nso_double_act_spec[OF nso vp[THEN valid_plan_durs(1)] t0 tada(1)] 
+  with nso_double_act_spec[OF t0 tada(1)] 
   show False by fastforce
 qed
 
@@ -2137,7 +2250,8 @@ qed
 
 lemma locked_before_and_during: "locked_before t p = locked_during t p + sum_list (map (\<lambda>a. (if is_ending_action t a then 1 else 0)) (locked_by p))"
 proof -
-  have 2: "sum_list (map (open_active_count t) xs) = sum_list (map (open_closed_active_count t) xs) + (\<Sum>a\<leftarrow>xs. if is_ending_action t a then 1 else 0)" if "set xs \<subseteq> actions" for xs
+  have 2: "sum_list (map (open_active_count t) xs) = sum_list (map (open_closed_active_count t) xs) 
+    + (\<Sum>a\<leftarrow>xs. if is_ending_action t a then 1 else 0)" if "set xs \<subseteq> actions" for xs
     using that
   proof (induction xs)
     case Nil
@@ -2171,7 +2285,8 @@ qed
 lemma locked_after_and_during: "locked_after t p = locked_during t p + sum_list (map (\<lambda>a. (if is_starting_action t a then 1 else 0)) (locked_by p))"
 proof -
   have "sum_list (map (closed_active_count t) xs) =
-        sum_list (map (open_active_count t) xs) - (\<Sum>a\<leftarrow>xs. if is_ending_action t a then 1 else 0) + (\<Sum>a\<leftarrow>xs. if is_starting_action t a then 1 else 0)" if "set xs \<subseteq> actions" for xs 
+        sum_list (map (open_active_count t) xs) - (\<Sum>a\<leftarrow>xs. if is_ending_action t a then 1 else 0) 
+      + (\<Sum>a\<leftarrow>xs. if is_starting_action t a then 1 else 0)" if "set xs \<subseteq> actions" for xs 
     using that
     apply (induction xs)
      apply simp
@@ -2183,7 +2298,8 @@ proof -
       apply (subst sum_list.eq_foldr[symmetric])+
       apply (cases "(t, at_start x) \<in> plan_happ_seq"; cases "(t, at_end x) \<in> plan_happ_seq")
          apply simp
-      subgoal using open_active_count_0_if_start_scheduled closed_active_count_0_if_end_scheduled action_happening_case_defs by simp
+      subgoal using open_active_count_0_if_start_scheduled 
+          closed_active_count_0_if_end_scheduled action_happening_case_defs by simp
       subgoal unfolding action_happening_case_defs
         apply (subst if_not_P, simp)
         apply (subst (2) if_P, simp)
@@ -2319,10 +2435,8 @@ proof -
       hence False 
         apply -
         apply (elim CollectE conjE)
-        unfolding plan_happ_seq_def
-        apply (drule plan_happ_seq_conv_htps)
+        apply (drule happ_seq_conv_htps)
         apply (drule time_indexI_htps[rotated])
-        using vp valid_plan_finite apply blast
         using time_index_sorted_set[of 0]
         by fastforce
     }
@@ -2336,10 +2450,8 @@ proof -
       hence False 
         apply -
         apply (elim CollectE conjE)
-        unfolding plan_happ_seq_def
-        apply (drule plan_happ_seq_conv_htps)
+        apply (drule happ_seq_conv_htps)
         apply (drule time_indexI_htps[rotated])
-        using vp valid_plan_finite apply blast
         using time_index_sorted_set[of 0]
         by fastforce
     }
@@ -2406,7 +2518,7 @@ lemma closed_active_count_on_indexed_timepoint_is_open_active_count_Suc:
   apply (rule closed_active_count_is_open_active_count_if_nothing_happens)
    apply (rule time_index_strict_sorted_list, (simp add: assms)+)
   using no_actions_between_indexed_timepoints[OF assms]
-  unfolding plan_happ_seq_def by fast
+  by fast
 
 lemma locked_after_is_locked_before_if_nothing_happens:
   assumes "s < t"
@@ -2421,7 +2533,7 @@ lemma locked_after_indexed_timepoint_is_locked_before_Suc:
   apply (rule locked_after_is_locked_before_if_nothing_happens)
    apply (rule time_index_strict_sorted_list, (simp add: assms)+)
   using no_actions_between_indexed_timepoints[OF assms]
-  unfolding plan_happ_seq_def by fast
+  by fast
 
 lemma locked_before_initial_is_0:
   shows "locked_before (time_index 0) p = 0"
@@ -2474,7 +2586,7 @@ lemma active_after_indexed_timepoint_is_active_before_Suc:
   apply (rule active_after_is_before_if_nothing_happens)
    apply (rule time_index_strict_sorted_list, (simp add: assms)+)
   using no_actions_between_indexed_timepoints[OF assms]
-  unfolding plan_happ_seq_def by fast
+  by fast
 
 lemma active_before_initial_is_0: "active_before (time_index 0) = 0"
   unfolding active_before_def using open_active_count_initial_is_0 by auto
@@ -2557,8 +2669,9 @@ proof -
     proof (cases "is_ending_action t x")
       case True
       hence "\<not>is_starting_action t x" using action_happening_disj by blast
-      hence "closed_open_active_count t x = open_active_count t x" using closed_open_active_count_is_open_active_count_if_not_starting a set_action_list by blast
-      hence "closed_open_active_count t x = 1" using open_active_count_1_if_ending True  a set_action_list by simp
+      hence "closed_open_active_count t x = open_active_count t x" 
+        using closed_open_active_count_is_open_active_count_if_not_starting a set_action_list by blast
+      hence "closed_open_active_count t x = 1" using open_active_count_1_if_ending True a set_action_list by simp
       then show ?thesis by simp
     next
       case False
@@ -2626,7 +2739,7 @@ proof (rule iffI)
     "p \<in> over_all a" 
     "ta < t" 
     "t \<le> ta + da" 
-    unfolding plan_invs_before_def inv_seq_def invs_at_def plan_inv_seq_def by blast
+    unfolding plan_invs_before_def invs_at_def plan_inv_seq_def by blast
   from tada(1) pap plan_actions_in_problem_def
   have a_in_acts: "a \<in> actions" by fast
   with tada
@@ -2667,7 +2780,8 @@ next
   with open_active_count_1_iff
   obtain ta da where
     tada: "(a, ta, da) \<in> ran \<pi>" "ta < t" "t \<le> ta + da" by auto  
-  show "p \<in> plan_invs_before t" unfolding plan_invs_before_def invs_at_def inv_seq_def plan_inv_seq_def using tada a(1) by auto
+  show "p \<in> plan_invs_before t" unfolding plan_invs_before_def invs_at_def plan_inv_seq_def 
+    using tada a(1) by auto
 qed
 
 lemma in_invs_after_iff_locked_after: "p \<in> plan_invs_after t \<longleftrightarrow> 0 < locked_after t p"
@@ -2738,13 +2852,16 @@ proof (rule iffI)
   have a_closed_active: "closed_active_count t a = 1" using closed_active_count_1_iff tada a_in_acts by fastforce
   have a_open_active: "open_active_count t a = 1" using open_active_count_1_iff tada a_in_acts by fastforce
 
-  have "(t, at_start a) \<in> plan_happ_seq \<longleftrightarrow> (t, at_end a) \<in> plan_happ_seq" using a_closed_active a_open_active open_active_count_eq_closed_active_count_iff_only_instant_acts[OF a_in_acts, of t] by argo  
+  have "(t, at_start a) \<in> plan_happ_seq \<longleftrightarrow> (t, at_end a) \<in> plan_happ_seq" using a_closed_active 
+      a_open_active open_active_count_eq_closed_active_count_iff_only_instant_acts[OF a_in_acts, of t] by argo  
   moreover
-  have not_starting: "(t, at_start a) \<notin> plan_happ_seq" using open_active_count_0_if_start_scheduled a_in_acts a_open_active by auto
+  have not_starting: "(t, at_start a) \<notin> plan_happ_seq" 
+      using open_active_count_0_if_start_scheduled a_in_acts a_open_active by auto
   ultimately
   have not_ending: "(t, at_end a) \<notin> plan_happ_seq" by simp
 
-  have a_in_open_closed: "open_closed_active_count t a = 1" unfolding open_closed_active_count_def using a_open_active not_starting not_ending is_ending_action_def by simp
+  have a_in_open_closed: "open_closed_active_count t a = 1" unfolding open_closed_active_count_def 
+      using a_open_active not_starting not_ending is_ending_action_def by simp
 
   show "0 < locked_during t p"
   proof -
@@ -2777,12 +2894,16 @@ next
   hence oac: "open_active_count t a = 1" using open_closed_active_count_def open_active_count_ran by force
 
   from ocac oac
-  consider "(t, at_start a) \<in> plan_happ_seq" | "(t, at_end a) \<notin> plan_happ_seq" unfolding open_closed_active_count_def is_ending_action_def by fastforce
-  then consider "(t, at_start a) \<in> plan_happ_seq" "(t, at_end a) \<notin> plan_happ_seq" | "(t, at_start a) \<in> plan_happ_seq" "(t, at_end a) \<in> plan_happ_seq"| "(t, at_start a) \<notin> plan_happ_seq" "(t, at_end a) \<notin> plan_happ_seq" by argo
+  consider "(t, at_start a) \<in> plan_happ_seq" | "(t, at_end a) \<notin> plan_happ_seq" 
+      unfolding open_closed_active_count_def is_ending_action_def by fastforce
+  then consider "(t, at_start a) \<in> plan_happ_seq" "(t, at_end a) \<notin> plan_happ_seq" 
+    | "(t, at_start a) \<in> plan_happ_seq" "(t, at_end a) \<in> plan_happ_seq"
+    | "(t, at_start a) \<notin> plan_happ_seq" "(t, at_end a) \<notin> plan_happ_seq" by argo
   hence not_starting_or_ending: "(t, at_start a) \<notin> plan_happ_seq \<and> (t, at_end a) \<notin> plan_happ_seq"
     apply cases 
     subgoal using open_active_count_0_if_start_scheduled oac by auto
-    subgoal using open_active_count_eq_closed_active_count_iff_only_instant_acts oac closed_active_count_0_if_end_scheduled by force
+    subgoal using open_active_count_eq_closed_active_count_iff_only_instant_acts oac 
+        closed_active_count_0_if_end_scheduled by force
     subgoal by simp
     done
 
@@ -2791,7 +2912,8 @@ next
     t'd': "(a, t', d') \<in> ran \<pi>" "t' < t" "t \<le> t' + d'" by auto
   with not_starting_or_ending[THEN conjunct2]
   have t_le_t'd': "t < t' + d'" using at_end_in_happ_seqI apply (cases "t = t' + d'") by auto
-  show "p \<in> plan_invs_during t" unfolding plan_invs_during_def invs_during_def invs_at_def using a(1) t'd' t_le_t'd' by auto
+  show "p \<in> plan_invs_during t" unfolding plan_invs_during_def invs_during_def invs_at_def 
+    using a(1) t'd' t_le_t'd' by auto
 qed
 
 subsubsection \<open>Connecting the different invariant states\<close>
@@ -2802,7 +2924,7 @@ lemma invs_after_invariant_if:
     shows "plan_invs_after s = plan_invs_before u"
   apply (intro equalityI subsetI)
   subgoal for p
-    unfolding plan_invs_after_def plan_invs_before_def invs_after_def inv_seq_def plan_inv_seq_def invs_at_def
+    unfolding plan_invs_after_def plan_invs_before_def invs_after_def plan_inv_seq_def invs_at_def
     apply (elim UnionE CollectE exE conjE)
     subgoal for P P' a t d s'
       apply (rule UnionI)
@@ -2823,7 +2945,7 @@ lemma invs_after_invariant_if:
       using at_end_in_happ_seqI assms by force
     done
   subgoal for p
-    unfolding plan_invs_after_def plan_invs_before_def invs_after_def inv_seq_def plan_inv_seq_def invs_at_def
+    unfolding plan_invs_after_def plan_invs_before_def invs_after_def plan_inv_seq_def invs_at_def
     apply (elim UnionE CollectE exE conjE)
     subgoal for P P' a t d u'
       apply (rule UnionI)
@@ -2851,8 +2973,8 @@ lemma invs_between_indexed_timepoints_invariant:
   shows "plan_invs_after (time_index l) = plan_invs_before (time_index (Suc l))"
   apply (rule invs_after_invariant_if)
   using time_index_strict_sorted_list assms apply fastforce
-  using no_actions_between_indexed_timepoints[OF valid_plan_finite[OF vp] assms] 
-  unfolding plan_happ_seq_def by fast
+  using no_actions_between_indexed_timepoints assms
+  by fast
 
 lemma invs_during_hold_after:
   "plan_invs_during t \<subseteq> plan_invs_after t"
@@ -2888,8 +3010,8 @@ lemma no_invs_after_end:
   apply (erule exE)
   apply (erule plan_invs_afterE)
   apply (drule at_end_in_happ_seqI)
-  using no_actions_after_final_timepoint[OF valid_plan_finite[OF vp] assms]
-  unfolding plan_happ_seq_def by fast
+  using no_actions_after_final_timepoint assms 
+  by fast
 
 lemma snap_does_not_delete_inv:
   assumes "(t, h) \<in> plan_happ_seq"
@@ -2899,7 +3021,7 @@ proof-
   have "t \<in> htps" using a_in_B_iff_t_in_htps plan_happ_seq_def by fast
   then obtain l where
     l: "l < length htpl"
-    "time_index l = t" using time_index_img_set[OF valid_plan_finite[OF vp]] unfolding card_htps_len_htpl by force
+    "time_index l = t" using time_index_img_set unfolding card_htps_len_htpl by force
   then consider "Suc l = length htpl" | "Suc l < length htpl" by linarith
   thus ?thesis
   proof cases
@@ -2913,13 +3035,13 @@ proof-
     have "plan_invs_after (time_index l) = plan_invs_before (time_index (Suc l))" by simp
     moreover
     have "plan_invs_before (time_index (Suc l)) \<subseteq> plan_state_seq (Suc l)" 
-      using plan_state_seq_props 2 unfolding Let_def plan_invs_before_def inv_seq_def by simp
+      using plan_state_seq_props 2 unfolding Let_def plan_invs_before_def by simp
     moreover
-    have "plan_state_seq (Suc l) = apply_effects adds dels (plan_state_seq l) (happ_at (plan_happ_seq \<pi> at_start at_end) (time_index l))" 
+    have "plan_state_seq (Suc l) = apply_effects (happ_at plan_happ_seq (time_index l)) (plan_state_seq l)" 
       using plan_state_seq_props l(1) unfolding Let_def plan_happ_seq_def[symmetric] by auto
     ultimately
     have "plan_invs_after (time_index l) \<subseteq> plan_state_seq l - \<Union> (dels ` happ_at plan_happ_seq (time_index l)) \<union> \<Union> (adds ` happ_at plan_happ_seq (time_index l))" 
-      unfolding apply_effects_def plan_happ_seq_def by simp
+      unfolding apply_effects_def by simp
     hence 1: "plan_invs_during (time_index l) \<subseteq> plan_state_seq l - \<Union> (dels ` happ_at plan_happ_seq (time_index l)) \<union> \<Union> (adds ` happ_at plan_happ_seq (time_index l))" using invs_during_hold_after l by auto
 
     have h_happens: "h \<in> happ_at plan_happ_seq (time_index l)" using assms l by simp
@@ -2933,7 +3055,9 @@ proof-
       {
         fix s
         assume "s \<in> (happ_at plan_happ_seq (time_index l) - {h})" 
-        hence "\<not> mutex_snap_action pre adds dels s h" using nm unfolding nm_happ_seq_def nm_happ_seq_def using h_happens by blast
+        hence "\<not> mutex_snap_action s h" using nm_happ_seq 
+          unfolding nm_happ_seq_def nm_happ_seq_def 
+          using h_happens by blast
         hence "dels h \<inter> adds s = {}" unfolding mutex_snap_action_def by auto
       }
       thus ?thesis by auto
@@ -2949,372 +3073,15 @@ proof-
   qed
 qed
 
-subsection \<open>Execution times\<close>
-
-definition pt::"'snap_action \<Rightarrow> ('time \<Rightarrow> 'time \<Rightarrow> bool) \<Rightarrow> 'time \<Rightarrow> 'time" where
-"pt a co t \<equiv> if (\<exists>t'. co t' t \<and> (t', a) \<in> plan_happ_seq) 
-  then (Greatest (\<lambda>t'. co t' t \<and> (t', a) \<in> plan_happ_seq)) 
-  else (Least (\<lambda>t'. \<exists>a. (t', a) \<in> plan_happ_seq) - (\<epsilon> + c))"
-
-abbreviation last_snap_exec::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
-"last_snap_exec a t \<equiv> pt a (<) t"
-
-definition exec_time::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
-"exec_time a t \<equiv> (let t' = last_snap_exec a t in t - t')"
-
-abbreviation last_snap_exec'::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
-"last_snap_exec' a t \<equiv> pt a (\<le>) t"
-
-definition exec_time'::"'snap_action \<Rightarrow> 'time \<Rightarrow> 'time" where
-"exec_time' a t \<equiv> (let t' = last_snap_exec' a t in t - t')"
-
- 
-lemma a_not_in_b_last_unchanged: "(t, a) \<notin> plan_happ_seq \<Longrightarrow> last_snap_exec' a t = last_snap_exec a t"
-proof -
-  assume "(t, a) \<notin> plan_happ_seq"
-  have 1: "(GREATEST t'. t' < t \<and> (t', a) \<in> plan_happ_seq) = (GREATEST t'. t' \<le> t \<and> (t', a) \<in> plan_happ_seq)"
-    if defined: "\<exists>t'\<le>t. (t', a) \<notin> plan_happ_seq"
-  proof (rule classical)
-    assume "(GREATEST t'. t' < t \<and> (t', a) \<in> plan_happ_seq) \<noteq> (GREATEST t'. t' \<le> t \<and> (t', a) \<in> plan_happ_seq)"
-    then have "\<exists>t'. t' \<le> t \<and> \<not>(t' < t) \<and> (t', a) \<in> plan_happ_seq"
-      using defined
-      by (meson nless_le)
-    then have "(t, a) \<in> plan_happ_seq" by auto
-    with \<open>(t, a) \<notin> plan_happ_seq\<close>
-    have "False" by simp
-    thus "(GREATEST t'. t' < t \<and> (t', a) \<in> plan_happ_seq) = (GREATEST t'. t' \<le> t \<and> (t', a) \<in> plan_happ_seq)"
-      by blast
-  qed
-  from \<open>(t, a) \<notin> plan_happ_seq\<close>
-  have "(\<exists>t'<t. (t', a) \<in> plan_happ_seq) = (\<exists>t'\<le>t. (t', a) \<in> plan_happ_seq)"
-    using nless_le by auto
-  with \<open>(t, a) \<notin> plan_happ_seq\<close> 1
-  show "last_snap_exec' a t = last_snap_exec a t"
-    using pt_def by force
-qed
-
-lemma a_not_in_b_exec_time'_unchanged: "(t, a) \<notin> plan_happ_seq \<Longrightarrow> exec_time a t = exec_time' a t"
-  using a_not_in_b_last_unchanged unfolding exec_time_def exec_time'_def by simp
-
-lemma a_in_b_last_now: "(t, a) \<in> plan_happ_seq \<Longrightarrow> last_snap_exec' a t = t"
-  using pt_def
-  by (auto intro: Greatest_equality)
-
-lemma a_in_b_exec_time'_0: "(t, a) \<in> plan_happ_seq \<Longrightarrow> exec_time' a t = 0"
-  using a_in_b_last_now unfolding exec_time'_def by simp
-
-lemma subseq_last_snap_exec:
-  assumes llen: "(Suc l) < length htpl" 
-shows "last_snap_exec a (time_index (Suc l)) = last_snap_exec' a (time_index l)"
-proof -
-
-  define t where 
-    "t = last_snap_exec a (time_index (Suc l))"    
-
-  define s where
-    "s = last_snap_exec' a (time_index l)" 
-  
-  have cl: "length htpl = card htps" unfolding htpl_def by simp
-  
-  have tl_ord: "time_index l < time_index (Suc l)" 
-    using time_index_strict_sorted_list llen by blast
-  
-  from t_def consider "\<exists>t'. t' < (time_index (Suc l)) \<and> (t', a) \<in> plan_happ_seq" 
-    | "\<not>(\<exists>t'. t' < (time_index (Suc l)) \<and> (t', a) \<in> plan_happ_seq)" by auto
-  hence "t = s"
-  proof cases
-    case 1 
-    hence exsl: "Ex (\<lambda>t'. t' < time_index (Suc l) \<and> (t', a) \<in> plan_happ_seq)" (is "Ex ?psl") by blast
-    have "\<forall>t'. t' < time_index (Suc l) \<and> (t', a) \<in> plan_happ_seq \<longrightarrow> t' \<le> time_index l"
-      using time_index_strict_sorted_list[OF _ llen] time_index_sorted_list[OF _ llen] 
-        no_actions_between_indexed_timepoints[OF] 
-      by (metis plan_happ_seq_def leI llen mem_Collect_eq)
-    moreover
-    have "\<forall>t'. t' \<le> time_index l \<and> (t', a) \<in> plan_happ_seq \<longrightarrow> t' < time_index (Suc l)" 
-      using time_index_strict_sorted_list[OF _ llen] time_index_sorted_list[OF _ llen] 
-        no_actions_between_indexed_timepoints[OF] by fastforce
-    ultimately 
-    have fa: "\<forall>t'. t' < time_index (Suc l) \<and> (t', a) \<in> plan_happ_seq \<longleftrightarrow> t' \<le> time_index l \<and> (t', a) \<in> plan_happ_seq" by blast
-    with 1
-    have exl: "Ex (\<lambda>t'. t' \<le> time_index l \<and> (t', a) \<in> plan_happ_seq)" (is "Ex ?pl") by blast
-    from fa
-    have "Greatest ?psl = Greatest ?pl" by auto
-    thus "t = s" unfolding t_def s_def pt_def using exl exsl by auto
-  next
-    case 2
-    hence "\<not> (\<exists>t' \<le> time_index l. (t', a) \<in> plan_happ_seq)" using tl_ord by force
-    with 2 t_def[simplified pt_def] s_def[simplified pt_def]
-    show ?thesis by auto
-  qed
-  thus "last_snap_exec a (time_index (Suc l)) = last_snap_exec' a (time_index l)" 
-    using s_def t_def by auto
-  qed
-
-lemma updated_exec_time_and_next: 
-  assumes "Suc l < length htpl"
-  shows "exec_time a (time_index (Suc l)) = (exec_time' a (time_index l)) + (time_index (Suc l) - time_index l)"
-  using subseq_last_snap_exec[OF assms] exec_time_def exec_time'_def by simp
-
-
-lemma exec_time_and_separation:
-  assumes  a_at_t: "(t, a) \<in> plan_happ_seq"
-      and mutex: "mutex_snap_action a b"
-    shows "exec_time b t \<ge> \<epsilon> \<and> exec_time b t > 0"
-proof (cases "\<exists>u < t. (u, b) \<in> plan_happ_seq")
-  case True
-
-  have "\<forall>u. (u, b) \<in> plan_happ_seq \<longrightarrow> \<not> (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> t \<noteq> u)" using assms nm 
-    unfolding nm_happ_seq_def nm_happ_seq_def mutex_snap_def[symmetric] by blast
-
-  from a_at_t
-  have "t \<in> htps" using a_in_B_iff_t_in_htps unfolding plan_happ_seq_def by fast
-  then obtain j where
-    j: "t = time_index j"
-    "j < card htps" using time_index_img_set[OF valid_plan_finite[OF vp]] by blast
-  
-  have P_iff: "(\<lambda>t'. t' < t \<and> (t', b) \<in> plan_happ_seq) = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> i < j \<and> (time_index i, b) \<in> plan_happ_seq)" (is "?P = ?P'")
-  proof -
-    have "(\<lambda>t'. t' < t \<and> (t', b) \<in> plan_happ_seq) = (\<lambda>t'. t' \<in> htps \<and> t' < t \<and> (t', b) \<in> plan_happ_seq)" using a_in_B_iff_t_in_htps unfolding plan_happ_seq_def by fast
-    also have "... = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> t' < t \<and> (time_index i, b) \<in> plan_happ_seq)" using time_index_img_set[OF valid_plan_finite[OF vp]] by force
-    also have "... = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> i < j \<and> (time_index i, b) \<in> plan_happ_seq)"
-      unfolding j(1) 
-      using time_index_strict_sorted_set'[where j = j] 
-      using time_index_strict_sorted_set[OF _ j(2)] 
-      by blast
-    finally show ?thesis .
-  qed
-  
-  obtain u where
-    u: "u < t"
-    "(u, b) \<in> plan_happ_seq"
-    using True by blast
-  hence "u \<in> htps" using a_in_B_iff_t_in_htps plan_happ_seq_def by fast
-  hence "\<exists>i < card htps. i < j \<and> (time_index i, b) \<in> plan_happ_seq" (is "Ex ?P2") using P_iff u by meson
-  moreover
-  have P2_int: "\<And>x. ?P2 x \<Longrightarrow> x \<le> j" using time_index_sorted_set' by auto
-  ultimately
-  have P2: "?P2 (Greatest ?P2)" using GreatestI_ex_nat[where P = ?P2] by blast
-
-  have P_1: "?P (time_index (Greatest ?P2))" 
-  proof -
-    from P2 time_index_strict_sorted_set[OF _ j(2)] 
-    show ?thesis unfolding j(1) by blast
-  qed
-  
-  have P_max: "x \<le> time_index (Greatest ?P2)" if assm: "?P x" for x 
-  proof -
-    from assm P_iff
-    have "\<exists>i<card htps. time_index i = x \<and> i < j \<and> (time_index i, b) \<in> plan_happ_seq" by meson
-    then
-    obtain i where
-      i: "?P2 i"
-      "x = time_index i" by auto
-    moreover
-    have "i \<le> Greatest ?P2" using Greatest_le_nat[where P = ?P2] i(1) P2_int by blast
-    moreover
-    have "Greatest ?P2 < card htps" using P2 ..
-    ultimately
-    show "x \<le> time_index (Greatest ?P2)" using time_index_sorted_set by blast
-  qed
-
-  have "?P (Greatest ?P)" 
-    apply (rule GreatestI_time)
-     apply (rule P_1)
-    using P_max by simp
-  moreover
-  have 1: "last_snap_exec b t = (GREATEST t'. t' < t \<and> (t', b) \<in> plan_happ_seq)" using True unfolding pt_def by auto
-  ultimately
-  have b_at_t': "(\<lambda>u. u < t \<and> (u, b) \<in> plan_happ_seq) (last_snap_exec b t)" (is "?t < t \<and> (?t, b) \<in> plan_happ_seq") by auto
-
-  { assume a: "(t, a) \<in> plan_happ_seq" "(?t, b) \<in> plan_happ_seq"
-
-    have nm_cond: "t - ?t < \<epsilon> \<and> ?t - t < \<epsilon> \<and> (a \<noteq> b \<or> t \<noteq> ?t) \<or> (t = ?t \<and> a \<noteq> b) \<longrightarrow> \<not>mutex_snap_action a b" 
-      using a nm unfolding nm_happ_seq_def nm_happ_seq_def mutex_snap_def by auto
-    hence "mutex_snap_action a b \<longrightarrow> (t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon> \<or> (a = b \<and> t = ?t)) \<and> (t \<noteq> ?t \<or> a = b)" by auto
-    hence "mutex_snap_action a b \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon> \<or> (a = b \<and> t = ?t)" 
-          "mutex_snap_action a b \<longrightarrow> (t \<noteq> ?t \<or> a = b)" by auto
-
-    hence "\<not>(\<not>(a \<noteq> b \<or> t \<noteq> ?t) \<or> \<not>mutex_snap_action a b) \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>" by auto
-    hence "((a \<noteq> b \<or> t \<noteq> ?t) \<and> mutex_snap_action a b) \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  using a_at_t b_at_t' by blast
-    hence "(a \<noteq> b \<or> t \<noteq> ?t) \<and> mutex_snap_action a b \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  by blast  
-    moreover
-    have "a \<noteq> b \<longrightarrow> mutex_snap_action a b" using mutex by blast
-    ultimately
-    have "a \<noteq> b \<or> (t \<noteq> ?t \<and> mutex_snap_action a b) \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>" by blast
-    moreover
-    have "t \<noteq> ?t" using b_at_t' by auto
-    ultimately
-    consider "t - ?t \<ge> \<epsilon>" | "?t - t \<ge> \<epsilon>" using mutex by blast
-  }
-  note c = this
-  
-  have t: "t > ?t" using b_at_t' by blast
-  moreover
-  have "\<epsilon> \<ge> 0" using eps_range less_le_not_le by fastforce
-  ultimately 
-  have "t - ?t \<ge> \<epsilon>"  
-    apply (cases rule: c) 
-    subgoal using assms by simp 
-    subgoal using b_at_t' by simp 
-    subgoal by blast 
-    apply (drule order.trans)
-     apply assumption
-    by auto
-  thus ?thesis
-    apply -
-    apply (rule conjI)
-     apply (subst exec_time_def)
-     apply simp
-    using t unfolding exec_time_def by fastforce
-next
-  case False
-  have 1: "time_index 0 \<le> u" if "\<exists>h. (u, h) \<in> plan_happ_seq" for u
-  proof -
-    have "u \<in> set htpl" using that a_in_B_iff_t_in_htps htps_set_htpl valid_plan_finite[OF vp] unfolding plan_happ_seq_def by fast
-    hence "\<exists>i. time_index i = u \<and> i < length htpl" using time_index_img_list by force
-    thus "time_index 0 \<le> u" using time_index_sorted_list by blast
-  qed
-  with a_at_t
-  have 2: "time_index 0 \<le> t" by auto
-  
-  have 3: "Least (\<lambda>t. \<exists>x. (t, x) \<in> plan_happ_seq) = (time_index 0)" 
-  proof (rule Least_equality[OF _ 1])
-    have "card htps > 0" using a_in_B_iff_t_in_htps a_at_t card_gt_0_iff finite_htps valid_plan_finite vp unfolding plan_happ_seq_def by fast
-    hence "time_index 0 \<in> htps" using time_index_img_set valid_plan_finite vp by blast
-    thus "\<exists>x. (time_index 0, x) \<in> plan_happ_seq" using a_in_B_iff_t_in_htps plan_happ_seq_def by fast
-  qed
-
-  have "last_snap_exec b t = (LEAST t'. \<exists>x. (t', x) \<in> plan_happ_seq) - (\<epsilon> + c)" using False unfolding pt_def by argo
-  from this[simplified 3]
-  have "last_snap_exec b t = time_index 0 - (\<epsilon> + c)" .
-  hence 4: "t - last_snap_exec b t = \<epsilon> + c + t - time_index 0" by auto
-  with 2
-  have "0 < c + t - time_index 0" using c by (simp add: add_strict_increasing)
-  with 4
-  have "\<epsilon> < t - last_snap_exec b t" unfolding 4
-    by auto
-  thus ?thesis unfolding exec_time_def Let_def using eps_range 
-    apply -
-    apply (rule conjI)
-     apply simp
-    by order
-qed
-
-
-lemma exec_time_when_ending:
-  assumes a_in_actions: "a \<in> actions"
-      and ending: "(t, at_end a) \<in> plan_happ_seq"
-      and not_starting: "(t, at_start a) \<notin> plan_happ_seq"
-  shows "\<exists>t' d. (a, t', d) \<in> ran \<pi> \<and> exec_time (at_start a) t = d"
-proof -
-  have "\<exists>!(s,d). (a, s, d) \<in> ran \<pi> \<and> t = s + d" using at_end_in_happ_seqE' a_in_actions ending unfolding plan_happ_seq_def by simp
-  then obtain s d where
-    sd: "(a, s, d) \<in> ran \<pi>" 
-    "t = s + d" by auto
-  hence "s \<le> t \<and> (s, at_start a) \<in> plan_happ_seq" 
-    unfolding plan_happ_seq_def plan_happ_seq_def 
-    using valid_plan_durs(1)[OF vp] unfolding durations_ge_0_def by auto
-  hence s: "s < t \<and> (s, at_start a) \<in> plan_happ_seq" using not_starting apply (cases "s < t") by auto
-  moreover
-  have "t' \<le> s" if "t' < t" "(t', at_start a) \<in> plan_happ_seq" for t'
-  proof (rule ccontr)
-    assume "\<not> t' \<le> s"
-    hence st': "s < t'" by simp
-    with that(2)
-    obtain d' where
-       t'd': "(a, t', d') \<in> ran \<pi>" 
-      using at_start_in_happ_seq_exD[OF a_in_actions] unfolding plan_happ_seq_def by blast
-    thus False using that st' sd nso[THEN no_self_overlap_spec] by force
-  qed
-  ultimately
-  have "(GREATEST s. s < t \<and> (s, at_start a) \<in> plan_happ_seq) = s" unfolding Greatest_def plan_happ_seq_def by fastforce
-  hence "exec_time (at_start a) t = d" using sd(2) s unfolding exec_time_def pt_def by auto
-  thus ?thesis using sd(1) by blast
-qed
-
-
-lemma instant_act_in_happ_seqE:
-  assumes a_in_actions: "a \<in> actions"
-      and ending: "(t, at_end a) \<in> plan_happ_seq"
-      and starting: "(t, at_start a) \<in> plan_happ_seq"
-    shows "(a, t, 0) \<in> ran \<pi>"
-proof -
-  from at_start_in_happ_seq_exD'  assms
-  have "\<exists>!ds. (a, t, ds) \<in> ran \<pi>" by blast
-  then obtain ds where
-    tds: "(a, t, ds) \<in> ran \<pi>"
-    "\<forall>d. (a, t, d) \<in> ran \<pi> \<longrightarrow> d = ds" by blast
-
-  have ds_ran: "0 \<le> ds" using plan_durations tds by blast
-
-  from at_end_in_happ_seqE'' assms
-  have "\<exists>!(te, de). (a, te, de) \<in> ran \<pi> \<and> t = te + de" by simp
-  then obtain te de where
-    tede: "(a, te, de) \<in> ran \<pi>"
-    "t = te + de"
-    "\<forall>t' d'. (a, t', d') \<in> ran \<pi> \<and> t = t' + d' \<longrightarrow> (t' = te \<and> d' = de)" by blast
-
-  have de_ran: "0 \<le> de" using plan_durations tede by blast
-
-  have "t = te \<and> de = 0" by (metis add_cancel_right_right nso nso_start_end prod.inject tds(1) tede(1,2) valid_plan_durs(1) vp)
-  thus ?thesis using tede by blast
-qed
-
-lemma ending_act_sat_dur_bounds:
-  assumes a_in_actions: "a \<in> actions"
-      and ending: "is_ending_action t a"
-    shows "satisfies_duration_bounds lower upper a (exec_time (at_start a) t)"
-  using exec_time_when_ending valid_plan_durs(2)[OF vp] assms 
-  unfolding is_ending_action_def durations_valid_def by blast
-
-lemma instant_act_sat_dur_bounds:
-  assumes a_in_actions: "a \<in> actions"
-      and is_instant: "is_instant_action t a"
-    shows "satisfies_duration_bounds lower upper a 0"
-  using valid_plan_durs(2)[OF vp] instant_act_in_happ_seqE assms
-  unfolding durations_valid_def is_instant_action_def by blast
-
-lemma exec_time_at_init:
-  assumes some_happs: "0 < card htps"
-  shows "exec_time b (time_index 0) = \<epsilon> + c"
-proof -
-  have "\<forall>i < card htps. time_index 0 \<le> time_index i" using time_index_sorted_set by blast
-  hence "\<forall>t \<in> htps. time_index 0 \<le> t" using time_index_img_set[OF valid_plan_finite[OF vp]] by force 
-  hence "\<not>(\<exists>s \<in> htps. s < time_index 0)" by auto
-  hence 1: "\<not>(\<exists>s < time_index 0. \<exists>x. (s, x) \<in> plan_happ_seq)" unfolding plan_happ_seq_def plan_happ_seq_def htps_def by blast
-  
-  have "time_index 0 \<in> htps" using time_index_img_set[OF valid_plan_finite[OF vp]] using some_happs by blast
-  hence "\<exists>x. (time_index 0, x) \<in> plan_happ_seq" unfolding plan_happ_seq_def plan_happ_seq_def unfolding htps_def by blast
-  with 1
-  have "Least (\<lambda>t'. \<exists>x. (t', x) \<in> plan_happ_seq) = time_index 0"
-    apply -
-    apply (rule Least_equality)
-     apply simp
-    by force
-  with 1
-  show ?thesis unfolding exec_time_def pt_def by (auto simp: Let_def)
-qed
-
-lemma action_happening_exec_times: 
-  "is_not_happening_action t a \<Longrightarrow> exec_time (at_start a) t = exec_time' (at_start a) t"
-  "is_not_happening_action t a \<Longrightarrow> exec_time (at_end a) t = exec_time' (at_end a) t"
-  "is_starting_action t a \<Longrightarrow> exec_time (at_end a) t = exec_time' (at_end a) t"
-  "is_starting_action t a \<Longrightarrow> exec_time' (at_start a) t = 0"
-  "is_ending_action t a \<Longrightarrow> exec_time (at_start a) t = exec_time' (at_start a) t"
-  "is_ending_action t a \<Longrightarrow> exec_time' (at_end a) t = 0"
-  "is_instant_action t a \<Longrightarrow> exec_time' (at_start a) t = 0"
-  "is_instant_action t a \<Longrightarrow> exec_time' (at_end a) t = 0"
-  by (intro a_not_in_b_exec_time'_unchanged a_in_b_exec_time'_0, elim action_happening_case_dests)+
-
 subsection \<open>Propositional states, updates, and commutativity\<close>
 
 lemma prop_state_upd_combine_if:                        
   assumes "\<And>a b. a \<in> h \<Longrightarrow> b \<in> h \<Longrightarrow> a \<noteq> b \<Longrightarrow> \<not> mutex_snap_action a b"
       and "h1 \<union> h2 = h"
-  shows "(app_effs h2 o app_effs h1) M  = app_effs h M"
+  shows "(apply_effects h2 o apply_effects h1) M  = apply_effects h M"
 proof -
   from assms
-  have ab_not_int: "\<And>a b. a \<in> h \<Longrightarrow> b \<in> h \<Longrightarrow> a \<noteq> b \<Longrightarrow> adds a \<inter> dels b = {}" unfolding mutex_snap_def mutex_snap_action_def by simp
+  have ab_not_int: "\<And>a b. a \<in> h \<Longrightarrow> b \<in> h \<Longrightarrow> a \<noteq> b \<Longrightarrow> adds a \<inter> dels b = {}" unfolding mutex_snap_action_def by simp
   have not_int: "\<Union> (adds ` h1) \<inter> (\<Union> (dels ` h2) - \<Union> (adds ` h2)) = {}"
   proof -
     { fix p 
@@ -3341,12 +3108,12 @@ proof -
     thus ?thesis by blast
   qed
 
-  have "app_effs h2 (app_effs h1 M) = M - \<Union> (dels ` h1) \<union> \<Union> (adds ` h1) - \<Union> (dels ` h2) \<union> \<Union> (adds ` h2)" unfolding app_effs_def apply_effects_def by blast
+  have "apply_effects h2 (apply_effects h1 M) = M - \<Union> (dels ` h1) \<union> \<Union> (adds ` h1) - \<Union> (dels ` h2) \<union> \<Union> (adds ` h2)" unfolding apply_effects_def by blast
   also have "... = M - \<Union> (dels ` h1) \<union> \<Union> (adds ` h1) - (\<Union> (dels ` h2) - \<Union> (adds ` h2)) \<union> \<Union> (adds ` h2)" by blast
   also have "... = M - \<Union> (dels ` h1) - (\<Union> (dels ` h2) - \<Union> (adds ` h2)) \<union> \<Union> (adds ` h1) \<union> \<Union> (adds ` h2)" using not_int by blast
   also have "... = M - (\<Union> (dels ` h1) \<union> \<Union> (dels ` h2)) \<union> \<Union> (adds ` h1) \<union> \<Union> (adds ` h2)" by blast
   also have "... = M - \<Union> (dels ` h) \<union> \<Union> (adds ` h)" using assms(2) by blast
-  finally show ?thesis unfolding app_effs_def apply_effects_def comp_def by simp
+  finally show ?thesis unfolding apply_effects_def comp_def by simp
 qed
 
 lemma mutex_pre_app: 
@@ -3354,15 +3121,14 @@ lemma mutex_pre_app:
       and "(t, b) \<in> plan_happ_seq"
       and "a \<noteq> b"
     shows "pre a \<inter> (dels b \<union> adds b) = {}"
-  using nm assms unfolding nm_happ_seq_def nm_happ_seq_def
-  unfolding mutex_snap_def mutex_snap_action_def by blast
+  using nm_happ_seq assms unfolding nm_happ_seq_def nm_happ_seq_def
+  unfolding mutex_snap_action_def by blast
 
 lemma happ_combine:
   assumes "h1 \<union> h2 \<subseteq> happ_at plan_happ_seq t"
-  shows "(app_effs h2 o app_effs h1) M = app_effs (h1 \<union> h2) M"
+  shows "(apply_effects h2 o apply_effects h1) M = apply_effects (h1 \<union> h2) M"
   apply (rule prop_state_upd_combine_if)
-  using nm assms unfolding nm_happ_seq_def nm_happ_seq_def
-  unfolding mutex_snap_def
+  using nm_happ_seq assms unfolding nm_happ_seq_def nm_happ_seq_def
   by blast+
 
 
@@ -3376,8 +3142,7 @@ lemma happ_at_is_union_of_starting_ending_instant:
   apply (intro equalityI subsetI)
   subgoal for x
     apply (drule in_happ_atD)
-    unfolding plan_happ_seq_def
-    apply (drule in_happ_seqE')
+    apply (drule in_happ_seq_exD)
     apply (elim exE)
     subgoal for a t d
       apply (elim conjE disjE)
@@ -3395,21 +3160,20 @@ lemma happ_at_is_union_of_starting_ending_instant:
       unfolding instant_snaps_at_def instant_actions_at_def starting_snaps_at_def starting_actions_at_def ending_snaps_at_def ending_actions_at_def
       unfolding action_happening_case_defs by auto
 
-lemma app_start_instant_dist: "(app_effs (starting_snaps_at t) o app_effs (instant_snaps_at t)) M = app_effs (instant_snaps_at t \<union> starting_snaps_at t) M"
+lemma app_start_instant_dist: "(apply_effects (starting_snaps_at t) o apply_effects (instant_snaps_at t)) M = apply_effects (instant_snaps_at t \<union> starting_snaps_at t) M"
   apply (rule prop_state_upd_combine_if[OF _ HOL.refl])
   subgoal for a b
     unfolding instant_snaps_at_def starting_snaps_at_def instant_actions_at_def starting_actions_at_def
-    using nm unfolding nm_happ_seq_def nm_happ_seq_def
-    unfolding mutex_snap_def
+    using nm_happ_seq unfolding nm_happ_seq_def nm_happ_seq_def
     unfolding action_happening_case_defs by auto
     done
 
-lemma app_all_dist: "(app_effs (ending_snaps_at t) o app_effs (starting_snaps_at t) o app_effs (instant_snaps_at t)) M = app_effs (happ_at plan_happ_seq t) M"
+lemma app_all_dist: "(apply_effects (ending_snaps_at t) o apply_effects (starting_snaps_at t) o apply_effects (instant_snaps_at t)) M = apply_effects (happ_at plan_happ_seq t) M"
   apply (subst comp_assoc)
   apply (subst app_start_instant_dist[THEN ext])
   apply (rule prop_state_upd_combine_if)
   subgoal for a b
-    using nm unfolding nm_happ_seq_def nm_happ_seq_def unfolding mutex_snap_def by blast
+    using nm_happ_seq unfolding nm_happ_seq_def nm_happ_seq_def by blast
   subgoal unfolding instant_snaps_at_def starting_snaps_at_def ending_snaps_at_def 
     unfolding instant_actions_at_def starting_actions_at_def ending_actions_at_def
     unfolding action_happening_case_defs
@@ -3418,7 +3182,7 @@ lemma app_all_dist: "(app_effs (ending_snaps_at t) o app_effs (starting_snaps_at
     apply (rule subsetI)
     subgoal for b
       apply (drule in_happ_atD)
-      apply (erule in_happ_seqE[of _ _ \<pi> at_start at_end, simplified plan_happ_seq_def[symmetric]])
+      apply (erule in_happ_seqE[simplified plan_happ_seq_def[symmetric]])
       subgoal for a t' d
         apply (erule subst)
         apply (erule ssubst)
@@ -3450,26 +3214,26 @@ lemma locked_before_and_during_if_none_ending:
   using assms[simplified ending_actions_at_conv_ending_indexes]
   unfolding locked_by_def by auto
 
-definition "inst_upd_state i \<equiv> app_effs (instant_snaps_at (time_index i)) (plan_state_seq i)"
+definition "inst_upd_state i \<equiv> apply_effects (instant_snaps_at (time_index i)) (plan_state_seq i)"
 
-definition "inst_start_upd_state i \<equiv> ((app_effs (starting_snaps_at (time_index i))) o (app_effs (instant_snaps_at (time_index i)))) (plan_state_seq i)"
+definition "inst_start_upd_state i \<equiv> ((apply_effects (starting_snaps_at (time_index i))) o (apply_effects (instant_snaps_at (time_index i)))) (plan_state_seq i)"
 
-definition "upd_state i \<equiv> app_effs (happ_at plan_happ_seq (time_index i)) (plan_state_seq i)"
+definition "upd_state i \<equiv> apply_effects (happ_at plan_happ_seq (time_index i)) (plan_state_seq i)"
 
 lemma upd_state_conv_inst_start_upd_state:
-  "upd_state i = app_effs (ending_snaps_at (time_index i)) (inst_start_upd_state i)"
+  "upd_state i = apply_effects (ending_snaps_at (time_index i)) (inst_start_upd_state i)"
   unfolding upd_state_def inst_start_upd_state_def using app_all_dist by simp
 
 lemma state_seq_Suc_is_upd_state:
   assumes "i < length htpl"
   shows "plan_state_seq (Suc i) = upd_state i"
   using plan_state_seq_valid valid_state_sequenceE assms
-  unfolding upd_state_def plan_happ_seq_def app_effs_def by blast
+  unfolding upd_state_def plan_happ_seq_def by blast
 
 lemma no_instant_imp_state_is_inst_upd:
   assumes "instant_snaps_at (time_index i) = {}"
   shows "plan_state_seq i = inst_upd_state i"
-  unfolding inst_upd_state_def app_effs_def apply_effects_def
+  unfolding inst_upd_state_def apply_effects_def
   using assms by blast
 
 lemma pre_sat_by_arbitrary_intermediate_state:
@@ -3478,7 +3242,7 @@ lemma pre_sat_by_arbitrary_intermediate_state:
       and h: "(t, h) \<in> plan_happ_seq"
       and snap: "S \<subseteq> happ_at plan_happ_seq t"
       and h_not_in_S: "h \<notin> S"
-      and state: "state = app_effs S (plan_state_seq i)"
+      and state: "state = apply_effects S (plan_state_seq i)"
     shows "pre h \<subseteq> state"
 proof -
   have "pre h \<subseteq> plan_state_seq i" 
@@ -3495,12 +3259,12 @@ proof -
       have happening: "(t, b) \<in> plan_happ_seq" using b snap by blast
       have not_eq: "b \<noteq> h" using h_not_in_S b by blast
       have "\<not>mutex_snap_action h b" using mutex_not_in_same_instant using happening not_eq h by blast
-      hence "pre h \<inter> (adds b \<union> dels b) = {}" unfolding mutex_snap_def mutex_snap_action_def by auto
+      hence "pre h \<inter> (adds b \<union> dels b) = {}" unfolding mutex_snap_action_def by auto
     }
     thus ?thesis by auto
   qed
   ultimately
-  show ?thesis unfolding state app_effs_def apply_effects_def by auto
+  show ?thesis unfolding state apply_effects_def by auto
 qed
 
 lemma inv_sat_by_upd_state:
@@ -3512,9 +3276,9 @@ lemma inv_sat_by_upd_state:
 proof -
   have "over_all a \<subseteq> plan_state_seq (Suc i)"
   proof -
-    from starting[THEN is_starting_action_dests(1)] at_start_in_happ_seq_exD'[THEN ex1_implies_ex, THEN exE, OF a]
+    from starting[THEN is_starting_action_dests(1)] at_start_of_act_in_happ_seq_exD[THEN ex1_implies_ex, THEN exE] a
     obtain d where
-      d: "(a, t, d) \<in> ran \<pi>" by auto
+      d: "(a, t, d) \<in> ran \<pi>" by blast
     hence "0 \<le> d" using plan_durations by auto
     hence "0 < d" 
     proof -
@@ -3554,9 +3318,9 @@ proof -
           using \<open>0 < locked_after t p\<close> \<open>Suc i < length htpl\<close> locked_after_indexed_timepoint_is_locked_before_Suc t by simp
   
         hence "p \<in> plan_invs_before (time_index (Suc i))" using in_invs_before_iff_locked_before by blast
-        hence "p \<in> invs_at (plan_inv_seq \<pi> over_all) (time_index (Suc i))"  unfolding plan_invs_before_def inv_seq_def by simp
+        hence "p \<in> invs_at plan_inv_seq (time_index (Suc i))"  unfolding plan_invs_before_def by simp
         with plan_state_seq_props \<open>Suc i < length htpl\<close>
-        show "p \<in> plan_state_seq (Suc i)" by auto
+        show "p \<in> plan_state_seq (Suc i)" by blast
       qed
     qed
   qed
