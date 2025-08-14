@@ -3,9 +3,6 @@ theory TP_NTA_Reduction_Spec
       Munta_Model_Checker.Simple_Network_Language_Export_Code
 
 begin
-(* To do: implement the compilation abstractly or directly using show? *)
-
-(* These must be replaced with arbitrary functions again *)
 section \<open>Abstract definition of reduction\<close>
 
 subsection \<open>Datatypes to identify clocks, variables and locations associated with actions and propositions\<close>
@@ -233,7 +230,7 @@ abbreviation mutex_effects_spec::"
    'snap_action 
 \<Rightarrow> 'snap_action 
 \<Rightarrow> bool" where
-"mutex_effects_spec a b \<equiv> mutex_snap_action (set o pre) (set o adds) (set o dels) a b"
+"mutex_effects_spec a b \<equiv> mutex_snap_action a b"
 
 definition int_clocks_spec::"'snap_action \<Rightarrow> 'action clock list" where
 "int_clocks_spec s \<equiv>

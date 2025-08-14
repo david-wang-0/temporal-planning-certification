@@ -1,9 +1,9 @@
 theory Temporal_Plans_Theory
-  imports Temporal_Plans ListMisc
+  imports Temporal_Plans_Instances ListMisc
 begin
 
 context temp_plan_for_actions_with_unique_snaps_nso_dg0
-begin 
+begin                                  
 lemma at_start_of_act_in_happ_seq_exD: 
     assumes in_happ_seq: "(s, at_start a) \<in> plan_happ_seq"
         and a_in_actions: "a \<in> actions"
@@ -13,12 +13,14 @@ lemma at_start_of_act_in_happ_seq_exD:
     have "\<exists>(a', t, d) \<in> ran \<pi>. (at_start a' = at_start a \<and> s = t \<or> at_end a' = at_start a \<and> s = t + d)"
       by blast
     hence  "\<exists>(a', t, d) \<in> ran \<pi>. at_start a' = at_start a \<and> s = t" 
-      using snaps_disj_on_acts pap  a_in_actions 
-      unfolding plan_actions_in_problem_def by blast
+      using a_in_actions acts_in_prob
+      using at_start_inj_on_acts at_start_at_end_disj_on_acts 
+      unfolding inj_on_def by blast
     moreover
     have "\<forall>(a', t, d) \<in> ran \<pi>. at_start a = at_start a' \<longrightarrow> a = a'" 
-      using at_start_inj_on_acts a_in_actions pap 
-      unfolding inj_on_def plan_actions_in_problem_def by blast
+      using a_in_actions acts_in_prob
+      using at_start_inj_on_acts 
+      unfolding inj_on_def by blast
     ultimately
     show "\<exists>x. case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t" by auto
   next
@@ -26,7 +28,8 @@ lemma at_start_of_act_in_happ_seq_exD:
          if "(a, t, d) \<in> ran \<pi> \<and> s = t" 
         and "(a, t', d') \<in> ran \<pi> \<and> s = t'" for t d t' d'
       using that nso dg0 nso_no_double_start by blast
-    thus "\<And>x y. case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t \<Longrightarrow> case y of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t \<Longrightarrow> x = y" by blast
+    thus "\<And>x y. case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t 
+    \<Longrightarrow> case y of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t \<Longrightarrow> x = y" by blast
   qed
 
   lemma at_end_of_act_in_happ_seq_exD:
@@ -46,14 +49,17 @@ lemma at_start_of_act_in_happ_seq_exD:
       case 1
       hence "\<exists>a' d. (s, at_end a) = (s, at_start a') \<and> (a', s, d) \<in> ran \<pi> \<and> a' \<in> plan_actions" 
         using a_in_actions unfolding plan_actions_def by auto
-      thus ?thesis using snaps_disj_on_acts 1 a_in_actions pap
-          unfolding plan_actions_in_problem_def by blast
+      thus ?thesis 
+        using a_in_actions acts_in_prob
+        using at_start_at_end_disj_on_acts  by blast
     next
       case 2
       hence  "\<exists>a' t d. (s, at_end a) = (t + d, at_end a') \<and> (a', t, d) \<in> ran \<pi> \<and> a' \<in> plan_actions" 
         using a_in_actions unfolding plan_actions_def by blast
-      hence "\<exists>t d. (a, t, d) \<in> ran \<pi> \<and> s = t + d" using at_end_inj_on_acts a_in_actions pap
-        unfolding inj_on_def plan_actions_in_problem_def by blast
+      hence "\<exists>t d. (a, t, d) \<in> ran \<pi> \<and> s = t + d" 
+        using a_in_actions acts_in_prob
+        using at_start_at_end_disj_on_acts at_end_inj_on_acts
+        unfolding inj_on_def by blast
       thus ?thesis using some_eq_ex[where P = "\<lambda>(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"] pair_def by auto
     qed
     moreover
@@ -76,7 +82,7 @@ lemma at_start_of_act_in_happ_seq_exD:
   qed
 end
 
-context valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_finite_fluents_and_actions
+context temp_plan_for_problem_impl
 begin
 
 abbreviation snaps::"'action \<Rightarrow> 'snap_action set" where
@@ -130,7 +136,7 @@ lemma at_end_in_happ_seqI:
   
 lemma a_in_plan_is_in_actions:
   assumes "(a, t, d) \<in> ran \<pi>"
-  shows "a \<in> actions" using assms pap unfolding plan_actions_in_problem_def by blast
+  shows "a \<in> actions" using assms acts_in_prob  by auto
 
 
 subsubsection \<open>Execution state\<close>
@@ -235,12 +241,12 @@ proof -
       case 1
       hence "\<exists>a' t d. (s, at_start a) = (t, at_start a') \<and> (a', t, d) \<in> ran \<pi>" by blast
       thus ?thesis using at_start_inj_on_acts[simplified inj_on_def] \<open>a \<in> actions\<close> 
-          pap[simplified plan_actions_in_problem_def] by blast
+          acts_in_prob by blast
     next
       case 2
       hence "\<exists>a' t d. (s, at_start a) = (t + d, at_end a') \<and> (a', t, d) \<in> ran \<pi>" by auto
-      with s(1) snaps_disj_on_acts
-      have False using pap unfolding plan_actions_in_problem_def by blast 
+      with s(1) at_start_at_end_disj_on_acts
+      have False using pap unfolding plan_actions_in_problem_def plan_actions_def by fast
       thus ?thesis ..
     qed
     then obtain d where
@@ -2740,7 +2746,7 @@ proof (rule iffI)
     "ta < t" 
     "t \<le> ta + da" 
     unfolding plan_invs_before_def invs_at_def plan_inv_seq_def by blast
-  from tada(1) pap plan_actions_in_problem_def
+  from tada(1) acts_in_prob
   have a_in_acts: "a \<in> actions" by fast
   with tada
   have a_locks: "a \<in> set (locked_by p)" using locked_by_alt by blast
@@ -2793,7 +2799,7 @@ proof (rule iffI)
     "ta \<le> t" 
     "t < ta + da" 
     unfolding plan_invs_after_def  invs_at_def invs_after_def by blast
-  from tada(1) pap plan_actions_in_problem_def
+  from tada(1) acts_in_prob
   have a_in_acts: "a \<in> actions" by fast
   with tada
   have a_locks: "a \<in> set (locked_by p)" using locked_by_alt by blast
@@ -2845,7 +2851,7 @@ proof (rule iffI)
     "ta < t" 
     "t < ta + da"
     unfolding plan_invs_during_def  invs_at_def invs_during_def by blast
-  from tada(1) pap plan_actions_in_problem_def
+  from tada(1) acts_in_prob
   have a_in_acts: "a \<in> actions" by fast
   with tada
   have a_locks: "a \<in> set (locked_by p)" using locked_by_alt by blast
@@ -3131,10 +3137,6 @@ lemma happ_combine:
   using nm_happ_seq assms unfolding nm_happ_seq_def nm_happ_seq_def
   by blast+
 
-
-
-lemma acts_in_prob: "(a, t, d) \<in> ran \<pi> \<Longrightarrow> a \<in> actions" using pap unfolding plan_actions_in_problem_def by auto
-
 subsection \<open>Restating happenings\<close>
 
 lemma happ_at_is_union_of_starting_ending_instant:
@@ -3187,13 +3189,13 @@ lemma app_all_dist: "(apply_effects (ending_snaps_at t) o apply_effects (startin
         apply (erule subst)
         apply (erule ssubst)
        apply (frule at_start_in_happ_seqI)
-        using pap[simplified plan_actions_in_problem_def]
+        using acts_in_prob
         by fast
       subgoal for a t' d
         apply (erule subst)
         apply (erule ssubst)
        apply (frule at_end_in_happ_seqI)
-        using pap[simplified plan_actions_in_problem_def]
+        using acts_in_prob
         by fast
       done
     done
