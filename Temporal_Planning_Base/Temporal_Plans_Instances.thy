@@ -224,28 +224,28 @@ begin
 definition "over_all_restr_list = (\<lambda>a. filter (\<lambda>p. p \<in> set props) (over_all a))"
 definition "pre_restr_list = (\<lambda>s. filter (\<lambda>p. p \<in> set props) (pre s))"
 
-sublocale temp_planning_problem_and_finite_actions at_start at_end "set o over_all" lower upper
+sublocale set_impl: temp_planning_problem_and_finite_actions at_start at_end "set o over_all" lower upper
   "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> "set actions"
   apply unfold_locales using eps_ran finite_set by auto
 
-sublocale temp_planning_problem_and_finite_props at_start at_end "set o over_all" lower upper
+sublocale set_impl: temp_planning_problem_and_finite_props at_start at_end "set o over_all" lower upper
   "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> "set props"
   apply unfold_locales using eps_ran finite_set by auto
 
-sublocale action_set_and_props at_start at_end "set o over_all" lower upper
+sublocale set_impl: action_set_and_props at_start at_end "set o over_all" lower upper
   "set o pre" "set o adds" "set o dels" "set props" "set actions"
   by unfold_locales
 
 abbreviation "list_inter xs ys \<equiv> filter (\<lambda>p. p \<in> set (xs)) ys"
 
 definition pre_imp_list::"'action snap_action \<Rightarrow> 'proposition list" where
-"pre_imp_list x = app_snap pre x"
+"pre_imp_list x = set_impl.app_snap pre x"
 
 definition add_imp_list::"'action snap_action \<Rightarrow> 'proposition list" where
-"add_imp_list x = app_snap adds x"
+"add_imp_list x = set_impl.app_snap adds x"
 
 definition del_imp_list::"'action snap_action \<Rightarrow> 'proposition list" where
-"del_imp_list x = app_snap dels x"
+"del_imp_list x = set_impl.app_snap dels x"
 
 definition "pre_imp_restr_list x = list_inter props (pre_imp_list x)"
 
@@ -271,12 +271,12 @@ locale temp_planning_problem_list_impl = temp_planning_problem_list_defs
       and distinct_props: "distinct props"
       and distinct_actions: "distinct actions"
       and distinct_over_all: "\<forall>a \<in> set actions. distinct (over_all a)"
-      and snaps_disj: "snaps_disj_on (set actions)"
+      and snaps_disj: "set_impl.snaps_disj_on (set actions)"
       and init_in_props: "set init \<subseteq> set props"
       and goal_in_props: "set goal \<subseteq> set props"
-      and acts_ref_props: "\<forall>a \<in> set actions. act_ref_props a"
+      and acts_ref_props: "\<forall>a \<in> set actions. set_impl.act_ref_props a"
 begin
-sublocale temp_planning_problem_set_impl at_start at_end "set o over_all" lower upper
+sublocale set_impl: temp_planning_problem_set_impl at_start at_end "set o over_all" lower upper
   "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> "set props" "set actions"
   apply unfold_locales
   subgoal using some_props card_gt_0_iff by blast
@@ -327,7 +327,7 @@ sublocale prob_list_impl:
   subgoal by auto
   subgoal by auto
   subgoal using domain_acts_mod_props
-    unfolding act_mod_props_def snap_mod_props_def
+    unfolding set_impl.act_mod_props_def set_impl.snap_mod_props_def
     unfolding action_and_prop_set.act_ref_props_def action_and_prop_set.snap_ref_props_def
     unfolding pre_imp_list_def add_imp_list_def del_imp_list_def 
     unfolding over_all_restr_list_def pre_imp_restr_list_def
@@ -392,7 +392,7 @@ sublocale valid_temp_plan at_start at_end "set o over_all" lower upper
 sublocale temp_plan_unique_snaps_nso_dg0  at_start at_end "set o over_all" lower upper
   "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> \<pi> 
   apply unfold_locales 
-  using snaps_disj_on_acts snaps_disj_on_subset pap plan_actions_in_problem_def 
+  using set_impl.snaps_disj_on_acts set_impl.snaps_disj_on_subset pap plan_actions_in_problem_def 
   using nso by auto
 
 sublocale valid_temp_plan_unique_snaps_nso_dg0 
@@ -431,38 +431,38 @@ sublocale valid_temp_plan at_start at_end "set o over_all" lower upper
 sublocale unique_ref: temp_plan_unique_snaps_nso_dg0 AtStart AtEnd "set o over_all" lower upper 
   pre_imp add_imp del_imp "set init" "set goal"
   apply unfold_locales 
-  unfolding prob_list_impl.snaps_disj_on_def using nso 
+  unfolding prob_list_impl.set_impl.snaps_disj_on_def using nso 
   by (blast intro: inj_onI)+
 
 sublocale valid_plan_ref: plan_validity_equivalence at_start at_end "set o over_all" lower upper 
   "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> \<pi>
-  AtStart AtEnd "set o over_all" pre_imp add_imp del_imp "set init" "set goal"
-  apply unfold_locales unfolding pre_imp_def add_imp_def del_imp_def by auto
+  AtStart AtEnd "set o over_all" set_impl.pre_imp set_impl.add_imp set_impl.del_imp "set init" "set goal"
+  apply unfold_locales unfolding set_impl.pre_imp_def set_impl.add_imp_def set_impl.del_imp_def by auto
 
 sublocale valid_plan_ref_valid: plan_validity_ref at_start at_end "set o over_all" lower upper 
   "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> \<pi>
-  AtStart AtEnd "set o over_all" pre_imp add_imp del_imp "set init" "set goal"
+  AtStart AtEnd "set o over_all" set_impl.pre_imp set_impl.add_imp set_impl.del_imp "set init" "set goal"
   by unfold_locales
 
 (* The set of props is a superset of those that can be modified by a plan. Those propositions that
 are in the preconditions of actions, are either present in this or the initial set of propositions. *)
 sublocale restr_to_props: temp_plan_and_props_defs AtStart AtEnd "set o over_all" lower upper 
-  pre_imp add_imp del_imp "set init" "set goal" \<epsilon> \<pi> "set props" by unfold_locales 
+  set_impl.pre_imp set_impl.add_imp set_impl.del_imp "set init" "set goal" \<epsilon> \<pi> "set props" by unfold_locales 
 
 sublocale restr_to_props_ref: valid_temp_plan_restr_to_props AtStart AtEnd "set o over_all" lower upper 
-  pre_imp add_imp del_imp "set init" "set goal" \<epsilon> \<pi> "set props" 
+  set_impl.pre_imp set_impl.add_imp set_impl.del_imp "set init" "set goal" \<epsilon> \<pi> "set props" 
   apply unfold_locales
   subgoal using domain_acts_mod_props unfolding restr_to_props.plan_acts_mod_props_def 
     using pap unfolding plan_actions_in_problem_def 
-    unfolding action_and_prop_set.act_mod_props_def act_mod_props_def 
-    unfolding action_and_prop_set.snap_mod_props_def snap_mod_props_def 
-    unfolding pre_imp_def add_imp_def del_imp_def by auto
+    unfolding action_and_prop_set.act_mod_props_def set_impl.act_mod_props_def 
+    unfolding action_and_prop_set.snap_mod_props_def set_impl.snap_mod_props_def 
+    unfolding set_impl.pre_imp_def set_impl.add_imp_def set_impl.del_imp_def by auto
   subgoal using goal_consts_in_init_consts by auto
   subgoal using act_consts_in_init_consts
-    unfolding action_consts_def
+    unfolding set_impl.action_consts_def
     unfolding restr_to_props.plan_consts_def
-    unfolding pre_imp_restr_def over_all_restr_def
-    unfolding add_imp_def del_imp_def pre_imp_def
+    unfolding set_impl.pre_imp_restr_def set_impl.over_all_restr_def
+    unfolding set_impl.add_imp_def set_impl.del_imp_def set_impl.pre_imp_def
     using domain_acts_mod_props 
     using pap unfolding plan_actions_in_problem_def 
     by auto
@@ -470,23 +470,24 @@ sublocale restr_to_props_ref: valid_temp_plan_restr_to_props AtStart AtEnd "set 
 
 
 sublocale valid_plan_valid_2: plan_validity_equivalence AtStart AtEnd 
-  "restr_to_props.over_all_restr" lower upper "restr_to_props.pre_restr" add_imp del_imp "set init \<inter> set props"
+  "set_impl.over_all_restr" lower upper "restr_to_props.pre_restr" set_impl.add_imp set_impl.del_imp 
+  "set init \<inter> set props"
   "set goal \<inter> set props" \<epsilon> \<pi> AtStart AtEnd "set o over_all_restr_list" "set o pre_imp_restr_list" 
   "set o add_imp_list" "set o del_imp_list"  "set (list_inter props init)" "set (list_inter props goal)"
   apply unfold_locales
   unfolding restr_to_props.pre_restr_def pre_imp_restr_list_def 
-  unfolding pre_imp_def pre_imp_list_def
-  unfolding add_imp_def add_imp_list_def
-  unfolding del_imp_def del_imp_list_def
-  unfolding over_all_restr_list_def unfolding over_all_restr_def
+  unfolding set_impl.pre_imp_def pre_imp_list_def
+  unfolding set_impl.add_imp_def add_imp_list_def
+  unfolding set_impl.del_imp_def del_imp_list_def
+  unfolding over_all_restr_list_def unfolding set_impl.over_all_restr_def
   by auto
 
 
 sublocale valid_plan_ref_valid_2: plan_validity_ref AtStart AtEnd 
-  "restr_to_props.over_all_restr" lower upper "restr_to_props.pre_restr" add_imp del_imp "set init \<inter> set props"
+  "restr_to_props.over_all_restr" lower upper "restr_to_props.pre_restr" set_impl.add_imp set_impl.del_imp  "set init \<inter> set props"
   "set goal \<inter> set props" \<epsilon> \<pi> AtStart AtEnd "set o over_all_restr_list" "set o pre_imp_restr_list" 
   "set o add_imp_list" "set o del_imp_list"  "set (list_inter props init)" "set (list_inter props goal)"
-  by unfold_locales
+  by unfold_locales 
 
 sublocale restr_to_props_valid: temp_plan_for_problem_list_impl AtStart AtEnd over_all_restr_list lower upper 
   pre_imp_restr_list add_imp_list del_imp_list "list_inter props init" "list_inter props goal"
@@ -496,11 +497,17 @@ sublocale restr_to_props_valid: temp_plan_for_problem_list_impl AtStart AtEnd ov
   using nso pap by auto
 end
 
+(* global_interpretation temp_planning_problem_list_defs "fst" "fst o snd" "snd o snd"
+  "\<lambda>x. Some (lower_bound.GE 0)" "\<lambda>x. Some (upper_bound.LE 2)" fst "fst o snd" "snd o snd"
+   "[STR ''a'', STR ''b'']" "[c]" "1" "[STR ''a'', STR ''b'', STR ''c'']" 
+   "[(([STR ''a''],[],[STR ''b'']), ([],[],[]), [STR ''a'']), (([STR ''a''],[],[STR ''b'']), ([],[],[]), [STR ''a''])]"
+  sorry *)
+
 subsection \<open>Integers as time\<close>
 text \<open>Munta uses integers as inputs for clock constraints. Integers can be obtained from rationals by
 multiplying by a constant.\<close>
 
-
+text \<open>Define a temporal planning problem\<close>
 locale temp_planning_problem_list_defs_int = 
   fixes at_start::"'action  \<Rightarrow> 'snap_action"
     and at_end::  "'action  \<Rightarrow> 'snap_action"
@@ -517,13 +524,13 @@ locale temp_planning_problem_list_defs_int =
     and actions:: "'action list"
   assumes eps_ran: "0 \<le> \<epsilon>"
 begin
-sublocale temp_planning_problem_list_defs at_start at_end over_all 
+sublocale rat_impl: temp_planning_problem_list_defs at_start at_end over_all 
   "(map_option (map_lower_bound rat_of_int)) o lower" "(map_option (map_upper_bound rat_of_int)) o upper"
   pre adds dels init goal "rat_of_int \<epsilon>" props actions
   apply unfold_locales using eps_ran by auto
 end
 
-
+text \<open>The version that is used for the compilation\<close>
 locale temp_planning_problem_list_impl_int = temp_planning_problem_list_defs_int
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
   for at_start::"'action  \<Rightarrow> 'snap_action" 
@@ -544,20 +551,25 @@ locale temp_planning_problem_list_impl_int = temp_planning_problem_list_defs_int
       and distinct_props: "distinct props"
       and distinct_actions: "distinct actions"
       and distinct_over_all: "\<forall>a \<in> set actions. distinct (over_all a)"
-      and snaps_disj: "snaps_disj_on (set actions)"
+      and snaps_disj: "rat_impl.set_impl.snaps_disj_on (set actions)"
       and init_in_props: "set init \<subseteq> set props"
       and goal_in_props: "set goal \<subseteq> set props"
-      and acts_ref_props: "\<forall>a \<in> set actions. act_ref_props a"
+      and acts_ref_props: "\<forall>a \<in> set actions. rat_impl.set_impl.act_ref_props a"
 begin
-sublocale temp_planning_problem_list_impl at_start at_end over_all
+
+sublocale rat_impl: temp_planning_problem_list_impl at_start at_end over_all
   "(map_option (map_lower_bound rat_of_int)) o lower" "(map_option (map_upper_bound rat_of_int)) o upper"
   pre adds dels init goal "rat_of_int \<epsilon>" props actions
   apply unfold_locales
   using some_actions some_props distinct_actions distinct_props 
     distinct_over_all snaps_disj init_in_props goal_in_props acts_ref_props
   by auto
+
+find_theorems name: eps_ran
 end
-  
+
+text \<open>The version whose conditions must be satisfied. Once they are, the code from the
+above version should be available. \<close>
 locale temp_planning_problem_list_impl_int' = temp_planning_problem_list_defs_int
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
   for at_start::"'action  \<Rightarrow> 'snap_action" 
@@ -583,7 +595,7 @@ locale temp_planning_problem_list_impl_int' = temp_planning_problem_list_defs_in
       and act_consts_in_init_consts: "action_consts \<subseteq> set init - set props"
 begin
 
-sublocale
+sublocale rat_imp':
   temp_planning_problem_list_impl' at_start at_end over_all
   "(map_option (map_lower_bound rat_of_int)) o lower" "(map_option (map_upper_bound rat_of_int)) o upper"
   pre adds dels init goal "rat_of_int \<epsilon>" props actions
@@ -591,6 +603,28 @@ sublocale
   using some_actions some_props distinct_actions distinct_props 
     distinct_over_all domain_acts_mod_props goal_consts_in_init_consts act_consts_in_init_consts
   by auto 
+
+sublocale prob_list_impl_int: 
+  temp_planning_problem_list_impl_int AtStart AtEnd rat_impl.over_all_restr_list lower upper 
+  rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
+  "rat_impl.list_inter props init" "rat_impl.list_inter props goal" \<epsilon> props actions
+  apply unfold_locales
+  using some_actions apply simp
+  using some_props apply simp
+  using distinct_props apply simp
+  using distinct_actions apply simp
+  using distinct_over_all unfolding rat_impl.over_all_restr_list_def apply simp
+  subgoal unfolding action_defs.snaps_disj_on_def by (blast intro: inj_onI)
+  subgoal by auto
+  subgoal by auto
+  subgoal using domain_acts_mod_props
+    unfolding rat_impl.set_impl.act_mod_props_def rat_impl.set_impl.snap_mod_props_def
+    unfolding action_and_prop_set.act_ref_props_def action_and_prop_set.snap_ref_props_def
+    unfolding rat_impl.pre_imp_list_def rat_impl.add_imp_list_def rat_impl.del_imp_list_def 
+    unfolding rat_impl.over_all_restr_list_def rat_impl.pre_imp_restr_list_def
+    unfolding comp_def set_filter
+    by auto
+  done
 end
 
 locale temp_plan_for_problem_list_defs_int =
@@ -611,16 +645,45 @@ locale temp_plan_for_problem_list_defs_int =
     and actions:: "'action list" +
   fixes \<pi>:: "('i, 'action, int) temp_plan"
 begin
-sublocale temp_plan_for_problem_list_defs at_start at_end over_all
+sublocale rat_impl: temp_plan_for_problem_list_defs at_start at_end over_all
   "(map_option (map_lower_bound rat_of_int)) o lower" "(map_option (map_upper_bound rat_of_int)) o upper"
   pre adds dels init goal "rat_of_int \<epsilon>" props actions 
   "map_option (map_prod id (map_prod rat_of_int rat_of_int)) o \<pi>"
   by unfold_locales
+
 end
 
-
-(* This is executed *)
 locale temp_plan_for_problem_list_impl_int =
+  temp_plan_for_problem_list_defs_int at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi> +
+  temp_planning_problem_list_impl_int at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions 
+    for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition list"
+    and lower::   "'action  \<rightharpoonup> int lower_bound"
+    and upper::   "'action  \<rightharpoonup> int upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition list"
+    and adds::    "'snap_action \<Rightarrow> 'proposition list"
+    and dels::    "'snap_action \<Rightarrow> 'proposition list"
+    and init::"'proposition list"
+    and goal::"'proposition list"
+    and \<epsilon>::   "int"
+    and props::   "'proposition list"
+    and actions:: "'action list"
+    and \<pi>:: "('i, 'action, int) temp_plan" +
+  assumes vp:  "rat_impl.valid_plan"
+      and nso: "rat_impl.no_self_overlap"
+      and pap: "rat_impl.plan_actions_in_problem"
+begin
+
+sublocale abstr_impl: temp_plan_for_problem_list_impl at_start at_end over_all
+  "(map_option (map_lower_bound rat_of_int)) o lower" "(map_option (map_upper_bound rat_of_int)) o upper"
+  pre adds dels init goal "rat_of_int \<epsilon>" props actions 
+  "map_option (map_prod id (map_prod rat_of_int rat_of_int)) o \<pi>"
+  apply unfold_locales using vp nso pap by auto
+
+end
+
+locale temp_plan_for_problem_list_impl_int' =
   temp_plan_for_problem_list_defs_int at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi> +
   temp_planning_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions 
     for at_start::"'action  \<Rightarrow> 'snap_action" 
@@ -633,20 +696,86 @@ locale temp_plan_for_problem_list_impl_int =
     and dels::    "'snap_action \<Rightarrow> 'proposition list"
     and init::"'proposition list"
     and goal::"'proposition list"
-    and \<epsilon>::"int"
+    and \<epsilon>::   "int"
     and props::   "'proposition list"
     and actions:: "'action list"
     and \<pi>:: "('i, 'action, int) temp_plan" +
-  assumes vp:  "valid_plan"
-      and nso: "no_self_overlap"
-      and pap: "plan_actions_in_problem"
+  assumes vp:  "rat_impl.valid_plan"
+      and nso: "rat_impl.no_self_overlap"
+      and pap: "rat_impl.plan_actions_in_problem"
 begin
 
 sublocale temp_plan_for_problem_list_impl' at_start at_end over_all
   "(map_option (map_lower_bound rat_of_int)) o lower" "(map_option (map_upper_bound rat_of_int)) o upper"
   pre adds dels init goal "rat_of_int \<epsilon>" props actions 
   "map_option (map_prod id (map_prod rat_of_int rat_of_int)) o \<pi>"
-  apply unfold_locales using vp nso pap by blast+
+  apply unfold_locales using vp nso pap by auto
+
+
+sublocale conc_ref_impl: temp_plan_for_problem_list_impl_int AtStart AtEnd rat_impl.over_all_restr_list lower upper 
+  rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
+  "rat_impl.list_inter props init" "rat_impl.list_inter props goal" \<epsilon> props actions \<pi>
+  apply unfold_locales
+  using restr_to_props_valid.vp 
+    restr_to_props_valid.nso 
+    restr_to_props_valid.pap
+  by auto
+end
+
+locale temp_planning_problem_list_impl_int_ex = temp_planning_problem_list_impl_int'
+  at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
+  for at_start::"'action  \<Rightarrow> 'snap_action" 
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition list"
+    and lower::   "'action  \<rightharpoonup> int lower_bound"
+    and upper::   "'action  \<rightharpoonup> int upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition list"
+    and adds::    "'snap_action \<Rightarrow> 'proposition list"
+    and dels::    "'snap_action \<Rightarrow> 'proposition list"
+    and init::"'proposition list"
+    and goal::"'proposition list"
+    and \<epsilon>::"int"
+    and props::   "'proposition list"
+    and actions:: "'action list"
+begin
+context fixes \<pi>::"('i, 'action, int) temp_plan" 
+begin
+
+definition "list_impl_valid_plan \<equiv> temp_plan_defs.valid_plan at_start at_end (set o over_all) 
+  ((map_option (map_lower_bound rat_of_int)) o lower) ((map_option (map_upper_bound rat_of_int)) o upper)
+  (set o pre) (set o adds) (set o dels) (set init) (set goal) (rat_of_int \<epsilon>) 
+  (map_option (map_prod id (map_prod rat_of_int rat_of_int)) o \<pi>)"
+
+definition "list_impl_nso \<equiv> 
+  temp_plan_defs.no_self_overlap (map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ> \<pi>)"
+
+definition "list_impl_pap \<equiv> temp_plan_for_action_defs.plan_actions_in_problem 
+  (map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ> \<pi>)
+  (set actions)"
+
+context 
+  assumes vp: "list_impl_valid_plan"
+      and nso: "list_impl_nso"
+      and pap: "list_impl_pap"
+begin
+interpretation int: temp_plan_for_problem_list_impl_int'
+  apply unfold_locales          
+  subgoal using vp unfolding list_impl_valid_plan_def by simp
+  subgoal using nso unfolding list_impl_nso_def by simp
+  subgoal using pap unfolding list_impl_pap_def by simp
+  done
+
+
+text \<open>If a plan is valid according to the definitions used for this locale, then it is also
+  valid in @{locale temp_plan_for_problem_list_impl_int}\<close>
+lemma example: "int.valid_plan_valid_2.plan2.valid_plan"
+  apply (rule int.conc_ref_impl.vp)
+  done
+end
+
+
+
+end
 end
   
 end

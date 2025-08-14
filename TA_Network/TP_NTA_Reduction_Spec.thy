@@ -150,8 +150,9 @@ instance location::(countable) countable
     Otherwise, it could be false and never explicitly set to false during action execution, and still not hold.
     
   *)
-locale tp_nta_reduction_spec =
-  fixes init :: "('proposition::countable) list"
+locale tp_nta_reduction_spec = temp_planning_problem_list_impl_int
+  at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
+  for init :: "('proposition::countable) list"
     and goal :: "'proposition list"
     and at_start :: "('action::countable) \<Rightarrow> 'snap_action"
     and at_end :: "'action \<Rightarrow> 'snap_action"
@@ -163,22 +164,9 @@ locale tp_nta_reduction_spec =
     and dels :: "'snap_action \<Rightarrow> 'proposition list"
     and \<epsilon> :: "int"
     and props :: "'proposition list"
-    and actions :: "'action list"
-  assumes domain_ref_fluents: "fluent_domain (set props) at_start at_end
-    (set o over_all) (set o pre) (set o adds) (set o dels) (set actions)"
-      and init_props: "set init \<subseteq> set props"
-      and goal_props: "set goal \<subseteq> set props"
-      and infinite_actions: "infinite (UNIV::'action set)"
+    and actions :: "'action list" +
+  assumes infinite_actions: "infinite (UNIV::'action set)"
       and infinite_propositions: "infinite (UNIV::'proposition set)"
-      and distinct_props: "distinct props"
-      and distinct_actions: "distinct actions"
-      and some_actions: "0 < length actions"
-      and some_propositions: "0 < length props"
-      and eps_range: "0 \<le> \<epsilon>"
-      and at_start_inj: "inj_on at_start (set actions)"
-      and at_end_inj: "inj_on at_end (set actions)"
-      and snaps_disj: "at_start ` (set actions) \<inter> at_end ` (set actions) = {}"
-      and distinct_over_all: "\<forall>a \<in> set actions. distinct (over_all a)"
 begin
 
 subsection \<open>Abbreviations for encoding propositions into clocks\<close>
@@ -224,13 +212,12 @@ definition inc_prop_lock_ab::"
 "inc_prop_lock_ab n \<equiv> inc_var n o PropLock"
   
 
-
 subsection \<open>Automata for individual actions\<close>
 abbreviation mutex_effects_spec::"
    'snap_action 
 \<Rightarrow> 'snap_action 
 \<Rightarrow> bool" where
-"mutex_effects_spec a b \<equiv> mutex_snap_action a b"
+"mutex_effects_spec a b \<equiv> rat_impl.set_impl.mutex_snap_action a b"
 
 definition int_clocks_spec::"'snap_action \<Rightarrow> 'action clock list" where
 "int_clocks_spec s \<equiv>
@@ -531,8 +518,45 @@ let
   formula = formula.EX (loc 0 GoalLocation)
 in (automata, clocks, all_vars_spec, formula)"
 (* The id of the main automaton is 0 *)
+find_theorems name: eps_ran
 end
+                                     
+global_interpretation a: tp_nta_reduction_spec "[a::String.literal, b]" "[c]" "fst" "fst o snd" "snd o snd"
+  "\<lambda>x. Some (lower_bound.GE 0)" "\<lambda>x. Some (upper_bound.LE 2)" fst "fst o snd" "snd o snd"
+  "1" "[a, b, c]" "[(([a],[],[b]), ([],[],[]), [a]), (([a],[],[b]), ([],[],[]), [a])]"
+  sorry
+
+find_consts name: "a.rat_impl.set_impl.mutex_snap_action"
+
+lemma [code]: "action_defs.mutex_snap_action = (\<lambda> pre adds dels a b. 
+  (pre a \<inter> (adds b \<union> dels b) \<noteq> {} \<or> 
+  adds a \<inter> dels b \<noteq> {} \<or> 
+  pre b \<inter> (adds a \<union> dels a) \<noteq> {} \<or> 
+  adds b \<inter> dels a \<noteq> {}))"
+  apply (intro ext)
+  apply (subst action_defs.mutex_snap_action_def)
+    by blast
+
+lemma [code]: "action_defs.mutex_snap_action (set \<circ> fst) (set o fst o snd) (set o snd o snd) \<equiv> \<lambda>a b. (
+  set (fst a) \<inter> (set (fst (snd b)) \<union> set (snd (snd b))) \<noteq> {} \<or>
+  set (fst (snd a)) \<inter> set (snd (snd b)) \<noteq> {} \<or>
+  set (fst b) \<inter> (set (fst (snd a)) \<union> set (snd (snd a))) \<noteq> {} \<or> 
+  set (fst (snd b)) \<inter> set (snd (snd a)) \<noteq> {}
+)" unfolding action_defs.mutex_snap_action_def unfolding comp_def by argo
 
 
+lemma [code]: "a.rat_impl.set_impl.mutex_snap_action \<equiv> \<lambda> aa ba. (
+    set (fst aa) \<inter> (set (fst (snd ba)) \<union> set (snd (snd ba))) \<noteq> {} \<or>
+   set (fst (snd aa)) \<inter> set (snd (snd ba)) \<noteq> {} \<or>
+   set (fst ba) \<inter> (set (fst (snd aa)) \<union> set (snd (snd aa))) \<noteq> {} \<or> 
+  set (fst (snd ba)) \<inter> set (snd (snd aa)) \<noteq> {})" 
+  using a.rat_impl.set_impl.mutex_snap_action_def
+  unfolding comp_def by presburger
+
+find_consts name: "a.rat_impl.set_impl.mutex_snap_action"
+
+code_thms "action_defs.mutex_snap_action"
+
+value "a.mutex_effects_spec ([STR ''a''],[],[STR ''b'']) ([STR ''a''],[],[STR ''b''])"
 
 end
