@@ -6,10 +6,6 @@ section \<open>Renumbering the abstract definition\<close>
 
 subsubsection \<open>Some functions for renumbering\<close>
 
-instance rat::time 
-  apply standard 
-  using dense_order_class.dense apply blast
-  using verit_eq_simplify(*(24) 1 \<noteq> 0 *) by blast
 
 definition mk_renum::"'a list \<Rightarrow> 'a \<Rightarrow> nat" where
 "mk_renum l \<equiv>
@@ -454,12 +450,16 @@ lemma action_variables:
   assumes "a \<in> set actions"
   shows "action_vars_spec a \<subseteq> PropLock ` (set props) \<union> PropVar ` (set props)"
   unfolding action_vars_spec_def Let_def inv_vars_spec_def set_map set_append snap_vars_spec_def 
-  using domain_ref_fluents[simplified fluent_domain_def, THEN bspec, OF assms] 
-  unfolding act_ref_fluents_def by auto
+  using acts_ref_props unfolding rat_impl.set_impl.act_ref_props_def
+  unfolding rat_impl.set_impl.snap_ref_props_def comp_def
+  unfolding action_and_prop_set.snap_ref_props_def using assms
+  apply -
+  apply (drule bspec, assumption)
+  by auto
 
 lemma init_variables:
   "PropVar ` (set init) \<union> PropVar ` (set goal) \<subseteq> PropVar ` (set props)"
-  using init_props goal_props by auto
+  using init_in_props goal_in_props by auto
 
 lemma all_vars_spec_exact: "all_vars_spec = [(ActsActive, 0, int (length actions)), (Effecting, 0, int (length actions)), (PlanningLock, 0, 2)] @ map (\<lambda>p. (PropLock p, 0, int (length actions))) (filter (\<lambda>x. PropLock x \<in> \<Union> (set (map action_vars_spec actions))) props) @
     map (\<lambda>p. (PropVar p, 0, 1)) (filter (\<lambda>x. PropVar x \<in> \<Union> (set (map action_vars_spec actions)) \<union> set (map PropVar init) \<union> set (map PropVar goal)) props)" 

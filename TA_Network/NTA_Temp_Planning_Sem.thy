@@ -1,5 +1,6 @@
 theory NTA_Temp_Planning_Sem
-  imports Temporal_Planning_Base.Temporal_Plans_Theory
+  imports Temporal_Planning_Base.Temporal_Plans_Instances
+          Temporal_Planning_Base.Temporal_Plans_Theory
           "HOL-Library.Multiset"
 begin
 

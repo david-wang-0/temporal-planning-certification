@@ -683,6 +683,7 @@ sublocale abstr_impl: temp_plan_for_problem_list_impl at_start at_end over_all
 
 end
 
+(* Something *)
 locale temp_plan_for_problem_list_impl_int' =
   temp_plan_for_problem_list_defs_int at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi> +
   temp_planning_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions 
@@ -722,6 +723,8 @@ sublocale conc_ref_impl: temp_plan_for_problem_list_impl_int AtStart AtEnd rat_i
   by auto
 end
 
+
+(* 
 locale temp_planning_problem_list_impl_int_ex = temp_planning_problem_list_impl_int'
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
   for at_start::"'action  \<Rightarrow> 'snap_action" 
@@ -777,5 +780,5 @@ end
 
 end
 end
-  
+   *)
 end

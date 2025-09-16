@@ -1,5 +1,6 @@
 theory TP_NTA_Reduction_Spec
-  imports NTA_Temp_Planning_Sem
+  imports Temporal_Planning_Base.Temporal_Plans_Theory
+      Temporal_Planning_Base.Temporal_Plans_Code
       Munta_Model_Checker.Simple_Network_Language_Export_Code
 
 begin
@@ -517,46 +518,16 @@ let
 
   formula = formula.EX (loc 0 GoalLocation)
 in (automata, clocks, all_vars_spec, formula)"
-(* The id of the main automaton is 0 *)
-find_theorems name: eps_ran
+
 end
-                                     
+(*                    
 global_interpretation a: tp_nta_reduction_spec "[a::String.literal, b]" "[c]" "fst" "fst o snd" "snd o snd"
   "\<lambda>x. Some (lower_bound.GE 0)" "\<lambda>x. Some (upper_bound.LE 2)" fst "fst o snd" "snd o snd"
   "1" "[a, b, c]" "[(([a],[],[b]), ([],[],[]), [a]), (([a],[],[b]), ([],[],[]), [a])]"
   sorry
 
-find_consts name: "a.rat_impl.set_impl.mutex_snap_action"
-
-lemma [code]: "action_defs.mutex_snap_action = (\<lambda> pre adds dels a b. 
-  (pre a \<inter> (adds b \<union> dels b) \<noteq> {} \<or> 
-  adds a \<inter> dels b \<noteq> {} \<or> 
-  pre b \<inter> (adds a \<union> dels a) \<noteq> {} \<or> 
-  adds b \<inter> dels a \<noteq> {}))"
-  apply (intro ext)
-  apply (subst action_defs.mutex_snap_action_def)
-    by blast
-
-lemma [code]: "action_defs.mutex_snap_action (set \<circ> fst) (set o fst o snd) (set o snd o snd) \<equiv> \<lambda>a b. (
-  set (fst a) \<inter> (set (fst (snd b)) \<union> set (snd (snd b))) \<noteq> {} \<or>
-  set (fst (snd a)) \<inter> set (snd (snd b)) \<noteq> {} \<or>
-  set (fst b) \<inter> (set (fst (snd a)) \<union> set (snd (snd a))) \<noteq> {} \<or> 
-  set (fst (snd b)) \<inter> set (snd (snd a)) \<noteq> {}
-)" unfolding action_defs.mutex_snap_action_def unfolding comp_def by argo
-
-
-lemma [code]: "a.rat_impl.set_impl.mutex_snap_action \<equiv> \<lambda> aa ba. (
-    set (fst aa) \<inter> (set (fst (snd ba)) \<union> set (snd (snd ba))) \<noteq> {} \<or>
-   set (fst (snd aa)) \<inter> set (snd (snd ba)) \<noteq> {} \<or>
-   set (fst ba) \<inter> (set (fst (snd aa)) \<union> set (snd (snd aa))) \<noteq> {} \<or> 
-  set (fst (snd ba)) \<inter> set (snd (snd aa)) \<noteq> {})" 
-  using a.rat_impl.set_impl.mutex_snap_action_def
-  unfolding comp_def by presburger
-
-find_consts name: "a.rat_impl.set_impl.mutex_snap_action"
-
 code_thms "action_defs.mutex_snap_action"
 
 value "a.mutex_effects_spec ([STR ''a''],[],[STR ''b'']) ([STR ''a''],[],[STR ''b''])"
-
+ *)
 end
