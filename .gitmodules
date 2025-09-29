@@ -1,0 +1,9 @@
+[submodule "ML/parcom"]
+	path = ML/parcom
+	url = https://github.com/standardml/parcom.git
+[submodule "ML/lib/parcom"]
+	path = ML/lib/parcom
+	url = https://github.com/standardml/parcom.git
+[submodule "ML/lib/cmlib"]
+	path = ML/lib/cmlib
+	url = https://github.com/standardml/cmlib.git

@@ -1,37 +1,19 @@
 $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/basis/mlton.mlb
 
-sequential.sml
 
-local
-    Unsynchronized.sml
+util/util.mlb
 
-    Writeln.sml
+ir_types/types.mlb
 
-    basics.ML
+imports/isalib.mlb
+imports/mlunta.mlb
+imports/munta.mlb
 
-    ann "nonexhaustiveMatch ignore" in
-      library.ML
-      (* Certificate.sml  *)
-      (* Certificate.ML *)
-      PlanCert.ML
-    end
-in
-    structure Timing
-    structure Tracing
-    structure Model_Checker
-end
+parsing/pddl_validate_plan.mlb
 
-basics.ML
-ann "nonexhaustiveMatch ignore" in
-    library.ML
-end
-Unsynchronized.sml
-$(MLUNTA_CERT)/prelude.sml
-$(MLUNTA_CERT)/serializable.sml
-$(MLUNTA_CERT)/certificate.sml
-
-$(MLUNTA_DIR)/checker.mlb
-
+network_conversion.sml
+certificate_conversion.sml
+mlunta_adapter.sml
 plan_cert.sml
 Mlton_Main.sml

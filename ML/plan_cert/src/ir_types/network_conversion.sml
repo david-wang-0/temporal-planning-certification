@@ -1,4 +1,10 @@
 structure NetworkConversionTypes = struct
+    type nat = Model_Checker.nat
+    type inta = Model_Checker.inta
+    type 'a act = 'a Model_Checker.act
+    type int = int
+
+
     type isa_edge = 
         nat * 
         (string, inta) Model_Checker.bexp * 

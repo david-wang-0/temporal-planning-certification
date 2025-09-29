@@ -106,20 +106,23 @@ fun check_and_cert_network extra renaming cert compression certification num_thr
           (Int.fromString certification |> the)
     )
 
-fun check_and_cert_problem extra domain problem renaming cert compression certification num_threads debug = (
-    log_config (extra, domain, problem, renaming, cert, compression, certification, num_threads);
+fun check_and_cert_problem extra domain problem renaming cert compression certification num_threads debug = 
     let
+        val _ = log_config (extra, domain, problem, renaming, cert, compression, certification, num_threads)
         val parsedDom = parse_pddl_dom dom_file;
         val parsedProb = parse_pddl_prob prob_file;
-        val certifier = convert_certificate o 
-            (check_and_cert_network extra renaming cert compression certification num_threads) o 
-            convert_network;
-        val f = (fn a b c d e f g => ()); (* XXX: Isabelle export*)
+        val certifier = 
+                convert_network 
+            #> (check_and_cert_network extra renaming cert compression certification num_threads)
+            #> convert_certificate;
         val show_cert = (case debug of NONE => false | SOME _ => true);
+        val f = (fn a b c d e f g => ()); (* XXX: Isabelle export*)
     in f parsedDom parsedProb mode num_split false certifier show_cert 
-)
+    end
 
-(* fun check_problem domain problem = (
+(* 
+(* Useful for testing *)
+fun check_problem domain problem = (
     log_config1 (Local, domain, problem);
     let
         val parsedDom = parse_pddl_dom dom_file;
@@ -136,21 +139,7 @@ fun check_problem_lu extra domain problem  = (
 ); *)
 
 
-(*  
-    - How is a certificate stored in memory (types)? 
-    - How is a renaming stored in memory (types)? 
-
-- The serialiser and deserialiser are built into MLuntaAdapter.
-- The deserialiser outputs ML equivalents of types:
-      SOME (Deserialize.Reachable_Set x) => SOME (Reachable_Set x)
-    | SOME (Deserialize.Buechi_Set x)    => SOME (Buechi_Set x)
-- The serialiser does ???
-*)
-
-(* To do: Implement a conversion from whatever the certifier outputs to 
-    the Isabelle types. *)
-
-fun check args = (* Todo: This should be implemented at a later point. *)
+fun check args =
     case args of
         (SOME domain, SOME problem, SOME extra, SOME renaming, SOME cert, compression,
          certification, num_threads, debug) => check_and_cert_problem

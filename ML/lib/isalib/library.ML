@@ -11,7 +11,7 @@ See also General/basics.ML for the most fundamental concepts.
 
 infix 2 ?
 infix 3 o oo ooo oooo
-infix 4 ~~ downto
+infix 4 ~~ upto downto
 infix orf andf
 
 signature BASIC_LIBRARY =
