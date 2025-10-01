@@ -1,5 +1,9 @@
+signature CERTIFICATE_CONVERSION = 
+sig 
+    val convert_certificate: 'a CertificateConversionTypes.ml_cert -> CertificateConversionTypes.isa_cert
+end
 
-structure CertificateConversion =
+structure CertificateConversion : CERTIFICATE_CONVERSION =
 struct
     open CertificateConversionTypes
 
@@ -35,20 +39,26 @@ struct
     fun convert_renaming ({clock_dict, var_dict, loc_dict, ta_names, ...}
                     : 'a ml_renaming) : isa_renaming =
         let 
-            val var_renaming = IndexDict.to_function var_dict
-            val clock_renaming = IndexDict.to_function clock_dict
-            val location_renaming = (IndexDict.to_function loc_dict) #> IndexDict.to_function 
+            val var_renaming = IndexDict.inv_function var_dict #> Model_Checker.nat_of_integer
+            val inv_var_renaming = Model_Checker.integer_of_nat #> IndexDict.to_function var_dict
 
-            val inv_var_renaming = IndexDict.inv_function var_dict
-            val inv_clock_renaming = IndexDict.inv_function clock_dict
-            val inv_location_renaming = I(IndexDict.to_function loc_dict) #> IndexDict.inv_function 
+            val clock_renaming = IndexDict.inv_function clock_dict #> Model_Checker.nat_of_integer
+            val inv_clock_renaming = Model_Checker.integer_of_nat #> IndexDict.to_function clock_dict
+
+            val loc_dict' = Model_Checker.integer_of_nat #> IndexDict.to_function loc_dict
+            val location_renaming = loc_dict'
+                #> (fn f => (Model_Checker.integer_of_nat #> IndexDict.inv_function f #> Model_Checker.nat_of_integer))
+            val inv_location_renaming = loc_dict'
+                #> (fn f => (Model_Checker.integer_of_nat #> IndexDict.to_function f #> Model_Checker.nat_of_integer))
+
+
         in (var_renaming, clock_renaming, location_renaming,
             inv_var_renaming, inv_clock_renaming, inv_location_renaming)
         end
 
-    fun convert_cert (cert: 'a ml_cert) : isa_cert =
+    fun convert_certificate ((renaming, passed): 'a ml_cert) : isa_cert =
         let
-            val renaming = convert_renaming cert
+            val renaming = convert_renaming renaming
             val state_space = convert_passed passed
         in (renaming, state_space)
         end

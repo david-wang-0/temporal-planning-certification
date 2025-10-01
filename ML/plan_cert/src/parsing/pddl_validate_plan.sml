@@ -1,6 +1,8 @@
   (* This file contains the code for converting the types in the parsed domain to those used
      by the validator exported by Isabelle in the file ../../../isabelle/code/PDDL_STRIPS_Checker_Exported.sml.
      It also calls the function exported by Isabelle to check the validity of a plan.*)
+structure PddlParser =
+struct
 open PDDL
 
   val IsabelleStringImplode = implode;
@@ -223,7 +225,7 @@ open PDDL
     | Durative_Action_Def_Body (durConst, (cond, eff)) => 
         Durative_Action_Schema(IsabelleStringExplode actName,
           pddlTypedListVarsTypesToIsabelle args,
-          pddlDurConstraintToIsabelle durConst,
+          map pddlDurConstraintToIsabelle durConst,
           pddlTimedListCondToIsabelle cond,
           pddlTimedListEffToIsabelle eff)
 
@@ -303,21 +305,13 @@ val parse_pddl_dom = parse_wrapper (PDDL.end_of_file PDDL.domain)
 val parse_pddl_prob = parse_wrapper (PDDL.end_of_file PDDL.problem)
 val parse_pddl_plan = parse_wrapper (PDDL.end_of_file PDDL.plan)
 
-(* 
-fun do_check_plan dom_file prob_file plan_file = let
+fun get_prob dom_file prob_file = let
   val parsedDom = parse_pddl_dom dom_file
   val parsedProb = parse_pddl_prob prob_file
-  val parsedPlan = parse_pddl_plan plan_file
 
   val isaProb = (TEMPORAL_PDDL_Checker_Exported.Problem
                   (let val (p1,p2,p3) = pddlProbToIsabelle parsedProb in
                      (pddlDomToIsabelle parsedDom, p1,p2,p3) end))
-
-  val isaPlan = planToIsabelle parsedPlan
-
-in
-  case TEMPORAL_PDDL_Checker_Exported.check_plan isaProb isaPlan of
-      TEMPORAL_PDDL_Checker_Exported.Inl msg => exit_fail ("Invalid Plan: " ^ msg)
-    | _ => println "Valid Plan"
-end *)
-
+in isaProb
+end
+end

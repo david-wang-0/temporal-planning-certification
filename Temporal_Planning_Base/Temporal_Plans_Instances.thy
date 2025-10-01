@@ -399,6 +399,11 @@ sublocale valid_temp_plan_unique_snaps_nso_dg0
   at_start at_end "set o over_all" lower upper
   "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> \<pi> 
   by unfold_locales
+
+sublocale temp_plan_for_problem_impl
+  at_start at_end "set o over_all" lower upper
+  "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> \<pi> "set actions" "set props"
+   using pap by unfold_locales
 end
 
 locale temp_plan_for_problem_list_impl' =
@@ -674,7 +679,7 @@ locale temp_plan_for_problem_list_impl_int =
       and nso: "rat_impl.no_self_overlap"
       and pap: "rat_impl.plan_actions_in_problem"
 begin
-
+                                      
 sublocale abstr_impl: temp_plan_for_problem_list_impl at_start at_end over_all
   "(map_option (map_lower_bound rat_of_int)) o lower" "(map_option (map_upper_bound rat_of_int)) o upper"
   pre adds dels init goal "rat_of_int \<epsilon>" props actions 
@@ -683,7 +688,7 @@ sublocale abstr_impl: temp_plan_for_problem_list_impl at_start at_end over_all
 
 end
 
-(* Something *)
+(* An instance of this should be created. *)
 locale temp_plan_for_problem_list_impl_int' =
   temp_plan_for_problem_list_defs_int at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi> +
   temp_planning_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions 
@@ -712,7 +717,7 @@ sublocale temp_plan_for_problem_list_impl' at_start at_end over_all
   "map_option (map_prod id (map_prod rat_of_int rat_of_int)) o \<pi>"
   apply unfold_locales using vp nso pap by auto
 
-
+(* The code in this sublocale can be called.*)
 sublocale conc_ref_impl: temp_plan_for_problem_list_impl_int AtStart AtEnd rat_impl.over_all_restr_list lower upper 
   rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
   "rat_impl.list_inter props init" "rat_impl.list_inter props goal" \<epsilon> props actions \<pi>

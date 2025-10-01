@@ -8,8 +8,8 @@ lemma GreatestI_time: "P (k::'t::time) \<Longrightarrow> (\<And>y. P y \<Longrig
   apply (rule GreatestI2_order)
   by blast
 
-locale nta_temp_planning = valid_temp_plan_unique_snaps_nso_fluent_mutex_happ_seq_for_some_fluents_and_actions 
-  at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> props actions
+locale nta_temp_planning = temp_plan_for_problem_impl 
+  at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> actions props
     for at_start::"'action  \<Rightarrow> 'snap_action" 
     and at_end::  "'action  \<Rightarrow> 'snap_action"
     and over_all::"'action  \<Rightarrow> 'proposition set"

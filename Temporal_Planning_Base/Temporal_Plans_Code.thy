@@ -11,6 +11,6 @@ lemma [code]: "action_defs.mutex_snap_action = (\<lambda> pre adds dels a b.
   apply (subst action_defs.mutex_snap_action_def)
   by blast
 
-(* Code theorems need to be pure lambda expressions on the RHS *)
+(* in some cases code theorems need to be pure lambda expressions on the RHS *)
 code_thms "action_defs.mutex_snap_action"
 end

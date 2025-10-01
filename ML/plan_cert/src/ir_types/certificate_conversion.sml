@@ -4,12 +4,12 @@ structure CertificateConversionTypes = struct
     type inta = Model_Checker.inta
     type 'a act = 'a Model_Checker.act
 
-    type isa_renaming = (string -> nat) * 
-        (string -> nat) * 
-        (nat -> nat -> nat) * 
-        (nat -> string) * 
-        (nat -> string) * 
-        (nat -> nat -> nat)
+    type isa_renaming = (string -> nat)
+        * (string -> nat)
+        * (nat -> nat -> nat)
+        * (nat -> string)
+        * (nat -> string)
+        * (nat -> nat -> nat)
 
     type isa_dbm_entry = inta Model_Checker.dBMEntry
 

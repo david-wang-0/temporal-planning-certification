@@ -308,7 +308,7 @@ struct
                 |> ListUtils.zip_with_index
                 |> List.map ((fn ((l, a), i) => (node_ids_to_names (Model_Checker.nat_of_integer i), l, a))
                         #> (fn (n, l, a) => convert_automaton v n l a))
-                |> (fn xs => ListPair.zip (indexed_auto_names, xs));
+                |> (fn xs => ListPair.zip (indexed_auto_names, xs)); (* Needs to preserve order, since indexes are used in renamings. *)
 
             val auto_num_to_name = (fn n => List.nth (indexed_auto_names, Model_Checker.integer_of_nat n))
             val formula = convert_formula auto_num_to_name node_ids_to_names formula

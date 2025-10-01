@@ -1,4 +1,4 @@
 $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/basis/mlton.mlb
 
-../../../../../munta-cert/mlunta/src/checker.mlb
+../../../../../munta-cert/mlunta/src/sources.mlb

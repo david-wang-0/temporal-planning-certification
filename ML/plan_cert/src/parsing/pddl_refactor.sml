@@ -4,6 +4,8 @@
 (* Some utility functions. *)
 fun println x = print (x ^ "\n")
 
+fun id x = x
+
 fun exit_fail msg = (
   println msg;
   OS.Process.exit(OS.Process.failure)
@@ -125,7 +127,7 @@ struct
 
   datatype PDDL_ACTION_DEF_BODY = 
     Simple_Action_Def_Body of ((unit * PDDL_PRE_GD) option) * ((unit * C_EFFECT) option)
-  | Durative_Action_Def_Body of PDDL_DURATION_CONSTRAINT * (PDDL_DA_GD * PDDL_DA_EFFECT)
+  | Durative_Action_Def_Body of PDDL_DURATION_CONSTRAINT list * (PDDL_DA_GD * PDDL_DA_EFFECT)
   (*  *)
 
   structure RTP = TokenParser (PDDLDef)
@@ -243,9 +245,11 @@ struct
 
   val action_symbol = pddl_name
 
+  val action_params = (pddl_reserved ":parameters" >> (in_paren(optional_typed_list pddl_var))) ??  "action params"
+
   val action_def = (in_paren(pddl_reserved ":action" >>
                     action_symbol
-                    && (pddl_reserved ":parameters" >> (in_paren(typed_list pddl_var)))
+                    && action_params
                     && action_def_body)) ?? "action def"
 
   (* extension for durative actions *)
@@ -269,6 +273,10 @@ struct
                             || in_paren (opt (string "at" >> time_specifier) && (d_op && char #"?" >> string "duration" >> d_value)) wth Time_Const_Def
                             || in_paren (opt (string "at" >> time_specifier) && (d_op && char #"?" >> string "duration" >> f_head)) wth Func_Const_Def) ?? "duration constraint"
 
+  fun opt_and_list elem = 
+    in_paren(pddl_reserved "and" >> (repeat1 elem))
+    || (elem wth (fn x => [x])) 
+
   val interval = string "all" wth (fn () => over_all) ?? "interval"
 
   val timed_GD = ((string "at" >> (time_specifier && pre_GD term)) 
@@ -284,17 +292,18 @@ struct
   val da_effect = in_paren (opt ((timed_effect wth (fn (teff) => [teff])) 
                               || (pddl_reserved "and" >> (repeat (in_paren timed_effect) (* TODO: fix repeat *))))) ?? "da effect"
 
-  val durative_action_def_body = ((pddl_reserved ":duration" >> duration_constraint)
+  val durative_action_def_body = ((pddl_reserved ":duration" >> opt_and_list duration_constraint)
                                   && (pddl_reserved ":condition" >> da_GD)
                                   && (pddl_reserved ":effect" >> da_effect)) wth Durative_Action_Def_Body ?? "durative action def body"
 
   val durative_action_symbol = pddl_name
 
-  val durative_action_def = (in_paren (pddl_reserved ":durative-action" >> durative_action_symbol
-                             && (pddl_reserved ":parameters" >> (in_paren (typed_list pddl_var)))
-                             && durative_action_def_body)) ?? "durative action def"
+  val durative_action_def = (in_paren 
+    (pddl_reserved ":durative-action" >> durative_action_symbol
+        && action_params
+        && durative_action_def_body)) ?? "durative action def"
 
-  val structure_def = (action_def || durative_action_def (*|| derived_def*) )?? "struct def"
+  val structure_def = (action_def || durative_action_def (*|| derived_def*)) ?? "struct def"
 
   val invariant_symbol = (pddl_reserved ":name" >> pddl_name) ?? "invariant symbol"
 
@@ -316,9 +325,9 @@ struct
                                                   && (opt types_def)
                                                   && (opt constants_def)
                                                   && (opt predicates_def)
-                                                  (* && (opt functions_def) *)
+                                                  && (opt functions_def)
                                                   && (repeat structure_def)
-                                                  (* && (repeat invariant_def) *)
+                                                  && (optional id [] (repeat invariant_def))
                                                   ) ?? "domain"
 
   val object_declar = in_paren(pddl_reserved ":objects" >> (typed_list pddl_obj_cons))
@@ -349,8 +358,8 @@ struct
 
   val problem = in_paren(pddl_reserved "define" >> in_paren(pddl_reserved "problem" >> pddl_name)
                                                 >> in_paren(pddl_reserved ":domain" >> pddl_name)
-                                                >> (opt (require_def))
-                                                  && (object_declar)
+                                                >> (opt require_def)
+                                                  && (optional id [] object_declar)
                                                   && init
                                                   && goal
                                                   && opt metric_spec) ?? "problem"
