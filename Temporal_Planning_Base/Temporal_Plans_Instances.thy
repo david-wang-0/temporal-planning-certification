@@ -309,8 +309,8 @@ locale temp_planning_problem_list_impl' = temp_planning_problem_list_defs
       and distinct_actions: "distinct actions"
       and distinct_over_all: "\<forall>a \<in> set actions. distinct (over_all a)"
       and goal_consts_in_init_consts: "set goal - set props \<subseteq> set init - set props"
-      and domain_acts_mod_props: "\<forall>a \<in> set actions. act_mod_props a"
-      and act_consts_in_init_consts: "action_consts \<subseteq> set init - set props"
+      and domain_acts_mod_props: "\<forall>a \<in> set actions. set_impl.act_mod_props a"
+      and act_consts_in_init_consts: "set_impl.action_consts \<subseteq> set init - set props"
 begin
 
 sublocale prob_list_impl: 
@@ -400,7 +400,7 @@ sublocale valid_temp_plan_unique_snaps_nso_dg0
   "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> \<pi> 
   by unfold_locales
 
-sublocale temp_plan_for_problem_impl
+sublocale set_impl: temp_plan_for_problem_impl
   at_start at_end "set o over_all" lower upper
   "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> \<pi> "set actions" "set props"
    using pap by unfold_locales
@@ -570,7 +570,6 @@ sublocale rat_impl: temp_planning_problem_list_impl at_start at_end over_all
     distinct_over_all snaps_disj init_in_props goal_in_props acts_ref_props
   by auto
 
-find_theorems name: eps_ran
 end
 
 text \<open>The version whose conditions must be satisfied. Once they are, the code from the
@@ -596,8 +595,8 @@ locale temp_planning_problem_list_impl_int' = temp_planning_problem_list_defs_in
       and distinct_actions: "distinct actions"
       and distinct_over_all: "\<forall>a \<in> set actions. distinct (over_all a)"
       and goal_consts_in_init_consts: "set goal - set props \<subseteq> set init - set props"
-      and domain_acts_mod_props: "\<forall>a \<in> set actions. act_mod_props a"
-      and act_consts_in_init_consts: "action_consts \<subseteq> set init - set props"
+      and domain_acts_mod_props: "\<forall>a \<in> set actions. rat_impl.set_impl.act_mod_props a"
+      and act_consts_in_init_consts: "rat_impl.set_impl.action_consts \<subseteq> set init - set props"
 begin
 
 sublocale rat_imp':

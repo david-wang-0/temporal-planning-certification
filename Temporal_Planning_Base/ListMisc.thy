@@ -1,5 +1,5 @@
 theory ListMisc
-  imports "Automatic_Refinement.Misc"
+  imports "Automatic_Refinement.Misc" "List-Index.List_Index"
 begin
 
 locale filter_sorted_distinct_list =
@@ -276,4 +276,61 @@ next
   qed
   then show ?case by simp
 qed
+
+
+lemma map_of_zip_fst:
+  assumes "x \<in> set as"
+     and "length as = length bs"
+   shows "map_of (zip as bs) x = Some (bs ! (List_Index.index as x))"
+  using assms
+proof (induction as arbitrary: bs)
+  case Nil
+  then show ?case by auto
+next
+  case (Cons a as)
+  then obtain c cs where
+    bs[simp]: "bs =c#cs" by (cases bs, auto)
+  show ?case 
+  proof (cases "x = a")
+    case [simp]: True
+    hence "List_Index.index (a # as) x = 0" by auto
+    hence "bs ! (List_Index.index (a # as) x) = c" using nth_Cons_0 by simp
+    moreover
+    have "map_of (zip (a # as) bs) x = Some c" by auto
+    ultimately
+    show ?thesis by simp
+  next
+    case False
+    show ?thesis 
+      apply (subst bs)+
+      apply (subst zip_Cons_Cons)
+      apply (subst map_of_Cons_code(2))
+      using False Cons
+      by simp
+  qed
+qed
+
+lemma map_of_map_inj_on_fst: 
+  assumes "inj_on f ({x} \<union> (fst ` set xs))"
+    shows "map_of (map (\<lambda>(k, v). (f k, v)) xs) (f x) = map_of xs x"
+  using assms
+proof (induction xs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a xs)
+  obtain i j where
+    a: "a = (i, j)" by fastforce
+  have ix: "f i \<noteq> f x" if "i \<noteq> x" using Cons(2) that unfolding inj_on_def a by auto
+  show ?case 
+    unfolding a
+      apply (subst map_of_Cons_code)
+      apply (cases "i = x")
+       apply simp
+      apply (subst list.map)
+      apply (subst prod.case)+
+      apply (subst map_of_Cons_code)
+    using ix Cons.IH Cons(2) by auto
+qed
+
 end

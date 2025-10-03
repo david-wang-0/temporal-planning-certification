@@ -1,4 +1,5 @@
 session Temporal_Planning_Base in Temporal_Planning_Base = Munta_Model_Checker +
+    sessions "List-Index"
     theories
       Base
       ListMisc

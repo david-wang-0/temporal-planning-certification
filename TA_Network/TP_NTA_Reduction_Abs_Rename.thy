@@ -1617,37 +1617,6 @@ proof (subst inj_on_Un; intro conjI)
   qed
 qed
 
-lemma map_of_zip_fst:
-  assumes "x \<in> set as"
-     and "length as = length bs"
-   shows "map_of (zip as bs) x = Some (bs ! (List_Index.index as x))"
-  using assms
-proof (induction as arbitrary: bs)
-  case Nil
-  then show ?case by auto
-next
-  case (Cons a as)
-  then obtain c cs where
-    bs[simp]: "bs =c#cs" by (cases bs, auto)
-  show ?case 
-  proof (cases "x = a")
-    case [simp]: True
-    hence "List_Index.index (a # as) x = 0" by auto
-    hence "bs ! (List_Index.index (a # as) x) = c" using nth_Cons_0 by simp
-    moreover
-    have "map_of (zip (a # as) bs) x = Some c" by auto
-    ultimately
-    show ?thesis by simp
-  next
-    case False
-    show ?thesis 
-      apply (subst bs)+
-      apply (subst zip_Cons_Cons)
-      apply (subst map_of_Cons_code(2))
-      using False Cons
-      by simp
-  qed
-qed
 
 (* lemma map_of_zip_ran_distinct_inj:
   assumes dist: "distinct bs"

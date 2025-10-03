@@ -64,11 +64,12 @@ section \<open>Abstract definition of reduction\<close>
     Otherwise, it could be false and never explicitly set to false during action execution, and still not hold.
     
   *)
+
 locale tp_nta_reduction_spec = temp_planning_problem_list_impl_int
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
-  for init :: "('proposition::countable) list"
+  for init :: "'proposition list"
     and goal :: "'proposition list"
-    and at_start :: "('action::countable) \<Rightarrow> 'snap_action"
+    and at_start :: "'action \<Rightarrow> 'snap_action"
     and at_end :: "'action \<Rightarrow> 'snap_action"
     and over_all :: "'action \<Rightarrow> 'proposition list"
     and lower :: "'action \<Rightarrow> int lower_bound option"
@@ -82,6 +83,8 @@ locale tp_nta_reduction_spec = temp_planning_problem_list_impl_int
   fixes act_to_name :: "'action \<Rightarrow> String.literal"
     and prop_to_name :: "'proposition \<Rightarrow> String.literal"
 begin
+
+find_theorems name: "local*unique_name"
 
 (*   fixes prop_to_var prop_to_lock
     and acts_active effecting planning_lock
@@ -452,4 +455,32 @@ code_thms "action_defs.mutex_snap_action"
 
 value "a.mutex_effects_spec ([STR ''a''],[],[STR ''b'']) ([STR ''a''],[],[STR ''b''])"
  *)
+
+(* Implement this one.  *)
+locale tp_nta_reduction_spec' = temp_planning_problem_list_impl_int'
+  at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
+  for init :: "'proposition list"
+    and goal :: "'proposition list"
+    and at_start :: "'action \<Rightarrow> 'snap_action"
+    and at_end :: "'action \<Rightarrow> 'snap_action"
+    and over_all :: "'action \<Rightarrow> 'proposition list"
+    and lower :: "'action \<Rightarrow> int lower_bound option"
+    and upper :: "'action \<Rightarrow> int upper_bound option"
+    and pre :: "'snap_action \<Rightarrow> 'proposition list"
+    and adds :: "'snap_action \<Rightarrow> 'proposition list"
+    and dels :: "'snap_action \<Rightarrow> 'proposition list"
+    and \<epsilon> :: "int"
+    and props :: "'proposition list"
+    and actions :: "'action list"
+    and act_to_name :: "'action \<Rightarrow> String.literal"
+    and prop_to_name :: "'proposition \<Rightarrow> String.literal"
+begin
+sublocale reduction_ref_impl: tp_nta_reduction_spec 
+  "rat_impl.list_inter props init" 
+  "rat_impl.list_inter props goal"
+  AtStart AtEnd rat_impl.over_all_restr_list lower upper 
+  rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
+  \<epsilon> props actions act_to_name prop_to_name 
+  by unfold_locales
+end
 end

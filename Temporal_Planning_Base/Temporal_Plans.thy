@@ -89,6 +89,7 @@ definition snaps_disj_on where
   \<and> inj_on at_end S
   \<and> at_start ` S \<inter> at_end ` S = {}"
 
+
 lemma snaps_disj_on_subset: 
   assumes "snaps_disj_on A"
   and "B \<subseteq> A"
@@ -165,7 +166,7 @@ lemma at_start_inj_on_acts:
 lemma at_end_inj_on_acts:
   "inj_on at_end actions" 
   using snaps_disj_on_acts unfolding snaps_disj_on_def by auto
-lemma at_start_at_end_disj_on_acts:
+lemma end_not_start_on_acts:
   "at_start ` actions \<inter> at_end ` actions = {}" 
   using snaps_disj_on_acts snaps_disj_on_def by auto
   
