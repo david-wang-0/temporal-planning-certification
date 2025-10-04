@@ -22,6 +22,10 @@ schematic_goal map_of_all_vars_spec_exact:
   unfolding all_vars_spec_def Let_def fold_union'
   ..
 
+lemmas map_of_bounds_spec_exact = map_of_all_vars_spec_exact
+
+thm map_of_all_vars_spec_exact
+
 section \<open>Equivalence to temporal planning semantics\<close>
 
 definition lower_sem where
@@ -2552,7 +2556,9 @@ lemma map_of_bounds_spec_planning_lock:
   apply (rule map_add_find_right)
   apply (subst map_of_Cons_code)
   apply (subst if_not_P)
-  using variables_unique by auto 
+  apply (rule variables_unique)
+  by simp
+ 
 
 lemma map_prop_var_simp: "map (\<lambda>p. (prop_to_var p, 0, 1)) xs = map (\<lambda>(v, b). (v, id b)) (map (\<lambda>v. (v, 0, 1)) (map prop_to_var xs))"
   by auto
@@ -2599,7 +2605,7 @@ proof-
     apply (subst set_filter)
     apply (rule notI)
     apply (erule imageE)  
-    using variables_unique(6)[symmetric] by blast
+    using variables_unique by blast
 
   have 6: "map (\<lambda>p. (f p, 0, 1)) xs = map (\<lambda>x. (x, 0, 1)) (map f xs)" for f xs by simp
   show ?thesis 
@@ -2607,8 +2613,7 @@ proof-
     apply (subst p)
     apply (subst map_of_append)+
     apply (subst map_add_find_left)
-    using variables_unique(3,5)[where p = p]
-     apply (simp add: map_of_Cons_code)
+     apply (simp add: variables_unique map_of_Cons_code)
     apply (subst filter_append)
     apply (subst map_of_append)
     apply (subst map_add_find_left)
@@ -2657,7 +2662,7 @@ proof -
     apply (subst p)
     apply (subst map_of_append)+
     apply (subst map_add_find_left)
-     apply (simp add: variables_unique(2,4)[symmetric])
+     apply (simp add: variables_unique)
     apply (subst filter_append)
     apply (subst map_of_append)
     apply (subst map_add_find_right)
@@ -2711,7 +2716,7 @@ proof -
     apply (subst p)
     apply (subst map_of_append)+
     apply (subst map_add_find_left)
-     apply (simp add: variables_unique(3,5)[symmetric])
+     apply (simp add: variables_unique)
     apply (subst filter_append)
     apply (subst map_of_append)
     apply (subst map_add_find_left)
@@ -2754,7 +2759,7 @@ proof -
     apply (subst p)
     unfolding map_of_append
     apply (subst map_add_find_left)
-     apply (simp add: variables_unique(3,5)[symmetric])
+     apply (simp add: variables_unique)
     apply (subst filter_append)
     apply (subst map_of_append)
     apply (subst map_add_find_left)
@@ -2799,7 +2804,7 @@ proof -
     apply (subst p)
     unfolding map_of_append
     apply (subst map_add_find_left)
-     apply (simp add: variables_unique(3,5)[symmetric])
+     apply (simp add: variables_unique)
     apply (subst filter_append)
     apply (subst map_of_append)
     apply (subst map_add_find_left)
@@ -2834,7 +2839,7 @@ proof -
   show ?thesis 
     unfolding map_of_all_vars_spec_exact map_of_append p
     apply (subst map_add_find_left)
-     apply (simp add: variables_unique[symmetric])
+     apply (simp add: variables_unique)
     unfolding filter_append filter_map comp_def fst_conv map_of_append
     apply (rule map_add_find_right)
     apply (rule map_of_is_SomeI)
@@ -2878,7 +2883,7 @@ proof -
     apply (subst p)
     unfolding map_of_append
     apply (subst map_add_find_left)
-     apply (simp add: variables_unique(3,5)[symmetric])
+     apply (simp add: variables_unique)
     apply (subst filter_append)
     apply (subst map_of_append)
     apply (subst map_add_find_left)
@@ -2923,7 +2928,7 @@ proof -
     apply (subst p)
     unfolding map_of_append
     apply (subst map_add_find_left)
-     apply (simp add: variables_unique(3,5)[symmetric])
+     apply (simp add: variables_unique)
     apply (subst filter_append)
     apply (subst map_of_append)
     apply (subst map_add_find_left)
@@ -2958,7 +2963,7 @@ proof -
   show ?thesis 
     unfolding map_of_all_vars_spec_exact map_of_append p
     apply (subst map_add_find_left)
-     apply (simp add: variables_unique[symmetric])
+     apply (simp add: variables_unique)
     unfolding filter_append filter_map comp_def fst_conv map_of_append
     apply (rule map_add_find_right)
     apply (rule map_of_is_SomeI)
@@ -3002,7 +3007,7 @@ proof -
     apply (subst p)
     unfolding map_of_append
     apply (subst map_add_find_left)
-     apply (simp add: variables_unique(3,5)[symmetric])
+     apply (simp add: variables_unique)
     apply (subst filter_append)
     apply (subst map_of_append)
     apply (subst map_add_find_left)
@@ -3049,7 +3054,7 @@ proof -
     apply (subst p)
     unfolding map_of_append
     apply (subst map_add_find_left)
-     apply (simp add: variables_unique(3,5)[symmetric])
+     apply (simp add: variables_unique)
     apply (subst filter_append)
     apply (subst map_of_append)
     apply (subst map_add_find_left)
@@ -4250,12 +4255,24 @@ in start_end_invs n Lvc
   \<and> locked
   \<and> starting_loc"
 
-text \<open>rules\<close>
+text \<open>Rules\<close>
+
+
 
 lemma init_state_propsE: 
   assumes "init_state_props x"
       and "\<And>L v c. x = (L, v, c) \<Longrightarrow> bounded (map_of bounds_spec) v \<Longrightarrow> L = init_loc # map (\<lambda> x. off_loc) actions \<Longrightarrow> \<forall>x\<in>set (map fst bounds_spec). v x = Some 0 \<Longrightarrow> \<forall>x. x \<notin> set (map fst bounds_spec) \<longrightarrow> v x = None \<Longrightarrow> c = (\<lambda>_. 0) \<Longrightarrow> thesis"
       shows thesis 
+  using assms unfolding init_state_props_def by auto
+
+lemma init_state_props_dests: 
+  assumes "init_state_props Lvc"
+      and "Lvc = (L, v, c)"
+    shows "bounded (map_of bounds_spec) v"
+      "L = init_loc # map (\<lambda> x. off_loc) actions"
+      "x \<in>set (map fst bounds_spec) \<Longrightarrow> v x = Some 0"
+      "x \<notin> set (map fst bounds_spec) \<Longrightarrow> v x = None"
+      "c = (\<lambda>_. 0)"
   using assms unfolding init_state_props_def by auto
 
 lemma init_state_propsI:
@@ -4293,18 +4310,23 @@ lemma init_planning_state_propsI:
     "Lv_conds L v" 
     "v acts_active = Some 0" 
     "L = planning_loc # map (\<lambda> x. off_loc) actions"
-    "\<And>p. p\<in>set init \<Longrightarrow> v (prop_to_var p) = Some 1" 
+    "\<And>p. p \<in> set init \<Longrightarrow> v (prop_to_var p) = Some 1" 
     "\<And>x. x \<in> set (map fst bounds_spec) \<Longrightarrow> x \<notin> {planning_lock, acts_active} \<Longrightarrow> x \<notin> prop_to_var ` set init \<Longrightarrow> v x = Some 0" 
-    "\<And>x. x \<notin> set (map fst bounds_spec) \<Longrightarrow> v x = None" "c = (\<lambda>_. 0)"
+    "\<And>x. x \<notin> set (map fst bounds_spec) \<Longrightarrow> v x = None" 
+    "c = (\<lambda>_. 0)"
   shows "init_planning_state_props x"  
   using assms unfolding init_planning_state_props_def by auto
 
 
 lemma init_planning_state_props'E:
   assumes "init_planning_state_props' x"
-      and "\<And>L v c. x = (L, v, c) \<Longrightarrow> Lv_conds L v \<Longrightarrow> v acts_active = Some 0
-      \<Longrightarrow> L = planning_loc # map (\<lambda> x. off_loc) actions \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec) \<longrightarrow> v (prop_to_var p) = Some (prop_state (set init) p)) 
-      \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of bounds_spec) \<longrightarrow> v (prop_to_lock p) = Some 0) \<Longrightarrow> (\<forall>i<length actions. c (act_to_start_clock (actions ! i)) = 0) 
+      and "\<And>L v c. x = (L, v, c) 
+      \<Longrightarrow> Lv_conds L v 
+      \<Longrightarrow> v acts_active = Some 0
+      \<Longrightarrow> L = planning_loc # map (\<lambda> x. off_loc) actions 
+      \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec) \<longrightarrow> v (prop_to_var p) = Some (prop_state (set init) p)) 
+      \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of bounds_spec) \<longrightarrow> v (prop_to_lock p) = Some 0) 
+      \<Longrightarrow> (\<forall>i<length actions. c (act_to_start_clock (actions ! i)) = 0) 
       \<Longrightarrow> (\<forall>i<length actions. c (act_to_end_clock (actions ! i)) = 0) \<Longrightarrow> thesis"
     shows thesis 
   using assms unfolding init_planning_state_props'_def by auto
@@ -4325,8 +4347,8 @@ lemma init_planning_state_props'I:
 lemma goal_trans_preE:
   assumes "goal_trans_pre x"
       and "\<And>L v c. x = (L, v, c) \<Longrightarrow> Lv_conds L v \<Longrightarrow> v acts_active = Some 0 \<Longrightarrow> L = planning_loc # map (\<lambda> x. off_loc) actions 
-    \<Longrightarrow> \<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec) \<longrightarrow> v (prop_to_var p) = Some (prop_state S p)) 
-  \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of bounds_spec) \<longrightarrow> v (prop_to_lock p) = Some 0) \<Longrightarrow> thesis"
+      \<Longrightarrow> \<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec) \<longrightarrow> v (prop_to_var p) = Some (prop_state S p)) 
+    \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of bounds_spec) \<longrightarrow> v (prop_to_lock p) = Some 0) \<Longrightarrow> thesis"
     shows thesis 
   using assms by (auto simp: goal_trans_pre_def)
 
@@ -4474,7 +4496,7 @@ lemma happening_pre_post_delayI:
 lemma happening_postI:
   assumes "x = (L, v, c)"
   and "Lv_conds L v"
-    "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ t p)"
+    "\<And>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ t p)"
     "\<And>p. prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index t) p))"
     "v acts_active = Some (int (planning_sem.active_after (planning_sem.time_index t)))"
     "\<And>i. i < length actions \<Longrightarrow> planning_sem.closed_active_count (planning_sem.time_index t) (actions ! i) = 0 \<Longrightarrow> L ! Suc i = off_loc"
@@ -4944,11 +4966,11 @@ lemma instant_action_invs_maintained:
 lemma happening_post_instants_dests:
   assumes "happening_post_instants n (L, v, c)"
   shows "instant_action_invs n (L, v, c)"
-  "(\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec) \<longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_happ n p))"
+  "(p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_happ n p))"
   "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index n)))"
-  "(\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> c (act_to_start_clock (actions ! i)) = 0)"
-  "(\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> c (act_to_end_clock (actions ! i)) = 0)"
-  "(\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> L ! Suc i = off_loc)"  
+  "(i<length actions \<Longrightarrow> is_instant_index (planning_sem.time_index n) i \<Longrightarrow> c (act_to_start_clock (actions ! i)) = 0)"
+  "(i<length actions \<Longrightarrow> is_instant_index (planning_sem.time_index n) i \<Longrightarrow> c (act_to_end_clock (actions ! i)) = 0)"
+  "(i<length actions \<Longrightarrow> is_instant_index (planning_sem.time_index n) i \<Longrightarrow> L ! Suc i = off_loc)"  
   using assms unfolding happening_post_instants_def Let_def prod.case act_clock_pre_happ_spec_def by blast+
   
 lemma happening_post_instantsI:
@@ -4964,7 +4986,7 @@ lemma happening_post_instantsI:
 lemma happening_pre_start_starts_dests:
   assumes "happening_pre_start_starts i (L, v, c)"
   shows "start_start_invs i (L, v, c)"
-  "prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_happ i p)"
+  "p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_happ i p)"
   "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index i)))"
   "j<length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) j \<Longrightarrow>  act_clock_pre_happ_spec c act_to_start_clock (actions ! j) (planning_sem.time_index i)"
   "j<length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) j \<Longrightarrow>  L ! Suc j = off_loc"
@@ -4972,7 +4994,7 @@ lemma happening_pre_start_starts_dests:
 
 lemma happening_pre_start_startsI:
   assumes "start_start_invs i (L, v, c)"
-      "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_happ i p)"
+      "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_happ i p)"
       "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index i)))"
       "\<And>ia. ia < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) ia \<Longrightarrow> act_clock_pre_happ_spec c act_to_start_clock (actions ! ia) (planning_sem.time_index i)"
       "\<And>ia. ia < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) ia \<Longrightarrow> L ! Suc ia = off_loc"
@@ -4982,7 +5004,7 @@ lemma happening_pre_start_startsI:
 lemma start_start_invs_maintained:
   assumes "start_start_invs i (L, v, c)"
       and "happening_invs i (L, v, c) \<Longrightarrow> happening_invs i (L', v', c')"
-      and "(\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of bounds_spec) \<longrightarrow> v' (prop_to_lock p) = v (prop_to_lock p))"
+      and "(\<forall>p. p \<in> set props \<longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<longrightarrow> v' (prop_to_lock p) = v (prop_to_lock p))"
           "(\<forall>ia<length actions. is_ending_index (planning_sem.time_index i) ia \<longrightarrow> c' (act_to_end_clock (actions ! ia)) = c (act_to_end_clock (actions ! ia)))"
           "(\<forall>ia<length actions. is_instant_index (planning_sem.time_index i) ia \<longrightarrow> c' (act_to_start_clock (actions ! ia)) = c (act_to_start_clock (actions ! ia)))"
           "(\<forall>ia<length actions. is_instant_index (planning_sem.time_index i) ia \<longrightarrow> c' (act_to_end_clock (actions ! ia)) = c (act_to_end_clock (actions ! ia)))"
@@ -4993,7 +5015,7 @@ lemma start_start_invs_maintained:
 
 lemma start_start_invsI:
   assumes "happening_invs i (L, v, c)"
-      "\<And>p. prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
+      "\<And>p. p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
       "\<And>ia. ia < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) ia \<Longrightarrow> c (act_to_end_clock (actions ! ia)) = 0"
       "\<And>ia. ia < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) ia \<Longrightarrow> c (act_to_start_clock (actions ! ia)) = 0"
       "\<And>ia. ia < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) ia \<Longrightarrow> c (act_to_end_clock (actions ! ia)) = 0"
@@ -5005,7 +5027,7 @@ lemma start_start_invsI:
 lemma start_start_invs_dests:
   assumes "start_start_invs i (L, v, c)"
   shows "happening_invs i (L, v, c)"
-    "\<And>p. prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
     "\<And>k. k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = 0"
     "\<And>k. k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
     "\<And>k. k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = 0"
@@ -5015,7 +5037,7 @@ lemma start_start_invs_dests:
 
 lemma start_start_preI:
   assumes "start_start_invs i (L, v, c)"
-    "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (starting_part_updated_prop_state i n p)"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (starting_part_updated_prop_state i n p)"
     "v acts_active = Some (int (updated_active_before i n))"
     "\<And>k. k < n \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
     "\<And>k. n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> act_clock_pre_happ_spec c act_to_start_clock (actions ! k) (planning_sem.time_index i)"
@@ -5028,7 +5050,7 @@ lemma start_start_preI:
 lemma start_start_pre_dests:
   assumes "start_start_pre i n (L, v, c)"
   shows "start_start_invs i (L, v, c)"
-    "prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (starting_part_updated_prop_state i n p)"
+    "p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (starting_part_updated_prop_state i n p)"
     "v acts_active = Some (int (updated_active_before i n))"
     "k < n \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
     "n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> act_clock_pre_happ_spec c act_to_start_clock (actions ! k) (planning_sem.time_index i)"
@@ -5038,7 +5060,7 @@ lemma start_start_pre_dests:
 
 lemma start_start_postI:
   assumes "start_start_invs i (L, v, c)"
-    "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (starting_part_updated_prop_state i (Suc n) p)"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (starting_part_updated_prop_state i (Suc n) p)"
     "v acts_active = Some (int (updated_active_before i (Suc n)))"
     "\<And>k. k < Suc n \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
     "\<And>k. Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> act_clock_pre_happ_spec c act_to_start_clock (actions ! k) (planning_sem.time_index i)"
@@ -5051,7 +5073,7 @@ lemma start_start_postI:
 lemma start_start_post_dests:
   assumes "start_start_post i n (L, v, c)"
   shows "start_start_invs i (L, v, c)"
-    "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (starting_part_updated_prop_state i (Suc n) p)"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (starting_part_updated_prop_state i (Suc n) p)"
     "v acts_active = Some (int (updated_active_before i (Suc n)))"
     "\<And>k. k < Suc n \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
     "\<And>k. Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> act_clock_pre_happ_spec c act_to_start_clock (actions ! k) (planning_sem.time_index i)"
@@ -5061,7 +5083,7 @@ lemma start_start_post_dests:
 
 lemma happening_post_start_startsI:
   assumes "start_start_invs i (L, v, c)"
-    "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_start_happ i p)"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_start_happ i p)"
     "v acts_active = Some (int (planning_sem.active_during (planning_sem.time_index i)))"
     "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
     "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = starting_loc"
@@ -5072,7 +5094,7 @@ lemma happening_post_start_startsI:
 lemma happening_post_start_starts_dests:
   assumes "happening_post_start_starts i (L, v, c)"
   shows "start_start_invs i (L, v, c)"
-    "prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_start_happ i p)"
+    "p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_start_happ i p)"
     "v acts_active = Some (int (planning_sem.active_during (planning_sem.time_index i)))"
     "k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
     "k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = starting_loc"
@@ -5080,7 +5102,7 @@ lemma happening_post_start_starts_dests:
 
 lemma happening_pre_end_endsI:
   assumes "end_end_invs i (L, v, c)"
-    "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_start_happ i p)"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_start_happ i p)"
     "v acts_active = Some (int (planning_sem.active_during (planning_sem.time_index i)))"
     "\<And>k. k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = ending_loc"
   shows "happening_pre_end_ends i (L, v, c)"
@@ -5090,7 +5112,7 @@ lemma happening_pre_end_endsI:
 lemma happening_pre_end_ends_dests:
   assumes "happening_pre_end_ends i (L, v, c)"
   shows "end_end_invs i (L, v, c)"
-    "prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_start_happ i p)"
+    "p \<in> set props \<Longrightarrow>  prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_instant_start_happ i p)"
     "v acts_active = Some (int (planning_sem.active_during (planning_sem.time_index i)))"
     "k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = ending_loc"
   using assms unfolding happening_pre_end_ends_def Let_def prod.case
@@ -5098,7 +5120,7 @@ lemma happening_pre_end_ends_dests:
 
 lemma end_end_invsI:
   assumes "happening_invs i (L, v, c)"
-    "\<And>p. prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
     "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
     "\<And>k. k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = 0"
     "\<And>k. k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
@@ -5111,7 +5133,7 @@ lemma end_end_invsI:
 lemma end_end_invs_dests:
   assumes "end_end_invs i (L, v, c)"
   shows "happening_invs i (L, v, c)"
-    "prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
+    "p \<in> set props \<Longrightarrow>prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
     "k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
     "k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = 0"
     "k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
@@ -5123,7 +5145,7 @@ lemma end_end_invs_dests:
 lemma end_end_invs_maintained:
   assumes "end_end_invs i (L, v, c)"
     "happening_invs i (L, v, c) \<Longrightarrow> happening_invs i (L', v', c')"
-  and syn: "\<And>p. prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = v' (prop_to_lock p)"
+  and syn: "\<And>p. p \<in> set props \<Longrightarrow>prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = v' (prop_to_lock p)"
     "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = c'(act_to_start_clock (actions ! k))"
     "\<And>k. k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = c' (act_to_end_clock (actions ! k))"
     "\<And>k. k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = c' (act_to_start_clock (actions ! k))"
@@ -5138,7 +5160,7 @@ lemma end_end_invs_maintained:
 
 lemma end_end_preI:
   assumes "end_end_invs i (L, v, c)"
-    "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (ending_part_updated_prop_state i n p)"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (ending_part_updated_prop_state i n p)"
      "v acts_active = Some (int (updated_active_during i n))"
     "\<And>k. n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = ending_loc"
     "\<And>k. k < n \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = off_loc"
@@ -5148,7 +5170,7 @@ lemma end_end_preI:
 lemma end_end_pre_dests:
   assumes "end_end_pre i n (L, v, c)"
   shows "end_end_invs i (L, v, c)"
-    "prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (ending_part_updated_prop_state i n p)"
+    "p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (ending_part_updated_prop_state i n p)"
     "v acts_active = Some (int (updated_active_during i n))"
     "n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = ending_loc"
     "k < n \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = off_loc"
@@ -5156,7 +5178,7 @@ lemma end_end_pre_dests:
   
 lemma end_end_postI:
   assumes "end_end_invs i (L, v, c)"
-    "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (ending_part_updated_prop_state i (Suc n) p)"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (ending_part_updated_prop_state i (Suc n) p)"
     "v acts_active = Some (int (updated_active_during i (Suc n)))"
     "\<And>k. Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = ending_loc"
     "\<And>k. k < Suc n \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = off_loc"
@@ -5166,7 +5188,7 @@ lemma end_end_postI:
 lemma end_end_post_dests:
   assumes "end_end_post i n (L, v, c)"
   shows "end_end_invs i (L, v, c)"
-    "prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (ending_part_updated_prop_state i (Suc n) p)"
+    "p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (ending_part_updated_prop_state i (Suc n) p)"
     "v acts_active = Some (int (updated_active_during i (Suc n)))"
     "Suc n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = ending_loc"
     "k < Suc n \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = off_loc"
@@ -5174,7 +5196,7 @@ lemma end_end_post_dests:
 
 lemma happening_post_end_endsI:
   assumes "end_end_invs i (L, v, c)"
-    "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ i p)"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ i p)"
     "v acts_active = Some (int (planning_sem.active_during_minus_ended (planning_sem.time_index i)))"
     "\<And>k. k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = off_loc"
   shows "happening_post_end_ends i (L, v, c)"
@@ -5183,14 +5205,14 @@ lemma happening_post_end_endsI:
 lemma happening_post_end_ends_dests:
   assumes "happening_post_end_ends i (L, v, c)"
   shows "end_end_invs i (L, v, c)"
-    "prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ i p)"
+    "p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ i p)"
     "v acts_active = Some (int (planning_sem.active_during_minus_ended (planning_sem.time_index i)))"
     "k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = off_loc"
   using assms unfolding happening_post_end_ends_def Let_def prod.case by blast+
 
 lemma happening_pre_start_endsI:
   assumes "start_end_invs i (L, v, c)"
-    "\<And>p. prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
     "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = starting_loc"
   shows "happening_pre_start_ends i (L, v, c)"
   using assms unfolding happening_pre_start_ends_def Let_def prod.case by blast+
@@ -5198,13 +5220,13 @@ lemma happening_pre_start_endsI:
 lemma happening_pre_start_ends_dests:
   assumes "happening_pre_start_ends i (L, v, c)"
   shows "start_end_invs i (L, v, c)"
-    "prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
+    "p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index i) p))"
     "k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = starting_loc"
   using assms unfolding happening_pre_start_ends_def Let_def prod.case by blast+
 
 lemma start_end_invsI:
   assumes "happening_invs i (L, v, c)"
-    "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ i p)"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ i p)"
     "v acts_active = Some (int (planning_sem.active_after (planning_sem.time_index i)))"
     "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
     "\<And>k. k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = 0"
@@ -5218,7 +5240,7 @@ lemma start_end_invsI:
 lemma start_end_invs_dests:
   assumes "start_end_invs i (L, v, c)"
   shows "happening_invs i (L, v, c)"
-    "prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ i p)"
+    "p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ i p)"
     "v acts_active = Some (int (planning_sem.active_after (planning_sem.time_index i)))"
     "k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = 0"
     "k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = 0"
@@ -5232,7 +5254,7 @@ lemma start_end_invs_maintained:
   assumes prev: "start_end_invs i (L, v, c)"
       and happ: "happening_invs i (L, v, c) \<Longrightarrow> happening_invs i (L', v', c')"
       and syn: "v acts_active = v' acts_active"
-        "\<And>p. prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = v' (prop_to_var p)"
+        "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = v' (prop_to_var p)"
         "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = c' (act_to_start_clock (actions ! k))"
         "\<And>k. k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = c' (act_to_end_clock (actions ! k))"
         "\<And>k. k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = c' (act_to_start_clock (actions ! k))"
@@ -5256,14 +5278,14 @@ lemma start_end_preI:
 lemma start_end_pre_dests:
   assumes "start_end_pre i n (L, v, c)"
   shows "start_end_invs i (L, v, c)"
-    "prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (updated_locked_during i n p))"
+    "p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (updated_locked_during i n p))"
     "n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = starting_loc"
     "k < n \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = running_loc"
   using assms unfolding start_end_pre_def start_end_cond_def Let_def prod.case by blast+
 
 lemma start_end_postI:
   assumes "start_end_invs i (L, v, c)"
-    "\<And>p. prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (updated_locked_during i (Suc n) p))"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (updated_locked_during i (Suc n) p))"
     "\<And>k. (Suc n) \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = starting_loc"
     "\<And>k. k < (Suc n) \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = running_loc"
   shows "start_end_post i n (L, v, c)"
@@ -5272,14 +5294,14 @@ lemma start_end_postI:
 lemma start_end_post_dests:
   assumes "start_end_post i n (L, v, c)"
   shows "start_end_invs i (L, v, c)"
-    "prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (updated_locked_during i (Suc n) p))"
+    "p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (updated_locked_during i (Suc n) p))"
     "(Suc n) \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = starting_loc"
     "k < (Suc n) \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = running_loc"
   using assms unfolding start_end_post_def start_end_cond_def by auto
 
 lemma happening_post_start_endsI:
   assumes "start_end_invs i (L, v, c)"
-      "\<And>p. prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index i) p))"
+      "\<And>p. p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index i) p))"
       "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = running_loc"
   shows "happening_post_start_ends i (L, v, c)"
   using assms unfolding happening_post_start_ends_def Let_def prod.case by blast+
@@ -5287,13 +5309,13 @@ lemma happening_post_start_endsI:
 lemma happening_post_start_ends_dests:
   assumes "happening_post_start_ends i (L, v, c)"
   shows "start_end_invs i (L, v, c)"
-      "prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index i) p))"
+      "p \<in> set props \<Longrightarrow>p \<in> set props \<Longrightarrow>prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index i) p))"
       "k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = running_loc"
   using assms unfolding happening_post_start_ends_def Let_def prod.case by blast+
 
 lemma happening_post_inv_checkI:
   assumes "start_end_invs i (L, v, c)"
-    "\<And>p. prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index i) p))"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index i) p))"
     "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = running_loc"
   shows "happening_post_inv_check i (L, v, c)"
   using assms unfolding happening_post_inv_check_def by auto
@@ -5301,7 +5323,7 @@ lemma happening_post_inv_checkI:
 lemma happening_post_inv_check_dests:
   assumes "happening_post_inv_check i (L, v, c)"
     shows "start_end_invs i (L, v, c)"
-      "prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index i) p))"
+      "p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index i) p))"
       "k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = running_loc"
   using assms unfolding happening_post_inv_check_def Let_def prod.case by blast+
 
@@ -5327,9 +5349,6 @@ schematic_goal dom_map_of_bounds_spec_exact: "dom (map_of bounds_spec) = ?x"
   apply (subst set_init_vars_exact)
   ..
 
-lemma dom_map_of_bounds_spec_correct: 
-  "prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> p \<in> set props"
-  "prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> p \<in> set props"
 
 lemma initial_step_possible: "graph_impl.steps ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0]) \<and> init_planning_state_props' (last ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0]))"
 proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composable[where R = init_state_props and S = init_planning_state_props])
@@ -5377,24 +5396,37 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
           using variables_unique[symmetric] apply fast
           apply (rule notI)
           apply (erule imageE)
-          using inj_on_subset[OF variables_inj(2) init_in_props] 
+          using variables_unique init_in_props by fast
+        subgoal apply (intro strip, elim conjE) 
+          apply (rule init_planning_state_props_dests(5))
+              apply (assumption, rule HOL.refl)
+            apply (subst (asm) dom_map_of_conv_image_fst)
+          apply simp
+          using variables_unique apply fast
+          using variable_sets_unique init_in_props by presburger
+        subgoal using init_planning_state_props_dests by metis
+        using init_planning_state_props_dests by fast
+      done
+    done
   show "\<And>x. init_state_props x \<Longrightarrow> init_planning_state_props (main_auto_init_edge_effect x) \<and> graph_impl.steps [x, main_auto_init_edge_effect x]"
   proof -
     fix x
     assume a: "init_state_props x"
+    obtain L v c where
+      Lvc: "x = (L,v,c)" by (cases x, auto)
     have x: "init_planning_state_props (main_auto_init_edge_effect x)"
-      apply (rule init_state_propsE[OF a])
-      subgoal for L v c
-        apply (erule ssubst)
-        apply (rule init_planning_state_propsI)
-        unfolding main_auto_init_edge_effect_alt
+      apply (insert a)
+      apply (rule init_planning_state_propsI)
+      unfolding main_auto_init_edge_effect_alt Lvc
                apply (rule HOL.refl)
-        subgoal apply (rule Lv_condsI)
-             apply simp
-            apply simp
+      subgoal apply (rule Lv_condsI)
+        using init_state_props_dests apply fastforce
+        apply (rule nth_list_update_eq)
+        using init_state_props_dests apply fastforce
           subgoal apply (rule upds_map_bounded[where v = "v(planning_lock \<mapsto> 1, acts_active \<mapsto> 0)"])
               apply (rule single_upd_bounded)
-                 apply (erule single_upd_bounded)
+                 apply (rule single_upd_bounded)
+            using init_state_props_dests apply blast
                    apply (rule map_of_bounds_spec_planning_lock)
                   apply simp
                  apply simp
@@ -5406,44 +5438,31 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
               subgoal for x
                 apply (intro exI)
                 apply (intro conjI)
-                  apply (subst map_of_all_vars_spec_def)
-                  apply (subst map_add_find_left)
-                   apply force
-                  apply (subst map_add_find_left)
-                   apply (rule map_of_NoneI)
-                   apply force
-                  apply (subst map_of_determ[of _ _ "(0, 1)"])
-                    apply force
-                using init_props by auto
+                  apply (rule map_of_bounds_spec_init_goal)
+                by simp+
               done
             done
           apply (subst map_upds_apply_nontin)
-          by auto
-        subgoal by (subst map_upds_apply_nontin) auto
-             apply simp
-        subgoal apply (subst map_upds_apply_nontin) apply force 
-          unfolding set (map fst bounds_spec)_exact by simp
-        subgoal by (fastforce intro!: map_upds_with_map)
-        subgoal by (fastforce intro!: map_upds_with_map)
-        subgoal for x
-          apply (subst map_upds_apply_nontin)
-          subgoal apply rule
-            apply (frule set_mp[THEN in_set (map fst bounds_spec)I, rotated, of x])
-            using init_props by auto
+           apply (rule notI)
+          using variable_sets_unique apply simp
           apply (subst fun_upd_other)
-           defer
-           apply (subst fun_upd_other)
-            defer
-            apply simp
-          unfolding set (map fst bounds_spec)_exact by blast+
-        subgoal for x 
+           apply (rule variables_unique)
+          by simp
+        subgoal by (simp add: variables_unique variable_sets_unique)
+        subgoal using init_state_props_dests by fastforce
+        subgoal by (fastforce intro!: map_upds_with_map)
+        subgoal using init_state_props_dests by (fastforce intro!: map_upds_with_map)
+        subgoal for p
           apply (subst map_upds_apply_nontin)
-          subgoal apply rule
-            apply (frule set_mp[THEN in_set (map fst bounds_spec)I, rotated, of x])
-            using init_props by auto
-          using set (map fst bounds_spec)_exact by auto
-        by auto
-      done
+          subgoal apply (rule notI)
+            apply (subst (asm) set_init_vars_exact) using init_in_props by auto
+          apply (subst fun_upd_other)
+           apply (subst (asm) set_init_vars_exact) apply blast
+          apply (subst fun_upd_other)
+           apply (subst (asm) set_init_vars_exact) apply blast
+          using init_state_props_dests by simp
+        subgoal using init_state_props_dests by simp
+        done
     moreover
     have "graph_impl.steps [x, main_auto_init_edge_effect x]"
     proof (rule single_step_intro)
@@ -5481,13 +5500,11 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
           using no_committed conv_committed apply force
           subgoal apply (insert a)
             unfolding Lvc
-            apply (erule init_state_propsE)
-            apply simp
               apply (subst refl_True[symmetric])
               apply (rule check_bexp_is_val.intros)
-               apply (rule check_bexp_is_val.intros)
-               apply (subst (asm) set (map fst bounds_spec)_exact)
-               apply simp
+             apply (rule check_bexp_is_val.intros)
+             apply (rule init_state_props_dests, simp, simp)
+            using set_init_vars_exact apply blast
             by (rule check_bexp_is_val.intros)
                  apply simp
           apply (rule allI impI)
@@ -5539,7 +5556,7 @@ lemma apply_instant_actions_alt: "ext_seq (apply_instant_actions xs) =
   by (induction xs) auto
 
 
-schematic_goal action_auto_urg: "urgent ((automaton_of \<circ> conv_automaton \<circ> snd \<circ> snd) (action_to_automaton_spec a)) = ?x"
+schematic_goal action_auto_urg: "urgent ((automaton_of \<circ> conv_automaton) (action_to_automaton_spec a)) = ?x"
   unfolding urgent_def action_to_automaton_spec_def Let_def comp_apply fst_conv snd_conv conv_automaton_def prod.case automaton_of_def list.set ..
 
 lemma in_setE:
@@ -5629,17 +5646,19 @@ proof -
 
 
     have v_prop_to_lock: "v (prop_to_lock p) = Some (int (partially_updated_locked_before (planning_sem.time_index i) p (end_indices ! j)))"
-      if p_in_vars: "prop_to_lock p \<in> dom (map_of bounds_spec)" for p
+      if p_in_vars: "p \<in> set props" "prop_to_lock p \<in> dom (map_of bounds_spec)" for p
       apply (insert esp)
       unfolding s
       apply (drule end_start_preD)
       using p_in_vars by simp
-  
 
-    define v' where "v' = (v(Effecting \<mapsto> plus_int (the (v Effecting)) 1, map prop_to_lock (over_all (actions ! (end_indices ! j))) [\<mapsto>] map (\<lambda>x. (the \<circ> v) x - 1) (map prop_to_lock (over_all (actions ! (end_indices ! j))))))"
+    have over_all_in_props: "set (over_all (actions ! (end_indices ! j))) \<subseteq> set props"
+      using acts_ref_props planning_sem.act_ref_props_def planning_sem.snap_ref_props_def eij_in_act by auto
+
+    define v' where "v' = (v(map prop_to_lock (over_all (actions ! (end_indices ! j))) [\<mapsto>] map (\<lambda>x. (the \<circ> v) x - 1) (map prop_to_lock (over_all (actions ! (end_indices ! j))))))"
     
     have variables_locked_after:"v' (prop_to_lock p) = Some (int (partially_updated_locked_before (planning_sem.time_index i) p (Suc (end_indices ! j))))" 
-      if p_in_vars: "prop_to_lock p \<in> dom (map_of bounds_spec)" 
+      if p_in_vars: "p \<in> set props" "prop_to_lock p \<in> dom (map_of bounds_spec)" 
       for p
     proof (cases "p \<in> set (over_all (actions ! (end_indices ! j)))")
       case True
@@ -5647,10 +5666,12 @@ proof -
           unfolding v'_def
           apply (subst distinct_map_upds)
           using True eij_in_act apply simp
-          apply (rule distinct_inj_map)
+          apply (rule distinct_inj_on_map)
           apply (rule distinct_over_all[THEN bspec[of _ _ "actions ! (end_indices ! j)"]])
           using eij_in_act apply simp
-          unfolding inj_def apply simp
+           apply (rule inj_on_subset)
+          apply (rule variables_inj)
+          using eij_in_act acts_ref_props unfolding planning_sem.act_ref_props_def apply simp
           unfolding comp_def by simp
       
       have pudp_Suc: "partially_updated_locked_before (planning_sem.time_index i) p (Suc (end_indices ! j)) = partially_updated_locked_before (planning_sem.time_index i) p (end_indices ! j) - 1"
@@ -5681,8 +5702,8 @@ proof -
         apply (subst v'_prop_to_lock)
         apply (subst pudp_Suc)
         apply (subst v_prop_to_lock[OF p_in_vars])
-        using partially_updated_locked_before_pos True eij_in_act eij_ending i
-        by fastforce
+        using partially_updated_locked_before_pos[OF True eij_in_act(1) eij_ending] i
+        by auto
     next
       case False
       have "partially_updated_locked_before (planning_sem.time_index i) p (Suc (end_indices ! j)) = partially_updated_locked_before (planning_sem.time_index i) p (end_indices ! j)" 
@@ -5691,71 +5712,57 @@ proof -
       have "v' (prop_to_lock p) = v (prop_to_lock p)"
         unfolding v'_def
         apply (subst map_upds_apply_nontin)
-        using False by auto
+        using False variable_sets_unique p_in_vars over_all_in_props by simp+
       ultimately
       show ?thesis using v_prop_to_lock p_in_vars by presburger
     qed
 
-    have vE: "(v Effecting) = Some (card (ending_actions_before i (end_indices ! j)))" using esp s end_start_pre_dests by auto
     
     have bounded_after: "Simple_Network_Language.bounded (map_of bounds_spec) v'"
     proof (rule updated_bounded[OF _ _ v'_def], goal_cases)
       case 1
-      have x: "Simple_Network_Language.bounded (map_of bounds_spec) v"
-        using esp s 
+      show ?case using esp s 
         by (auto intro: esp Lv_conds_dests happening_invs_dests end_start_invs_dests end_start_pre_dests)
-      have vE: "(v Effecting) = Some (card (ending_actions_before i (end_indices ! j)))" using esp s end_start_pre_dests by auto
-      show ?case 
-        apply (rule single_upd_bounded)
-           apply (rule x)
-          apply (rule map_of_bounds_spec_Effecting)
-        unfolding vE
-        apply simp
-        using ending_actions_before_less_if_ending i eij_ending eij_in_act by fastforce
     next
       case 2
       then show ?case by simp
     next
       case 3
-      then show ?case 
+      show ?case 
+        apply (insert 3)
         apply (rule ballI)
       subgoal for x
         unfolding set_map
         apply (erule imageE)
         subgoal for p
           apply (erule ssubst[of x])
+          apply (frule set_mp[OF over_all_in_props])
           apply (intro exI conjI)
             apply (rule map_of_bounds_spec_action_inv[OF eij_in_act(2)])
-          using variables_locked_after map_of_bounds_spec_action_inv[OF eij_in_act(2)] partially_updated_locked_before_ran by fastforce+
+          using variables_locked_after map_of_bounds_spec_action_inv[OF eij_in_act(2)] 
+            partially_updated_locked_before_ran by fastforce+
         done
       done
   qed 
  (* is_upd_make_updI *)
-  have is_upds: "is_upds v ((Effecting, binop plus_int (var Effecting) (exp.const 1)) # map (inc_prop_lock_ab (- 1)) (over_all (actions ! (end_indices ! j))))
-     (v(Effecting \<mapsto> plus_int (the (v Effecting)) 1, map prop_to_lock (over_all (actions ! (end_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) (- 1)) (map prop_to_lock (over_all (actions ! (end_indices ! j))))))"
-  proof (rule is_upds.intros)
-    show "is_upd v (Effecting, binop plus_int (var Effecting) (exp.const 1)) (v(Effecting \<mapsto> the (v Effecting) + 1))"
-      unfolding is_upd_def 
-      using vE 
-      by (simp add: is_val_simps)
-    show "is_upds (v(Effecting \<mapsto> plus_int (the (v Effecting)) 1)) (map (inc_prop_lock_ab (- 1)) (over_all (actions ! (end_indices ! j))))
-     (v(Effecting \<mapsto> plus_int (the (v Effecting)) 1, map prop_to_lock (over_all (actions ! (end_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) (- 1)) (map prop_to_lock (over_all (actions ! (end_indices ! j))))))"
-      apply (rule is_upds_inc_vars)
-        apply (rule subsetI)
-        apply (frule map_of_bounds_spec_action_inv[rotated])
-         apply (rule eij_in_act)
-      using esp s end_start_pre_dests(3) apply fastforce
-        apply (rule distinct_inj_map)
-      using distinct_over_all eij_in_act apply blast
-      using inj_def apply blast
-       apply (subst inc_prop_lock_ab_def)
+  have is_upds: "is_upds v (map (inc_prop_lock_ab (- 1)) (over_all (actions ! (end_indices ! j))))
+     (v(map prop_to_lock (over_all (actions ! (end_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) (- 1)) (map prop_to_lock (over_all (actions ! (end_indices ! j))))))"
+    apply (rule is_upds_inc_vars)
+       prefer 3
+       apply (subst inc_prop_lock_ab_def) 
        apply (subst map_map[symmetric])
-      apply (rule HOL.refl)
-      unfolding map_map comp_def
-      apply (subst fun_upd_other)
-      by auto
-  qed
-
+       apply (rule HOL.refl)
+       apply (rule subsetI)
+      apply (frule map_of_bounds_spec_action_inv[rotated])
+       apply (rule eij_in_act)
+    subgoal for x
+      unfolding set_map
+      apply (erule imageE)
+      using esp[simplified s, THEN end_start_pre_dests(2)] over_all_in_props by blast
+     apply (rule distinct_inj_on_map)
+    using distinct_over_all eij_in_act apply blast
+    using inj_on_subset over_all_in_props variables_inj apply blast
+    unfolding comp_def map_map by blast
   have plus_minus_rule: "(\<lambda>x. plus_int x (-1)) = (\<lambda>x. x - 1)" by auto
 
     show ?case
@@ -5774,11 +5781,11 @@ proof -
                 apply (erule Lv_conds_maintained)
                    apply simp
                   apply simp
-                 apply (subst map_upds_apply_nontin, force)+
+                 apply (subst map_upds_apply_nontin, force simp: variables_unique)+
                 apply simp
                 using bounded_after
                 unfolding v'_def by auto
-              subgoal by simp
+              subgoal using clocks_unique eij_in_act try0
               subgoal
                 apply (intro allI impI)
                 apply (frule index_case_disj)
@@ -6109,7 +6116,7 @@ proof -
       { fix p
         assume p: "p \<in> set (pre (at_start (actions ! (instant_indices ! j))))"
         moreover
-        have "prop_to_var p \<in> dom (map_of bounds_spec)" using map_of_bounds_spec_action_start_pre iij_in_act p by auto
+        have "p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec)" using map_of_bounds_spec_action_start_pre iij_in_act p by auto
         ultimately
         have "v (prop_to_var p) = Some 1" using pre_val_in_instant_part_updated_prop_state_if i  prop_state iij_ran iij_instant[simplified planning_sem.is_instant_action_def] by metis 
         hence "Simple_Expressions.check_bexp v (is_prop_ab 1 p) True" 
@@ -6146,7 +6153,7 @@ proof -
       { fix p
         assume p: "p \<in> set (pre (at_end (actions ! (instant_indices ! j))))"
         moreover
-        have "prop_to_var p \<in> dom (map_of bounds_spec)" using  p iij_in_act p map_of_bounds_spec_action_end_pre by auto
+        have "p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec)" using  p iij_in_act p map_of_bounds_spec_action_end_pre by auto
         ultimately
         have "v' (prop_to_var p) = Some 1" using pre_val_in_instant_intermediate_prop_state_if[OF i _ iij_instant_index] using iij_ran p prop_state by auto
     
@@ -6950,7 +6957,7 @@ proof -
       proof -
         { fix p
           assume p: "p \<in> set (pre (at_start (actions ! (start_indices ! j))))"
-          have  "prop_to_var p \<in> dom (map_of bounds_spec)" using  p sij_in_act p map_of_bounds_spec_action_start_pre by auto
+          have  "p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec)" using  p sij_in_act p map_of_bounds_spec_action_start_pre by auto
           hence "v' (prop_to_var p) = Some (starting_part_updated_prop_state i (start_indices ! j) p)" using prop_state * by auto
           moreover
           have "starting_part_updated_prop_state i (start_indices ! j) p = 1" 
@@ -7432,7 +7439,7 @@ proof -
       proof -
         { fix p
           assume p: "p \<in> set (pre (at_end (actions ! (end_indices ! j))))"
-          have  "prop_to_var p \<in> dom (map_of bounds_spec)" using  p eij_in_act p map_of_bounds_spec_action_end_pre by auto
+          have  "p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec)" using  p eij_in_act p map_of_bounds_spec_action_end_pre by auto
           hence "v' (prop_to_var p) = Some (ending_part_updated_prop_state i (end_indices ! j) p)" using prop_state * by auto
           moreover
           have "ending_part_updated_prop_state i (end_indices ! j) p = 1" 

@@ -41,17 +41,35 @@ begin
 
 lemma variables_unique: 
     "acts_active \<noteq> planning_lock"
+    "planning_lock \<noteq> acts_active"
     "acts_active \<noteq> prop_to_lock p"
+    "prop_to_lock p \<noteq> acts_active"
     "acts_active \<noteq> prop_to_var p"
+    "prop_to_var p \<noteq> acts_active"
     "planning_lock \<noteq> prop_to_lock p"
+    "prop_to_lock p \<noteq> planning_lock"
     "planning_lock \<noteq> prop_to_var p"
+    "prop_to_var p \<noteq> planning_lock"
     "prop_to_lock p \<noteq> prop_to_var q"
+    "prop_to_var p \<noteq> prop_to_lock q"
     "p \<in> set props \<Longrightarrow> q \<in> set props \<Longrightarrow> p \<noteq> q \<Longrightarrow> prop_to_var p \<noteq> prop_to_var q"
     "p \<in> set props \<Longrightarrow> q \<in> set props \<Longrightarrow> prop_to_var p = prop_to_var q \<Longrightarrow> p = q"
     "p \<in> set props \<Longrightarrow> q \<in> set props \<Longrightarrow> p \<noteq> q \<Longrightarrow> prop_to_lock p \<noteq> prop_to_lock q"
     "p \<in> set props \<Longrightarrow> q \<in> set props \<Longrightarrow> prop_to_lock p = prop_to_lock q \<Longrightarrow> p = q"
   unfolding prop_to_var_def prop_to_lock_def acts_active_def planning_lock_def
   by ((rule notI)?, (subst (asm) String.add_literal_code String.Literal_eq_iff)+, (use prop_names.names_unique in blast))+
+
+
+lemma variable_sets_unique: 
+  "acts_active \<notin> prop_to_lock ` S"
+  "acts_active \<notin> prop_to_var ` S"
+  "planning_lock \<notin> prop_to_lock ` S"
+  "planning_lock \<notin> prop_to_var ` S"
+  "p \<in> set props \<Longrightarrow> S \<subseteq> set props \<Longrightarrow> prop_to_lock p \<notin> prop_to_var ` S"
+  "p \<in> set props \<Longrightarrow> S \<subseteq> set props \<Longrightarrow> p \<notin> S \<Longrightarrow> prop_to_lock p \<notin> prop_to_lock ` S"
+  "p \<in> set props \<Longrightarrow> S \<subseteq> set props \<Longrightarrow> prop_to_var p \<notin> prop_to_lock ` S"
+  "p \<in> set props \<Longrightarrow> S \<subseteq> set props \<Longrightarrow> p \<notin> S \<Longrightarrow> prop_to_var p \<notin> prop_to_var ` S"
+  using variables_unique by blast+
 
 lemma variables_inj: 
   "inj_on prop_to_var (set props)"
@@ -60,14 +78,24 @@ lemma variables_inj:
 
 lemma clocks_unique:
     "urge_clock \<noteq> act_to_start_clock a"
+    "act_to_start_clock a \<noteq> urge_clock"
     "urge_clock \<noteq> act_to_end_clock a"
+    "act_to_end_clock a \<noteq> urge_clock"
     "act_to_start_clock a \<noteq> act_to_end_clock b"
+    "act_to_end_clock a \<noteq> act_to_start_clock b"
     "a \<in> set actions \<Longrightarrow> b \<in> set actions \<Longrightarrow> a \<noteq> b \<Longrightarrow> act_to_start_clock a \<noteq> act_to_start_clock b"
     "a \<in> set actions \<Longrightarrow> b \<in> set actions \<Longrightarrow> act_to_start_clock a = act_to_start_clock b \<Longrightarrow> a = b"
     "a \<in> set actions \<Longrightarrow> b \<in> set actions \<Longrightarrow> a \<noteq> b \<Longrightarrow> act_to_end_clock a \<noteq> act_to_end_clock b"
     "a \<in> set actions \<Longrightarrow> b \<in> set actions \<Longrightarrow> act_to_end_clock a = act_to_end_clock b \<Longrightarrow> a = b"
   unfolding urge_clock_def act_to_start_clock_def act_to_end_clock_def
   by ((rule notI)?, (subst (asm) String.add_literal_code String.Literal_eq_iff)+, (use action_names.names_unique in blast))+
+
+lemma clock_sets_unique:
+  "urge_clock \<notin> act_to_start_clock ` S"
+  "urge_clock \<notin> act_to_end_clock ` S"
+  "a \<in> set actions \<Longrightarrow> S \<subseteq> set actions \<Longrightarrow> act_to_start_clock a \<notin> act_to_end_clock ` S"
+  "a \<in> set actions \<Longrightarrow> S \<subseteq> set actions \<Longrightarrow> act_to_end_clock a \<notin> act_to_start_clock ` S"
+  using clocks_unique by blast+
 
 lemma clock_cons_unique:
   "act_to_start_clock \<noteq> act_to_end_clock" unfolding act_to_start_clock_def act_to_end_clock_def 
