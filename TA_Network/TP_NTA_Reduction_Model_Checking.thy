@@ -39,6 +39,8 @@ locale tp_nta_reduction_model_checking = tp_nta_reduction_spec
     and prop_to_name :: "'proposition \<Rightarrow> String.literal"
 begin
 
+lemma 
+
 lemma variables_unique: 
     "acts_active \<noteq> planning_lock"
     "planning_lock \<noteq> acts_active"
@@ -69,7 +71,15 @@ lemma variable_sets_unique:
   "p \<in> set props \<Longrightarrow> S \<subseteq> set props \<Longrightarrow> p \<notin> S \<Longrightarrow> prop_to_lock p \<notin> prop_to_lock ` S"
   "p \<in> set props \<Longrightarrow> S \<subseteq> set props \<Longrightarrow> prop_to_var p \<notin> prop_to_lock ` S"
   "p \<in> set props \<Longrightarrow> S \<subseteq> set props \<Longrightarrow> p \<notin> S \<Longrightarrow> prop_to_var p \<notin> prop_to_var ` S"
-  using variables_unique by blast+
+  "acts_active \<notin> set (map prop_to_lock  L)"
+  "acts_active \<notin> set (map prop_to_var  L)"
+  "planning_lock \<notin> set (map prop_to_lock  L)"
+  "planning_lock \<notin> set (map prop_to_var  L)"
+  "p \<in> set props \<Longrightarrow> set L \<subseteq> set props \<Longrightarrow> prop_to_lock p \<notin> set (map prop_to_var  L)"
+  "p \<in> set props \<Longrightarrow> set L \<subseteq> set props \<Longrightarrow> p \<notin> set L \<Longrightarrow> prop_to_lock p \<notin> set (map prop_to_lock  L)"
+  "p \<in> set props \<Longrightarrow> set L \<subseteq> set props \<Longrightarrow> prop_to_var p \<notin> set (map prop_to_lock  L)"
+  "p \<in> set props \<Longrightarrow> set L \<subseteq> set props \<Longrightarrow> p \<notin> set L \<Longrightarrow> prop_to_var p \<notin> set (map prop_to_var L)"
+  using variables_unique unfolding set_map by blast+
 
 lemma variables_inj: 
   "inj_on prop_to_var (set props)"

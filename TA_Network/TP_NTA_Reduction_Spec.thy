@@ -418,6 +418,9 @@ definition "formula_spec::(nat, nat, String.literal, int) Simple_Network_Languag
 definition "init_vars_spec::(String.literal \<times> int) list \<equiv> map (map_prod id fst) all_vars_spec"
 definition "init_locs_spec::nat list \<equiv> init_loc # map (\<lambda>x. off_loc) actions"
 
+lemma length_automata_spec: "length automata_spec = Suc (length actions)"
+  using timed_automaton_net_spec_def by auto
+
 
 (* broadcast bounds' renum_acts renum_vars renum_clocks renum_states automata urge \<Phi> s\<^sub>0 L\<^sub>0 *)
 (* 
