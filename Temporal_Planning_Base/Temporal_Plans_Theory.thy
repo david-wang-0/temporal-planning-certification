@@ -14,8 +14,8 @@ lemma at_start_of_act_in_happ_seq_exD:
       by blast
     hence  "\<exists>(a', t, d) \<in> ran \<pi>. at_start a' = at_start a \<and> s = t" 
       using a_in_actions acts_in_prob
-      using at_start_inj_on_acts at_start_at_end_disj_on_acts 
-      unfolding inj_on_def by blast
+      using at_start_inj_on_acts snaps_disj_on_acts 
+      unfolding inj_on_def snaps_disj_on_def by blast
     moreover
     have "\<forall>(a', t, d) \<in> ran \<pi>. at_start a = at_start a' \<longrightarrow> a = a'" 
       using a_in_actions acts_in_prob
@@ -51,15 +51,15 @@ lemma at_start_of_act_in_happ_seq_exD:
         using a_in_actions unfolding plan_actions_def by auto
       thus ?thesis 
         using a_in_actions acts_in_prob
-        using at_start_at_end_disj_on_acts  by blast
+        using snaps_disj_on_acts unfolding snaps_disj_on_def  by blast
     next
       case 2
       hence  "\<exists>a' t d. (s, at_end a) = (t + d, at_end a') \<and> (a', t, d) \<in> ran \<pi> \<and> a' \<in> plan_actions" 
         using a_in_actions unfolding plan_actions_def by blast
-      hence "\<exists>t d. (a, t, d) \<in> ran \<pi> \<and> s = t + d" 
-        using a_in_actions acts_in_prob
-        using at_start_at_end_disj_on_acts at_end_inj_on_acts
-        unfolding inj_on_def by blast
+      then obtain a' t d where
+        "(s, at_end a) = (t + d, at_end a')" "(a', t, d) \<in> ran \<pi>" "a' \<in> plan_actions" by blast
+      hence "(a, t, d) \<in> ran \<pi> \<and> s = t + d"
+        using a_in_actions at_end_inj_on_acts acts_in_prob unfolding inj_on_def by blast
       thus ?thesis using some_eq_ex[where P = "\<lambda>(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t + d"] pair_def by auto
     qed
     moreover
@@ -245,8 +245,8 @@ proof -
     next
       case 2
       hence "\<exists>a' t d. (s, at_start a) = (t + d, at_end a') \<and> (a', t, d) \<in> ran \<pi>" by auto
-      with s(1) at_start_at_end_disj_on_acts
-      have False using pap unfolding plan_actions_in_problem_def plan_actions_def by fast
+      with s(1) 
+      have False using pap snaps_disj_on_acts unfolding snaps_disj_on_def plan_actions_in_problem_def plan_actions_def by fast
       thus ?thesis ..
     qed
     then obtain d where

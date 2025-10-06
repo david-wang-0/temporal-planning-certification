@@ -16,9 +16,8 @@ session TP_NTA_Reduction in TA_Network =
     theories
       NTA_Temp_Planning_Sem
       TP_NTA_Reduction_Spec
-      TP_NTA_Reduction_Renaming
-      TP_NTA_Reduction_Abs_Rename
-      TP_NTA_Reduction_Abs_Rename_Correctness
+      TP_NTA_Reduction_Model_Checking
+      TP_NTA_Reduction_Correctness
     document_files (in "..")
       "document/root.bib"
       "document/root.tex"

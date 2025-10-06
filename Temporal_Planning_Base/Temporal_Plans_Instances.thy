@@ -61,7 +61,6 @@ sublocale prop_set_impl:
     unfolding over_all_restr_def pre_imp_restr_def
     by simp
   done
-
 end
 
 locale temp_plan_mutex_nso_unique_snaps_dg0 =
@@ -203,6 +202,7 @@ sublocale restr_to_props_valid: temp_plan_for_problem_impl AtStart AtEnd "restr_
   unfolding act_mod_props_def snap_mod_props_def
   unfolding pre_imp_def add_imp_def del_imp_def 
   by simp
+
 end
 
 locale temp_planning_problem_list_defs =
@@ -334,6 +334,7 @@ sublocale prob_list_impl:
     unfolding comp_def set_filter
     by auto
   done
+
 end
 
 locale temp_plan_for_problem_list_defs =
@@ -427,14 +428,14 @@ locale temp_plan_for_problem_list_impl' =
       and nso: "no_self_overlap"
       and pap: "plan_actions_in_problem"
 begin
-
-sublocale valid_temp_plan at_start at_end "set o over_all" lower upper
+sublocale valid_plan: valid_temp_plan at_start at_end "set o over_all" lower upper
   "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> \<pi> 
   apply unfold_locales using vp by auto
 
+
 (* We first replace snap actions with annotated actions*)
 sublocale unique_ref: temp_plan_unique_snaps_nso_dg0 AtStart AtEnd "set o over_all" lower upper 
-  pre_imp add_imp del_imp "set init" "set goal"
+  set_impl.pre_imp set_impl.add_imp set_impl.del_imp "set init" "set goal"
   apply unfold_locales 
   unfolding prob_list_impl.set_impl.snaps_disj_on_def using nso 
   by (blast intro: inj_onI)+
@@ -487,7 +488,6 @@ sublocale valid_plan_valid_2: plan_validity_equivalence AtStart AtEnd
   unfolding over_all_restr_list_def unfolding set_impl.over_all_restr_def
   by auto
 
-
 sublocale valid_plan_ref_valid_2: plan_validity_ref AtStart AtEnd 
   "restr_to_props.over_all_restr" lower upper "restr_to_props.pre_restr" set_impl.add_imp set_impl.del_imp  "set init \<inter> set props"
   "set goal \<inter> set props" \<epsilon> \<pi> AtStart AtEnd "set o over_all_restr_list" "set o pre_imp_restr_list" 
@@ -500,6 +500,7 @@ sublocale restr_to_props_valid: temp_plan_for_problem_list_impl AtStart AtEnd ov
   apply unfold_locales 
   using valid_plan_ref_valid_2.valid_plan2.vp
   using nso pap by auto
+
 end
 
 (* global_interpretation temp_planning_problem_list_defs "fst" "fst o snd" "snd o snd"

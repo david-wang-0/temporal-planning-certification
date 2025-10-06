@@ -4435,7 +4435,6 @@ lemma happening_pre_pre_delayI:
     "(\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ n p))"
     "(\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of bounds_spec) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index n) p)))"
     "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index n)))"
-    "v Effecting = Some 0"
     "(\<forall>i<length actions. planning_sem.open_active_count (planning_sem.time_index n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = off_loc)"
     "(\<forall>i<length actions. planning_sem.open_active_count (planning_sem.time_index n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = running_loc)" 
     "(\<forall>i<length actions. act_clock_pre_happ_spec (c \<oplus> get_delay n) act_to_start_clock (actions ! i) (planning_sem.time_index n))"
@@ -4507,8 +4506,8 @@ lemma happening_pre_post_delayI:
 lemma happening_postI:
   assumes "x = (L, v, c)"
   and "Lv_conds L v"
-    "\<And>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ t p)"
-    "\<And>p. prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index t) p))"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ t p)"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index t) p))"
     "v acts_active = Some (int (planning_sem.active_after (planning_sem.time_index t)))"
     "\<And>i. i < length actions \<Longrightarrow> planning_sem.closed_active_count (planning_sem.time_index t) (actions ! i) = 0 \<Longrightarrow> L ! Suc i = off_loc"
     "\<And>i. i < length actions \<Longrightarrow> planning_sem.closed_active_count (planning_sem.time_index t) (actions ! i) = 1 \<Longrightarrow> L ! Suc i = running_loc"
@@ -5280,7 +5279,7 @@ lemma start_end_invs_maintained:
 
 lemma start_end_preI:
   assumes "start_end_invs i (L, v, c)"
-    "\<And>p. prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (updated_locked_during i n p))"
+    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of bounds_spec) \<Longrightarrow> v (prop_to_lock p) = Some (int (updated_locked_during i n p))"
     "\<And>k. n \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = starting_loc"
     "\<And>k. k < n \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = running_loc"
   shows "start_end_pre i n (L, v, c)"
@@ -6881,6 +6880,7 @@ proof -
   have nat_leE: thesis if  "x \<le> y" "x < y \<Longrightarrow> thesis" "x = y \<Longrightarrow> thesis"  for x y::nat and thesis using that by linarith
 
 
+
   show ?thesis
   proof (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[
           where R = "happening_pre_start_starts i" 
@@ -6903,6 +6903,11 @@ proof -
         apply (insert sij_set)
         apply (subst (asm) (2) start_indices)
         by simp
+
+      have adds_in_props: "set (adds (at_start (actions ! (start_indices ! j)))) \<subseteq> set props"
+        and dels_in_props: "set (dels (at_start (actions ! (start_indices ! j)))) \<subseteq> set props"
+        and pre_in_props: "set (pre (at_start (actions ! (start_indices ! j)))) \<subseteq> set props"
+        using acts_ref_props using sij_in_act planning_sem.act_ref_props_def planning_sem.snap_ref_props_def by auto
 
     show ?case
     proof (insert j, induction s; rule context_conjI, goal_cases)
@@ -6971,9 +6976,26 @@ proof -
              using sij_ran index_case_disj sij_starting_index by fast+
            done
           subgoal apply (intro strip)
-            apply ((subst map_upds_apply_nontin|subst fun_upd_other), force)+
+            apply ((subst map_upds_apply_nontin|subst fun_upd_other), force simp: variables_unique)+
             by simp
-          by ((intro strip, (subst nth_list_update_neq)?, (frule index_case_dests_disj)?); (use nth_actions_unique[OF sij_ran] sij_starting_index in force))+
+          subgoal apply (intro strip)
+            apply (subst fun_upd_other) 
+            by (use sij_starting_index sij_ran  index_case_disj clocks_unique in fast)+
+          subgoal apply (intro strip)
+            apply (subst fun_upd_other)
+             apply (intro clocks_unique nth_mem)
+            using sij_in_act nth_actions_unique sij_ran sij_starting_index index_case_disj by blast+
+          subgoal apply (intro strip)
+            apply (subst fun_upd_other)
+             apply (intro clocks_unique nth_mem)
+            using sij_in_act nth_actions_unique sij_ran sij_starting_index index_case_disj by blast+
+          subgoal apply (intro strip)
+            apply (subst nth_list_update_neq)
+            using sij_in_act nth_actions_unique sij_ran sij_starting_index index_case_disj by blast+
+          subgoal apply (intro strip)
+            apply (subst nth_list_update_neq)
+            using sij_in_act nth_actions_unique sij_ran sij_starting_index index_case_disj by blast+
+          done
       next
         case (2 p)
         then show ?case 
@@ -6986,49 +7008,45 @@ proof -
             apply simp
           apply simp
           apply (subst map_upds_apply_nontin)
-           apply force
+           apply (force simp: variable_sets_unique adds_in_props)
           apply (cases "p \<in> set (dels (at_start (actions ! (start_indices ! j))))")
            apply (subst map_upds_with_map)
              apply simp
             apply simp
            apply simp
           apply (subst map_upds_apply_nontin)
-           apply force
+           apply (force simp: variable_sets_unique dels_in_props)
           apply (subst fun_upd_other)
-           apply simp
-          apply (drule start_start_pre_dests(2), assumption)
+           apply (simp add: variables_unique)
+          apply (drule start_start_pre_dests(2))
           unfolding starting_part_updated_prop_state_def[OF i] prop_state_def starting_part_updated_state_seq_def[OF i]
-          by simp
+          by simp+
       next
         case 3
         then show ?case 
           apply -
-          apply (subst map_upds_apply_nontin, force)+
+          apply (subst map_upds_apply_nontin, force simp: variables_unique)+
           using updated_active_before_Suc i sij_starting_index sij_ran
           by (auto simp: start_start_pre_dests)
       next
-        case 4
-        then show ?case 
-          apply (subst map_upds_apply_nontin, force)+
-          using card_starting_actions_before_Suc i sij_starting_index sij_ran
-          by (auto simp: start_start_pre_dests)
-      next
-        case (5 k)
+        case (4 k)
         then show ?case 
           apply (cases "k = start_indices ! j")
           using sij_L start_start_pre_dests by auto
       next
-        case (6 k)
+        case (5 k)
         then show ?case
-          using nth_actions_unique 
+          apply (subst act_clock_pre_happ_spec_simps)
+          apply (subst fun_upd_other)
+           apply (intro clocks_unique)
+          using nth_actions_unique sij_L start_start_pre_dests by auto
+      next
+        case (6 k)
+        then show ?case 
+          apply (cases "k = start_indices ! j")
           using sij_L start_start_pre_dests by auto
       next
         case (7 k)
-        then show ?case 
-          apply (cases "k = start_indices ! j")
-          using sij_L start_start_pre_dests by auto
-      next
-        case (8 k)
         thus ?case
           apply (cases "k = start_indices ! j")
           using sij_L start_start_pre_dests by auto
@@ -7054,27 +7072,34 @@ proof -
         apply (subst (asm) (2) start_indices)
         by simp
 
-     have v_pre_conds_sat: "Simple_Expressions.check_bexp v' (bexp_and_all (map (is_prop_ab 1) (pre (at_start (actions ! (start_indices ! j)))))) True"
-        if prop_state: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec) \<longrightarrow> v' (prop_to_var p) = Some (starting_part_updated_prop_state i (start_indices ! j) p)" for v'
-      proof -
-        { fix p
-          assume p: "p \<in> set (pre (at_start (actions ! (start_indices ! j))))"
-          have  "p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec)" using  p sij_in_act p map_of_bounds_spec_action_start_pre by auto
-          hence "v' (prop_to_var p) = Some (starting_part_updated_prop_state i (start_indices ! j) p)" using prop_state * by auto
-          moreover
-          have "starting_part_updated_prop_state i (start_indices ! j) p = 1" 
-            apply (rule pre_val_in_starting_part_updated_prop_state_if[OF i _ _ _ _ _ p])
-            using sij_ran sij_starting_index p using is_starting_index_def planning_sem.is_starting_action_def by auto
-          ultimately
-          have "v' (prop_to_var p) = Some 1" by simp
-      
-          hence "Simple_Expressions.check_bexp v' (is_prop_ab 1 p) True" 
-            unfolding is_prop_ab_def
-            by (simp add: check_bexp_simps is_val_simps)
-        } 
-        hence "\<forall>b\<in>set (map (is_prop_ab 1) (pre (at_start (actions ! (start_indices ! j))))). Simple_Expressions.check_bexp v' b True" by auto
-        thus ?thesis using check_bexp_all by blast
-      qed
+      have adds_in_props: "set (adds (at_start (actions ! (start_indices ! j)))) \<subseteq> set props"
+        and dels_in_props: "set (dels (at_start (actions ! (start_indices ! j)))) \<subseteq> set props"
+        and pre_in_props: "set (pre (at_start (actions ! (start_indices ! j)))) \<subseteq> set props"
+        using acts_ref_props using sij_in_act planning_sem.act_ref_props_def planning_sem.snap_ref_props_def by auto
+
+       have v_pre_conds_sat: "Simple_Expressions.check_bexp v' (bexp_and_all (map (is_prop_ab 1) (pre (at_start (actions ! (start_indices ! j)))))) True"
+          if prop_state: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec) \<longrightarrow> v' (prop_to_var p) = Some (starting_part_updated_prop_state i (start_indices ! j) p)" for v'
+        proof -
+          { fix p
+            assume p: "p \<in> set (pre (at_start (actions ! (start_indices ! j))))"
+            have  "p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec)" 
+              using  p sij_in_act p map_of_bounds_spec_action_start_pre pre_in_props by auto
+            hence "v' (prop_to_var p) = Some (starting_part_updated_prop_state i (start_indices ! j) p)" 
+              using prop_state * by auto
+            moreover
+            have "starting_part_updated_prop_state i (start_indices ! j) p = 1" 
+              apply (rule pre_val_in_starting_part_updated_prop_state_if[OF i _ _ _ _ _ p])
+              using sij_ran sij_starting_index p using is_starting_index_def planning_sem.is_starting_action_def by auto
+            ultimately
+            have "v' (prop_to_var p) = Some 1" by simp
+        
+            hence "Simple_Expressions.check_bexp v' (is_prop_ab 1 p) True" 
+              unfolding is_prop_ab_def
+              by (simp add: check_bexp_simps is_val_simps)
+          } 
+          hence "\<forall>b\<in>set (map (is_prop_ab 1) (pre (at_start (actions ! (start_indices ! j))))). Simple_Expressions.check_bexp v' b True" by auto
+          thus ?thesis using check_bexp_all by blast
+        qed
 
     
       have v_lock_conds_sat: 
@@ -7085,10 +7110,21 @@ proof -
         { fix p
           assume p: "p \<notin> set (adds (at_start (actions ! (start_indices ! j))))"
                  "p \<in> set (dels (at_start (actions ! (start_indices ! j))))"
-          hence "p \<notin> planning_sem.plan_invs_during (planning_sem.time_index i)" using planning_sem.snap_does_not_delete_inv sij_starting unfolding planning_sem.action_happening_case_defs by auto
-          hence "planning_sem.locked_during (planning_sem.time_index i) p = 0" using planning_sem.in_invs_during_iff_locked_during by blast
+          hence "p \<notin> planning_sem.plan_invs_during (planning_sem.time_index i)" 
+            using planning_sem.snap_does_not_delete_inv sij_starting unfolding planning_sem.action_happening_case_defs by auto
+          hence "planning_sem.locked_during (planning_sem.time_index i) p = 0" 
+            using planning_sem.in_invs_during_iff_locked_during by blast
           moreover
-          have "prop_to_lock p \<in> dom (map_of bounds_spec)" using map_of_bounds_spec_action_start_del_lock p sij_in_act by auto
+          have "prop_to_lock p \<in> set (map prop_to_lock (dels (at_start (actions ! (start_indices ! j)))))" 
+               "prop_to_lock p \<notin> set (map prop_to_lock (adds (at_start (actions ! (start_indices ! j)))))" 
+            using p apply simp
+            unfolding set_map
+            apply (rule variable_sets_unique)
+            using adds_in_props p dels_in_props by auto
+          hence "prop_to_lock p \<in> dom (map_of bounds_spec)" 
+            using map_of_bounds_spec_action_start_del_lock p sij_in_act by auto
+          moreover
+          have "p \<in> set props" using dels_in_props p by auto
           ultimately
           have "v' (prop_to_lock p) = Some 0" using locked by simp
           
@@ -7108,18 +7144,14 @@ proof -
     
       have is_upds: "is_upds v 
         ((acts_active, binop plus_int (var acts_active) (exp.const 1)) 
-          # (Effecting, binop plus_int (var Effecting) (exp.const 1)) 
           # map (set_prop_ab 0) ?dels @ map (set_prop_ab 1) ?adds)
        (v(acts_active \<mapsto> plus_int (the (v acts_active)) 1, 
-          Effecting \<mapsto> plus_int (the (v Effecting)) 1, 
           map prop_to_var ?dels [\<mapsto>] map (\<lambda>x. 0) ?dels,
           map prop_to_var ?adds [\<mapsto>] map (\<lambda>x. 1) ?adds))"
       proof (rule is_upds.intros)
 
-        have def: "\<exists>x. v acts_active = Some x" 
-                  "\<exists>x. v Effecting = Some x" using 2 start_start_pre_dests(3,4) by fastforce+
+        have def: "\<exists>x. v acts_active = Some x" using 2 start_start_pre_dests(3,4) by fastforce+
         have is_val: "is_val v (var acts_active) (the (v acts_active))"
-                     "is_val (v(acts_active \<mapsto> plus_int (the (v acts_active)) 1)) (var Effecting) (the (v Effecting))"
             using def
             by (auto intro: check_bexp_is_val.intros)
 
@@ -7127,29 +7159,11 @@ proof -
           unfolding is_upd_def
           by (auto intro: check_bexp_is_val.intros is_val)
         show "is_upds (v(acts_active \<mapsto> plus_int (the (v acts_active)) 1)) 
-            ((Effecting, binop plus_int (var Effecting) (exp.const 1)) 
-              # map (set_prop_ab 0) ?dels 
-              @ map (set_prop_ab 1) ?adds)
-            (v(acts_active \<mapsto> plus_int (the (v acts_active)) 1,
-                Effecting \<mapsto> plus_int (the (v Effecting)) 1, 
-                map prop_to_var ?dels [\<mapsto>] map (\<lambda>x. 0) ?dels,
-                map prop_to_var ?adds [\<mapsto>] map (\<lambda>x. 1) ?adds))"
-        proof (rule is_upds.intros)
-          show "is_upd (v(acts_active \<mapsto> plus_int (the (v acts_active)) 1)) 
-              (Effecting, binop plus_int (var Effecting) (exp.const 1)) 
-              (v(acts_active \<mapsto> plus_int (the (v acts_active)) 1, 
-                  Effecting \<mapsto> plus_int (the (v Effecting)) 1))"
-            unfolding is_upd_def
-            by (auto intro: check_bexp_is_val.intros is_val)
-          show "is_upds 
-            (v(acts_active \<mapsto> plus_int (the (v acts_active)) 1, 
-                Effecting \<mapsto> plus_int (the (v Effecting)) 1)) 
             (map (set_prop_ab 0) ?dels @ map (set_prop_ab 1) ?adds)
-            (v(acts_active \<mapsto> plus_int (the (v acts_active)) 1, 
-                Effecting \<mapsto> plus_int (the (v Effecting)) 1, 
+            (v(acts_active \<mapsto> plus_int (the (v acts_active)) 1,
                 map prop_to_var ?dels [\<mapsto>] map (\<lambda>x. 0) ?dels,
                 map prop_to_var ?adds [\<mapsto>] map (\<lambda>x. 1) ?adds))"
-            apply (rule is_upds_appendI)
+          apply (rule is_upds_appendI)
             unfolding set_prop_ab_def
              apply (rule is_upds_set_vars_map)
               apply (subst map_map[symmetric])
@@ -7161,8 +7175,8 @@ proof -
               apply (rule HOL.refl)
             apply simp
             unfolding comp_def map_map by blast
-      qed
-    qed
+        qed
+
 
     have mutex_conds_sat: "c \<turnstile> map (conv_ac \<circ> (\<lambda>x. acconstraint.GT x 0)) (int_clocks_spec (at_start (actions ! (start_indices ! j)))) 
       @ map (conv_ac \<circ> (\<lambda>x. acconstraint.GE x \<epsilon>)) (int_clocks_spec (at_start (actions ! (start_indices ! j))))"
@@ -7180,7 +7194,7 @@ proof -
       have 4: "\<forall>b\<in>set actions. planning_sem.is_not_happening_action (planning_sem.time_index i) b \<longrightarrow> act_clock_pre_happ_spec c act_to_end_clock b (planning_sem.time_index i)"
         unfolding index_case_conv_action[symmetric] 
         by (blast intro: start_start_pre_dests start_start_invs_dests happening_invs_dests ssp)
-      have 5: "act_clock_pre_happ_spec c (act_to_start_clock (actions ! (start_indices ! j))) (planning_sem.time_index i)"
+      have 5: "act_clock_pre_happ_spec c act_to_start_clock (actions ! (start_indices ! j)) (planning_sem.time_index i)"
         unfolding index_case_conv_action[symmetric] 
         by (blast intro: start_start_pre_dests ssp sij_ran sij_starting_index)
 
@@ -7206,7 +7220,10 @@ proof -
                     apply (rule image_eqI[where x = "start_edge_spec (actions ! (start_indices ! j))"])
                      apply (simp add: start_edge_spec_def)
                     apply (simp add: sij_ran nth_auto_trans)
-                   apply (use conv_committed no_committed in simp)
+        subgoal apply (intro disjI2 strip)
+          apply (subst conv_committed, simp)
+          apply (subst no_committed, simp)
+          by auto
         subgoal by (auto intro: check_bexp_all_append v_pre_conds_sat v_lock_conds_sat start_start_pre_dests start_start_invs_dests)
         subgoal using mutex_conds_sat by auto
         subgoal using conv_invs no_invs by auto
@@ -7218,16 +7235,11 @@ proof -
         subgoal apply (rule upds_map_bounded'[OF _ _ HOL.refl])
             apply (rule upds_map_bounded'[OF _ _ HOL.refl])
           subgoal apply (rule single_upd_bounded)
-            subgoal
-               apply (rule single_upd_bounded)
-                 apply (blast intro: Lv_conds_dests happening_invs_dests start_start_invs_dests start_start_pre_dests)
+            subgoal by (blast intro: Lv_conds_dests happening_invs_dests start_start_invs_dests start_start_pre_dests)
                 apply (rule map_of_bounds_spec_acts_active)
                apply (force dest: start_start_pre_dests)
             by (drule start_start_pre_dests(3), use  updated_active_before_less_if_starting sij_starting_index i sij_ran in fastforce)
-                apply (rule map_of_bounds_spec_Effecting)
-           apply (force dest: start_start_pre_dests)
-          using start_start_pre_dests(4) card_ending_actions_and_starting_before_less[OF i sij_starting_index sij_ran] by fastforce
-             apply simp
+          subgoal by simp
           subgoal unfolding set_map apply (intro ballI exI conjI)
               apply (rule map_of_bounds_spec_action_start_del)
                apply (rule sij_in_act)
@@ -7260,10 +7272,6 @@ proof -
           apply (intro allI impI, elim conjE ssubst)
            apply (rule start_indices_inc_all)
           by (auto intro: start_start_post_dests)
-        subgoal apply (subst starting_actions_before_inv[OF i, where n = "Suc (start_indices ! j)", symmetric])
-          using sip.ys_Suc apply fastforce
-          using start_indices_inc_all sip.ys_Suc
-          by (auto simp: start_start_post_dests)
         subgoal for k
           apply (cases "k < Suc (start_indices ! j)")
           using start_indices_inc_all 
@@ -7290,7 +7298,7 @@ proof -
         apply (rule start_start_preI)
         subgoal by (rule happening_pre_start_starts_dests)
         subgoal for p
-          apply (drule happening_pre_start_starts_dests(2), assumption)
+          apply (drule happening_pre_start_starts_dests(2), assumption, assumption)
           apply (subst (asm) starting_part_updated_prop_state_0_is_prop_state_after_instant_happ[symmetric, OF i])
           apply (subst starting_part_updated_prop_state_inv[symmetric, where n = 0, OF i])
           using start_indices_inc_all_below[simplified is_starting_index_def] by auto
@@ -7298,10 +7306,6 @@ proof -
           apply (subst (asm) updated_active_before_0_is_active_before[symmetric, OF i])
           apply (subst updated_active_before_inv[symmetric, where n = 0])
           using i start_indices_inc_all_below by auto
-        subgoal apply (subst starting_actions_before_inv[OF i, where n = 0, symmetric])
-          apply simp
-          using start_indices_inc_all_below sip.ys_Suc apply fast
-          using happening_pre_start_starts_dests(4) starting_actions_before_0_is_none i by force
         subgoal using start_indices_inc_all_below by auto
         subgoal by (rule happening_pre_start_starts_dests)
         subgoal using start_indices_inc_all_below by auto
@@ -7317,7 +7321,7 @@ proof -
         apply (rule happening_post_start_startsI)
         subgoal by (rule start_start_post_dests)
         subgoal for p
-          apply (drule start_start_post_dests(2), assumption)
+          apply (drule start_start_post_dests(2), assumption, assumption)
           apply (subst (asm) starting_part_updated_prop_state_inv[where m = "length actions", OF i])
           using sip.nth_ys_ran[simplified set_upt, THEN spec, of "length start_indices - 1"] apply simp
           using start_indices_inc_all_above index_case_defs apply simp
@@ -7330,12 +7334,6 @@ proof -
           using start_indices_inc_all_above apply simp
           apply (subst (asm) updated_active_before_all_is_active_during)
           using i by auto
-        subgoal apply (subst starting_actions_before_all_is_starting_actions[symmetric, OF i])
-          apply (subst starting_actions_before_inv[symmetric, where n = "Suc (start_indices ! (length start_indices - 1))"])
-          using i apply simp
-          using sip.nth_ys_ran[simplified set_upt, THEN spec, of "length start_indices - 1"] apply simp
-          using start_indices_inc_all_above index_case_defs apply simp
-          by (auto simp: start_start_post_dests)
         subgoal for k 
           apply (cases "k < Suc (start_indices ! (length start_indices - 1))")
           using start_indices_inc_all_above by (auto intro: start_start_post_dests)
@@ -7369,7 +7367,6 @@ proof -
           using i no_starting by (auto intro: happening_pre_start_starts_dests)
         subgoal apply (subst active_before_is_active_during_if_no_start[symmetric])
           using i no_starting by (auto intro: happening_pre_start_starts_dests)
-        subgoal using no_starting by (auto intro: happening_pre_start_starts_dests)
         using not_starting by auto
       done
   next
@@ -7449,6 +7446,11 @@ proof -
       apply (subst (asm) (2) end_indices)
       by simp
 
+      have adds_in_props: "set (adds (at_end (actions ! (end_indices ! j)))) \<subseteq> set props"
+        and dels_in_props: "set (dels (at_end (actions ! (end_indices ! j)))) \<subseteq> set props"
+        and pre_in_props: "set (pre (at_end (actions ! (end_indices ! j)))) \<subseteq> set props"
+        using acts_ref_props using eij_in_act planning_sem.act_ref_props_def planning_sem.snap_ref_props_def by auto
+
 
     show ?case 
     proof (insert j, induction s; rule context_conjI, goal_cases)
@@ -7465,7 +7467,7 @@ proof -
                       apply (erule Lv_conds_maintained)
                          apply simp
                         apply simp
-          subgoal by ((subst map_upds_apply_nontin| subst fun_upd_other), force+)+
+          subgoal by ((subst map_upds_apply_nontin| subst fun_upd_other), (force simp: variables_unique)+)+
           subgoal apply (rule upds_map_bounded')
                prefer 3
                apply blast
@@ -7473,7 +7475,6 @@ proof -
                  prefer 3
                  apply blast
                 apply (rule single_upd_bounded)
-            apply (rule single_upd_bounded)
                    apply simp
                   apply (rule map_of_bounds_spec_acts_active)
             subgoal apply (subst end_end_pre_dests, assumption)
@@ -7481,20 +7482,14 @@ proof -
             subgoal apply (subst end_end_pre_dests, assumption)
               using updated_active_during_ran[where n = "end_indices ! j"] i
               by fastforce
-                  apply (rule map_of_bounds_spec_Effecting)
-            subgoal apply (subst end_end_pre_dests, assumption)
-              using ending_actions_after_pos_if_ending[OF i eij_ending_index eij_ran] by auto
-            subgoal apply (subst end_end_pre_dests, assumption)
-              using card_starting_actions_and_ending_after_le[OF i, of "end_indices ! j"] eij_ran
-              by auto
-               apply simp
+            apply simp
             using map_of_bounds_spec_action_end_del map_of_bounds_spec_action_end_add eij_in_act by auto
                      apply auto[4]
           subgoal apply (intro strip)?
             apply (subst nth_list_update_neq)
              apply (frule index_case_dests_disj)
             using eij_ending_index by auto
-          subgoal by ((subst map_upds_apply_nontin | subst fun_upd_other)?, force+)+
+          subgoal by ((subst map_upds_apply_nontin | subst fun_upd_other)?, (force simp: variables_unique)+)+
                apply auto[4]
           subgoal apply (subst nth_list_update_neq)
              apply (frule index_case_dests_disj)
@@ -7510,24 +7505,20 @@ proof -
            apply (subst map_upds_with_map)
              apply auto[3]
            apply (subst map_upds_apply_nontin)
-            apply force
+            apply (force simp: adds_in_props variable_sets_unique)
           apply (cases "p \<in> set (dels (at_end (actions ! (end_indices ! j))))")
            apply (subst map_upds_with_map)
              apply auto[3]
-          apply ((subst map_upds_apply_nontin | subst fun_upd_other), force)+
+          apply ((subst map_upds_apply_nontin | subst fun_upd_other), (force simp: dels_in_props variable_sets_unique variables_unique))+
           apply (subst end_end_pre_dests, simp, simp)
           unfolding  ending_part_updated_prop_state_def[OF i] ending_part_updated_state_seq_def[OF i] prop_state_def
           by auto
-        subgoal apply (subst map_upds_apply_nontin, force+)+
+        subgoal apply (subst map_upds_apply_nontin, (force simp: dels_in_props variable_sets_unique variables_unique)+)+
           using updated_active_during_pos_if_ending i eij_ending_index eij_ran  
           by (fastforce simp: updated_active_during_Suc end_end_pre_dests)+
-        subgoal apply ((subst map_upds_apply_nontin | subst fun_upd_other), force)+
-          apply (subst fun_upd_same)
-          apply (frule end_end_pre_dests(4))
-          apply (erule ssubst)
-          using card_ending_actions_after_Suc[OF i eij_ending_index eij_ran, symmetric] 
+        subgoal apply (subst nth_list_update_neq, (force simp: dels_in_props variable_sets_unique variables_unique))+
+          using end_end_pre_dests card_ending_actions_after_Suc[OF i eij_ending_index eij_ran, symmetric] 
           by auto
-        subgoal using end_end_pre_dests by auto
         subgoal by (erule nat_less_SucE, use end_end_pre_dests eij_L in auto)
         done
     next
@@ -7541,7 +7532,8 @@ proof -
       proof -
         { fix p
           assume p: "p \<in> set (pre (at_end (actions ! (end_indices ! j))))"
-          have  "p \<in> set props \<and> prop_to_var p \<in> dom (map_of bounds_spec)" using  p eij_in_act p map_of_bounds_spec_action_end_pre by auto
+          have p_in_props: "p \<in> set props" and  "prop_to_var p \<in> dom (map_of bounds_spec)" 
+            using pre_in_props p eij_in_act p map_of_bounds_spec_action_end_pre by auto
           hence "v' (prop_to_var p) = Some (ending_part_updated_prop_state i (end_indices ! j) p)" using prop_state * by auto
           moreover
           have "ending_part_updated_prop_state i (end_indices ! j) p = 1" 
@@ -7570,9 +7562,17 @@ proof -
           hence "p \<notin> planning_sem.plan_invs_during (planning_sem.time_index i)" using planning_sem.snap_does_not_delete_inv eij_ending unfolding planning_sem.action_happening_case_defs by auto
           hence "planning_sem.locked_during (planning_sem.time_index i) p = 0" using planning_sem.in_invs_during_iff_locked_during by blast
           moreover
-          have "prop_to_lock p \<in> dom (map_of bounds_spec)" using map_of_bounds_spec_action_end_del_lock p eij_in_act by auto
+          have "prop_to_lock p \<in> set (map prop_to_lock (dels (at_end (actions ! (end_indices ! j)))))" 
+               "prop_to_lock p \<notin> set (map prop_to_lock (adds (at_end (actions ! (end_indices ! j)))))" 
+            using p apply simp
+            unfolding set_map
+            apply (rule variable_sets_unique)
+            using adds_in_props p dels_in_props by auto
+          hence "prop_to_lock p \<in> dom (map_of bounds_spec)" using map_of_bounds_spec_action_end_del_lock p eij_in_act by auto
+          moreover
+          have "p \<in> set props" using p dels_in_props by auto
           ultimately
-          have "v' (prop_to_lock p) = Some 0" using locked by simp
+          have "v' (prop_to_lock p) = Some 0" using locked by simp 
           
           hence "Simple_Expressions.check_bexp v' (is_prop_lock_ab 0 p) True" 
             unfolding is_prop_lock_ab_def 
@@ -7586,8 +7586,8 @@ proof -
       qed
 
       (* Could be done by apply scripting and rotating the goal state to synthesize terms *)
-      have is_upds: "is_upds v ((acts_active, binop plus_int (var acts_active) (exp.const (- 1))) # (Effecting, binop plus_int (var Effecting) (exp.const (- 1))) # map (set_prop_ab 0) (dels (at_end (actions ! (end_indices ! j)))) @ map (set_prop_ab 1) (adds (at_end (actions ! (end_indices ! j)))))
-     (v(acts_active \<mapsto> plus_int (the (v acts_active)) (- 1), Effecting \<mapsto> plus_int (the (v Effecting)) (- 1), map prop_to_var (dels (at_end (actions ! (end_indices ! j)))) [\<mapsto>] map (\<lambda>x. 0) (map prop_to_var (dels (at_end (actions ! (end_indices ! j))))),
+      have is_upds: "is_upds v ((acts_active, binop plus_int (var acts_active) (exp.const (- 1))) # map (set_prop_ab 0) (dels (at_end (actions ! (end_indices ! j)))) @ map (set_prop_ab 1) (adds (at_end (actions ! (end_indices ! j)))))
+     (v(acts_active \<mapsto> plus_int (the (v acts_active)) (- 1), map prop_to_var (dels (at_end (actions ! (end_indices ! j)))) [\<mapsto>] map (\<lambda>x. 0) (map prop_to_var (dels (at_end (actions ! (end_indices ! j))))),
           map prop_to_var (adds (at_end (actions ! (end_indices ! j)))) [\<mapsto>] map (\<lambda>x. 1) (map prop_to_var (adds (at_end (actions ! (end_indices ! j)))))))"
       proof (rule is_upds.intros(2)[of _ _ "(v(acts_active \<mapsto> plus_int (the (v acts_active)) (- 1)))"], goal_cases)
         case 1
@@ -7604,36 +7604,17 @@ proof -
           by auto
       next
         case 2
-        then show ?case 
-        proof (rule is_upds.intros(2)[of _ _ "v(acts_active \<mapsto> plus_int (the (v acts_active)) (- 1), Effecting \<mapsto> plus_int (the (v Effecting)) (- 1))"], goal_cases)
-          case 1
-          have vE: "v Effecting = Some (the (v Effecting))"
-            using j end_end_pre_dests(4) unfolding comp_def by fastforce
-          show ?case
-             unfolding is_upd_def
-             apply (intro exI conjI)
-               apply simp
-              apply (rule check_bexp_is_val.intros)
-               apply (rule check_bexp_is_val.intros)
-               apply (subst fun_upd_other, force)
-               apply (rule vE)
-              apply (rule check_bexp_is_val.intros)
-             by simp
-        next
-          case 2
-          then show ?case 
-            apply (rule is_upds_appendI)
-             prefer 2
-             apply (rule is_upds_set_vars_map)
-            unfolding set_prop_ab_def
-              apply (subst map_map[symmetric])
-              apply (rule HOL.refl)
-             apply (rule HOL.refl)
-            apply (rule is_upds_set_vars_map)
-             apply (subst map_map[symmetric])
-             apply (rule HOL.refl)
-            by auto
-        qed
+        thus ?case apply (rule is_upds_appendI)
+           prefer 2
+           apply (rule is_upds_set_vars_map)
+          unfolding set_prop_ab_def
+            apply (subst map_map[symmetric])
+            apply (rule HOL.refl)
+           apply (rule HOL.refl)
+          apply (rule is_upds_set_vars_map)
+           apply (subst map_map[symmetric])
+           apply (rule HOL.refl)
+          by auto
       qed
 
       show ?case 
@@ -7650,7 +7631,7 @@ proof -
                     apply (rule image_eqI[where x = "end_edge_spec (actions ! (end_indices ! j))"])
                      apply (simp add: end_edge_spec_def)
                     apply (simp add: eij_ran nth_auto_trans)
-                   apply (use conv_committed no_committed in simp)
+        subgoal by (intro disjI2 strip) ((subst conv_committed no_committed | simp)+)
         subgoal by (auto intro: check_bexp_all_append v_pre_conds_sat v_lock_conds_sat end_end_pre_dests end_end_invs_dests)
         subgoal by simp
         subgoal using conv_invs no_invs by force
@@ -7681,12 +7662,6 @@ proof -
           apply (intro allI impI, elim conjE ssubst)
            apply (rule end_indices_inc_all)
           by (auto intro: end_end_post_dests)
-        subgoal apply (subst ending_actions_after_inv[symmetric, where n = "Suc (end_indices ! j)"])
-          using i apply simp
-          using eip.ys_Suc apply fastforce
-          apply (intro allI impI, elim conjE ssubst)
-          using end_indices_inc_all
-          by (auto simp: end_end_post_dests)
         subgoal for k
           apply (erule end_end_post_dests)
           using eip.ys_Suc by force+
@@ -7706,7 +7681,7 @@ proof -
         apply (rule end_end_preI)
         subgoal by (rule happening_pre_end_ends_dests)
         subgoal for p
-          apply (drule happening_pre_end_ends_dests(2), assumption)
+          apply (drule happening_pre_end_ends_dests(2), assumption, assumption)
           apply (subst (asm) ending_part_updated_prop_state_0_is_prop_state_after_instant_start_happ[symmetric, OF i])
           apply (subst ending_part_updated_prop_state_inv[symmetric, where n = 0, OF i])
           using end_indices_inc_all_below[simplified is_ending_index_def] by auto
@@ -7714,10 +7689,6 @@ proof -
           apply (subst (asm) updated_active_during_0_is_active_during[symmetric, OF i])
           apply (subst updated_active_during_inv[symmetric, where n = 0])
           using i end_indices_inc_all_below by auto
-        subgoal apply (drule happening_pre_end_ends_dests(4))
-          apply (subst (asm) ending_actions_after_0_is_ending_actions[symmetric, OF i])
-          apply (subst ending_actions_after_inv[symmetric, where n = 0, OF i])
-          using end_indices_inc_all_below by auto
         subgoal by (rule happening_pre_end_ends_dests)
         subgoal using end_indices_inc_all_below by auto
         done
@@ -7731,7 +7702,7 @@ proof -
         apply (rule happening_post_end_endsI)
         subgoal by (rule end_end_post_dests)
         subgoal for p
-          apply (drule end_end_post_dests(2), assumption)
+          apply (drule end_end_post_dests(2), assumption, assumption)
           apply (subst (asm) ending_part_updated_prop_state_inv[where m = "length actions", OF i])
           using eip.nth_ys_ran[simplified set_upt, THEN spec, of "length end_indices - 1"] apply simp
           using end_indices_inc_all_above index_case_defs apply simp
@@ -7744,10 +7715,6 @@ proof -
           using end_indices_inc_all_above apply simp
           apply (subst (asm) updated_active_during_all_is_active_during_minus_ended)
           using i by auto
-        subgoal apply (subst end_end_post_dests, assumption)
-          apply (subst ending_actions_after_inv[where m = "length actions", OF i])
-          using eip.nth_ys_ran[simplified set_upt, THEN spec, of "length end_indices - 1"] apply simp
-          using end_indices_inc_all_above ending_actions_after_all_is_none i by auto
         subgoal for k 
           apply (cases "k < Suc (end_indices ! (length end_indices - 1))")
           using end_indices_inc_all_above by (auto intro: end_end_post_dests)
@@ -7781,7 +7748,6 @@ proof -
           using i no_ending by (auto intro: happening_pre_end_ends_dests)
         subgoal apply (subst happening_pre_end_ends_dests, assumption)
           using no_ending not_ending by auto
-        subgoal using no_ending not_ending by auto
         done
       done
   next
@@ -7820,6 +7786,7 @@ proof -
     using that
     by simp
   
+  
   have start_indices_inc_all: "\<not> is_starting_index (planning_sem.time_index i) m"
     if "Suc j < length start_indices" "Suc (start_indices ! j) \<le> m" "m < start_indices ! Suc j" for j m
     apply (rule sip.ys_inc_all)
@@ -7841,6 +7808,7 @@ proof -
     unfolding index_case_defs planning_sem.starting_actions_at_def
     apply (subst set_conv_nth)
     by auto
+
 
 
   have nat_leE: thesis if  "x \<le> y" "x < y \<Longrightarrow> thesis" "x = y \<Longrightarrow> thesis"  for x y::nat and thesis using that by linarith
@@ -7868,6 +7836,12 @@ proof -
         apply (subst (asm) (2) start_indices)
         by simp
 
+      have adds_in_props: "set (adds (at_end (actions ! (start_indices ! j)))) \<subseteq> set props"
+        and dels_in_props: "set (dels (at_end (actions ! (start_indices ! j)))) \<subseteq> set props"
+        and pre_in_props: "set (pre (at_end (actions ! (start_indices ! j)))) \<subseteq> set props"
+        and over_all_in_props: "set (over_all (actions ! (start_indices ! j))) \<subseteq> set props"
+        using acts_ref_props using sij_in_act planning_sem.act_ref_props_def planning_sem.snap_ref_props_def by auto
+
 
     show ?case
     proof (insert j, induction s; rule context_conjI, goal_cases)
@@ -7881,10 +7855,10 @@ proof -
       have *: "start_end_pre i (start_indices ! j) (L, v, c)" using 1 by auto
       have **: "start_end_invs i (L, v, c)" using start_end_pre_dests 1 by auto
 
-      define v' where "v' = (v(Effecting \<mapsto> plus_int (the (v Effecting)) (- 1), map prop_to_lock (over_all (actions ! (start_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) 1) (map prop_to_lock (over_all (actions ! (start_indices ! j))))))"
+      define v' where "v' = (v(map prop_to_lock (over_all (actions ! (start_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) 1) (map prop_to_lock (over_all (actions ! (start_indices ! j))))))"
         
       have variables_locked_after: "v' (prop_to_lock p) = Some (int (updated_locked_during i (Suc (start_indices ! j)) p))" 
-        if p_in_vars: "prop_to_lock p \<in> dom (map_of bounds_spec)" 
+        if p_in_vars: "prop_to_lock p \<in> dom (map_of bounds_spec)" and p_in_props: "p \<in> set props" 
         for p
       proof (cases "p \<in> set (over_all (actions ! (start_indices ! j)))")
         case True
@@ -7892,14 +7866,14 @@ proof -
             unfolding v'_def
             apply (subst distinct_map_upds)
             using True sij_in_act apply simp
-            apply (rule distinct_inj_map)
+            apply (rule distinct_inj_on_map)
             apply (rule distinct_over_all[THEN bspec[of _ _ "actions ! (start_indices ! j)"]])
-            using sij_in_act inj_def by auto
-        
+            using sij_in_act inj_on_subset over_all_in_props variables_inj by auto
+
         show ?thesis 
           apply (subst v'_prop_to_lock)
           apply (subst updated_locked_during_Suc[OF i sij_starting_index sij_ran True])
-          using start_end_pre_dests(3)[OF * p_in_vars]
+          using start_end_pre_dests(2)[OF * p_in_props p_in_vars]
           by auto
       next
         case False
@@ -7909,23 +7883,18 @@ proof -
         have "v' (prop_to_lock p) = v (prop_to_lock p)"
           unfolding v'_def
           apply (subst map_upds_apply_nontin)
-          using False by auto
+          using False variable_sets_unique p_in_props over_all_in_props by auto
         ultimately
-        show ?thesis using p_in_vars  using start_end_pre_dests(3)[OF * p_in_vars] by simp
+        show ?thesis using p_in_vars  using start_end_pre_dests(2)[OF * p_in_props] by auto  
       qed
         
       have bounded_after: "Simple_Network_Language.bounded (map_of bounds_spec) v'"
       proof (rule updated_bounded[OF _ _ v'_def], goal_cases)
         case 1
         have v_bounded: "bounded (map_of bounds_spec) v" using ** by (auto dest: start_end_pre_dests start_end_invs_dests happening_invs_dests Lv_conds_dests)
-        have v_eff: "v Effecting = Some (int (card (starting_actions_after i (start_indices ! j))))" using * start_end_pre_dests by blast
         have pos: "0 < card (starting_actions_after i (start_indices ! j))" using starting_actions_after_pos_if_starting i sij_ran sij_starting_index by auto
         have l: "card (starting_actions_after i (start_indices ! j)) \<le> length actions" using starting_actions_after_le i by auto
-        show ?case 
-          apply (rule single_upd_bounded, goal_cases)
-             apply (rule v_bounded)
-            apply (rule map_of_bounds_spec_Effecting)
-          using v_eff pos l by auto
+        show ?case by (rule v_bounded)
       next
         case 2
         then show ?case by simp
@@ -7933,18 +7902,20 @@ proof -
         case 3
         then show ?case 
           apply (rule ballI)
-        subgoal for x
-          unfolding set_map
-          apply (erule imageE)
-          subgoal for p
-            apply (erule ssubst[of x])
-            apply (intro exI conjI)
-              apply (rule map_of_bounds_spec_action_inv[OF sij_in_act])
-            using variables_locked_after map_of_bounds_spec_action_inv[OF sij_in_act] updated_locked_during_ran apply simp
-            using variables_locked_after map_of_bounds_spec_action_inv[OF sij_in_act] apply fastforce
-            apply (subst variables_locked_after)
-            using map_of_bounds_spec_action_inv[OF sij_in_act]
-            using updated_locked_during_ran[OF i, of "Suc (start_indices ! j)"] sij_ran by auto
+          subgoal for x
+            unfolding set_map
+            apply (erule imageE)
+            subgoal for p
+              apply (erule ssubst[of x])
+              apply (intro exI conjI)
+                apply (rule map_of_bounds_spec_action_inv[OF sij_in_act], simp)
+              subgoal apply (frule set_mp[OF over_all_in_props]) 
+                using variables_locked_after map_of_bounds_spec_action_inv[OF sij_in_act] updated_locked_during_ran by fastforce
+              subgoal apply (frule set_mp[OF over_all_in_props]) 
+              apply (subst variables_locked_after)
+              using map_of_bounds_spec_action_inv[OF sij_in_act]
+              using updated_locked_during_ran[OF i, of "Suc (start_indices ! j)"] sij_ran by auto
+            done
           done
         done
       qed 
@@ -7961,15 +7932,15 @@ proof -
                        apply (erule Lv_conds_maintained)
                           apply simp
                          apply simp
-          subgoal by ((subst map_upds_apply_nontin | subst fun_upd_other), force)+ (simp)
+          subgoal by ((subst map_upds_apply_nontin | subst fun_upd_other), (force simp: dels_in_props variable_sets_unique variables_unique))+ (simp)
           subgoal using bounded_after v'_def by simp
                       apply auto[4]
           subgoal apply (intro strip)?
             apply (subst nth_list_update_neq)
              apply (frule index_case_dests_disj)
             using sij_starting_index by auto
-          subgoal by ((subst map_upds_apply_nontin | subst fun_upd_other), force)+ (simp)
-          subgoal by ((subst map_upds_apply_nontin | subst fun_upd_other), force)+ (simp)
+          subgoal by ((subst map_upds_apply_nontin | subst fun_upd_other), (force simp: dels_in_props variable_sets_unique variables_unique))+ (simp)
+          subgoal by ((subst map_upds_apply_nontin | subst fun_upd_other), (force simp: dels_in_props variable_sets_unique variables_unique))+ (simp)
                       apply auto[4]
           subgoal apply (intro strip)?
             apply (subst nth_list_update_neq)
@@ -7981,21 +7952,13 @@ proof -
             using sij_starting_index by auto
           done
       next
-        case 2
-        have "card (starting_actions_after i (Suc (start_indices ! j))) + 1= card (starting_actions_after i (start_indices ! j))"
-          using card_starting_actions_after_Suc i sij_starting_index sij_ran by fastforce
-        moreover
-        have "v Effecting = Some (card (starting_actions_after i (start_indices ! j)))" using 2 start_end_pre_dests by blast
-        ultimately
-        show ?case by ((subst map_upds_apply_nontin | subst fun_upd_other), force)+ simp
-      next
-        case (3 p)
+        case (2 p)
         then show ?case using variables_locked_after v'_def by auto
       next
-        case (4 k)
+        case (3 k)
         then show ?case using start_end_pre_dests sip.ys_Suc by auto
       next
-        case (5 k)
+        case (4 k)
         then show ?case 
           apply (cases "k = start_indices ! j")
           using sij_L apply simp
@@ -8009,44 +7972,27 @@ proof -
         apply (force intro: start_end_pre_dests start_end_invs_dests happening_invs_dests)
         using sij_ran by simp
 
-      have eff_upd: "is_upd v (Effecting, binop plus_int (var Effecting) (exp.const (- 1))) (v(Effecting \<mapsto> the (v Effecting) - 1))"
-      proof -
-        
-        have vE: "v Effecting = Some (the (v Effecting))"
-          using 2 start_end_pre_dests(2) unfolding comp_def by fastforce
-
-        show ?thesis
-          unfolding is_upd_def
-          apply (intro conjI exI)
-            apply simp
-           apply (rule check_bexp_is_val.intros)
-            apply (rule check_bexp_is_val.intros)
-            apply (rule vE)
-           apply (rule check_bexp_is_val.intros)
-          by auto
-      qed
-
-      have upds: "is_upds (v(Effecting \<mapsto> the (v Effecting) - 1)) (map (inc_prop_lock_ab 1) (over_all (actions ! (start_indices ! j)))) (v(Effecting \<mapsto> plus_int (the (v Effecting)) (- 1), map prop_to_lock (over_all (actions ! (start_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) 1) (map prop_to_lock (over_all (actions ! (start_indices ! j))))))"
+      have upds: "is_upds v (map (inc_prop_lock_ab 1) (over_all (actions ! (start_indices ! j)))) (v(map prop_to_lock (over_all (actions ! (start_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) 1) (map prop_to_lock (over_all (actions ! (start_indices ! j))))))"
       proof (rule is_upds_inc_vars)
-        show "set (map prop_to_lock (over_all (actions ! (start_indices ! j)))) \<subseteq> dom (v(Effecting \<mapsto> the (v Effecting) - 1))"
+        show "set (map prop_to_lock (over_all (actions ! (start_indices ! j)))) \<subseteq> dom v"
         proof (intro subsetI)
           fix x
           assume a: "x \<in> set (map prop_to_lock (over_all (actions ! (start_indices ! j))))"
           from a obtain p where
-            x: "x = prop_to_lock p" by auto
+            x: "x = prop_to_lock p" 
+            and p_in_props: "p \<in> set props" using over_all_in_props by auto
           
           have *: "x \<in> dom (map_of bounds_spec)" using map_of_bounds_spec_action_inv a by blast
-          show "x \<in> dom (v(Effecting \<mapsto> the (v Effecting) - 1))" 
+          show "x \<in> dom v" 
             apply (rule domI)
-            unfolding x 
-            apply (subst fun_upd_other, force)
-            using 2 * unfolding comp_def x using start_end_pre_dests by blast
+            using 2 * unfolding comp_def x using start_end_pre_dests  p_in_props by blast
         qed
         show "distinct (map prop_to_lock (over_all (actions ! (start_indices ! j))))" 
-          apply (rule distinct_inj_map) using distinct_over_all sij_in_act inj_def by auto
+          apply (rule distinct_inj_on_map) using distinct_over_all sij_in_act 
+          using variables_inj inj_on_subset over_all_in_props by auto
         show "map (inc_prop_lock_ab 1) (over_all (actions ! (start_indices ! j))) = map (\<lambda>v. (v, binop plus_int (var v) (exp.const 1))) (map prop_to_lock (over_all (actions ! (start_indices ! j))))" unfolding inc_prop_lock_ab_def by auto
-        show "v(Effecting \<mapsto> plus_int (the (v Effecting)) (- 1), map prop_to_lock (over_all (actions ! (start_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) 1) (map prop_to_lock (over_all (actions ! (start_indices ! j))))) =
-          v(Effecting \<mapsto> the (v Effecting) - 1, map prop_to_lock (over_all (actions ! (start_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int x 1) (map ((the \<circ>\<circ>\<circ> fun_upd v) Effecting (Some (the (v Effecting) - 1))) (map prop_to_lock (over_all (actions ! (start_indices ! j))))))"
+        show "v(map prop_to_lock (over_all (actions ! (start_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) 1) (map prop_to_lock (over_all (actions ! (start_indices ! j))))) = 
+            v(map prop_to_lock (over_all (actions ! (start_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int x 1) (map (the \<circ> v) (map prop_to_lock (over_all (actions ! (start_indices ! j))))))"
           unfolding comp_def map_map by simp
       qed 
 
@@ -8054,11 +8000,14 @@ proof -
       proof (intro check_bexp_all ballI)
         { fix p
           assume a: "p \<in> set (over_all (actions ! (start_indices ! j)))"
+          hence p_in_props: "p \<in> set props" using over_all_in_props by auto
           have "v (prop_to_var p) = Some (prop_state_after_happ i p)"
             apply (rule start_end_invs_dests)
              apply (rule start_end_pre_dests)
-            using 2 unfolding comp_def apply simp
-            using map_of_bounds_spec_action_inv_props sij_in_act a by auto
+            using 2 unfolding comp_def
+            using p_in_props
+            using map_of_bounds_spec_action_inv_props sij_in_act a 
+            by auto
           moreover
           have "p \<in> planning_sem.upd_state i" using planning_sem.inv_sat_by_upd_state sij_starting sij_in_act i comp_def a by auto
           ultimately
@@ -8090,7 +8039,8 @@ proof -
                     apply (rule image_eqI[where x = "edge_2_spec (actions ! (start_indices ! j))"])
                      apply (simp add: edge_2_spec_def)
                     apply (simp add: sij_ran nth_auto_trans)
-                   apply (use conv_committed no_committed in simp)
+        subgoal apply (intro disjI2 strip)
+          by (subst conv_committed no_committed | simp)+
         subgoal using v_pre_sat by simp
         subgoal by simp
         subgoal using conv_invs no_invs by auto
@@ -8098,10 +8048,7 @@ proof -
         subgoal using sij_L by simp
         subgoal by simp
         subgoal by simp
-        subgoal 
-          apply (intro is_upds.intros(2))
-          apply (rule eff_upd)
-          by (rule upds)
+        subgoal by (rule upds)
         by (auto intro: Lv_conds_dests happening_invs_dests start_end_invs_dests start_end_post_dests start_end_pre_dests)
     qed
   next
@@ -8113,10 +8060,6 @@ proof -
       subgoal for L v c
         apply (rule start_end_preI)
         subgoal by (rule start_end_post_dests)
-        subgoal apply (subst starting_actions_after_inv[OF i, symmetric, where n = "Suc (start_indices ! j)"])
-          using sip.ys_Suc apply force
-          using start_indices_inc_all
-          by (auto intro: start_end_post_dests)
         subgoal apply (subst updated_locked_during_inv[OF i, symmetric, where n = "Suc (start_indices ! j)"])
           using sip.ys_Suc apply force
           using start_indices_inc_all
@@ -8141,10 +8084,6 @@ proof -
       subgoal for L v c
         apply (intro start_end_preI)
         subgoal by (rule happening_pre_start_ends_dests)
-        subgoal apply (subst starting_actions_after_inv[OF i, symmetric, where n = 0])
-          using starting_actions_after_0_is_starting_actions[OF i]
-          using start_indices_inc_all_below 
-          by (auto intro: happening_pre_start_ends_dests)
         subgoal apply (subst updated_locked_during_inv[OF i, symmetric, where n = 0])
           using updated_locked_during_0_is_locked_during[OF i]
           using start_indices_inc_all_below 
@@ -8165,13 +8104,6 @@ proof -
         subgoal apply (subst updated_locked_during_all_is_locked_after[OF i, symmetric])
           apply (subst updated_locked_during_inv[OF i, symmetric, where n = "Suc (start_indices ! (length start_indices - 1))"])
           apply (rule Suc_leI)
-          using sip.nth_ys_ran 
-          using start_indices_inc_all_above
-          by (auto intro: start_end_post_dests)
-        subgoal apply (frule start_end_post_dests(2))
-          apply (subst (asm) starting_actions_after_inv[OF i, where m = "length actions"])
-          apply (rule Suc_leI)
-          using starting_actions_after_all_is_none[THEN arg_cong[of _ _ card], simplified card.empty, symmetric, OF i]
           using sip.nth_ys_ran 
           using start_indices_inc_all_above
           by (auto intro: start_end_post_dests)
@@ -8204,7 +8136,6 @@ proof -
         apply (intro happening_post_start_endsI)
         subgoal by (rule happening_pre_start_ends_dests)
         subgoal using happening_pre_start_ends_dests planning_sem.locked_after_and_during' no_starting by simp
-        subgoal using no_starting by (auto simp: happening_pre_start_ends_dests)
         using not_starting by auto
       done
   next
@@ -8213,7 +8144,6 @@ proof -
       apply (induction x)
       subgoal for L v c
         apply (intro happening_postI, simp)
-        subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
         subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
         subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
         subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
@@ -8252,10 +8182,10 @@ proof -
     unfolding get_delay_def
     apply (cases "i = 0")
      apply (subst if_P, simp)
-    using eps_range apply simp
+    using eps_ran apply simp
     apply (subst if_not_P, simp)
-    using time_index_sorted_list[of "i - 1" "i"] assms(1)
-    by auto
+    using planning_sem.time_index_sorted_list[of "i - 1" "i"] assms(1)
+    unfolding planning_sem.time_index_def by auto
 
   obtain L v c where
     s: "s = (L, v, c)" using prod_cases3 by blast
@@ -8276,26 +8206,25 @@ proof -
     assume "p <length (fst (snd net_impl.sem))"
     hence pl: "p < Suc (length actions)"
           "p < length L"
-      using n_ps_conv_Suc_length_actions
-      unfolding Prod_TA_Defs.n_ps_def
-      unfolding sem_alt_def
+      using length_net_impl
       using len_L by simp+
     
     show "fst (L, v, c) ! p \<notin> urgent (fst (snd net_impl.sem) ! p)"
     proof (cases p)
       case 0
-      then have "L ! p = planning_loc" using Lv_con unfolding Lv_conds_def by blast
-      moreover
-      have "urgent (fst (snd net_impl.sem) ! p) = {init_loc, goal_loc}" 
-        apply (subst sem_alt_def)
-        unfolding fst_conv snd_conv
+      then have 1: "L ! p = planning_loc" using Lv_con unfolding Lv_conds_def by blast
+      
+      have 2: "urgent (fst (snd net_impl.sem) ! p) = {init_loc, goal_loc}"
+        unfolding sem_alt_def fst_conv snd_conv
         apply (subst nth_map, simp add: pl)
         apply (subst 0)
         apply (subst nth_Cons_0)
         unfolding comp_def main_auto_spec_def Let_def snd_conv automaton_of_def conv_automaton_def prod.case
           urgent_def fst_conv by auto
-      ultimately
-      show ?thesis by simp
+      
+      show ?thesis unfolding 2 fst_conv 1 
+        using locations_unique 
+        by blast
     next
       case (Suc n)
       hence a: "actions ! n \<in> set actions" using pl by simp
@@ -8305,7 +8234,7 @@ proof -
         apply (cases rule: planning_sem.open_active_count_cases[OF a])
         by blast+
       note c = this
-      have "urgent (fst (snd net_impl.sem) ! p) = {starting_loc, ending_loc, PostStart (actions ! n)} "
+      have "urgent (fst (snd net_impl.sem) ! p) = {starting_loc, ending_loc} "
         apply (subst sem_alt_def)
         unfolding fst_conv snd_conv
         apply (subst nth_map, simp add: pl)
@@ -8317,8 +8246,9 @@ proof -
         ..
       then
       show ?thesis 
-        apply (cases rule: c)
-        by simp+
+        unfolding fst_conv
+        apply (cases rule: c; elim ssubst)
+        using locations_unique by blast+
     qed
   qed
     
@@ -8345,7 +8275,7 @@ proof -
       unfolding s
       apply (subst apply_nth_happening_def)
       unfolding Let_def
-unfolding apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def apply_instant_actions_alt apply_leave_start_edge_effects_def
+      unfolding apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def apply_instant_actions_alt
       unfolding comp_apply[of ext_seq seq_apply, symmetric]
       apply ((subst ext_seq_seq_apply_append_distrib | subst fold_ext_seq_comp_conv_foldl_append), (intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil)?, simp)+
       apply (rule steps_delay_replace[OF _ delay_non_negative no_urgent])
@@ -8356,7 +8286,7 @@ unfolding apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_e
       using p s by blast
     unfolding delay_and_apply_def Let_def
     apply (subst apply_nth_happening_def)
-    unfolding Let_def apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def  apply_instant_actions_alt apply_leave_start_edge_effects_def
+    unfolding Let_def apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def  apply_instant_actions_alt
     unfolding comp_apply[of ext_seq seq_apply, symmetric]
     apply (subst last_tl_eq_last)
     using p by blast
@@ -8388,27 +8318,26 @@ let ?seq = "((ext_seq \<circ> seq_apply) (map edge_2_effect (filter (is_starting
       subgoal by (auto 
             simp: planning_sem.open_active_count_eq_closed_active_count_if_only_instant_acts
               index_case_defs planning_sem.action_happening_case_defs 
-            dest!: happening_pre_post_delay_dests(6))
+            dest!: happening_pre_post_delay_dests(5))
       subgoal by (auto 
             simp: planning_sem.open_active_count_eq_closed_active_count_if_only_instant_acts
               index_case_defs planning_sem.action_happening_case_defs 
-            dest!: happening_pre_post_delay_dests(7))
+            dest!: happening_pre_post_delay_dests(6))
       using happening_pre_post_delay_dests apply auto[5]
       subgoal by (auto 
             simp: planning_sem.open_active_count_0_if_start_scheduled 
               index_case_defs planning_sem.action_happening_case_defs 
-            dest!: happening_pre_post_delay_dests(6))
+            dest!: happening_pre_post_delay_dests(5))
       subgoal by (auto 
             simp: planning_sem.open_active_count_0_if_start_scheduled 
               index_case_defs planning_sem.action_happening_case_defs 
-            dest!: happening_pre_post_delay_dests(6))
+            dest!: happening_pre_post_delay_dests(5))
       subgoal using happening_pre_post_delay_dests by auto
-      subgoal by (auto dest!: happening_pre_post_delay_dests(3))
       subgoal by (auto 
             simp: planning_sem.open_active_count_1_if_ending
               index_case_defs planning_sem.action_happening_case_defs 
-            dest!: happening_pre_post_delay_dests(7))
-      subgoal by (auto dest!: happening_pre_post_delay_dests(9))
+            dest!: happening_pre_post_delay_dests(6))
+      subgoal by (auto dest!: happening_pre_post_delay_dests(8))
       done
   qed
   show "graph_impl.steps ?seq \<and> happening_post i (last ?seq)"
@@ -8444,7 +8373,7 @@ proof (rule steps_seq.ext_seq'_induct_list_prop_and_post[
     show ?thesis
       unfolding delay_and_apply_def 
       unfolding apply_nth_happening_def Let_def
-      unfolding apply_edge_2_effects_def apply_end_edge_effects_def apply_start_edge_effects_def apply_instant_actions_alt apply_edge_3_effects_def apply_leave_start_edge_effects_def
+      unfolding apply_edge_2_effects_def apply_end_edge_effects_def apply_start_edge_effects_def apply_instant_actions_alt apply_edge_3_effects_def
       unfolding comp_apply[of ext_seq seq_apply, symmetric]
       apply (subst fold_ext_seq_comp_conv_foldl_append, intro ext_seq_comp_seq_apply_not_Nil, simp)
       apply (subst ext_seq_seq_apply_append_distrib, intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil, simp)+
@@ -8476,14 +8405,19 @@ next
       subgoal by (auto simp: planning_sem.active_after_indexed_timepoint_is_active_before_Suc[symmetric])
       subgoal by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
       subgoal by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
-      subgoal by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
-      subgoal by (auto simp: planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
-      subgoal by (auto simp: planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
+      subgoal apply (intro strip)
+        apply (subst act_clock_pre_happ_spec_simps)
+        apply (subst planning_sem.updated_exec_time_and_next)
+        by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
+      subgoal apply (intro strip)
+        apply (subst act_clock_pre_happ_spec_simps)
+        apply (subst planning_sem.updated_exec_time_and_next)
+        by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
       done
     done
 next
   case (4 x)
-  hence init_is_goal: "set goal \<subseteq> set init" using vp[THEN valid_plan_state_seq] by auto
+  hence init_is_goal: "set goal \<subseteq> set init" using planning_sem.valid_plan_state_seq by auto
   show ?case 
     apply (insert 4)
     apply (erule init_planning_state_props'E)
@@ -8499,13 +8433,13 @@ next
             apply (auto simp: planning_sem.plan_state_seq_props prop_state_before_happ_def 
               int_of_nat_def planning_sem.locked_before_initial_is_0 planning_sem.active_before_initial_is_0 planning_sem.open_active_count_initial_is_0)[7]
       subgoal 
-        by (subst act_clock_pre_happ_spec.simps  cval_add_def planning_sem.exec_time_at_init)+ 
-          (auto simp: get_delay_def card_htps_len_planning_sem.htpl of_rat_add Rat.of_int_def)
+        by (subst act_clock_pre_happ_spec_simps  cval_add_def planning_sem.exec_time_at_init)+ 
+          (auto simp: get_delay_def planning_sem.card_htps_len_htpl of_rat_add Rat.of_int_def)
       subgoal 
-        apply (subst act_clock_pre_happ_spec.simps)
+        apply (subst act_clock_pre_happ_spec_simps)
         apply (subst cval_add_def)
         apply (subst planning_sem.exec_time_at_init)
-        by (auto simp: cval_add_def get_delay_def card_htps_len_planning_sem.htpl of_rat_add Rat.of_int_def)
+        by (auto simp: cval_add_def get_delay_def planning_sem.card_htps_len_htpl of_rat_add Rat.of_int_def)
       done 
     done
 next
@@ -8568,7 +8502,7 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R =
       apply (rule ssubst[of x], assumption)
       unfolding main_auto_goal_edge_effect_alt
       apply (rule goal_state_condsI, rule HOL.refl)
-      by (auto elim: Lv_condsE intro!: single_upd_bounded map_of_bounds_spec_planning_lock)
+      by (auto elim: Lv_condsE intro!: single_upd_bounded map_of_bounds_spec_planning_lock simp: variables_unique)
     done
   show "graph_impl.steps [x, main_auto_goal_edge_effect x]"
     apply (rule single_step_intro)
@@ -8582,14 +8516,14 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R =
        apply (rule step_u.step_int[where p = 0])
       unfolding TAG_def
                  apply (subst conv_trans)
-      using some_automata_spec apply simp
+      using some_actions length_automata_spec apply simp
                  apply (subst main_auto_trans)
                  apply (rule image_eqI)
                   prefer 2
                   apply (rule insertI2)
                   apply (rule insertI1)
                  apply (simp add: main_auto_goal_edge_spec_def)
-      using no_committed conv_committed apply simp
+      subgoal by (intro disjI2 strip) (subst no_committed conv_committed | simp)+
       subgoal
         apply (subst check_bexp_simps)+
         apply (intro exI conjI)
@@ -8614,7 +8548,7 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R =
           apply (subst prop_state_simps(1)[symmetric, where S = S], assumption)
           apply (elim allE)
           apply (erule mp)
-          using map_of_bounds_spec_init_goal
+          using map_of_bounds_spec_init_goal goal_in_props
           by auto
                apply simp
               prefer 2
@@ -8689,15 +8623,15 @@ proof -
         apply (rule step_int[where p = 0])
       unfolding TAG_def
                   apply (subst conv_trans)
-      using some_automata_spec apply simp
+      using length_automata_spec some_actions apply simp
                   apply (subst main_auto_trans)
                   apply (rule image_eqI[where x = main_auto_loop_spec])
                    apply (subst main_auto_loop_spec_def)
                    apply simp
                   apply simp
-      subgoal using conv_committed no_committed by auto
+      subgoal by (intro disjI2 strip) (subst conv_committed no_committed | simp)+
       subgoal by (simp add: check_bexp_simps)
-               apply simp
+      subgoal by simp
       subgoal using conv_invs no_invs by simp
       subgoal using conds goal_state_condsE by fastforce
       subgoal using conds goal_state_condsE by fastforce
@@ -8722,7 +8656,7 @@ proof -
   qed
 qed
 
-lemma valid_plan_imp_form_holds': "net_impl.sem, a\<^sub>0 \<Turnstile> form"
+lemma valid_plan_imp_form_holds: "net_impl.sem, a\<^sub>0 \<Turnstile> formula_spec"
 proof -
   have plan_steps_not_Nil: "plan_steps \<noteq> []" unfolding plan_steps_def 
     apply (rule ext_seq_not_Nil(2))
@@ -8780,7 +8714,7 @@ proof -
     using run' run_alt form_holds by blast
 qed
 
-theorem valid_plan_imp_form_holds:
+(* theorem valid_plan_imp_form_holds:
   assumes "\<exists> \<pi>. valid_plan \<pi> (set init) (set goal) at_start at_end (set \<circ> over_all) lower_sem upper_sem (set \<circ> pre) (set \<circ> adds) (set \<circ> dels) (Rat.of_int \<epsilon>) 
         \<and> plan_actions_in_problem \<pi> (set actions) 
         \<and> no_self_overlap \<pi>" 
@@ -8793,6 +8727,29 @@ corollary form_not_sat_imp_no_valid_plan:
       \<and> plan_actions_in_problem \<pi> (set actions) 
       \<and> no_self_overlap \<pi>)"
   using assms valid_plan_imp_form_holds by auto
+ *)
+end
+
+context tp_nta_reduction_correctness'
+begin
+lemmas valid_plan_imp_form_holds = ref_correctness.valid_plan_imp_form_holds
+end
+
+context tp_nta_reduction_model_checking'
+begin
+find_theorems name: "ref_model_checking"
+
+lemma valid_plan_imp_locale_inst:
+  assumes "\<exists>(\<pi>::int \<Rightarrow> ('action \<times> int \<times> int) option). temp_plan_for_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>"
+  shows "ref_model_checking.net_impl.sem,ref_model_checking.a\<^sub>0 \<Turnstile> reduction_ref_impl.formula_spec"
+proof -
+  obtain \<pi>::"int \<Rightarrow> ('action \<times> int \<times> int) option" where
+    plan: "temp_plan_for_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>" 
+    using assms by auto
+  interpret x: tp_nta_reduction_correctness' init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name 
+    using valid_plan_imp_locale_inst plan by blast
+  show ?thesis using x.valid_plan_imp_form_holds by auto
+qed
 
 end
 end

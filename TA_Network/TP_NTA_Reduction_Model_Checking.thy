@@ -39,7 +39,6 @@ locale tp_nta_reduction_model_checking = tp_nta_reduction_spec
     and prop_to_name :: "'proposition \<Rightarrow> String.literal"
 begin
 
-lemma 
 
 lemma variables_unique: 
     "acts_active \<noteq> planning_lock"
@@ -117,6 +116,27 @@ lemma clocks_inj:
   "inj_on act_to_end_clock (set actions)"
   using clocks_unique unfolding inj_on_def by blast+
 
+lemma locations_unique:
+  "init_loc \<noteq> planning_loc"
+  "init_loc \<noteq> goal_loc"
+  "planning_loc \<noteq> init_loc"
+  "planning_loc \<noteq> goal_loc"
+  "goal_loc \<noteq> init_loc"
+  "goal_loc \<noteq> planning_loc"
+  "off_loc \<noteq> starting_loc"
+  "off_loc \<noteq> running_loc"
+  "off_loc \<noteq> ending_loc"
+  "starting_loc \<noteq> off_loc"
+  "starting_loc \<noteq> running_loc"
+  "starting_loc \<noteq> ending_loc"
+  "running_loc \<noteq> off_loc"
+  "running_loc \<noteq> starting_loc"
+  "running_loc \<noteq> ending_loc"
+  "ending_loc \<noteq> off_loc"
+  "ending_loc \<noteq> starting_loc"
+  "ending_loc \<noteq> running_loc"
+  unfolding init_loc_def planning_loc_def goal_loc_def off_loc_def starting_loc_def running_loc_def ending_loc_def 
+  by simp+
 
 thm Simple_Network_Rename_Formula.models_iff[no_vars, unfolded Simple_Network_Rename_Start.a\<^sub>0_def]
 term "Simple_Network_Language_Model_Checking.N broadcast_spec automata_spec bounds_spec,Simple_Network_Rename_Start.a\<^sub>0 init_vars_spec init_locs_spec \<Turnstile> formula_spec"
@@ -133,6 +153,13 @@ find_theorems name: "network_impl123."
 
 find_theorems name: "Simple_Network_Impl*ax"
 
+lemma length_net_impl: "length ((fst o snd) net_impl.sem) = Suc (length actions)" 
+  unfolding net_impl.sem_def
+  using length_automata_spec by auto
+
+schematic_goal sem_alt_def: "net_impl.sem = ?x"
+  unfolding net_impl.sem_def timed_automaton_net_spec_def 
+  unfolding Simple_Network_Impl.sem_def  fst_conv snd_conv ..
 end
 
 find_theorems name: "Simple_Network_Impl"
@@ -167,8 +194,6 @@ sublocale ref_model_checking: tp_nta_reduction_model_checking
   \<epsilon> props actions act_to_name prop_to_name 
   by unfold_locales 
 
-term "Simple_Network_Language_Model_Checking.N broadcast_spec automata_spec bounds_spec,(init_locs_spec, map_of init_vars_spec, \<lambda>_. 0) \<Turnstile> formula_spec"
-
 end
 
 
@@ -200,7 +225,6 @@ sublocale tp_nta_reduction_model_checking
   by unfold_locales
 end
 
-(* Demo: Useful for final proof *)
 lemma assumes "tp_nta_reduction_model_checking init goal at_start at_end over_all pre adds dels \<epsilon> props actions act_to_name prop_to_name"
   and "temp_plan_for_problem_list_impl_int at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>"
 shows "tp_nta_reduction_correctness init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name"
@@ -230,19 +254,31 @@ locale tp_nta_reduction_correctness' = temp_plan_for_problem_list_impl_int'
     and act_to_name :: "'action \<Rightarrow> String.literal"
     and prop_to_name :: "'proposition \<Rightarrow> String.literal"
 begin
-sublocale tp_nta_reduction_model_checking' 
+sublocale ref_model_checking: tp_nta_reduction_model_checking' 
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
   by unfold_locales 
-   
-find_consts name: "local*list*inte"             
+         
 sublocale ref_correctness: tp_nta_reduction_correctness
   "rat_impl.list_inter props init" 
   "rat_impl.list_inter props goal"
   AtStart AtEnd rat_impl.over_all_restr_list lower upper 
   rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
   \<epsilon> props actions \<pi> act_to_name prop_to_name 
-  by unfold_locales 
+  by unfold_locales
+
 end
+
+context tp_nta_reduction_model_checking'
+begin
+
+lemma valid_plan_imp_locale_inst:
+  assumes "temp_plan_for_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>"
+  shows "tp_nta_reduction_correctness' init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name"
+  apply (rule tp_nta_reduction_correctness'.intro)
+  using assms action_names.unique_names_axioms prop_names.unique_names_axioms by auto
+
+end
+
 
 (* Demo: Prove that the locale assumptions for the model checking locale hold and assume a valid plan exists.
 Show that something can be proven in the locale. *)
