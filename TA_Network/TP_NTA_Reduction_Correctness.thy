@@ -8713,21 +8713,6 @@ proof -
     unfolding Sequence_LTL.ev_alt_def
     using run' run_alt form_holds by blast
 qed
-
-(* theorem valid_plan_imp_form_holds:
-  assumes "\<exists> \<pi>. valid_plan \<pi> (set init) (set goal) at_start at_end (set \<circ> over_all) lower_sem upper_sem (set \<circ> pre) (set \<circ> adds) (set \<circ> dels) (Rat.of_int \<epsilon>) 
-        \<and> plan_actions_in_problem \<pi> (set actions) 
-        \<and> no_self_overlap \<pi>" 
-  shows "net_impl.sem,a\<^sub>0 \<Turnstile> form" 
-  using valid_plan_imp_form_holds' assms by auto
-
-corollary form_not_sat_imp_no_valid_plan:
-  assumes "\<not>net_impl.sem,a\<^sub>0 \<Turnstile> form"
-  shows "\<not>(\<exists> \<pi>. valid_plan \<pi> (set init) (set goal) at_start at_end (set \<circ> over_all) lower_sem upper_sem (set \<circ> pre) (set \<circ> adds) (set \<circ> dels) (Rat.of_int \<epsilon>) 
-      \<and> plan_actions_in_problem \<pi> (set actions) 
-      \<and> no_self_overlap \<pi>)"
-  using assms valid_plan_imp_form_holds by auto
- *)
 end
 
 context tp_nta_reduction_correctness'
@@ -8739,11 +8724,11 @@ context tp_nta_reduction_model_checking'
 begin
 find_theorems name: "ref_model_checking"
 
-lemma valid_plan_imp_locale_inst:
-  assumes "\<exists>(\<pi>::int \<Rightarrow> ('action \<times> int \<times> int) option). temp_plan_for_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>"
+lemma valid_temp_plan_imp_form_holds:
+  assumes "\<exists>\<pi>::(nat, 'action, int) temp_plan. temp_plan_for_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>"
   shows "ref_model_checking.net_impl.sem,ref_model_checking.a\<^sub>0 \<Turnstile> reduction_ref_impl.formula_spec"
 proof -
-  obtain \<pi>::"int \<Rightarrow> ('action \<times> int \<times> int) option" where
+  obtain \<pi>::"(nat, 'action, int) temp_plan" where
     plan: "temp_plan_for_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>" 
     using assms by auto
   interpret x: tp_nta_reduction_correctness' init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name 

@@ -1,10 +1,9 @@
 theory Check_Unsolvability
   imports Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code Containers.Containers
-    TP_NTA_Reduction.TP_NTA_Reduction_Renaming
+    TP_NTA_Reduction.TP_NTA_Reduction_Correctness
 begin
 
 
-(* This is like parse_compute, but skips the parse step *)
 definition compute_model::"
     (nat \<Rightarrow> nat \<Rightarrow> String.literal) \<times>
        (String.literal \<Rightarrow> nat) \<times>
@@ -157,7 +156,18 @@ instance Error_List_Monad.result::(heap)heap
 
 (* Note, that the state_space variable is the certificate. The naming convention is from the 
 original function written by Simon Wimmer. *)
-definition "convert_check" where
+definition convert_check ::
+    "mode
+     \<Rightarrow> nat
+        \<Rightarrow> bool
+           \<Rightarrow> (nat \<Rightarrow> nat \<Rightarrow> String.literal) \<times>
+              (String.literal \<Rightarrow> nat) \<times>
+              String.literal list \<times>
+              (nat list \<times>
+               nat list \<times>
+               (nat \<times> (String.literal, int) Simple_Expressions.bexp \<times> (String.literal, int) acconstraint list \<times> String.literal act \<times> (String.literal \<times> (String.literal, int) exp) list \<times> String.literal list \<times> nat) list \<times> (nat \<times> (String.literal, int) acconstraint list) list) list \<times>
+              (String.literal \<times> int \<times> int) list \<times> (nat, nat, String.literal, int) Simple_Network_Language_Model_Checking.formula \<times> nat list \<times> (String.literal \<times> int) list
+              \<Rightarrow> (String.literal \<Rightarrow> nat) \<times> (String.literal \<Rightarrow> nat) \<times> (nat \<Rightarrow> nat \<Rightarrow> nat) \<times> (nat \<Rightarrow> String.literal) \<times> (nat \<Rightarrow> String.literal) \<times> (nat \<Rightarrow> nat \<Rightarrow> nat) \<Rightarrow> int state_space \<Rightarrow> bool \<Rightarrow> Simple_Network_Language_Export_Code.result Error_List_Monad.result Heap" where
 "convert_check mode num_split dc model renaming state_space show_cert \<equiv> 
 (case do {
     r \<leftarrow> compute_model model renaming;
@@ -181,8 +191,8 @@ definition "convert_check" where
         let _ = print_sep ();
         let _ = show_state_space m inv_renum_states inv_renum_vars inv_renum_clocks state_space;
         let _ = print_sep ();
-        return ()}
-      else return ()
+        Heap_Monad.return ()}
+      else Heap_Monad.return ()
     };
     Result (certificate_check mode num_split dc state_space broadcast bounds automata k L\<^sub>0 s\<^sub>0 formula
         m num_states num_actions renum_acts renum_vars renum_clocks renum_states
@@ -192,10 +202,10 @@ of Result c \<Rightarrow> do {
     let t = now ();
     check \<leftarrow> c;
     let _ = (case check of
-          Renaming_Failed \<Rightarrow> do {let _ = println STR ''Renaming failed''; return ()}
-        | Preconds_Unsat \<Rightarrow> do {let _ = println STR ''Preconditions were not met''; return ()}
-        | Sat \<Rightarrow> do {let _ = println STR ''Certificate was accepted''; return ()}
-        | Unsat \<Rightarrow> do {let _ = println STR ''Certificate was rejected''; return ()});
+          Renaming_Failed \<Rightarrow> do {let _ = println STR ''Renaming failed''; Heap_Monad.return ()}
+        | Preconds_Unsat \<Rightarrow> do {let _ = println STR ''Preconditions were not met''; Heap_Monad.return ()}
+        | Sat \<Rightarrow> do {let _ = println STR ''Certificate was accepted''; Heap_Monad.return ()}
+        | Unsat \<Rightarrow> do {let _ = println STR ''Certificate was rejected''; Heap_Monad.return ()});
     let t = now () - t;
     let _ = println (STR ''Time for certificate checking: '' + time_to_string t);
     Heap_Monad.return (Result check)
@@ -231,12 +241,12 @@ case make_certified_net problem certifier of
     res \<leftarrow> convert_check mode num_split False network renaming cert show_cert;
     let _ = (case res of 
       Result r \<Rightarrow> (case r of
-        Sat \<Rightarrow> do {let _ = println STR ''The planning problem is unsolvable.''; return ()}
-      | _   \<Rightarrow> do {let _ = println STR ''Something went wrong.''; return ()})
-    | Error es \<Rightarrow> do {let _ = map println es; return ()});
-    return ()
+        Sat \<Rightarrow> do {let _ = println STR ''The planning problem is unsolvable.''; Heap_Monad.return ()}
+      | _   \<Rightarrow> do {let _ = println STR ''Something went wrong.''; Heap_Monad.return ()})
+    | Error es \<Rightarrow> do {let _ = map println es; Heap_Monad.return ()});
+    Heap_Monad.return ()
   }
-| Error es \<Rightarrow> do {let _ = map println es; return ()}
+| Error es \<Rightarrow> do {let _ = map println es; Heap_Monad.return ()}
 " for num_split 
 
 (* To do:
