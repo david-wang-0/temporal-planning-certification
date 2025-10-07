@@ -1,16 +1,10 @@
 # How to use
 
-## Install Mercurial
-Find instructions here: https://www.mercurial-scm.org/install
-
 ## Install isabelle 2025
 More instructions here: https://isabelle.in.tum.de/installation.html
 
 ## Add the Isabelle AFP
-A working revision can be obtained from the mercurial repository:
-```
-hg clone --updaterev 2085e31ab5f7e61bec8a294711a6fe740125ada8 https://foss.heptapod.net/isa-afp/afp-2025  
-```
+Go to https://www.isa-afp.org/download/ and download the 2025 version of the AFP
 
 ```
 <isabelle> components -u afp-2025/thys
