@@ -1,32 +1,6 @@
 theory Base                
-  imports Main Containers.Containers
+  imports Main "Containers.Containers"
 begin
-
-section \<open>Time\<close>
-(* 
-class time = linordered_ab_group_add + zero_less_one +
-  assumes dense: "x < y \<Longrightarrow> \<exists>z. x < z \<and> z < y"
-  assumes non_trivial: "\<exists> x. x \<noteq> 0"
-begin
-
-lemma non_trivial_neg: "\<exists> x. x < 0"
-proof -
-  from non_trivial obtain x where "x \<noteq> 0" by auto
-  then show ?thesis
-  proof (cases "x < 0", auto, goal_cases)
-    case 1
-    then have "x > 0" by auto
-    then have "(-x) < 0" by auto
-    then show ?case by blast
-  qed
-qed
-
-lemma GreatestI_time:
-  assumes "P k" and minor: "\<And>y. P y \<Longrightarrow> y \<le> k"
-  shows "P (Greatest P)"
-  using assms GreatestI2_order by blast
-
-end *)
 
 section \<open>Utility Functions and Lemmas\<close>
 
@@ -104,37 +78,11 @@ fun list_max_opt::"('a::linorder) list \<Rightarrow> 'a option" where
 "list_max_opt [] = None" |
 "list_max_opt (x#xs) = Some (list_max_opt' xs x)"
 
-
                                        
 fun fun_upd_lists::"('a \<Rightarrow> 'b) \<Rightarrow> 'a list \<Rightarrow> 'b list \<Rightarrow> ('a \<Rightarrow> 'b)" where
 "fun_upd_lists f [] ys = f" |
 "fun_upd_lists f (x # xs) (y # ys) = fun_upd_lists (f(x := y)) xs ys" |
 "fun_upd_lists f _ _ = f"
-
-
-
-
-text \<open>Obtaining a unique name by appending underscores\<close>
-
-fun matches_start::"'a list \<Rightarrow> 'a list \<Rightarrow> bool" where
-"matches_start [] ys = True" |
-"matches_start xs [] = False" |
-"matches_start (x#xs) (y#ys) = (if (x \<noteq> y) then False else matches_start xs ys)"
-
-function unique_name::"string \<Rightarrow> string list \<Rightarrow> string" where
-"unique_name s [] = s" |
-"unique_name s (x#xs) = (if (matches_start s x) then unique_name (s@''_'') (x#xs) else unique_name s xs)"
-  apply pat_completeness 
-  by auto
-termination sorry
- 
-
-value "unique_name ''main'' [''main_'', ''main__'', ''abc'', ''_main_'', ''__main'']"
-
-fun get_or_default::"'a option \<Rightarrow> 'a \<Rightarrow> 'a" where
-"get_or_default None d = d" |
-"get_or_default (Some x) _ = x"
-
 
 
 

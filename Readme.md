@@ -1,19 +1,56 @@
-Contains:
-- A reduction from ground temporal planning (abstract) to a diagonal timed automaton
-  - Verified (not executable):
-    - Follows: https://ojs.aaai.org/index.php/AAAI/article/view/6539 by Gigante, Micheli, Montanari, Scala
-    - Currently does not check
-    - Adds some things which the original authors added in https://www.sciencedirect.com/science/article/pii/S0004370222000261
-  - Executable (unverified)
-    - Follows: https://www.sciencedirect.com/science/article/pii/S0004370222000261
-    - Adds some ideas from: https://ojs.aaai.org/index.php/AAAI/article/view/6539
-- An abstract formulation of temporal propositional planning semantics (based on work by Abdulaziz, Kurz, Lammich; https://arxiv.org/abs/2203.13604) to enable the formalisation.
-  - Also https://www.semanticscholar.org/paper/PDDL2.1%3A-An-Extension-to-PDDL-for-Expressing-Fox-Long/
-  - And https://ojs.aaai.org/index.php/AAAI/article/view/6539
-- A reduction from ground temporal planning (pretty-printed in a PDDL-like format; based on work by Abdulaziz, Kurz, Lammich; https://arxiv.org/abs/2203.13604) to networks timed automata (in `.muntax`; by Simon Wimmer; https://github.com/wimmers/munta; https://link.springer.com/chapter/10.1007/978-3-030-45190-5_24)
-  - Follows the structure of: https://ojs.aaai.org/index.php/ICAPS/article/view/3476 by Bogomolov, Greitschus, Heinz, Maggazeni, Podelski, Wehrle
-  - Adds ideas from https://www.sciencedirect.com/science/article/pii/S0004370222000261
-  - Executable but unverified
-- An concrete formulation of temporal propositional planning syntax (based on work by Abdulaziz, Kurz, Lammich; https://arxiv.org/abs/2203.13604) to enable the formalisation.
+# How to use
 
-Very much work in progress and not formally verified yet.
+## Install Mercurial
+Find instructions here: https://www.mercurial-scm.org/install
+
+## Install isabelle 2025
+More instructions here: https://isabelle.in.tum.de/installation.html
+
+## Add the Isabelle AFP
+A working revision can be obtained from the mercurial repository:
+```
+hg clone --updaterev 2085e31ab5f7e61bec8a294711a6fe740125ada8 https://foss.heptapod.net/isa-afp/afp-2025  
+```
+
+```
+<isabelle> components -u afp-2025/thys
+```
+Where `<isabelle>` is the Isabelle command
+
+## Add the session for the formalisation
+
+```
+<isabelle> components -u .
+```
+This allows Isabelle to obtain the relevant external dependecies, i.e. the AFP.
+
+`-u` updates the component described by the `ROOT` file in the `.` directory
+
+## Buliding and Navigating
+
+To build/check the project:
+
+```
+<isabelle> build -b TP_NTA_Reduction
+```
+
+`-b` tells Isabelle to store the heap image, i.e. compiled theories.
+`-v` is verbose
+`-c` tells isabelle to clean build
+### To look at the contents
+Build the Munta Model Checker:
+
+```
+<isabelle> build -b Munta_Model_Checker
+```
+This avoids a long startup time.
+
+Start Isabelle/jEdit with the Munta heap loaded:
+
+```
+<isabelle> jedit -l Munta_Model_Checker
+```
+
+It's also possible to select the session in the right panel of the jEdit UI and then restart jEdit.
+
+Navigate to the `temporal-planning-certification` folder in the jEdit UI.

@@ -1,0 +1,61 @@
+(* Combinator parsing examples *)
+
+$(SML_LIB)/basis/basis.mlb
+
+local 
+  ../../../lib/cmlib/cmlib.mlb
+in 
+	signature COORD
+  signature COORDINATED_STREAM
+  signature MONO_STREAMABLE
+	signature POS
+  signature STREAM
+  signature SUM
+
+	structure Coord
+  structure CoordinatedStream
+	structure Pos
+  structure Stream
+  structure SubstringMonoStreamable
+  structure Sum
+end
+
+(* Parcom proper *)
+local
+  ../../../lib/parcom/src/parse.sig
+  ../../../lib/parcom/src/parse.sml
+
+  ../../../lib/parcom/src/charparse.sig
+  ../../../lib/parcom/src/charparse.sml
+
+  ../../../lib/parcom/src/tokparse.sig
+  ../../../lib/parcom/src/tokparse.sml
+  ../../../lib/parcom/src/langparse.sml
+
+in
+
+  signature PARSER_COMBINATORS
+  signature CHAR_PARSER
+  signature MINI_LANGUAGE_DEF
+  signature LANGUAGE_DEF
+  signature TOKEN_PARSER
+
+  structure ParserCombinators
+  structure CharParser
+  structure BasicParser
+
+
+  functor   TokenParser
+  functor   SimpleStyle
+  functor   JavaStyle
+  functor   MLStyle
+
+end
+
+../imports/isalib.mlb
+
+
+(*pddl.sml*)
+../../../../../temporal-pddl-validation/temporal-pddl-semantics/code/TEMPORAL_PDDL_Checker_Exported.sml
+pddl_refactor.sml
+pddl_validate_plan.sml

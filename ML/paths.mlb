@@ -1,0 +1,3 @@
+SMACKAGE $SMACKAGE_HOME/lib
+
+AFP_PATH ~/bin/afp-2025
