@@ -10,7 +10,7 @@
         :parameters (?ob)
         :duration (= ?duration 1)
         :condition (and 
-            (over all (arm-empty))
+            (over all (or (arm-empty)))
             (at start (and (on-table ?ob) (clear ?ob)))
         )
         :effect (and 
@@ -40,7 +40,7 @@
         :parameters  (?ob ?underob)
         :duration (= ?duration 1)
         :condition (and 
-            (over all (holding ?ob))
+            (over all (or (holding ?ob) (holding ?ob)))
             (at start (clear ?underob))
         )
         :effect (at end (and 
