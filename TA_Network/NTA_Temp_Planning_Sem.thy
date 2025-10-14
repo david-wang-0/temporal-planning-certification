@@ -25,8 +25,8 @@ locale nta_temp_planning = temp_plan_for_problem_impl
     and props::"'proposition set"
     and actions:: "'action set" +
 fixes c::'time
-assumes c: "0 < c" (* \<epsilon> + c is an initial delta transition. Necessary to not violate clock constraints
-                      for mutual exclusivity. *)
+assumes c: "0 < c" (* \<epsilon> + c is an initial delta transition. 
+    It is ecessary to not violate clock constraints for mutual exclusivity. *)
 begin
 
 

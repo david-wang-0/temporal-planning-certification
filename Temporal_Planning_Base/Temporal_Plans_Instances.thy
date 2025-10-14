@@ -503,12 +503,6 @@ sublocale restr_to_props_valid: temp_plan_for_problem_list_impl AtStart AtEnd ov
 
 end
 
-(* global_interpretation temp_planning_problem_list_defs "fst" "fst o snd" "snd o snd"
-  "\<lambda>x. Some (lower_bound.GE 0)" "\<lambda>x. Some (upper_bound.LE 2)" fst "fst o snd" "snd o snd"
-   "[STR ''a'', STR ''b'']" "[c]" "1" "[STR ''a'', STR ''b'', STR ''c'']" 
-   "[(([STR ''a''],[],[STR ''b'']), ([],[],[]), [STR ''a'']), (([STR ''a''],[],[STR ''b'']), ([],[],[]), [STR ''a''])]"
-  sorry *)
-
 subsection \<open>Integers as time\<close>
 text \<open>Munta uses integers as inputs for clock constraints. Integers can be obtained from rationals by
 multiplying by a constant.\<close>
@@ -728,62 +722,4 @@ sublocale conc_ref_impl: temp_plan_for_problem_list_impl_int AtStart AtEnd rat_i
   by auto
 end
 
-
-(* 
-locale temp_planning_problem_list_impl_int_ex = temp_planning_problem_list_impl_int'
-  at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
-  for at_start::"'action  \<Rightarrow> 'snap_action" 
-    and at_end::  "'action  \<Rightarrow> 'snap_action"
-    and over_all::"'action  \<Rightarrow> 'proposition list"
-    and lower::   "'action  \<rightharpoonup> int lower_bound"
-    and upper::   "'action  \<rightharpoonup> int upper_bound"
-    and pre::     "'snap_action \<Rightarrow> 'proposition list"
-    and adds::    "'snap_action \<Rightarrow> 'proposition list"
-    and dels::    "'snap_action \<Rightarrow> 'proposition list"
-    and init::"'proposition list"
-    and goal::"'proposition list"
-    and \<epsilon>::"int"
-    and props::   "'proposition list"
-    and actions:: "'action list"
-begin
-context fixes \<pi>::"('i, 'action, int) temp_plan" 
-begin
-
-definition "list_impl_valid_plan \<equiv> temp_plan_defs.valid_plan at_start at_end (set o over_all) 
-  ((map_option (map_lower_bound rat_of_int)) o lower) ((map_option (map_upper_bound rat_of_int)) o upper)
-  (set o pre) (set o adds) (set o dels) (set init) (set goal) (rat_of_int \<epsilon>) 
-  (map_option (map_prod id (map_prod rat_of_int rat_of_int)) o \<pi>)"
-
-definition "list_impl_nso \<equiv> 
-  temp_plan_defs.no_self_overlap (map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ> \<pi>)"
-
-definition "list_impl_pap \<equiv> temp_plan_for_action_defs.plan_actions_in_problem 
-  (map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ> \<pi>)
-  (set actions)"
-
-context 
-  assumes vp: "list_impl_valid_plan"
-      and nso: "list_impl_nso"
-      and pap: "list_impl_pap"
-begin
-interpretation int: temp_plan_for_problem_list_impl_int'
-  apply unfold_locales          
-  subgoal using vp unfolding list_impl_valid_plan_def by simp
-  subgoal using nso unfolding list_impl_nso_def by simp
-  subgoal using pap unfolding list_impl_pap_def by simp
-  done
-
-
-text \<open>If a plan is valid according to the definitions used for this locale, then it is also
-  valid in @{locale temp_plan_for_problem_list_impl_int}\<close>
-lemma example: "int.valid_plan_valid_2.plan2.valid_plan"
-  apply (rule int.conc_ref_impl.vp)
-  done
-end
-
-
-
-end
-end
-   *)
 end
