@@ -6,11 +6,6 @@ theory TP_NTA_Reduction_Spec
 begin
 section \<open>Abstract definition of reduction\<close>
 
-(* draft *)
-(* IMPORTANT: Replace the hard-coded datatypes for equivalence of representations in the non-draft version *)
-(* Time is hardcoded as int here, because this is how Simon does it. He then defines semantics w.r.t. some 
-    automata obtained by replacing integers with reals (which satisfy the assumptions about the time class)
-    To do: Copy the locale structure, so this extends the temporal planning locales. *)
 
 
 (*  off \<rightarrow> start instant!! \<rightarrow> pass time \<rightarrow> end instant!! \<rightarrow> off
@@ -86,12 +81,6 @@ begin
 
 find_theorems name: "local*unique_name"
 
-(*   fixes prop_to_var prop_to_lock
-    and acts_active effecting planning_lock
-  fixes act_to_start_clock act_to_end_clock 
-    and urge_clock
-  fixes off_locct_to_starting_loc act_to_running_lock act_to_end_loc
-    and init_loc planning_loc goal_loc *)
 find_consts name: "implode"
 
 definition "prop_to_var p \<equiv> STR ''var_'' + prop_to_name p"
@@ -421,43 +410,10 @@ definition "init_locs_spec::nat list \<equiv> init_loc # map (\<lambda>x. off_lo
 lemma length_automata_spec: "length automata_spec = Suc (length actions)"
   using timed_automaton_net_spec_def by auto
 
-
-(* broadcast bounds' renum_acts renum_vars renum_clocks renum_states automata urge \<Phi> s\<^sub>0 L\<^sub>0 *)
-(* 
-  broadcast::String.literal list
-  bounds::(String.literal \<times> int \<times> int) list
-  renum_acts::(String.literal \<Rightarrow> nat) (* These 4 come from the model checker *)
-  renum_vars::(String.literal \<Rightarrow> nat)
-  renum_clocks::(String.literal \<Rightarrow> nat)
-  renum_states::(nat \<Rightarrow> nat \<Rightarrow> nat)
-  automata::(nat list 
-    \<times> nat list 
-    \<times> (nat 
-      \<times> (String.literal, int) Simple_Expressions.bexp 
-      \<times> (String.literal, int) acconstraint list 
-      \<times> String.literal act 
-      \<times> (String.literal 
-      \<times> (String.literal, int) exp) list 
-      \<times> String.literal list 
-      \<times> nat) list 
-    \<times> (nat \<times> (String.literal, int) acconstraint list) list) list 
-  urge::String.literal 
-  formula::(nat, nat, String.literal, int) Simple_Network_Language_Model_Checking.formula 
-  init_vars::(String.literal \<times> int) list 
-  init_locs::nat list *)
 thm Simple_Network_Language_Export_Code.Simple_Network_Rename_Formula_String_def[no_vars]
 term "Simple_Network_Rename_Formula_String"
 end
-(*
-global_interpretation a: tp_nta_reduction_spec "[a::String.literal, b]" "[c]" "fst" "fst o snd" "snd o snd"
-  "\<lambda>x. Some (lower_bound.GE 0)" "\<lambda>x. Some (upper_bound.LE 2)" fst "fst o snd" "snd o snd"
-  "1" "[a, b, c]" "[(([a],[],[b]), ([],[],[]), [a]), (([a],[],[b]), ([],[],[]), [a])]"
-  sorry
 
-code_thms "action_defs.mutex_snap_action"
-
-value "a.mutex_effects_spec ([STR ''a''],[],[STR ''b'']) ([STR ''a''],[],[STR ''b''])"
- *)
 
 (* Implement this one.  *)
 locale tp_nta_reduction_spec' = temp_planning_problem_list_impl_int'

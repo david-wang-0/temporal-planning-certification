@@ -8736,5 +8736,10 @@ proof -
   show ?thesis using x.valid_plan_imp_form_holds by auto
 qed
 
+corollary form_not_sat_imp_no_valid_plan:
+  assumes "\<not>(ref_model_checking.net_impl.sem,ref_model_checking.a\<^sub>0 \<Turnstile> reduction_ref_impl.formula_spec)"
+  shows "\<not>(\<exists>\<pi>::(nat, 'action, int) temp_plan. temp_plan_for_problem_list_impl_int' 
+    at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>)"
+  using assms valid_temp_plan_imp_form_holds by auto
 end
 end
