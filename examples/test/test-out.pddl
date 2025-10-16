@@ -1,5 +1,5 @@
 (define (domain ground)
-(:requirements :strips :durative-actions)
+(:requirements :strips)
 (:predicates
  (s_x)
  (p_x)
@@ -21,6 +21,7 @@
     (over all (q_x))
    )
    (at end (r_x))
+   (at start (not (r_x)))
   )
  :effect (and
   (at start (p_x))

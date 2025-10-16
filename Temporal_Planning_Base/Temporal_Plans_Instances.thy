@@ -19,16 +19,16 @@ A problem is an initial state, a goal, a set of actions.\<close>
 
 locale temp_planning_problem_set_impl = 
   temp_planning_problem +
-  temp_planning_problem_and_some_props +
-  temp_planning_problem_and_some_actions +
+  temp_planning_problem_and_finite_props +
+  temp_planning_problem_and_finite_actions +
   temp_planning_problem_and_actions_with_unique_snaps +
   temp_planning_problem_with_bounded_init_and_goal +
   temp_planning_problem_and_actions_ref_props
 
 locale temp_planning_problem_set_impl' =
   temp_planning_problem at_start at_end over_all lower upper pre adds dels init goal \<epsilon> +
-  temp_planning_problem_and_some_props  at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props +
-  temp_planning_problem_and_some_actions  at_start at_end over_all lower upper pre adds dels init goal \<epsilon> actions +
+  temp_planning_problem_and_finite_props  at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props +
+  temp_planning_problem_and_finite_actions  at_start at_end over_all lower upper pre adds dels init goal \<epsilon> actions +
   temp_planning_problem_goal_consts_in_init_consts  at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props +
   temp_planning_problem_and_actions_mod_props at_start at_end over_all lower upper pre adds dels init goal \<epsilon> actions props +
   temp_planning_problem_and_action_consts_in_init_consts at_start at_end over_all lower upper pre adds dels init goal \<epsilon> actions props
@@ -266,9 +266,7 @@ locale temp_planning_problem_list_impl = temp_planning_problem_list_defs
     and \<epsilon>::"'time"
     and props::   "'proposition list"
     and actions:: "'action list" +
-  assumes some_actions: "0 < length actions"
-      and some_props: "0 < length props"
-      and distinct_props: "distinct props"
+  assumes distinct_props: "distinct props"
       and distinct_actions: "distinct actions"
       and distinct_over_all: "\<forall>a \<in> set actions. distinct (over_all a)"
       and snaps_disj: "set_impl.snaps_disj_on (set actions)"
@@ -279,8 +277,6 @@ begin
 sublocale set_impl: temp_planning_problem_set_impl at_start at_end "set o over_all" lower upper
   "set o pre" "set o adds" "set o dels" "set init" "set goal" \<epsilon> "set props" "set actions"
   apply unfold_locales
-  subgoal using some_props card_gt_0_iff by blast
-  subgoal using some_actions card_gt_0_iff by blast
   subgoal using snaps_disj by auto
   subgoal using init_in_props by blast
   subgoal using goal_in_props by blast
@@ -303,9 +299,7 @@ locale temp_planning_problem_list_impl' = temp_planning_problem_list_defs
     and \<epsilon>::"'time"
     and props::   "'proposition list"
     and actions:: "'action list" +
-  assumes some_actions: "0 < length actions"
-      and some_props: "0 < length props"
-      and distinct_props: "distinct props"
+  assumes distinct_props: "distinct props"
       and distinct_actions: "distinct actions"
       and distinct_over_all: "\<forall>a \<in> set actions. distinct (over_all a)"
       and goal_consts_in_init_consts: "set goal - set props \<subseteq> set init - set props"
@@ -318,8 +312,6 @@ sublocale prob_list_impl:
   pre_imp_restr_list add_imp_list del_imp_list
   "list_inter props init" "list_inter props goal" \<epsilon> props actions
   apply unfold_locales
-  using some_actions apply simp
-  using some_props apply simp
   using distinct_props apply simp
   using distinct_actions apply simp
   using distinct_over_all unfolding over_all_restr_list_def apply simp
@@ -552,9 +544,7 @@ locale temp_planning_problem_list_impl_int = temp_planning_problem_list_defs_int
     and \<epsilon>::"int"
     and props::   "'proposition list"
     and actions:: "'action list" +
-  assumes some_actions: "0 < length actions"
-      and some_props: "0 < length props"
-      and distinct_props: "distinct props"
+  assumes distinct_props: "distinct props"
       and distinct_actions: "distinct actions"
       and distinct_over_all: "\<forall>a \<in> set actions. distinct (over_all a)"
       and snaps_disj: "rat_impl.set_impl.snaps_disj_on (set actions)"
@@ -567,7 +557,7 @@ sublocale rat_impl: temp_planning_problem_list_impl at_start at_end over_all
   "(map_option (map_lower_bound rat_of_int)) o lower" "(map_option (map_upper_bound rat_of_int)) o upper"
   pre adds dels init goal "rat_of_int \<epsilon>" props actions
   apply unfold_locales
-  using some_actions some_props distinct_actions distinct_props 
+  using distinct_actions distinct_props 
     distinct_over_all snaps_disj init_in_props goal_in_props acts_ref_props
   by auto
 
@@ -590,9 +580,7 @@ locale temp_planning_problem_list_impl_int' = temp_planning_problem_list_defs_in
     and \<epsilon>::"int"
     and props::   "'proposition list"
     and actions:: "'action list" +
-  assumes some_actions: "0 < length actions"
-      and some_props: "0 < length props"
-      and distinct_props: "distinct props"
+  assumes distinct_props: "distinct props"
       and distinct_actions: "distinct actions"
       and distinct_over_all: "\<forall>a \<in> set actions. distinct (over_all a)"
       and goal_consts_in_init_consts: "set goal - set props \<subseteq> set init - set props"
@@ -605,7 +593,7 @@ sublocale rat_imp':
   "(map_option (map_lower_bound rat_of_int)) o lower" "(map_option (map_upper_bound rat_of_int)) o upper"
   pre adds dels init goal "rat_of_int \<epsilon>" props actions
   apply unfold_locales
-  using some_actions some_props distinct_actions distinct_props 
+  using distinct_actions distinct_props 
     distinct_over_all domain_acts_mod_props goal_consts_in_init_consts act_consts_in_init_consts
   by auto 
 
@@ -614,8 +602,6 @@ sublocale prob_list_impl_int:
   rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
   "rat_impl.list_inter props init" "rat_impl.list_inter props goal" \<epsilon> props actions
   apply unfold_locales
-  using some_actions apply simp
-  using some_props apply simp
   using distinct_props apply simp
   using distinct_actions apply simp
   using distinct_over_all unfolding rat_impl.over_all_restr_list_def apply simp

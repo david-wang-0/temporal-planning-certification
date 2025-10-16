@@ -85,5 +85,6 @@ fun fun_upd_lists::"('a \<Rightarrow> 'b) \<Rightarrow> 'a list \<Rightarrow> 'b
 "fun_upd_lists f _ _ = f"
 
 
+abbreviation (input) comb (infixl "#>" 59) where "a #> b \<equiv> (\<lambda>x. b (a x))"
 
 end

@@ -332,5 +332,4 @@ next
       apply (subst map_of_Cons_code)
     using ix Cons.IH Cons(2) by auto
 qed
-
 end

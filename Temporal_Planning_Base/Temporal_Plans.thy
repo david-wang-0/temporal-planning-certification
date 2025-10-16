@@ -200,6 +200,19 @@ definition act_mod_props where
     snap_mod_props (at_start a)
   \<and> snap_mod_props (at_end a)"
 
+lemma snap_mod_propsI:
+  assumes "adds s \<subseteq> props"
+      and "dels s \<subseteq> props"
+  shows "snap_mod_props s"
+  unfolding snap_mod_props_def
+  using assms by simp
+
+lemma act_mod_propsI:
+  assumes "snap_mod_props (at_start a)"
+    "snap_mod_props (at_end a)"
+  shows "act_mod_props a"
+  unfolding act_mod_props_def using assms by simp
+
 text \<open>Actions only refer to a certain set of propositions.\<close>
 definition snap_ref_props where
 "snap_ref_props s \<equiv> pre s \<union> adds s \<union> dels s \<subseteq> props"
@@ -219,10 +232,10 @@ lemma act_ref_props_imp_act_mod_props:
   unfolding act_ref_props_def act_mod_props_def by auto
 
 text \<open>Constants \<close>
-abbreviation snap_consts where
+definition snap_consts where
 "snap_consts s \<equiv> pre s \<union> adds s \<union> dels s - props"
 
-abbreviation act_consts where
+definition act_consts where
 "act_consts a \<equiv> snap_consts (at_start a) \<union> snap_consts (at_end a) \<union> (over_all a - props)"
 
 end
@@ -2172,7 +2185,8 @@ definition plan_consts where
 definition happ_seq_consts where
 "happ_seq_consts \<equiv> \<Union>(snap_consts ` {s|t s. (t, s) \<in> plan_happ_seq})"
 
-lemma happ_seq_consts_const: "happ_seq_consts \<inter> props = {}" unfolding happ_seq_consts_def by auto
+lemma happ_seq_consts_const: "happ_seq_consts \<inter> props = {}" 
+  unfolding happ_seq_consts_def act_consts_def snap_consts_def  by auto
 
 definition domain_consts where
 "domain_consts \<equiv> plan_consts \<union> (goal - props) \<union> (init - props)"
@@ -2210,13 +2224,16 @@ lemma plan_acts_ref_props_is_const_respecting: "plan_acts_ref_props \<Longrighta
 lemma plan_acts_ref_props_consts:
   assumes "plan_acts_ref_props"
   shows "plan_consts = {}"
-  using assms unfolding plan_acts_ref_props_def plan_consts_def act_ref_props_def plan_actions_def snap_ref_props_def
+  using assms unfolding plan_consts_def plan_actions_def 
+    plan_acts_ref_props_def act_ref_props_def snap_ref_props_def
+    act_consts_def snap_consts_def 
   by (auto simp: Let_def)
 
 lemma cr_plan_consts:
   assumes "plan_acts_mod_props"
   shows "plan_consts = \<Union> ((\<lambda>a. pre (at_start a) \<union> pre (at_end a) \<union> over_all a) ` {a|a t d. (a, t, d) \<in> ran \<pi>}) - props"
-  using assms unfolding plan_acts_mod_props_def plan_consts_def act_mod_props_def snap_mod_props_def plan_actions_def by fast
+  using assms unfolding plan_acts_mod_props_def plan_consts_def act_mod_props_def snap_mod_props_def plan_actions_def 
+  act_consts_def snap_consts_def by fast
 
 lemma cr_domain_consts:
   assumes "plan_acts_mod_props"
@@ -2228,9 +2245,9 @@ lemma plan_and_happ_seq_consts:
   unfolding plan_consts_def happ_seq_consts_def 
   apply (rule equalityI; rule subsetI)
   subgoal for x
-    unfolding plan_happ_seq_def plan_actions_def by fast
+    unfolding plan_happ_seq_def plan_actions_def act_consts_def snap_consts_def  by fast
   subgoal for x
-    using in_happ_seq_exD_act plan_actions_def by fast
+    using in_happ_seq_exD_act unfolding plan_actions_def act_consts_def snap_consts_def by fast
   done
 
 lemma cr_plan_cr_happ_seq:
@@ -2241,10 +2258,11 @@ lemma cr_happ_seq_consts:
   assumes "const_resp_happ_seq"
   shows "happ_seq_consts = \<Union>(pre ` {s|t s. (t, s) \<in> plan_happ_seq}) - props"
   using assms unfolding const_resp_happ_seq_def  happ_seq_consts_def snap_mod_props_def
+  unfolding act_consts_def snap_consts_def 
   by blast
 
 lemma plan_consts_not_fluent:
-  "props \<inter> plan_consts = {}" unfolding plan_consts_def by blast
+  "props \<inter> plan_consts = {}" unfolding plan_consts_def act_consts_def snap_consts_def  by blast
 
 lemma domain_consts_not_fluent:
   "props \<inter> domain_consts = {}" 

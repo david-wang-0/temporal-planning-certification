@@ -8516,7 +8516,7 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R =
        apply (rule step_u.step_int[where p = 0])
       unfolding TAG_def
                  apply (subst conv_trans)
-      using some_actions length_automata_spec apply simp
+      using length_automata_spec apply simp
                  apply (subst main_auto_trans)
                  apply (rule image_eqI)
                   prefer 2
@@ -8623,7 +8623,7 @@ proof -
         apply (rule step_int[where p = 0])
       unfolding TAG_def
                   apply (subst conv_trans)
-      using length_automata_spec some_actions apply simp
+      using length_automata_spec apply simp
                   apply (subst main_auto_trans)
                   apply (rule image_eqI[where x = main_auto_loop_spec])
                    apply (subst main_auto_loop_spec_def)

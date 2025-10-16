@@ -413,7 +413,7 @@ lemma length_automata_spec: "length automata_spec = Suc (length actions)"
 end
 
 
-(* Implement this one.  *)
+(* Implement this one.  *)                            
 locale tp_nta_reduction_spec' = temp_planning_problem_list_impl_int'
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
   for init :: "'proposition list"

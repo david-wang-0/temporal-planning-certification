@@ -11,6 +11,7 @@
     :parameters (?x - object)
     :duration  (= ?duration 10)
     :condition (and 
+        (at start (not (r ?x)))
         (over all (or (p ?x) (q ?x)))
         (at end (r ?x))
     )
