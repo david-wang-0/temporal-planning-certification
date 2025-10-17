@@ -299,6 +299,12 @@ proof -
     using assms 1 is_pos_conj_Big_And is_pos_conj_map_formula by auto
 qed
 
+sublocale temp_planning_problem_list_defs_int 
+  at_start_spec at_end_spec over_all_spec
+  lower_spec upper_spec pre_spec adds_spec dels_spec
+  init_spec goal_spec 0 props_spec actions_spec
+  by unfold_locales simp
+
 end
 
 locale ground_ast_problem = 

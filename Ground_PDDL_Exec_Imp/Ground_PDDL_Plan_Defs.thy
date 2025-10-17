@@ -100,11 +100,10 @@ lemma is_integral_floor_ne:
   by (cases "x \<le> y") force+
 
 locale ground_plan_defs = 
-  ground_ast_problem_defs P
-  for P::ast_problem 
+  ground_ast_problem_defs P 
+  for P::ast_problem +
+  fixes tp::"(rat \<times> plan_action) list"
 begin
-
-
 
 fun plan_act_no_args where
 "plan_act_no_args (Simple_Plan_Action n []) = True" |
@@ -129,25 +128,32 @@ fun PDDL_no_self_overlap::"(rat \<times> plan_action) \<Rightarrow> (rat \<times
 "PDDL_no_self_overlap (t, Durative_Plan_Action x _ d) (u, Durative_Plan_Action y _ e) =
   (x = y \<longrightarrow> \<not>((t \<le> u \<and> u \<le> t + d) \<or> (u \<le> t \<and> t \<le> u + e)))"
 
-definition "PDDL_plan_no_self_overlap tp \<equiv> list_pairwise PDDL_no_self_overlap tp"
+definition "PDDL_plan_no_self_overlap \<equiv> list_pairwise PDDL_no_self_overlap tp"
 
 fun ref_no_self_overlap::"(ast_action_schema \<times> int \<times> int) \<Rightarrow> (ast_action_schema \<times> int \<times> int) \<Rightarrow> bool" where
 "ref_no_self_overlap (a, t, d) (b, u, e) = ((a = b) \<longrightarrow> \<not>((t \<le> u \<and> u \<le> t + d) \<or> (u \<le> t \<and> t \<le> u + e)))"
 
 definition ref_plan where
-"ref_plan tp \<equiv> (map timed_plan_action_to_ref_plan_action tp)"
+"ref_plan \<equiv> (map timed_plan_action_to_ref_plan_action tp)"
 
-definition "ref_plan_no_self_overlap tp \<equiv> list_pairwise ref_no_self_overlap (ref_plan tp)"
+definition "ref_plan_no_self_overlap \<equiv> list_pairwise ref_no_self_overlap ref_plan"
+
+find_theorems name: "temp_plan_defs*no_self"
+
+definition plan_imp where
+"plan_imp \<equiv> 
+  ref_plan
+  |> nth_opt"
 
 end
 
 locale valid_ground_plan =
   ground_ast_problem P +
-  ground_plan_defs P tp 
+  ground_plan_defs P tp
   for P::ast_problem 
   and tp::"(rat \<times> plan_action) list" +
 assumes valid_plan: "valid_plan tp"
-  and "PDDL_plan_no_self_overlap"
+  and pddl_nso: "PDDL_plan_no_self_overlap"
   and plan_acts_no_args: "list_all (snd #> plan_act_no_args) tp"
   and plan_acts_durs_integral: "list_all (timed_plan_action_durs_integral) tp"
 begin
@@ -310,7 +316,7 @@ next
     { assume "u + e < t"
       hence "floor (u + e) < floor t" 
         by (intro vs_integral is_integral_floor_less is_integral_add)
-      hence "floor u + floor e < floor y" by linarith
+      hence "floor u + floor e < floor t" by linarith 
     }
     ultimately
     have " \<not> (\<lfloor>t\<rfloor> \<le> \<lfloor>u\<rfloor> \<and> \<lfloor>u\<rfloor> \<le> plus_int \<lfloor>t\<rfloor> \<lfloor>d\<rfloor> \<or> \<lfloor>u\<rfloor> \<le> \<lfloor>t\<rfloor> \<and> \<lfloor>t\<rfloor> \<le> plus_int \<lfloor>u\<rfloor> \<lfloor>e\<rfloor>)" 
@@ -326,39 +332,55 @@ next
 qed 
 
 
-lemma no_PDDL_plan_self_overlap_imp_no_ref_plan_self_overlap:
-  assumes PDDL_plan_no_self_overlap
-  shows ref_plan_no_self_overlap
+lemma ref_plan_no_self_overlap: "ref_plan_no_self_overlap"
 proof -
   have "wf_plan tp" using valid_plan unfolding valid_plan_def valid_plan_from_def by blast
   hence "list_all (snd #> wf_plan_action) tp" unfolding wf_plan_def list_all_iff by auto
   thus ?thesis
-    using assms plan_acts_no_args plan_acts_durs_integral
+    using pddl_nso plan_acts_no_args plan_acts_durs_integral
     unfolding PDDL_plan_no_self_overlap_def ref_plan_no_self_overlap_def ref_plan_def
-    proof (induction tp)
-      case Nil
-      then show ?case by simp
-    next
-      case (Cons pa pas)
-      have 1: "list_pairwise ref_no_self_overlap (map timed_plan_action_to_ref_plan_action pas)" using Cons by simp
+  proof (induction tp)
+    case Nil
+    then show ?case by simp
+  next
+    case (Cons pa pas)
+    have 1: "list_pairwise ref_no_self_overlap (map timed_plan_action_to_ref_plan_action pas)" using Cons by simp
 
-      have nso: "list_all (PDDL_no_self_overlap pa) pas" using Cons by simp
-      have wf: "list_all (\<lambda>x. wf_plan_action (snd x)) (pa # pas)" using Cons by blast
-      have no_args: "list_all (\<lambda>x. plan_act_no_args (snd x)) (pa # pas)" using Cons by blast
-      have are_integral: "list_all timed_plan_action_durs_integral (pa # pas)" using Cons by blast
+    have nso: "list_all (PDDL_no_self_overlap pa) pas" using Cons by simp
+    have wf: "list_all (\<lambda>x. wf_plan_action (snd x)) (pa # pas)" using Cons by blast
+    have no_args: "list_all (\<lambda>x. plan_act_no_args (snd x)) (pa # pas)" using Cons by blast
+    have are_integral: "list_all timed_plan_action_durs_integral (pa # pas)" using Cons by blast
 
-      have 2: "list_all (ref_no_self_overlap (timed_plan_action_to_ref_plan_action pa)) (map timed_plan_action_to_ref_plan_action pas)"
-        using nso wf no_args are_integral PDDL_no_self_overlap_imp_ref_no_self_overlap unfolding list_all_iff by simp
+    have 2: "list_all (ref_no_self_overlap (timed_plan_action_to_ref_plan_action pa)) (map timed_plan_action_to_ref_plan_action pas)"
+      using nso wf no_args are_integral PDDL_no_self_overlap_imp_ref_no_self_overlap unfolding list_all_iff by simp
 
-      show ?case using 1 2 by simp
-    qed
+    show ?case using 1 2 by simp
+  qed
 qed
 
-definition plan_imp where
-"plan_imp \<equiv> 
-  map timed_plan_action_to_ref_plan_action tp
-  |> nth_opt"
 
+find_theorems name: "temp_plan_defs.no_self_over"
+
+sublocale imp_defs: temp_plan_for_problem_list_defs_int
+  at_start_spec at_end_spec over_all_spec
+  lower_spec upper_spec pre_spec adds_spec dels_spec
+  init_spec goal_spec 0 props_spec actions_spec plan_imp  
+  by unfold_locales simp
+
+
+lemma temp_plan_no_self_overlap:
+  "imp_defs.rat_impl.no_self_overlap"
+  unfolding imp_defs.rat_impl.no_self_overlap_def
+proof -
+  define \<pi> where "\<pi> \<equiv> ((map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ>\<circ>\<circ> ground_plan_defs.plan_imp) P tp)"
+  have "\<forall>i j a t d u e.  i \<noteq> j \<and> i \<in> dom \<pi> \<and> j \<in> dom \<pi> 
+    \<and> Some (a, t, d) = \<pi> i \<and> Some (a, u, e) = \<pi> j 
+    \<longrightarrow> \<not>(t \<le> u \<and> u \<le> t + d)"
+  proof (intro strip, elim conjE)
+
+
+
+qed
 
 sublocale red_corr: tp_nta_reduction_correctness' init_spec goal_spec 
   at_start_spec at_end_spec over_all_spec
