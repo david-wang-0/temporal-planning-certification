@@ -1,9 +1,7 @@
-theory PDDL_TP_Reduction
+theory Ground_PDDL_Problem_TP_Reduction
   imports "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics_Alt"
     "TP_NTA_Reduction.TP_NTA_Reduction_Model_Checking"
 begin
-
-find_theorems name: "rat*linorder"
 
 instantiation lower_bound::(linorder) linorder
 begin
@@ -94,11 +92,11 @@ begin
 
 definition "props_spec \<equiv> map pred (predicates D)"
 
-definition "prop_to_name_spec \<equiv> predicate.name #> String.implode"
+definition "prop_to_name_spec \<equiv> predicate.name"
 
 definition "actions_spec \<equiv> actions D"
 
-definition "act_to_name_spec \<equiv> ast_action_schema.name #> String.implode"
+definition "act_to_name_spec \<equiv> ast_action_schema.name"
 
 
 fun to_predicate::"object atom Formulas.formula \<Rightarrow> predicate" where
@@ -226,8 +224,9 @@ fun is_pos_lit :: "'a atom Formulas.formula \<Rightarrow> bool" where
   "is_pos_lit _ = False"
 
 fun is_pos_conj :: "'a atom Formulas.formula \<Rightarrow> bool" where
-  "is_pos_conj (f \<^bold>\<and> g) \<longleftrightarrow> is_pos_lit f \<and> is_pos_conj g" |
+  "is_pos_conj (f \<^bold>\<and> g) \<longleftrightarrow> is_pos_conj f \<and> is_pos_conj g" |
   "is_pos_conj f \<longleftrightarrow> is_pos_lit f"
+(* This does not have to be right recursive. It could be beneficial *)
 
 text \<open>End: Taken from M. Vollath\<close>
 
@@ -239,8 +238,11 @@ fun act_no_args::"ast_action_schema \<Rightarrow> bool" where
 "act_no_args (Durative_Action_Schema n ps d pre eff) = (ps = [])" 
 
 fun act_pres_pos::"ast_action_schema \<Rightarrow> bool" where
-"act_no_args (Simple_Action_Schema n ps pre eff) = (is_pos_conj (map snd pre))" |
-"act_no_args (Durative_Action_Schema n ps d pre eff) = (is_pos_conj (map snd pre))" 
+"act_pres_pos (Simple_Action_Schema n ps pre eff) = (is_pos_conj (pre))" |
+"act_pres_pos (Durative_Action_Schema n ps d pre eff) = (list_all is_pos_conj (map snd pre))"
+
+fun ground_act_pres_pos::"ground_action \<Rightarrow> bool" where
+"ground_act_pres_pos (Ground_Action pre eff) = (is_pos_conj pre)"
 
 lemma wf_pos_conj_fmla_imp_wf_atoms: 
     assumes "wf_fmla M form"
@@ -258,7 +260,48 @@ lemma wf_pos_conj_fmla_imp_wf_atoms:
     by (cases f) auto
   by auto
 
-  
+lemma is_pos_conj_map_formula:
+  assumes "is_pos_conj form"
+  shows "is_pos_conj (Formulas.map_formula (map_atom f) form)"
+  using assms
+  apply (induction form)
+  subgoal for x by (cases x) auto
+  subgoal by simp
+  subgoal for g
+    apply (induction g)
+    subgoal for x by (cases x) auto
+    by auto
+  subgoal for f g by (cases f) auto
+  by auto
+
+lemma is_pos_conj_Big_And:
+  assumes "list_all is_pos_conj x"
+  shows "is_pos_conj (BigAnd x)"
+  using assms by (induction x) auto
+
+lemma instantiate_action_schema_pres_pos:
+  assumes "act_pres_pos (Simple_Action_Schema n ps pre eff)"
+      and "action_params_match (Simple_Action_Schema n ps pre eff) as"
+    shows "ground_act_pres_pos (instantiate_action_schema (Simple_Action_Schema n ps pre eff) as)"
+proof -
+  have 1: "is_pos_conj pre"
+    using assms(1) by auto
+  show ?thesis 
+    using assms 1 is_pos_conj_map_formula by auto
+qed
+
+lemma inst_snap_act_pres_pos:
+  assumes "act_pres_pos (Durative_Action_Schema n ps d pre eff)"
+      and "action_params_match (Durative_Action_Schema n ps d pre eff) as"
+    shows "ground_act_pres_pos (inst_snap_action (Durative_Action_Schema n ps d pre eff) as x)"
+proof -
+  have 1: "list_all is_pos_conj (filter_time_spec x pre)"
+    using assms(1)
+    unfolding  filter_time_spec_def comp_def
+    apply (subst (asm) act_pres_pos.simps)
+    unfolding list_all_iff by auto
+  show ?thesis 
+    using assms 1 is_pos_conj_Big_And is_pos_conj_map_formula by auto
 qed
 
 end
@@ -270,11 +313,20 @@ locale ground_ast_problem =
   assumes positive_goal: "is_pos_conj (goal P)"
       and preds_no_args: "list_all pred_no_args (predicates D)"
       and acts_no_args: "list_all act_no_args (actions D)"
-      and positive_act_pres: "list_all (\<lambda>a. 
+      and positive_act_pres: "list_all act_pres_pos (actions D)"
       and no_functions: "functions D = []"
 begin
-  
 
+lemma act_params_match_empty:
+  assumes "a \<in> set actions_spec"
+  shows "action_params_match a []"
+  using assms
+  apply (induction a)
+  using acts_no_args 
+  unfolding action_params_match_def actions_spec_def list_all_iff 
+  by auto
+  
+(* Any wf atomic formula's predicates' ids are in the set of ids that we use as propositions *)
 lemma wf_fmla_atom_in_props:
   assumes "wf_fmla_atom M x"
   shows "to_predicate x \<in> set props_spec"
@@ -295,7 +347,25 @@ proof -
   hence Ts_ran: "Ts \<in> ran sig" 
     by (rule ranI)
   hence p_dom: "p \<in> dom sig" using Ts by auto
-  have "snd ` set (map (\<lambda>x. case x of PredDecl p n \<Rightarrow> (p, n)) (predicates local.D)) = {[]}"
+  have "fst ` set (map (\<lambda>x. case x of PredDecl p n \<Rightarrow> (p, n)) (predicates D)) = pred ` set (predicates D)"
+    apply (intro equalityI subsetI)
+    unfolding set_map image_image
+     apply (erule imageE)
+    subgoal for x predd
+      apply (cases predd)
+      using predicate_decl.sel by force
+    apply (erule imageE)
+    subgoal for x predd
+      apply (cases predd)
+      using predicate_decl.sel by force
+    done
+  then
+  show ?thesis
+    unfolding x to_predicate.simps
+    unfolding props_spec_def
+    using p_dom unfolding sig_def
+    unfolding dom_map_of_conv_image_fst by auto
+  (* have "snd ` set (map (\<lambda>x. case x of PredDecl p n \<Rightarrow> (p, n)) (predicates local.D)) = {[]}"
   proof (rule equalityI)
     show pred_args: "snd ` (set (map (\<lambda>x. case x of PredDecl p n \<Rightarrow> (p, n)) (predicates D))) \<subseteq> {[]}"
     proof (intro  subsetI)
@@ -327,27 +397,12 @@ proof -
       have "Ts = []" by blast
       thus ?thesis using Ts_ran 1 by auto
     qed
-  qed
-  have "fst ` set (map (\<lambda>x. case x of PredDecl p n \<Rightarrow> (p, n)) (predicates D)) = pred ` set (predicates D)"
-    apply (intro equalityI subsetI)
-    unfolding set_map image_image
-     apply (erule imageE)
-    subgoal for x predd
-      apply (cases predd)
-      using predicate_decl.sel by force
-    apply (erule imageE)
-    subgoal for x predd
-      apply (cases predd)
-      using predicate_decl.sel by force
-    done
-  then
-  show ?thesis
-    unfolding x to_predicate.simps
-    unfolding props_spec_def
-    using p_dom unfolding sig_def
-    unfolding dom_map_of_conv_image_fst by auto
+  qed *)
 qed
 
+
+text \<open>Snap actions are well formed, because they are just ground actions obtained using the
+functions in the PDDL formalisation\<close>
 lemma start_snaps_wf:
   assumes "a \<in> set actions_spec"
   shows "wf_ground_action (at_start_spec a)"
@@ -407,6 +462,7 @@ next
   qed
 qed
 
+text \<open>The over-all condition is obtained by first instantiating the action.\<close>
 lemma over_all_snap_wf:
   assumes "a \<in> set actions_spec"
   shows "wf_ground_action (over_all_snap a)"
@@ -432,19 +488,65 @@ next
   qed
 qed
 
+lemma start_snap_pre_pos_conj:
+  assumes "a \<in> set actions_spec"
+  shows "ground_act_pres_pos (at_start_spec a)"
+  using assms
+proof (induction a)
+  case 1: (Simple_Action_Schema n ps pre eff)
+  have "act_pres_pos (Simple_Action_Schema n ps pre eff)" using 1 positive_act_pres 
+    unfolding actions_spec_def list_all_iff by auto
+  then show ?case using instantiate_action_schema_pres_pos act_params_match_empty 1 by fastforce
+next
+  case 1: (Durative_Action_Schema n ps d pre eff)
+  have "act_pres_pos (Durative_Action_Schema n ps d pre eff)" using 1 positive_act_pres 
+    unfolding actions_spec_def list_all_iff by auto
+  then show ?case using inst_snap_act_pres_pos act_params_match_empty 1 by fastforce
+qed
+
+lemma end_snap_pre_pos_conj:
+  assumes "a \<in> set actions_spec"
+  shows "ground_act_pres_pos (at_end_spec a)"
+  using assms
+proof (induction a)
+  case 1: (Simple_Action_Schema n ps pre eff)
+  show ?case unfolding at_end_spec.simps non_ground_action_def by auto
+next
+  case 1: (Durative_Action_Schema n ps d pre eff)
+  have "act_pres_pos (Durative_Action_Schema n ps d pre eff)" using 1 positive_act_pres 
+    unfolding actions_spec_def list_all_iff by auto
+  then show ?case using inst_snap_act_pres_pos act_params_match_empty 1 by fastforce
+qed
+
+lemma over_all_snap_pre_pos_conj:
+  assumes "a \<in> set actions_spec"
+  shows "ground_act_pres_pos (over_all_snap a)"
+  using assms
+proof (induction a)
+  case 1: (Simple_Action_Schema n ps pre eff)
+  show ?case unfolding  over_all_snap.simps non_ground_action_def by simp
+next
+  case 1: (Durative_Action_Schema n ps d pre eff)
+  have "act_pres_pos (Durative_Action_Schema n ps d pre eff)" using 1 positive_act_pres 
+    unfolding actions_spec_def list_all_iff by auto
+  then show ?case using inst_snap_act_pres_pos act_params_match_empty 1 by fastforce
+qed
+
+text \<open>Conditions and effects of well formed ground actions are in props. Snap actions are ground actions\<close>
 lemma wf_ground_action_pres_in_props:
   assumes "wf_ground_action h"
+      and "ground_act_pres_pos h"
   shows "(set \<circ> pre_spec) h \<subseteq> set props_spec"
   using assms
 proof (induction h)
   case (Ground_Action pre eff)
-  have 1: "list_all (wf_fmla_atom objT) (pre)"
-    using Ground_Action unfolding wf_ground_action.simps apply (induction eff)
-    using wf_effect.simps list_all_iff by auto
-  show ?case 
-    apply (rule subsetI)
-    unfolding comp_def pres_spec.simps
-    using 1 wf_fmla_atom_in_props 
+  have 1: "(wf_fmla objT) pre"
+    using Ground_Action by auto
+  have 2: "is_pos_conj pre"
+    using Ground_Action by auto
+  show ?case  
+    using wf_pos_conj_fmla_imp_wf_atoms[OF 1 2] 
+      wf_fmla_atom_in_props 
     unfolding list_all_iff by auto
 qed
 
@@ -480,7 +582,29 @@ proof (induction h)
     unfolding list_all_iff by auto
 qed
 
+text \<open>Actions' over_all conditions are in props.\<close>
 
+lemma over_all_in_props:
+  assumes "a \<in> set actions_spec"
+  shows "set (over_all_spec a) \<subseteq> set props_spec"
+  using assms
+proof (induction a)
+  case 1: (Simple_Action_Schema x1 x2 x3 x4)
+  hence 2: "wf_action_schema (Simple_Action_Schema x1 x2 x3 x4)" using wf_domain 
+    unfolding wf_domain_def actions_spec_def by blast
+  show ?case unfolding over_all_spec.simps
+    using wf_ground_action_pres_in_props[simplified comp_def]
+    using over_all_snap_wf 1 over_all_snap_pre_pos_conj by blast+
+next
+  case 1: (Durative_Action_Schema x1 x2 x3 x4 x5)
+  hence 2: "wf_action_schema (Durative_Action_Schema x1 x2 x3 x4 x5)" using wf_domain 
+    unfolding wf_domain_def actions_spec_def by blast
+  show ?case unfolding over_all_spec.simps
+    using wf_ground_action_pres_in_props[simplified comp_def]
+    using over_all_snap_wf  1 over_all_snap_pre_pos_conj by blast+
+qed
+
+text \<open>The initial state and goal are in the props\<close>
 lemma init_in_props: "set init_spec \<subseteq> set props_spec"
 proof -
   have 1: "\<forall>f\<in>set (init P). wf_fmla_atom objT f \<or> wf_func_assign f"
@@ -527,7 +651,7 @@ proof -
   thus ?thesis using goal_spec_def by auto
 qed
 
-sublocale tp_nta_reduction_model_checking' 
+sublocale abstr_model_checking: tp_nta_reduction_model_checking' 
   init_spec goal_spec at_start_spec at_end_spec 
   over_all_spec 
   lower_spec upper_spec 
@@ -577,24 +701,56 @@ proof
     assume "x \<in> action_set_and_props.action_consts at_start_spec at_end_spec (set \<circ> over_all_spec) (set \<circ> pre_spec) (set \<circ> adds_spec) (set \<circ> dels_spec) (set props_spec) (set actions_spec)"
     then obtain a where
       a: "x \<in> action_and_prop_set.act_consts at_start_spec at_end_spec (set \<circ> over_all_spec) (set \<circ> pre_spec) (set \<circ> adds_spec) (set \<circ> dels_spec) (set props_spec) a" 
-      "a \<in> set actions_spec" unfolding action_set_and_props.action_consts_def by blast
+      and a_in_acts: "a \<in> set actions_spec" unfolding action_set_and_props.action_consts_def by blast
     then consider "x \<in> action_and_prop_set.snap_consts (set \<circ> pre_spec) (set \<circ> adds_spec) (set \<circ> dels_spec) (set props_spec) (at_start_spec a)"
       | "x \<in> action_and_prop_set.snap_consts (set \<circ> pre_spec) (set \<circ> adds_spec) (set \<circ> dels_spec) (set props_spec) (at_end_spec a)"
       | "x \<in> ((set \<circ> over_all_spec) a - set props_spec)" unfolding action_and_prop_set.act_consts_def by auto
     hence "x \<in> {}" 
     proof (cases)
       case 1
-      hence "x \<in> undefined" unfolding action_and_prop_set.snap_consts_def
-      then show ?thesis sorry
+      obtain pre eff where
+        a': "Ground_Action pre eff = at_start_spec a"
+        "wf_ground_action (Ground_Action pre eff)" 
+        using start_snaps_wf[OF a_in_acts] apply (cases "at_start_spec a") by auto
+      have b: "ground_act_pres_pos (at_start_spec a)" using start_snap_pre_pos_conj a_in_acts by blast
+      have "(set \<circ> pre_spec) (at_start_spec a) \<union> (set \<circ> adds_spec) (at_start_spec a) \<union> (set \<circ> dels_spec) (at_start_spec a) \<subseteq> set props_spec"
+        using wf_ground_action_pres_in_props wf_ground_action_dels_in_props wf_ground_action_adds_in_props
+        using a' b by simp
+      then show ?thesis using 1 unfolding action_and_prop_set.snap_consts_def by blast
     next
       case 2
-      then show ?thesis sorry
+      obtain pre eff where
+        a': "Ground_Action pre eff = at_end_spec a"
+        "wf_ground_action (Ground_Action pre eff)" 
+        using end_snaps_wf[OF a_in_acts] apply (cases "at_end_spec a") by auto
+      have b: "ground_act_pres_pos (at_end_spec a)" using end_snap_pre_pos_conj a_in_acts by blast
+      have "(set \<circ> pre_spec) (at_end_spec a) \<union> (set \<circ> adds_spec) (at_end_spec a) \<union> (set \<circ> dels_spec) (at_end_spec a) \<subseteq> set props_spec"
+        using wf_ground_action_pres_in_props wf_ground_action_dels_in_props wf_ground_action_adds_in_props
+        using a' b by simp
+      then show ?thesis using 2 unfolding action_and_prop_set.snap_consts_def by blast
     next
       case 3
-      then show ?thesis sorry
+      then show ?thesis using a_in_acts over_all_in_props by auto
     qed
-        
-    show "x \<in> set init_spec - set props_spec" sorry
+    thus "x \<in> set init_spec - set props_spec" using init_in_props by blast
+  qed
+  show "inj_on act_to_name_spec (set actions_spec)"
+  proof -
+    have "distinct (map ast_action_schema.name actions_spec)" 
+      using wf_domain wf_domain_def actions_spec_def by presburger
+    thus ?thesis unfolding distinct_map act_to_name_spec_def by blast
+  qed                                       
+  show "inj_on prop_to_name_spec (set props_spec)"
+  proof -
+    have "distinct (map pred (predicates local.D))"
+      using wf_domain unfolding wf_domain_def by auto
+    hence "distinct (map predicate.name (map pred (predicates local.D)))"
+      apply (rule distinct_inj_map)
+      apply (rule injI)
+      using predicate.expand by simp
+    thus ?thesis
+      unfolding prop_to_name_spec_def props_spec_def
+      unfolding distinct_map by blast
   qed
 qed
 end
