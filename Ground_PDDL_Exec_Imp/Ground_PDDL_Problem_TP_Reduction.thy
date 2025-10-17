@@ -87,7 +87,8 @@ fun comp_opt_ge::"('a::linorder) option \<Rightarrow> ('a::linorder) option \<Ri
 "comp_opt_ge (Some x) None = True" |
 "comp_opt_ge (Some x) (Some y) = (x \<ge> y)"
 
-context ast_problem
+locale ground_ast_problem_defs = ast_problem P
+  for P :: ast_problem
 begin
 
 definition "props_spec \<equiv> map pred (predicates D)"
@@ -206,12 +207,6 @@ fun upper_spec::"ast_action_schema \<Rightarrow> _" where
 "upper_spec (Durative_Action_Schema n ps d cond eff) = (dc_list_upper d)"
 
 
-
-end
-
-locale ground_ast_problem_defs = ast_problem P
-  for P :: ast_problem
-begin
 
 text \<open>Begin: Taken from M. Vollath\<close>
 fun is_pos_lit :: "'a atom Formulas.formula \<Rightarrow> bool" where
