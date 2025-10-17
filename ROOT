@@ -5,6 +5,8 @@ session Temporal_Planning_Base in Temporal_Planning_Base = Munta_Model_Checker +
     ListMisc
     Temporal_Plans 
     Sequences
+  document_files (in "../document")
+    "root.bib"
 
 session TP_NTA_Reduction in TA_Network =
   Temporal_Planning_Base + 

@@ -1,6 +1,0 @@
-theory Ground_PDDL_Plan_TP_Reduction
-  imports Ground_PDDL_Problem_TP_Reduction
-begin
-
-
-end
