@@ -377,8 +377,8 @@ proof -
     \<and> Some (a, t, d) = \<pi> i \<and> Some (a, u, e) = \<pi> j 
     \<longrightarrow> \<not>(t \<le> u \<and> u \<le> t + d)"
   proof (intro strip, elim conjE)
-
-
+    
+  qed
 
 qed
 
