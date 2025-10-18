@@ -332,4 +332,121 @@ next
       apply (subst map_of_Cons_code)
     using ix Cons.IH Cons(2) by auto
 qed
+
+
+
+fun list_pairwise::"('a \<Rightarrow> 'a \<Rightarrow> bool) \<Rightarrow> 'a list \<Rightarrow> bool" where
+"list_pairwise P [] = True" |
+"list_pairwise P (x#xs) = (list_all (P x) xs \<and> list_pairwise P xs)"
+
+(* Todo?: list_pairwise and Set.pairwise conditional equivalence.
+    Not needed yet. *)
+
+find_theorems "?x \<noteq> ?y \<Longrightarrow> (?x < ?y \<Longrightarrow> ?thesis) \<Longrightarrow> (?y < ?x \<Longrightarrow> ?thesis) \<Longrightarrow> ?thesis"
+
+lemma list_pairwise_nth: "list_pairwise P xs \<longleftrightarrow> (\<forall>i j. j < length xs \<longrightarrow> i < j \<longrightarrow> P (xs ! i) (xs ! j))"
+proof (intro iffI strip)
+  fix i j
+  assume p:   "list_pairwise P xs" 
+    and j:    "j < length xs" 
+    and ij:   "i < j" 
+  show "P (xs ! i) (xs ! j)" using p j ij
+  proof (induction xs arbitrary: i j)
+    case Nil
+    then show ?case by auto
+  next
+    case 1: (Cons x xs)
+    have p:   "list_pairwise P (x # xs)"
+     and j:   "j < length (x # xs)"
+     and ij:  "i < j" using 1 by auto
+    have IH': "\<And>i j. j < length xs \<Longrightarrow> i < j \<Longrightarrow> P (xs ! i) (xs ! j)" using 1 by auto
+    show ?case
+    proof (cases "length xs")
+      case 0
+      then show ?thesis using 1 by simp
+    next
+      case (Suc nat)
+      show ?thesis 
+      proof (cases i)
+        assume i0: "i = 0"
+        have "list_all (P ((x#xs) ! i)) xs" using p i0 nth_Cons_0 by simp
+        hence "\<forall>y \<in> set xs. (P ((x#xs) ! i)) y" unfolding list_all_iff by blast
+        moreover
+        have "((x # xs) ! j) \<in> set xs" using ij j by simp
+        ultimately
+        show ?thesis by blast
+      next
+        fix i'
+        assume i: "i = Suc i'" 
+        have xsi: "(x # xs) ! i = xs ! i'" using i by simp
+        moreover
+        obtain j' where
+          j': "j = Suc j'" 
+              "j' < length xs" using lessE[OF ij] j by fastforce
+        hence ij': "i' < j'" using ij i by blast
+        have xsj: "(x # xs) ! j = xs ! j'" using j' by auto
+        moreover
+        have "P (xs ! i') (xs ! j')" using IH' j' i ij' by blast
+        ultimately
+        show ?thesis by argo
+      qed
+    qed
+  qed
+next
+  assume "\<forall>i j. j < length xs \<longrightarrow> i < j \<longrightarrow> P (xs ! i) (xs ! j)" 
+  thus "list_pairwise P xs"
+  proof (induction xs)
+    case Nil
+    then show ?case by simp
+  next
+    case (Cons x xs)
+    have "list_pairwise P xs" using Cons by fastforce
+    moreover
+    have "\<forall>j < length xs. P x (xs ! j)" using Cons by fastforce
+    hence "list_all (P x) xs" using list_all_iff unfolding set_conv_nth by blast
+    ultimately
+    show ?case by simp
+  qed
+qed
+
+lemma list_pairwise_nth_refl:
+  assumes refl: "\<forall>x y. P x y \<longleftrightarrow> P y x"
+  shows "list_pairwise P xs \<longleftrightarrow> (\<forall>i j. i < length xs \<longrightarrow> j < length xs \<longrightarrow> i \<noteq> j \<longrightarrow> P (xs ! i) (xs ! j))"
+  unfolding list_pairwise_nth 
+  apply (rule iffI)
+   apply (intro strip)
+   apply (erule neqE)
+    apply blast
+  using refl apply blast
+  by simp
+
+
+definition nth_opt where
+"nth_opt xs n \<equiv> if n < length xs then Some (xs ! n) else None"
+
+lemma dom_nth_opt:
+  "dom (nth_opt xs) = {i. i < length xs}" 
+  unfolding nth_opt_def 
+  by (induction xs) auto
+
+lemma ran_nth_opt:
+  "ran (nth_opt xs) = set xs" 
+  unfolding nth_opt_def unfolding ran_def
+  apply (intro equalityI subsetI)
+   apply (erule CollectE)
+   apply (erule exE)
+  unfolding set_conv_nth
+  subgoal for x i
+    apply (cases "i < length xs")
+    by auto
+  by auto
+
+
+lemma nth_opt_Some:
+  "nth_opt xs n = Some x \<Longrightarrow> x = xs ! n"
+  "Some x = nth_opt xs n \<Longrightarrow> x = xs ! n"
+  unfolding nth_opt_def
+  by (cases "n < length xs"; simp)+
+
+
 end

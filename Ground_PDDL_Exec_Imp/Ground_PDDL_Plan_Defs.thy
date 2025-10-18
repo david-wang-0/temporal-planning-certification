@@ -2,23 +2,15 @@ theory Ground_PDDL_Plan_Defs
   imports Ground_PDDL_Problem_Defs
     "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics_Alt"
 begin
+  
 
-fun list_pairwise::"('a \<Rightarrow> 'a \<Rightarrow> bool) \<Rightarrow> 'a list \<Rightarrow> bool" where
-"list_pairwise P [] = True" |
-"list_pairwise P (x#xs) = (list_all (P x) xs \<and> list_pairwise P xs)"
+definition "is_integer q \<equiv> \<exists>a b. q = Fract a b \<and> 0 < b \<and> coprime a b \<and> b = 1"
 
-(* Todo?: list_pairwise and Set.pairwise conditional equivalence.
-    Not needed, because the abstract definition of a plan accesses every
-    member of the plan separately by index. *)
+definition "is_integer_code (q::rat) \<equiv> snd (quotient_of q) = 1"
 
-
-definition "is_integral q \<equiv> \<exists>a b. q = Fract a b \<and> 0 < b \<and> coprime a b \<and> b = 1"
-
-definition "is_integral_code (q::rat) \<equiv> snd (quotient_of q) = 1"
-
-lemma is_integral_code[code]: "is_integral q = is_integral_code q"
+lemma is_integer_code[code]: "is_integer q = is_integer_code q"
   apply (rule iffI)
-  unfolding is_integral_def is_integral_code_def 
+  unfolding is_integer_def is_integer_code_def 
   subgoal apply (elim exE conjE)
     subgoal for a b
       apply (erule ssubst)
@@ -41,25 +33,25 @@ lemma is_integral_code[code]: "is_integral q = is_integral_code q"
   done
 
 
-lemma is_integral_add:
-  assumes "is_integral q"
-      and "is_integral r"
-    shows "is_integral (q + r)"
+lemma is_integer_add:
+  assumes "is_integer q"
+      and "is_integer r"
+    shows "is_integer (q + r)"
 proof -
   obtain a b where
     "q = Fract a 1"
-    "r = Fract b 1" using assms is_integral_def by auto
+    "r = Fract b 1" using assms is_integer_def by auto
   hence "q + r = Fract (a + b) 1" by auto
-  thus ?thesis using is_integral_def by auto
+  thus ?thesis using is_integer_def by auto
 qed
 
-lemma is_integral_of_int:
-  assumes "is_integral q"
+lemma is_integer_of_int:
+  assumes "is_integer q"
   shows "rat_of_int (floor q) = q"
 proof -
   obtain a b where
     q: "q = Fract a b"
-    "b = 1" using assms is_integral_def by auto
+    "b = 1" using assms is_integer_def by auto
   have "rat_of_int a = q" using q Fract_of_int_eq by auto
   moreover
   have "floor q = a" using q by simp
@@ -70,33 +62,33 @@ proof -
 qed
 
 
-lemma is_integral_floor_less: 
+lemma is_integer_floor_less: 
   assumes "x < y"
-      and "is_integral x"
-      and "is_integral y"
+      and "is_integer x"
+      and "is_integer y"
     shows "floor x < floor y"
   using assms
   apply -
-  apply (subst (asm) is_integral_of_int[symmetric, of x], simp)
-  apply (subst (asm) is_integral_of_int[symmetric, of y], simp)
+  apply (subst (asm) is_integer_of_int[symmetric, of x], simp)
+  apply (subst (asm) is_integer_of_int[symmetric, of y], simp)
   apply (subst (asm) of_int_less_iff)
   by (assumption)
 
-(* lemma is_integral_floor_le: 
+(* lemma is_integer_floor_le: 
   assumes "x \<le> y"
-      and "is_integral x"
-      and "is_integral y"
+      and "is_integer x"
+      and "is_integer y"
     shows "floor x \<le> floor y"
-  using assms is_integral_floor_less by linarith *)
+  using assms is_integer_floor_less by linarith *)
 
 thm Archimedean_Field.floor_mono
 
-lemma is_integral_floor_ne:
+lemma is_integer_floor_ne:
   assumes "x \<noteq> y"
-      and "is_integral x"
-      and "is_integral y"
+      and "is_integer x"
+      and "is_integer y"
     shows "floor x \<noteq> floor y"
-  using assms is_integral_floor_less 
+  using assms is_integer_floor_less 
   by (cases "x \<le> y") force+
 
 locale ground_plan_defs = 
@@ -110,12 +102,9 @@ fun plan_act_no_args where
 "plan_act_no_args (Durative_Plan_Action n [] d) = True" |
 "plan_act_no_args _ = False"
 
-definition nth_opt where
-"nth_opt xs n \<equiv> if n < length xs then Some (xs ! n) else None"
-
-fun timed_plan_action_durs_integral::"rat \<times> plan_action \<Rightarrow> bool" where
-"timed_plan_action_durs_integral (t, Simple_Plan_Action n as) = (is_integral t)" |
-"timed_plan_action_durs_integral (t, Durative_Plan_Action n as d) = (is_integral t \<and> is_integral d)"
+fun timed_plan_action_durs_integer::"rat \<times> plan_action \<Rightarrow> bool" where
+"timed_plan_action_durs_integer (t, Simple_Plan_Action n as) = (is_integer t)" |
+"timed_plan_action_durs_integer (t, Durative_Plan_Action n as d) = (is_integer t \<and> is_integer d)"
 
 fun timed_plan_action_to_ref_plan_action::"rat \<times> plan_action \<Rightarrow> ast_action_schema \<times> int \<times> int" where
 "timed_plan_action_to_ref_plan_action (t, Simple_Plan_Action n as) = (the (resolve_action_schema n), floor t, 0)" |
@@ -145,6 +134,18 @@ definition plan_imp where
   ref_plan
   |> nth_opt"
 
+lemma dom_plan_imp: 
+  "dom plan_imp = {i. i < length tp}"
+  unfolding plan_imp_def dom_nth_opt ref_plan_def by auto
+
+lemma ran_plan_imp:
+  "ran plan_imp = timed_plan_action_to_ref_plan_action ` set tp"
+  unfolding plan_imp_def ran_nth_opt ref_plan_def by auto
+
+lemma ref_no_self_overlap_refl:
+  "\<forall>x y. ref_no_self_overlap x y \<longleftrightarrow> ref_no_self_overlap y x"
+  by auto
+
 end
 
 locale valid_ground_plan =
@@ -155,9 +156,9 @@ locale valid_ground_plan =
 assumes valid_plan: "valid_plan tp"
   and pddl_nso: "PDDL_plan_no_self_overlap"
   and plan_acts_no_args: "list_all (snd #> plan_act_no_args) tp"
-  and plan_acts_durs_integral: "list_all (timed_plan_action_durs_integral) tp"
+  and plan_acts_durs_integer: "list_all (timed_plan_action_durs_integer) tp"
 begin
-(* Needs an assumption that durations are integral *)
+(* Needs an assumption that durations are integer *)
 
 lemma resolve_action_schema_inj_on_dom:
   assumes "resolve_action_schema x = resolve_action_schema y"
@@ -202,15 +203,15 @@ lemma PDDL_no_self_overlap_imp_ref_no_self_overlap:
       and "wf_plan_action (snd b)"
       and "plan_act_no_args (snd a)"
       and "plan_act_no_args (snd b)"
-      and "timed_plan_action_durs_integral a"
-      and "timed_plan_action_durs_integral b"
+      and "timed_plan_action_durs_integer a"
+      and "timed_plan_action_durs_integer b"
   shows "ref_no_self_overlap (timed_plan_action_to_ref_plan_action a) (timed_plan_action_to_ref_plan_action b)"
   using assms
 proof (induction rule: PDDL_no_self_overlap.induct)
   case (1 t x as u y bs)
 
-  have t_integral: "is_integral t" 
-   and u_integral: "is_integral u" using 1 by auto
+  have t_integer: "is_integer t" 
+   and u_integer: "is_integer u" using 1 by auto
 
   have a: "x = y \<longrightarrow> t \<noteq> u" using 1 unfolding PDDL_no_self_overlap.simps by auto
 
@@ -229,13 +230,13 @@ proof (induction rule: PDDL_no_self_overlap.induct)
     apply (subst timed_plan_action_to_ref_plan_action.simps)+
     apply (subst ref_no_self_overlap.simps)+
     apply (subst res_iff)
-    using a is_integral_floor_ne t_integral u_integral 
+    using a is_integer_floor_ne t_integer u_integer 
     by auto
 next
   case (2 t x as u y d bs)
 
-  have t_integral: "is_integral t" 
-   and u_integral: "is_integral u" using 2 by auto
+  have t_integer: "is_integer t" 
+   and u_integer: "is_integer u" using 2 by auto
 
 
   have wf_acts: 
@@ -257,8 +258,8 @@ next
 next
   case (3 t x d as u y bs)
 
-  have t_integral: "is_integral t" 
-   and u_integral: "is_integral u" using 3 by auto
+  have t_integer: "is_integer t" 
+   and u_integer: "is_integer u" using 3 by auto
 
   have wf_acts: 
     "wf_plan_action (Durative_Plan_Action x d as)"
@@ -279,12 +280,12 @@ next
 next
   case (4 t x as d u y bs e)
 
-  have t_integral: "is_integral t" 
-   and u_integral: "is_integral u" 
-   and d_integral: "is_integral d"
-   and e_integral: "is_integral e" using 4 by auto
+  have t_integer: "is_integer t" 
+   and u_integer: "is_integer u" 
+   and d_integer: "is_integer d"
+   and e_integer: "is_integer e" using 4 by auto
 
-  note vs_integral = t_integral u_integral d_integral e_integral
+  note vs_integer = t_integer u_integer d_integer e_integer
   
   have wf_acts: 
     "wf_plan_action (Durative_Plan_Action x as d)"
@@ -300,22 +301,22 @@ next
     hence "(u < t \<or> t + d < u) \<and> (t < u \<or> u + e < t)" by linarith
     moreover
     { assume "u < t"
-      hence "floor u < floor t" using vs_integral is_integral_floor_less by auto
+      hence "floor u < floor t" using vs_integer is_integer_floor_less by auto
     }
     moreover
     { assume "t + d < u"
       hence "floor (t + d) < floor u" 
-        by (intro vs_integral is_integral_floor_less is_integral_add)
+        by (intro vs_integer is_integer_floor_less is_integer_add)
       hence "floor t + floor d < floor u" by linarith
     }
     moreover
     { assume "t < u"
-      hence "floor t < floor u" using vs_integral is_integral_floor_less by auto
+      hence "floor t < floor u" using vs_integer is_integer_floor_less by auto
     }
     moreover
     { assume "u + e < t"
       hence "floor (u + e) < floor t" 
-        by (intro vs_integral is_integral_floor_less is_integral_add)
+        by (intro vs_integer is_integer_floor_less is_integer_add)
       hence "floor u + floor e < floor t" by linarith 
     }
     ultimately
@@ -337,7 +338,7 @@ proof -
   have "wf_plan tp" using valid_plan unfolding valid_plan_def valid_plan_from_def by blast
   hence "list_all (snd #> wf_plan_action) tp" unfolding wf_plan_def list_all_iff by auto
   thus ?thesis
-    using pddl_nso plan_acts_no_args plan_acts_durs_integral
+    using pddl_nso plan_acts_no_args plan_acts_durs_integer
     unfolding PDDL_plan_no_self_overlap_def ref_plan_no_self_overlap_def ref_plan_def
   proof (induction tp)
     case Nil
@@ -349,17 +350,47 @@ proof -
     have nso: "list_all (PDDL_no_self_overlap pa) pas" using Cons by simp
     have wf: "list_all (\<lambda>x. wf_plan_action (snd x)) (pa # pas)" using Cons by blast
     have no_args: "list_all (\<lambda>x. plan_act_no_args (snd x)) (pa # pas)" using Cons by blast
-    have are_integral: "list_all timed_plan_action_durs_integral (pa # pas)" using Cons by blast
+    have are_integer: "list_all timed_plan_action_durs_integer (pa # pas)" using Cons by blast
 
     have 2: "list_all (ref_no_self_overlap (timed_plan_action_to_ref_plan_action pa)) (map timed_plan_action_to_ref_plan_action pas)"
-      using nso wf no_args are_integral PDDL_no_self_overlap_imp_ref_no_self_overlap unfolding list_all_iff by simp
+      using nso wf no_args are_integer PDDL_no_self_overlap_imp_ref_no_self_overlap unfolding list_all_iff by simp
 
     show ?case using 1 2 by simp
   qed
 qed
 
+lemma ref_plan_actions_in_actions:
+  "set (map fst ref_plan) \<subseteq> set actions_spec"
+proof -
+  have "\<forall>a \<in> fst ` set ref_plan. a \<in> set actions_spec"
+  proof (rule ballI)
+    fix a 
+    assume a: "a \<in> fst ` set ref_plan" 
+    obtain t d where
+      t: "(a, t, d) \<in> set ref_plan"  using a by auto
+    then obtain t' a' where
+      t': "(t', a') \<in> set tp"
+          "(a, t, d) = timed_plan_action_to_ref_plan_action (t', a')" 
+      using t unfolding ref_plan_def by auto
+    have wf: "wf_plan_action a'" using t' valid_plan unfolding valid_plan_def valid_plan_from_def wf_plan_def list_all_iff by auto
+    show "a \<in> set actions_spec" 
+    proof (cases a')
+      case (Simple_Plan_Action n as)
+      thus "a \<in> set actions_spec" using t' wf unfolding actions_spec_def
+        apply (cases "resolve_action_schema n")
+         apply simp (* apply simp *)
+        (* unfolding *) using resolve_action_schema_def
+        by (auto dest: index_by_eq_SomeD)
+    next
+      case (Durative_Plan_Action n as d)
+      thus ?thesis using t' wf unfolding actions_spec_def
+        apply (cases "resolve_action_schema n")
+        by (auto dest: index_by_eq_SomeD simp: resolve_action_schema_def)
+    qed
+  qed
+  thus ?thesis by auto
+qed
 
-find_theorems name: "temp_plan_defs.no_self_over"
 
 sublocale imp_defs: temp_plan_for_problem_list_defs_int
   at_start_spec at_end_spec over_all_spec
@@ -370,16 +401,62 @@ sublocale imp_defs: temp_plan_for_problem_list_defs_int
 
 lemma temp_plan_no_self_overlap:
   "imp_defs.rat_impl.no_self_overlap"
-  unfolding imp_defs.rat_impl.no_self_overlap_def
 proof -
-  define \<pi> where "\<pi> \<equiv> ((map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ>\<circ>\<circ> ground_plan_defs.plan_imp) P tp)"
-  have "\<forall>i j a t d u e.  i \<noteq> j \<and> i \<in> dom \<pi> \<and> j \<in> dom \<pi> 
+  define \<pi> where "\<pi> \<equiv> (map_option (map_prod id (map_prod rat_of_int rat_of_int))) o plan_imp"
+  have "list_pairwise ref_no_self_overlap ref_plan" 
+    using ref_plan_no_self_overlap unfolding ref_plan_no_self_overlap_def by simp
+  hence "(\<forall>i j. i < length ref_plan \<longrightarrow> j < length ref_plan \<longrightarrow> i \<noteq> j 
+    \<longrightarrow> ref_no_self_overlap (ref_plan ! i) (ref_plan ! j))" 
+    using list_pairwise_nth_refl ref_no_self_overlap_refl by blast
+  hence "(\<forall>i j. i \<in> dom plan_imp \<longrightarrow> j \<in> dom plan_imp \<longrightarrow> i \<noteq> j 
+    \<longrightarrow> ref_no_self_overlap (ref_plan ! i) (ref_plan ! j))" 
+    unfolding plan_imp_def dom_nth_opt by blast
+  hence "(\<forall>i j a t d b u e. i \<in> dom plan_imp \<longrightarrow> j \<in> dom plan_imp \<longrightarrow> i \<noteq> j 
+    \<longrightarrow> Some (a, t, d) = plan_imp i \<longrightarrow> Some (b, u, e) = plan_imp j
+    \<longrightarrow> ref_no_self_overlap (a, t, d) (b, u, e))" unfolding plan_imp_def 
+    apply (intro strip)
+    apply (drule nth_opt_Some)+
+    by simp
+  hence "\<forall>i j a t d u e.  i \<noteq> j \<and> i \<in> dom \<pi> \<and> j \<in> dom \<pi> 
     \<and> Some (a, t, d) = \<pi> i \<and> Some (a, u, e) = \<pi> j 
     \<longrightarrow> \<not>(t \<le> u \<and> u \<le> t + d)"
-  proof (intro strip, elim conjE)
-    
-  qed
+    unfolding \<pi>_def by fastforce
+  thus ?thesis 
+    unfolding imp_defs.rat_impl.no_self_overlap_def \<pi>_def by blast
+qed
 
+lemma temp_plan_actions_in_actions:
+  "imp_defs.rat_impl.plan_actions_in_problem"
+proof -
+  have "ran (nth_opt ref_plan) = set ref_plan" using ran_nth_opt by fast
+  hence 1: "ran ((map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ>\<circ> nth_opt) ref_plan) = 
+      (map_prod id (map_prod rat_of_int rat_of_int)) ` set ref_plan" 
+    unfolding comp_def ran_map_option  by simp
+  show ?thesis
+  unfolding imp_defs.rat_impl.plan_actions_in_problem_def
+  unfolding imp_defs.rat_impl.plan_actions_def
+  unfolding plan_imp_def 
+  apply (rule subsetI)
+  apply (elim CollectE exE conjE)
+  apply simp
+  apply (subst (asm) 1)
+  using ref_plan_actions_in_actions by force
+qed
+
+lemma temp_plan_valid:
+  "imp_defs.rat_impl.valid_plan"
+proof -
+  have "\<exists>M. imp_defs.rat_impl.valid_state_sequence M \<and> M 0 = set init_spec \<and> set goal_spec \<subseteq> M (length imp_defs.rat_impl.htpl)" sorry
+  have "imp_defs.rat_impl.durations_ge_0" sorry
+  have "imp_defs.rat_impl.durations_valid" 
+    unfolding imp_defs.rat_impl.durations_valid_def
+    unfolding ran_map_option comp_def
+    unfolding plan_imp_def ran_nth_opt
+  have "imp_defs.rat_impl.mutex_valid_plan" sorry
+  have "imp_defs.rat_impl.finite_plan" 
+    unfolding imp_defs.rat_impl.finite_plan_def
+    unfolding dom_map_option comp_def
+    using dom_plan_imp by simp
 qed
 
 sublocale red_corr: tp_nta_reduction_correctness' init_spec goal_spec 
@@ -394,7 +471,7 @@ sublocale red_corr: tp_nta_reduction_correctness' init_spec goal_spec
   subgoal sorry
   subgoal sorry
   subgoal sorry
-
+  subgoal sorry
 
 end
 

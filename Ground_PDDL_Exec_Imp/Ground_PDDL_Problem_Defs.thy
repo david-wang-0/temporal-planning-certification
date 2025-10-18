@@ -221,7 +221,7 @@ fun is_pos_lit :: "'a atom Formulas.formula \<Rightarrow> bool" where
 fun is_pos_conj :: "'a atom Formulas.formula \<Rightarrow> bool" where
   "is_pos_conj (f \<^bold>\<and> g) \<longleftrightarrow> is_pos_conj f \<and> is_pos_conj g" |
   "is_pos_conj f \<longleftrightarrow> is_pos_lit f"
-(* This does not have to be right recursive. It could be beneficial *)
+(* This does not have to be right recursive for our purposes. It was originally *) 
 
 text \<open>End: Taken from M. Vollath\<close>
 
