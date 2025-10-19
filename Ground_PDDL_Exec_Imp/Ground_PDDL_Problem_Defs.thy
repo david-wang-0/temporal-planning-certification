@@ -171,42 +171,42 @@ fun dels_spec::"ground_action \<Rightarrow> predicate list" where
   |> remdups
 "
 
-fun dc_to_lb::"term duration_constraint \<Rightarrow> int lower_bound option" where
+fun dc_to_lb::"term duration_constraint \<Rightarrow> rat lower_bound option" where
 "dc_to_lb No_Const = None" |
-"dc_to_lb (Time_Const duration_op.EQ x) = Some (lower_bound.GE (floor x))" |
-"dc_to_lb (Time_Const duration_op.GEQ x) = Some (lower_bound.GE (floor x))" |
+"dc_to_lb (Time_Const duration_op.EQ x) = Some (lower_bound.GE x)" |
+"dc_to_lb (Time_Const duration_op.GEQ x) = Some (lower_bound.GE x)" |
 "dc_to_lb (Time_Const duration_op.LEQ x) = None"
 
-fun max_lb_opt::"int lower_bound option list \<Rightarrow> int lower_bound option \<Rightarrow> int lower_bound option" where
+fun max_lb_opt::"('x::linorder) lower_bound option list \<Rightarrow> ('x::linorder) lower_bound option \<Rightarrow> ('x::linorder) lower_bound option" where
 "max_lb_opt [] l = l" |
 "max_lb_opt (x#xs) l = max_lb_opt xs (if (comp_opt_ge x l) then x else l)"
 
-fun dc_list_lower::"term duration_constraint list \<Rightarrow> int lower_bound option" where
-"dc_list_lower xs = map dc_to_lb xs |> (\<lambda>xs. max_lb_opt xs None)" 
+definition dc_list_lower::"term duration_constraint list \<Rightarrow> rat lower_bound option" where
+"dc_list_lower xs \<equiv> map dc_to_lb xs |> (\<lambda>xs. max_lb_opt xs None)" 
 
 
-fun dc_to_ub::"term duration_constraint \<Rightarrow> int upper_bound option" where
+fun dc_to_ub::"term duration_constraint \<Rightarrow> rat upper_bound option" where
 "dc_to_ub No_Const = None" |
-"dc_to_ub (Time_Const duration_op.EQ x) = Some (upper_bound.LE (floor x))" |
+"dc_to_ub (Time_Const duration_op.EQ x) = Some (upper_bound.LE  x)" |
 "dc_to_ub (Time_Const duration_op.GEQ x) = None" |
-"dc_to_ub (Time_Const duration_op.LEQ x) = Some (upper_bound.LE (floor x))"
+"dc_to_ub (Time_Const duration_op.LEQ x) = Some (upper_bound.LE x)"
 
-fun min_ub_opt::"int upper_bound option list \<Rightarrow> int upper_bound option \<Rightarrow> int upper_bound option" where
+fun min_ub_opt::"('x::linorder) upper_bound option list \<Rightarrow> ('x::linorder) upper_bound option \<Rightarrow> ('x::linorder) upper_bound option" where
 "min_ub_opt [] u = u" |
 "min_ub_opt (x#xs) u = min_ub_opt xs (if (comp_opt_le x u) then x else u)"
 
-fun dc_list_upper::"term duration_constraint list \<Rightarrow> int upper_bound option" where
+definition dc_list_upper::"term duration_constraint list \<Rightarrow> rat upper_bound option" where
 "dc_list_upper xs = map dc_to_ub xs |> (\<lambda>xs. min_ub_opt xs None)" 
 
 fun lower_spec::"ast_action_schema \<Rightarrow> _" where
 "lower_spec (Simple_Action_Schema n ps pre eff) = Some (lower_bound.GE 0)" | (* could also be None *)
-"lower_spec (Durative_Action_Schema n ps d cond eff) = (dc_list_lower d)"
+"lower_spec (Durative_Action_Schema n ps d cond eff) = map_option (map_lower_bound floor) (dc_list_lower d)"
 
 fun upper_spec::"ast_action_schema \<Rightarrow> _" where
 "upper_spec (Simple_Action_Schema n ps pre eff) = Some (upper_bound.LE 0)" | (* could also be None *)
-"upper_spec (Durative_Action_Schema n ps d cond eff) = (dc_list_upper d)"
+"upper_spec (Durative_Action_Schema n ps d cond eff) = map_option (map_upper_bound floor) (dc_list_upper d)"
 
-
+subsection \<open>Additional well-formedness considerations\<close>
 
 text \<open>Begin: Adapted from Maximillian Vollath\<close>
 fun is_pos_lit :: "'a atom Formulas.formula \<Rightarrow> bool" where
@@ -235,6 +235,20 @@ fun act_no_args::"ast_action_schema \<Rightarrow> bool" where
 fun act_pres_pos::"ast_action_schema \<Rightarrow> bool" where
 "act_pres_pos (Simple_Action_Schema n ps pre eff) = (is_pos_conj (pre))" |
 "act_pres_pos (Durative_Action_Schema n ps d pre eff) = (list_all is_pos_conj (map snd pre))"
+
+fun act_no_func_dcs::"ast_action_schema \<Rightarrow> bool" where
+"act_no_func_dcs (Simple_Action_Schema n ps pre eff) = True" |
+"act_no_func_dcs (Durative_Action_Schema n ps dcs pre eff) = (list_all (\<lambda>d. \<not> is_Func_Const d) dcs)"
+
+fun duration_constraint_integer::"term duration_constraint \<Rightarrow> bool" where
+"duration_constraint_integer No_Const = True" |
+"duration_constraint_integer (Time_Const duration_op.EQ x) = is_integer x" |
+"duration_constraint_integer (Time_Const duration_op.GEQ x) = is_integer x" |
+"duration_constraint_integer (Time_Const duration_op.LEQ x) = is_integer x"
+
+fun act_dcs_integers::"ast_action_schema \<Rightarrow> bool" where
+"act_dcs_integers (Simple_Action_Schema n ps pre eff) = True" |
+"act_dcs_integers (Durative_Action_Schema n ps dcs pre eff) = (list_all duration_constraint_integer dcs)"
 
 fun ground_act_pres_pos::"ground_action \<Rightarrow> bool" where
 "ground_act_pres_pos (Ground_Action pre eff) = (is_pos_conj pre)"
@@ -299,6 +313,56 @@ proof -
     using assms 1 is_pos_conj_Big_And is_pos_conj_map_formula by auto
 qed
 
+lemma max_lb_opt_propI:
+  assumes "list_all Q xs"
+      and "Q y"
+    shows "Q (max_lb_opt xs y)"
+  using assms by (induction xs arbitrary: y) auto
+
+lemma dc_list_lower_propI:
+  assumes "list_all Q (map dc_to_lb dcs)"  
+      and "Q None"
+  shows "Q (dc_list_lower dcs)"
+  unfolding dc_list_lower_def
+  apply (rule max_lb_opt_propI)
+  using assms by simp+ 
+
+lemma min_ub_opt_propI:
+  assumes "list_all Q xs"
+      and "Q y"
+    shows "Q (min_ub_opt xs y)"
+  using assms by (induction xs arbitrary: y) auto
+
+lemma dc_list_upper_propI:
+  assumes "list_all Q (map dc_to_ub dcs)"  
+      and "Q None"
+  shows "Q (dc_list_upper dcs)"
+  unfolding dc_list_upper_def
+  apply (rule min_ub_opt_propI)
+  using assms by simp+
+
+lemma dc_integer_imp_lb_integer:
+  assumes "duration_constraint_integer dc"
+      and "\<not> is_Func_Const dc"
+  shows "pred_option (pred_lower_bound is_integer) (dc_to_lb dc)"
+  using assms apply (induction dc)
+    apply simp
+  subgoal for op c
+    apply (induction op)
+    by auto
+  by auto
+
+lemma dc_integer_imp_ub_integer:
+  assumes "duration_constraint_integer dc"
+      and "\<not> is_Func_Const dc"
+  shows "pred_option (pred_upper_bound is_integer) (dc_to_ub dc)"
+  using assms apply (induction dc)
+    apply simp
+  subgoal for op c
+    apply (induction op)
+    by auto
+  by auto
+
 sublocale imp_defs: temp_planning_problem_list_defs_int 
   at_start_spec at_end_spec over_all_spec
   lower_spec upper_spec pre_spec adds_spec dels_spec
@@ -314,9 +378,17 @@ locale ground_ast_problem =
   assumes positive_goal: "is_pos_conj (goal P)"
       and preds_no_args: "list_all pred_no_args (predicates D)"
       and acts_no_args: "list_all act_no_args (actions D)"
+      and acts_no_func_dcs: "list_all act_no_func_dcs (actions D)" 
+      and acts_dcs_integers: "list_all act_dcs_integers (actions D)"
       and positive_act_pres: "list_all act_pres_pos (actions D)"
       and no_functions: "functions D = []"
 begin
+
+lemma resolve_action_in_actions:
+  assumes "resolve_action_schema n = Some a"
+  shows "a \<in> set actions_spec"
+  using assms unfolding resolve_action_schema_def actions_spec_def
+  by (blast dest: index_by_eq_SomeD)
 
 lemma act_params_match_empty:
   assumes "a \<in> set actions_spec"

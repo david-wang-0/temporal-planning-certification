@@ -3,100 +3,58 @@ theory Ground_PDDL_Plan_Defs
     "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics_Alt"
 begin
   
-
-definition "is_integer q \<equiv> \<exists>a b. q = Fract a b \<and> 0 < b \<and> coprime a b \<and> b = 1"
-
-definition "is_integer_code (q::rat) \<equiv> snd (quotient_of q) = 1"
-
-lemma is_integer_code[code]: "is_integer q = is_integer_code q"
-  apply (rule iffI)
-  unfolding is_integer_def is_integer_code_def 
-  subgoal apply (elim exE conjE)
-    subgoal for a b
-      apply (erule ssubst)
-      apply (subst quotient_of_Fract)
-      by simp
-    done
-  subgoal 
-    apply (rule Rat_cases[of q])
-    subgoal for a b
-      apply simp
-      apply (cases "Rat.normalize (a, b)")
-      subgoal for a' b'
-    apply (subst (asm) quotient_of_Fract)
-    apply (rule exI)
-        apply (subst Rat.normalize_eq[symmetric])
-         apply assumption
-        by simp
-      done
-    done
-  done
-
-
-lemma is_integer_add:
-  assumes "is_integer q"
-      and "is_integer r"
-    shows "is_integer (q + r)"
-proof -
-  obtain a b where
-    "q = Fract a 1"
-    "r = Fract b 1" using assms is_integer_def by auto
-  hence "q + r = Fract (a + b) 1" by auto
-  thus ?thesis using is_integer_def by auto
-qed
-
-lemma is_integer_of_int:
-  assumes "is_integer q"
-  shows "rat_of_int (floor q) = q"
-proof -
-  obtain a b where
-    q: "q = Fract a b"
-    "b = 1" using assms is_integer_def by auto
-  have "rat_of_int a = q" using q Fract_of_int_eq by auto
-  moreover
-  have "floor q = a" using q by simp
-  moreover
-  have "floor (rat_of_int a) = a" by simp
-  ultimately
-  show ?thesis by simp
-qed
-
-
-lemma is_integer_floor_less: 
-  assumes "x < y"
-      and "is_integer x"
-      and "is_integer y"
-    shows "floor x < floor y"
-  using assms
-  apply -
-  apply (subst (asm) is_integer_of_int[symmetric, of x], simp)
-  apply (subst (asm) is_integer_of_int[symmetric, of y], simp)
-  apply (subst (asm) of_int_less_iff)
-  by (assumption)
-
-(* lemma is_integer_floor_le: 
-  assumes "x \<le> y"
-      and "is_integer x"
-      and "is_integer y"
-    shows "floor x \<le> floor y"
-  using assms is_integer_floor_less by linarith *)
-
-thm Archimedean_Field.floor_mono
-
-lemma is_integer_floor_ne:
-  assumes "x \<noteq> y"
-      and "is_integer x"
-      and "is_integer y"
-    shows "floor x \<noteq> floor y"
-  using assms is_integer_floor_less 
-  by (cases "x \<le> y") force+
-
 locale ground_plan_defs = 
   ground_ast_problem_defs P 
   for P::ast_problem +
   fixes tp::"(rat \<times> plan_action) list"
 begin
 
+fun timed_plan_action_to_ref_plan_action::"rat \<times> plan_action \<Rightarrow> ast_action_schema \<times> int \<times> int" where
+"timed_plan_action_to_ref_plan_action (t, Simple_Plan_Action n as) = (the (resolve_action_schema n), floor t, 0)" |
+"timed_plan_action_to_ref_plan_action (t, Durative_Plan_Action n as d) = (the (resolve_action_schema n), floor t, floor d)"
+
+definition ref_plan where
+"ref_plan \<equiv> (map timed_plan_action_to_ref_plan_action tp)"
+
+
+definition plan_imp where
+"plan_imp \<equiv> 
+  ref_plan
+  |> nth_opt"
+
+text \<open>Simple properties\<close>
+
+lemma dom_plan_imp: 
+  "dom plan_imp = {i. i < length tp}"
+  unfolding plan_imp_def dom_nth_opt ref_plan_def by auto
+
+lemma ran_plan_imp:
+  "ran plan_imp = timed_plan_action_to_ref_plan_action ` set tp"
+  unfolding plan_imp_def ran_nth_opt ref_plan_def by auto
+
+lemma in_set_ref_planE:
+  assumes "(a, t, d) \<in> set ref_plan"
+      and "\<And>t n as. (t, Simple_Plan_Action n as) \<in> set tp \<Longrightarrow> Q (the (resolve_action_schema n)) (floor t) 0"
+      and "\<And>t n as d. (t, Durative_Plan_Action n as d) \<in> set tp \<Longrightarrow> Q (the (resolve_action_schema n)) (floor t) (floor d)"
+  shows "Q a t d"
+  using assms(1) unfolding ref_plan_def set_map
+  apply (elim imageE)
+  subgoal for x
+    apply (cases x)
+    subgoal for t' b
+      apply (cases b)
+      using assms(2, 3)
+      by auto
+    done
+  done
+
+lemma ref_plan_pairwise_if:
+  assumes "list_pairwise (\<lambda>a b. Q (timed_plan_action_to_ref_plan_action a) (timed_plan_action_to_ref_plan_action b)) tp"
+  shows "list_pairwise Q ref_plan"
+  using assms unfolding ref_plan_def 
+  using list_pairwise_map by blast
+                            
+text \<open>Properties specific to later proofs\<close>
 fun plan_act_no_args where
 "plan_act_no_args (Simple_Plan_Action n []) = True" |
 "plan_act_no_args (Durative_Plan_Action n [] d) = True" |
@@ -105,10 +63,6 @@ fun plan_act_no_args where
 fun timed_plan_action_durs_integer::"rat \<times> plan_action \<Rightarrow> bool" where
 "timed_plan_action_durs_integer (t, Simple_Plan_Action n as) = (is_integer t)" |
 "timed_plan_action_durs_integer (t, Durative_Plan_Action n as d) = (is_integer t \<and> is_integer d)"
-
-fun timed_plan_action_to_ref_plan_action::"rat \<times> plan_action \<Rightarrow> ast_action_schema \<times> int \<times> int" where
-"timed_plan_action_to_ref_plan_action (t, Simple_Plan_Action n as) = (the (resolve_action_schema n), floor t, 0)" |
-"timed_plan_action_to_ref_plan_action (t, Durative_Plan_Action n as d) = (the (resolve_action_schema n), floor t, floor d)"
 
 fun PDDL_no_self_overlap::"(rat \<times> plan_action) \<Rightarrow> (rat \<times> plan_action) \<Rightarrow> bool" where
 "PDDL_no_self_overlap (t, Simple_Plan_Action x _) (u, Simple_Plan_Action y _) = (x = y \<longrightarrow> t \<noteq> u)" |
@@ -122,29 +76,129 @@ definition "PDDL_plan_no_self_overlap \<equiv> list_pairwise PDDL_no_self_overla
 fun ref_no_self_overlap::"(ast_action_schema \<times> int \<times> int) \<Rightarrow> (ast_action_schema \<times> int \<times> int) \<Rightarrow> bool" where
 "ref_no_self_overlap (a, t, d) (b, u, e) = ((a = b) \<longrightarrow> \<not>((t \<le> u \<and> u \<le> t + d) \<or> (u \<le> t \<and> t \<le> u + e)))"
 
-definition ref_plan where
-"ref_plan \<equiv> (map timed_plan_action_to_ref_plan_action tp)"
-
 definition "ref_plan_no_self_overlap \<equiv> list_pairwise ref_no_self_overlap ref_plan"
-
-find_theorems name: "temp_plan_defs*no_self"
-
-definition plan_imp where
-"plan_imp \<equiv> 
-  ref_plan
-  |> nth_opt"
-
-lemma dom_plan_imp: 
-  "dom plan_imp = {i. i < length tp}"
-  unfolding plan_imp_def dom_nth_opt ref_plan_def by auto
-
-lemma ran_plan_imp:
-  "ran plan_imp = timed_plan_action_to_ref_plan_action ` set tp"
-  unfolding plan_imp_def ran_nth_opt ref_plan_def by auto
 
 lemma ref_no_self_overlap_refl:
   "\<forall>x y. ref_no_self_overlap x y \<longleftrightarrow> ref_no_self_overlap y x"
   by auto
+
+
+text \<open>The abstract plan that can be obtained from this plan\<close>
+sublocale imp_defs: temp_plan_for_problem_list_defs_int
+  at_start_spec at_end_spec over_all_spec
+  lower_spec upper_spec pre_spec adds_spec dels_spec
+  init_spec goal_spec 0 props_spec actions_spec plan_imp  
+  by unfold_locales simp
+
+definition "abstr_plan \<equiv> (map_option (map_prod id (map_prod rat_of_int rat_of_int))) o plan_imp"
+
+lemma ran_abstr_plan_ref_planE:
+  assumes "(a, t, d) \<in> ran abstr_plan"
+      and "\<And>a t d. (a, t, d) \<in> set ref_plan \<Longrightarrow> Q a (rat_of_int t) (rat_of_int d)"
+    shows "Q a t d"
+  using assms unfolding abstr_plan_def plan_imp_def ran_map_option comp_def ran_nth_opt 
+  by auto
+
+lemma abstr_plan_binary_prop:
+  assumes secondary:
+    "i \<in> dom abstr_plan" 
+    "j \<in> dom abstr_plan" 
+    "i \<noteq> j"
+    "abstr_plan i = Some (a, ta, da)"
+    "abstr_plan j = Some (b, tb, db)"
+  and refl:
+    "\<forall>a ta da b tb db. Q a ta da b tb db = Q b tb db a ta da"
+  and primary: "list_pairwise (\<lambda>(a, ta, da) (b, tb, db). Q a (rat_of_int ta) (rat_of_int da) b (rat_of_int tb) (rat_of_int db)) ref_plan"
+shows "Q a ta da b tb db"
+proof -
+  have "list_pairwise (\<lambda>(a, ta, da) (b, tb, db). Q a (rat_of_int ta) (rat_of_int da) b (rat_of_int tb) (rat_of_int db)) ref_plan =
+     (\<forall>i j. i < length ref_plan \<longrightarrow> j < length ref_plan \<longrightarrow> i \<noteq> j \<longrightarrow> 
+      (case ref_plan ! i of (a, ta, da) \<Rightarrow> \<lambda>(b, tb, db). 
+      Q a (rat_of_int ta) (rat_of_int da) b (rat_of_int tb) (rat_of_int db)) (ref_plan ! j))" 
+    using list_pairwise_nth_refl[of "\<lambda>(a, ta, da) (b, tb, db). Q a (rat_of_int ta) (rat_of_int da) b (rat_of_int tb) (rat_of_int db)",
+        where xs = ref_plan] using refl by simp
+  hence 1: "(\<forall>i j a ta da b tb db. i < length ref_plan \<longrightarrow> j < length ref_plan \<longrightarrow> i \<noteq> j 
+      \<longrightarrow> (ref_plan ! i) = (a, ta, da) \<longrightarrow> (ref_plan ! j) = (b, tb, db)
+      \<longrightarrow> Q a (rat_of_int ta) (rat_of_int da) b (rat_of_int tb) (rat_of_int db))"
+    using primary by fastforce
+  show ?thesis
+    using secondary 
+    unfolding abstr_plan_def plan_imp_def 
+    unfolding ran_map_option comp_def ran_nth_opt 
+    unfolding dom_map_option comp_def dom_nth_opt
+    unfolding map_option_eq_Some
+    apply -
+    apply (elim exE conjE)
+    subgoal for x y
+      apply (drule nth_opt_Some)+
+      apply (induction x; induction y)
+      unfolding map_prod_simp using 1 by auto
+    done
+qed
+
+(* --- *)
+lemma duration_matches_imp_sat_lb: 
+  assumes "duration_matches d dc ps as"
+      and "\<not>is_Func_Const dc"
+  shows "imp_defs.rat_impl.satisfies_lower_bound (dc_to_lb dc) d"
+  using assms
+  apply (cases dc)
+  subgoal by auto
+  subgoal for op ps by (cases op) auto
+  by auto
+
+lemma durations_match_imp_sat_lb:
+  assumes "durations_match d dcs ps as"
+      and "list_all (\<lambda>x. \<not>is_Func_Const x) dcs"
+    shows "imp_defs.rat_impl.satisfies_lower_bound (dc_list_lower dcs) d"
+  apply (rule dc_list_lower_propI)
+  using assms duration_matches_imp_sat_lb unfolding durations_match_def list_all_iff by auto  
+
+lemma duration_matches_imp_sat_ub: 
+  assumes "duration_matches d dc ps as"
+      and "\<not>is_Func_Const dc"
+  shows "imp_defs.rat_impl.satisfies_upper_bound (dc_to_ub dc) d"
+  using assms
+  apply (cases dc)
+  subgoal by auto
+  subgoal for op ps by (cases op) auto
+  by auto
+
+lemma durations_match_imp_sat_ub:
+  assumes "durations_match d dcs ps as"
+      and "list_all (\<lambda>x. \<not>is_Func_Const x) dcs"
+    shows "imp_defs.rat_impl.satisfies_upper_bound (dc_list_upper dcs) d"
+  apply (rule dc_list_upper_propI)
+  using assms duration_matches_imp_sat_ub unfolding durations_match_def list_all_iff by auto  
+
+lemma integers_sat_lower_bounds:
+  assumes "imp_defs.rat_impl.satisfies_lower_bound x d"
+      and "pred_option (pred_lower_bound is_integer) x"
+      and "is_integer d"
+    shows "imp_defs.rat_impl.satisfies_lower_bound (map_option (map_lower_bound (\<lambda>x. rat_of_int \<lfloor>x\<rfloor>)) x) (rat_of_int \<lfloor>d\<rfloor>)"
+  using assms apply (cases x)
+   apply simp
+  subgoal for a
+    apply (cases a)
+    using is_integer_floor_less Archimedean_Field.floor_mono
+    by auto
+  done
+
+lemma integers_sat_upper_bounds:
+  assumes "imp_defs.rat_impl.satisfies_upper_bound x d"
+      and "pred_option (pred_upper_bound is_integer) x"
+      and "is_integer d"
+    shows "imp_defs.rat_impl.satisfies_upper_bound (map_option (map_upper_bound (\<lambda>x. rat_of_int \<lfloor>x\<rfloor>)) x) (rat_of_int \<lfloor>d\<rfloor>)"
+  using assms apply (cases x)
+   apply simp
+  subgoal for a
+    apply (cases a)
+    using is_integer_floor_less Archimedean_Field.floor_mono
+    by auto
+  done
+
+lemmas integers_sat_bounds = integers_sat_lower_bounds integers_sat_upper_bounds
+
 
 end
 
@@ -154,11 +208,47 @@ locale valid_ground_plan =
   for P::ast_problem 
   and tp::"(rat \<times> plan_action) list" +
 assumes valid_plan: "valid_plan tp"
-  and pddl_nso: "PDDL_plan_no_self_overlap"
-  and plan_acts_no_args: "list_all (snd #> plan_act_no_args) tp"
-  and plan_acts_durs_integer: "list_all (timed_plan_action_durs_integer) tp"
+    and pddl_nso: "PDDL_plan_no_self_overlap"
+    and plan_acts_durs_integer: "list_all (timed_plan_action_durs_integer) tp"
 begin
-(* Needs an assumption that durations are integer *)
+(* Needs an assumption that durations are integers. *)
+
+lemma plan_action_wf:
+  assumes "(t, a) \<in> set tp"
+  shows "wf_plan_action a" 
+  using assms valid_plan unfolding valid_plan_def valid_plan_from_def wf_plan_def by blast
+
+lemma plan_acts_no_args: "list_all (snd #> plan_act_no_args) tp"
+proof -
+  { fix t a 
+    assume "(t, a) \<in> set tp"
+    hence wf: "wf_plan_action a" using plan_action_wf by auto
+    have "plan_act_no_args a"
+    proof (cases a)
+      case a: (Simple_Plan_Action n ps)
+      hence wf: "wf_plan_action (Simple_Plan_Action n ps)" using wf by auto
+      then obtain pre eff as  where
+        res: "resolve_action_schema n = Some (Simple_Action_Schema n as pre eff)"
+        using simple_plan_action_schema_type1 by blast
+      have pm: "action_params_match (Simple_Action_Schema n as pre eff) ps" using wf res by auto
+      have "as = []" using resolve_action_schema_def index_by_eq_SomeD acts_no_args res
+        unfolding list_all_iff by fastforce
+      then show ?thesis using pm a action_params_match_def by simp
+    next
+      case a: (Durative_Plan_Action n ps d)
+      hence wf: "wf_plan_action (Durative_Plan_Action n ps d)" using wf by auto
+      then obtain pre eff as dcs where
+        res: "resolve_action_schema n = Some (Durative_Action_Schema n as pre eff dcs)"
+        using durative_plan_action_schema_type1 by blast
+      have pm: "action_params_match (Durative_Action_Schema n as pre eff dcs) ps" using wf res by auto
+      have "as = []" using resolve_action_schema_def index_by_eq_SomeD acts_no_args res
+        unfolding list_all_iff by fastforce
+      then show ?thesis using pm a action_params_match_def by simp
+    qed
+  }
+  thus ?thesis unfolding list_all_iff by fastforce
+qed 
+  
 
 lemma resolve_action_schema_inj_on_dom:
   assumes "resolve_action_schema x = resolve_action_schema y"
@@ -392,12 +482,7 @@ proof -
 qed
 
 
-sublocale imp_defs: temp_plan_for_problem_list_defs_int
-  at_start_spec at_end_spec over_all_spec
-  lower_spec upper_spec pre_spec adds_spec dels_spec
-  init_spec goal_spec 0 props_spec actions_spec plan_imp  
-  by unfold_locales simp
-
+text \<open>Properties of the abstract plan used for the proof\<close>
 
 lemma temp_plan_no_self_overlap:
   "imp_defs.rat_impl.no_self_overlap"
@@ -447,12 +532,125 @@ lemma temp_plan_valid:
   "imp_defs.rat_impl.valid_plan"
 proof -
   have "\<exists>M. imp_defs.rat_impl.valid_state_sequence M \<and> M 0 = set init_spec \<and> set goal_spec \<subseteq> M (length imp_defs.rat_impl.htpl)" sorry
-  have "imp_defs.rat_impl.durations_ge_0" sorry
-  have "imp_defs.rat_impl.durations_valid" 
-    unfolding imp_defs.rat_impl.durations_valid_def
-    unfolding ran_map_option comp_def
-    unfolding plan_imp_def ran_nth_opt
-  have "imp_defs.rat_impl.mutex_valid_plan" sorry
+  have "imp_defs.rat_impl.durations_ge_0"
+  proof -
+    have "\<forall>a t d. (a, t, d) \<in> ran abstr_plan \<longrightarrow> 0 \<le> d"
+    proof (intro strip, elim ran_abstr_plan_ref_planE in_set_ref_planE)
+      fix t n as 
+      show "(t, Simple_Plan_Action n as) \<in> set tp \<Longrightarrow> 0 \<le> rat_of_int 0" by simp
+    next
+      fix t n as d
+      assume "(t, Durative_Plan_Action n as d) \<in> set tp"
+      hence "wf_plan_action (Durative_Plan_Action n as d)" using plan_action_wf by fast
+      thus "0 \<le> rat_of_int \<lfloor>d\<rfloor>" by (auto split: option.splits ast_action_schema.splits)
+    qed
+    thus ?thesis unfolding imp_defs.rat_impl.durations_ge_0_def abstr_plan_def by simp
+  qed
+  have "imp_defs.rat_impl.durations_valid"
+  proof -
+    have "\<forall>a t d. (a, t, d) \<in> ran abstr_plan \<longrightarrow> imp_defs.rat_impl.satisfies_duration_bounds a d"
+    proof (intro strip, elim ran_abstr_plan_ref_planE in_set_ref_planE)
+      fix t n as
+      assume "(t, Simple_Plan_Action n as) \<in> set tp"
+      hence "wf_plan_action (Simple_Plan_Action n as)" using plan_action_wf by fast
+      then obtain ps pre eff where
+        res: "resolve_action_schema n = Some (Simple_Action_Schema n ps pre eff)"
+        using simple_plan_action_schema_type1 by blast
+      show "imp_defs.rat_impl.satisfies_duration_bounds (the (resolve_action_schema n)) (rat_of_int 0)"
+        unfolding imp_defs.rat_impl.satisfies_duration_bounds_def Let_def res option.sel 
+        unfolding comp_def lower_spec.simps upper_spec.simps
+        unfolding option.map
+        by simp
+    next 
+      fix t n as d
+      assume a: "(t, Durative_Plan_Action n as d) \<in> set tp"
+      hence wfp: "wf_plan_action (Durative_Plan_Action n as d)" using plan_action_wf by fast
+      then obtain ps pre eff dcs where
+        res: "resolve_action_schema n = Some (Durative_Action_Schema n ps dcs pre eff)" and 
+        wfs: "wf_action_schema (Durative_Action_Schema n ps dcs pre eff)"
+        using durative_plan_action_schema_type1 resolve_action_wf by blast+
+      have dms: "durations_match d dcs ps as" using wfp unfolding wf_plan_action.simps res by simp
+      have no_func_dcs: "list_all (\<lambda>d. \<not> is_Func_Const d) dcs" 
+        using acts_no_func_dcs resolve_action_in_actions[OF res]
+        unfolding actions_spec_def list_all_iff
+        apply -
+        apply (drule bspec, assumption)
+        unfolding list_all_iff[symmetric] by simp
+      have sat: "imp_defs.rat_impl.satisfies_lower_bound (dc_list_lower dcs) d"
+           "imp_defs.rat_impl.satisfies_upper_bound (dc_list_upper dcs) d"
+        using durations_match_imp_sat_lb durations_match_imp_sat_ub dms no_func_dcs by simp+
+
+      have d_integer: "is_integer d" using plan_acts_durs_integer a unfolding list_all_iff by auto
+
+      have dcs_integer: "list_all duration_constraint_integer dcs"
+        using resolve_action_in_actions[OF res] acts_dcs_integers 
+        unfolding actions_spec_def 
+        by (auto simp: list_all_iff)
+
+      have lbs_integer: "pred_option (pred_lower_bound is_integer) (dc_list_lower dcs)" 
+        apply (rule dc_list_lower_propI)
+        using dcs_integer no_func_dcs
+         apply (induction dcs)
+        using dc_integer_imp_lb_integer by auto
+  
+      have ubs_integer: "pred_option (pred_upper_bound is_integer) (dc_list_upper dcs)" 
+        apply (rule dc_list_upper_propI)
+        using dcs_integer no_func_dcs
+         apply (induction dcs)
+        using dc_integer_imp_ub_integer by auto
+
+      show "imp_defs.rat_impl.satisfies_duration_bounds (the (resolve_action_schema n)) (rat_of_int \<lfloor>d\<rfloor>)" 
+        unfolding imp_defs.rat_impl.satisfies_duration_bounds_def Let_def res option.sel 
+        unfolding comp_def lower_spec.simps upper_spec.simps
+        unfolding option.map_comp comp_def lower_bound.map_comp upper_bound.map_comp
+        using sat integers_sat_bounds lbs_integer ubs_integer d_integer by simp
+    qed
+    thus ?thesis unfolding imp_defs.rat_impl.durations_valid_def abstr_plan_def by simp
+  qed
+  have "imp_defs.rat_impl.mutex_valid_plan"
+  proof -
+    show ?thesis 
+      unfolding imp_defs.rat_impl.mutex_valid_plan_eq
+      imp_defs.rat_impl.mutex_valid_plan_alt_def
+      unfolding abstr_plan_def[symmetric]
+    proof (intro conjI)
+      show "\<forall>i j a ta da b tb db. i \<in> dom abstr_plan \<and> j \<in> dom abstr_plan \<and> i \<noteq> j 
+          \<and> abstr_plan i = Some (a, ta, da) \<and> abstr_plan j = Some (b, tb, db) 
+        \<longrightarrow> imp_defs.rat_impl.mutex_sched a ta da b tb db" sorry
+      show "\<forall>(a, t, d)\<in>ran abstr_plan. d = 0 \<or> d < rat_of_int 0 
+        \<longrightarrow> \<not> imp_defs.rat_impl.set_impl.mutex_snap_action (at_start_spec a) (at_end_spec a)"
+      proof -
+        { fix a' t' d'
+          assume "(a', t', d') \<in> ran abstr_plan"
+          hence "(d' = 0 \<or> d' < rat_of_int 0) \<longrightarrow> \<not> imp_defs.rat_impl.set_impl.mutex_snap_action (at_start_spec a') (at_end_spec a')"
+          proof (elim ran_abstr_plan_ref_planE in_set_ref_planE; intro strip)
+            fix t n as
+            assume a: "(t, Simple_Plan_Action n as) \<in> set tp"
+              and  d: "rat_of_int 0 = 0 \<or> rat_of_int 0 < rat_of_int 0"
+            show "\<not> imp_defs.rat_impl.set_impl.mutex_snap_action (at_start_spec (the (resolve_action_schema n))) (at_end_spec (the (resolve_action_schema n)))" 
+            proof -
+              
+            obtain ps pre eff where
+              res: "resolve_action_schema n = Some (Simple_Action_Schema n ps pre eff)"
+              using simple_plan_action_schema_type1 a plan_action_wf by blast
+            show ?thesis
+              unfolding res option.sel at_end_spec.simps at_start_spec.simps 
+                non_ground_action_def
+                imp_defs.rat_impl.set_impl.mutex_snap_action_def
+              by simp
+            qed
+          next
+            fix t n as d
+            assume a: "(t, Durative_Plan_Action n as d) \<in> set tp" 
+            assume d: "rat_of_int \<lfloor>d\<rfloor> = 0 \<or> rat_of_int \<lfloor>d\<rfloor> < rat_of_int 0" 
+            have d:
+            show "\<not> imp_defs.rat_impl.set_impl.mutex_snap_action (at_start_spec (the (resolve_action_schema n))) (at_end_spec (the (resolve_action_schema n)))" sorry
+            
+          qed
+        } thus ?thesis by blast
+      qed
+    qed
+  qed
   have "imp_defs.rat_impl.finite_plan" 
     unfolding imp_defs.rat_impl.finite_plan_def
     unfolding dom_map_option comp_def

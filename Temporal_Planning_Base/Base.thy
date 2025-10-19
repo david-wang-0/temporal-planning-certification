@@ -4,6 +4,9 @@ begin
 
 section \<open>Utility Functions and Lemmas\<close>
 
+abbreviation (input) comb (infixl "#>" 59) where "a #> b \<equiv> (\<lambda>x. b (a x))"
+
+
 lemma list_all2_twist: "list_all2 P xs ys \<longleftrightarrow> list_all2 (\<lambda>y x. P x y) ys xs" for xs ys P
   apply (subst list_all2_iff)+
   apply (rule iffI; rule conjI; simp)
@@ -85,6 +88,92 @@ fun fun_upd_lists::"('a \<Rightarrow> 'b) \<Rightarrow> 'a list \<Rightarrow> 'b
 "fun_upd_lists f _ _ = f"
 
 
-abbreviation (input) comb (infixl "#>" 59) where "a #> b \<equiv> (\<lambda>x. b (a x))"
+
+definition "is_integer q \<equiv> \<exists>a b. q = Fract a b \<and> 0 < b \<and> coprime a b \<and> b = 1"
+
+definition "is_integer_code (q::rat) \<equiv> snd (quotient_of q) = 1"
+
+lemma is_integer_code[code]: "is_integer q = is_integer_code q"
+  apply (rule iffI)
+  unfolding is_integer_def is_integer_code_def 
+  subgoal apply (elim exE conjE)
+    subgoal for a b
+      apply (erule ssubst)
+      apply (subst quotient_of_Fract)
+      by simp
+    done
+  subgoal 
+    apply (rule Rat_cases[of q])
+    subgoal for a b
+      apply simp
+      apply (cases "Rat.normalize (a, b)")
+      subgoal for a' b'
+    apply (subst (asm) quotient_of_Fract)
+    apply (rule exI)
+        apply (subst Rat.normalize_eq[symmetric])
+         apply assumption
+        by simp
+      done
+    done
+  done
+
+
+lemma is_integer_add:
+  assumes "is_integer q"
+      and "is_integer r"
+    shows "is_integer (q + r)"
+proof -
+  obtain a b where
+    "q = Fract a 1"
+    "r = Fract b 1" using assms is_integer_def by auto
+  hence "q + r = Fract (a + b) 1" by auto
+  thus ?thesis using is_integer_def by auto
+qed
+
+lemma is_integer_of_int:
+  assumes "is_integer q"
+  shows "rat_of_int (floor q) = q"
+proof -
+  obtain a b where
+    q: "q = Fract a b"
+    "b = 1" using assms is_integer_def by auto
+  have "rat_of_int a = q" using q Fract_of_int_eq by auto
+  moreover
+  have "floor q = a" using q by simp
+  moreover
+  have "floor (rat_of_int a) = a" by simp
+  ultimately
+  show ?thesis by simp
+qed
+
+
+lemma is_integer_floor_less: 
+  assumes "x < y"
+      and "is_integer x"
+      and "is_integer y"
+    shows "floor x < floor y"
+  using assms
+  apply -
+  apply (subst (asm) is_integer_of_int[symmetric, of x], simp)
+  apply (subst (asm) is_integer_of_int[symmetric, of y], simp)
+  apply (subst (asm) of_int_less_iff)
+  by (assumption)
+
+(* lemma is_integer_floor_le: 
+  assumes "x \<le> y"
+      and "is_integer x"
+      and "is_integer y"
+    shows "floor x \<le> floor y"
+  using assms is_integer_floor_less by linarith *)
+
+thm Archimedean_Field.floor_mono
+
+lemma is_integer_floor_ne:
+  assumes "x \<noteq> y"
+      and "is_integer x"
+      and "is_integer y"
+    shows "floor x \<noteq> floor y"
+  using assms is_integer_floor_less 
+  by (force elim: neqE)
 
 end

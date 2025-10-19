@@ -504,16 +504,21 @@ definition valid_state_sequence::"'proposition state_sequence \<Rightarrow> bool
         \<and> pres \<subseteq> (M i)))
 )"
 
+fun satisfies_lower_bound::"'time lower_bound option \<Rightarrow> 'time \<Rightarrow> bool" where
+"satisfies_lower_bound (Some (GT t')) t = (t' < t)" | 
+"satisfies_lower_bound (Some (GE t')) t = (t' \<le> t)" |
+"satisfies_lower_bound None t = True"
+
+fun satisfies_upper_bound::"'time upper_bound option \<Rightarrow> 'time \<Rightarrow> bool" where
+"satisfies_upper_bound (Some (LT t')) t = (t < t')" | 
+"satisfies_upper_bound (Some (LE t')) t = (t \<le> t')" |
+"satisfies_upper_bound None t = True"
+
 definition satisfies_duration_bounds::"'action \<Rightarrow> 'time \<Rightarrow> bool" where
 "satisfies_duration_bounds a t \<equiv> 
-  let lb = (case (lower a) of 
-    Some (GT t') \<Rightarrow> t' < t
-  | Some (GE t') \<Rightarrow> t' \<le> t
-  | None \<Rightarrow> True);
-  ub = (case (upper a) of 
-    Some (LT t') \<Rightarrow> t < t'
-  | Some (LE t') \<Rightarrow> t \<le> t'
-  | None \<Rightarrow> True)
+  let 
+  lb = satisfies_lower_bound (lower a) t;
+  ub = satisfies_upper_bound (upper a) t
   in lb \<and> ub
 "
 (* An action with a duration of 0 is an instant snap-action. We restrict this to 0 < d for some 

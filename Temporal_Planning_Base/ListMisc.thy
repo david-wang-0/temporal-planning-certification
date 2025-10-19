@@ -420,6 +420,16 @@ lemma list_pairwise_nth_refl:
   using refl apply blast
   by simp
 
+lemma list_pairwise_map:
+  assumes "list_pairwise (\<lambda>x y. P (f x) (f y)) xs"
+  shows "list_pairwise P (map f xs)"
+  using assms apply (induction xs)
+   apply simp
+  subgoal for x xs
+    apply (subst list.map list_pairwise.simps list.pred_map comp_def)+ 
+    by auto
+  done
+
 
 definition nth_opt where
 "nth_opt xs n \<equiv> if n < length xs then Some (xs ! n) else None"
