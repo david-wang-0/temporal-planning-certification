@@ -125,25 +125,25 @@ definition goal_spec::"predicate list" where
   |> map to_predicate
   |> remdups"
 
-definition "non_ground_action \<equiv> Ground_Action (Formulas.Not Formulas.Bot) (Effect [] [])"
+definition "non_ground_action n anno \<equiv> Ground_Action n anno (Formulas.Not Formulas.Bot) (Effect [] [])"
 
 
 fun at_start_spec::"ast_action_schema \<Rightarrow> ground_action" where
-"at_start_spec (Simple_Action_Schema n ps pre eff) = instantiate_action_schema (Simple_Action_Schema n ps pre eff) []" |
+"at_start_spec (Simple_Action_Schema n ps pre eff) = instantiate_action_schema (Simple_Action_Schema n ps pre eff) [] At_Start" |
 "at_start_spec (Durative_Action_Schema n ps d cond eff) = inst_snap_action (Durative_Action_Schema n ps d cond eff) [] At_Start"
 
 fun at_end_spec::"ast_action_schema \<Rightarrow> ground_action" where
-"at_end_spec (Simple_Action_Schema n ps pre eff) = non_ground_action" |
+"at_end_spec (Simple_Action_Schema n ps pre eff) = non_ground_action n At_End" |
 "at_end_spec (Durative_Action_Schema n ps d cond eff) = inst_snap_action (Durative_Action_Schema n ps d cond eff) [] At_End"
 
 fun over_all_snap::"ast_action_schema \<Rightarrow> ground_action" where
 "over_all_snap (Simple_Action_Schema n ps pre eff) = 
-  non_ground_action" |
+   non_ground_action n Over_All" |
 "over_all_snap (Durative_Action_Schema n ps d cond eff) = 
   inst_snap_action (Durative_Action_Schema n ps d cond eff) [] Over_All"
 
 fun pre_spec::"ground_action \<Rightarrow> predicate list" where
-"pre_spec (Ground_Action form eff) = 
+"pre_spec (Ground_Action n anno form eff) = 
   form
   |> to_literals
   |> map to_predicate
@@ -156,7 +156,7 @@ fun over_all_spec::"ast_action_schema \<Rightarrow> predicate list" where
   |> pre_spec"
 
 fun adds_spec::"ground_action \<Rightarrow> predicate list" where
-"adds_spec (Ground_Action form eff) =
+"adds_spec (Ground_Action n anno form eff) =
   eff
   |> ast_effect.adds
   |> map to_predicate
@@ -164,7 +164,7 @@ fun adds_spec::"ground_action \<Rightarrow> predicate list" where
 "
 
 fun dels_spec::"ground_action \<Rightarrow> predicate list" where
-"dels_spec (Ground_Action form eff) =
+"dels_spec (Ground_Action n anno form eff) =
   eff
   |> ast_effect.dels
   |> map to_predicate
@@ -210,20 +210,27 @@ subsection \<open>Additional well-formedness considerations\<close>
 
 text \<open>Begin: Adapted from Maximillian Vollath\<close>
 fun is_pos_lit :: "'a atom Formulas.formula \<Rightarrow> bool" where
-  f: "is_pos_lit \<bottom> = False" |
-  "is_pos_lit (\<^bold>\<not>\<bottom>) = True" |
+  f: "is_pos_lit (\<^bold>\<not>\<bottom>) = True" |
   "is_pos_lit (Atom (predAtm n args)) = True" |
-  "is_pos_lit (\<^bold>\<not>(Atom (predAtm n args))) = False" |
-  "is_pos_lit (Atom (eqAtm a b)) = False" |
-  "is_pos_lit (\<^bold>\<not>(Atom (eqAtm a b))) = False" |
   "is_pos_lit _ = False"
 
 fun is_pos_conj :: "'a atom Formulas.formula \<Rightarrow> bool" where
   "is_pos_conj (f \<^bold>\<and> g) \<longleftrightarrow> is_pos_conj f \<and> is_pos_conj g" |
   "is_pos_conj f \<longleftrightarrow> is_pos_lit f"
-(* This does not have to be right recursive for our purposes. It was originally *) 
+(* This does not have to be right recursive for our purposes. It originally was *) 
 
-text \<open>End: Taken from M. Vollath\<close>
+text \<open>End: Adapted from M. Vollath\<close>
+
+fun is_pred::"'a atom formula \<Rightarrow> bool" where
+"is_pred (Atom (predAtm n args)) = True" |
+"is_pred _ = False"
+
+fun atom_no_args::"'a atom \<Rightarrow> bool" where
+"atom_no_args (predAtm p []) = True" |
+"atom_no_args _ = False"
+
+definition form_preds_no_args::"'a atom Formulas.formula \<Rightarrow> bool" where
+"form_preds_no_args form \<equiv> \<forall>a \<in> formula.atoms form. atom_no_args a"
 
 fun pred_no_args::"predicate_decl \<Rightarrow> bool" where
 "pred_no_args (PredDecl p as) = (as = [])"
@@ -251,7 +258,7 @@ fun act_dcs_integers::"ast_action_schema \<Rightarrow> bool" where
 "act_dcs_integers (Durative_Action_Schema n ps dcs pre eff) = (list_all duration_constraint_integer dcs)"
 
 fun ground_act_pres_pos::"ground_action \<Rightarrow> bool" where
-"ground_act_pres_pos (Ground_Action pre eff) = (is_pos_conj pre)"
+"ground_act_pres_pos (Ground_Action n anno pre eff) = (is_pos_conj pre)"
 
 lemma wf_pos_conj_fmla_imp_wf_atoms: 
     assumes "wf_fmla M form"
@@ -288,10 +295,40 @@ lemma is_pos_conj_Big_And:
   shows "is_pos_conj (BigAnd x)"
   using assms by (induction x) auto
 
+lemma is_pos_conj_to_literals_conv_atoms:
+  assumes "is_pos_conj form"
+  shows "Atom ` atoms form = set (to_literals form)"
+  using assms
+  apply (induction form)
+  subgoal for x by (cases x) simp+
+      apply simp
+  subgoal for form
+    apply (induction form)
+    subgoal for x by (induction x) simp+
+    by simp+
+  by auto
+
+
+lemma is_pos_conj_predicates: 
+  assumes "is_pos_conj form"
+  shows "to_predicate ` Atom ` atoms form = set (map to_predicate (to_literals form))"
+  using assms unfolding set_remdups set_map 
+  using is_pos_conj_to_literals_conv_atoms
+  by simp  
+
+
+lemma Collect_is_pos_litE:
+  assumes "x \<in> Collect is_pos_lit"
+      and "\<And>p ps. x = Atom (predAtm p ps) \<Longrightarrow> thesis"
+      and "x = \<^bold>\<not>\<bottom> \<Longrightarrow> thesis"
+    shows thesis
+  using assms
+  by (induction x rule: is_pos_lit.induct) auto
+
 lemma instantiate_action_schema_pres_pos:
   assumes "act_pres_pos (Simple_Action_Schema n ps pre eff)"
       and "action_params_match (Simple_Action_Schema n ps pre eff) as"
-    shows "ground_act_pres_pos (instantiate_action_schema (Simple_Action_Schema n ps pre eff) as)"
+    shows "ground_act_pres_pos (instantiate_action_schema (Simple_Action_Schema n ps pre eff) as anno)"
 proof -
   have 1: "is_pos_conj pre"
     using assms(1) by auto
@@ -302,9 +339,9 @@ qed
 lemma inst_snap_act_pres_pos:
   assumes "act_pres_pos (Durative_Action_Schema n ps d pre eff)"
       and "action_params_match (Durative_Action_Schema n ps d pre eff) as"
-    shows "ground_act_pres_pos (inst_snap_action (Durative_Action_Schema n ps d pre eff) as x)"
+    shows "ground_act_pres_pos (inst_snap_action (Durative_Action_Schema n ps d pre eff) as anno)"
 proof -
-  have 1: "list_all is_pos_conj (filter_time_spec x pre)"
+  have 1: "list_all is_pos_conj (filter_time_spec anno pre)"
     using assms(1)
     unfolding  filter_time_spec_def comp_def
     apply (subst (asm) act_pres_pos.simps)
@@ -362,6 +399,12 @@ lemma dc_integer_imp_ub_integer:
     apply (induction op)
     by auto
   by auto
+
+lemma start_spec_end_spec_neq:
+  "at_start_spec a \<noteq> at_end_spec a" 
+  apply (cases a)
+  using non_ground_action_def apply simp
+  by simp
 
 sublocale imp_defs: temp_planning_problem_list_defs_int 
   at_start_spec at_end_spec over_all_spec
@@ -612,7 +655,7 @@ lemma wf_ground_action_pres_in_props:
   shows "(set \<circ> pre_spec) h \<subseteq> set props_spec"
   using assms
 proof (induction h)
-  case (Ground_Action pre eff)
+  case (Ground_Action n anno pre eff)
   have 1: "(wf_fmla objT) pre"
     using Ground_Action by auto
   have 2: "is_pos_conj pre"
@@ -628,7 +671,7 @@ lemma wf_ground_action_adds_in_props:
   shows "(set \<circ> adds_spec) h \<subseteq> set props_spec"
   using assms
 proof (induction h)
-  case (Ground_Action pre eff)
+  case (Ground_Action n anno  pre eff)
   have 1: "list_all (wf_fmla_atom objT) (adds eff)"
     using Ground_Action unfolding wf_ground_action.simps apply (induction eff)
     using wf_effect.simps list_all_iff by auto
@@ -644,7 +687,7 @@ lemma wf_ground_action_dels_in_props:
   shows "(set \<circ> dels_spec) h \<subseteq> set props_spec"
   using assms
 proof (induction h)
-  case (Ground_Action pre eff)
+  case (Ground_Action n anno  pre eff)
   have 1: "list_all (wf_fmla_atom objT) (dels eff)"
     using Ground_Action unfolding wf_ground_action.simps apply (induction eff)
     using wf_effect.simps list_all_iff by auto

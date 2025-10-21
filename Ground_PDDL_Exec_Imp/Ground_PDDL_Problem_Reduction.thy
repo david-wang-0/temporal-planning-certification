@@ -14,7 +14,6 @@ sublocale abstr_model_checking: tp_nta_reduction_model_checking'
   props_spec actions_spec
   act_to_name_spec prop_to_name_spec
 proof 
-  show "0 \<le> (0::int)" by auto
   show "distinct props_spec"
     using wf_problem
     unfolding wf_problem_def wf_domain_def props_spec_def 
@@ -62,9 +61,9 @@ proof
     hence "x \<in> {}" 
     proof (cases)
       case 1
-      obtain pre eff where
-        a': "Ground_Action pre eff = at_start_spec a"
-        "wf_ground_action (Ground_Action pre eff)" 
+      obtain n anno pre eff where
+        a': "Ground_Action n anno pre eff = at_start_spec a"
+        "wf_ground_action (Ground_Action n anno  pre eff)" 
         using start_snaps_wf[OF a_in_acts] apply (cases "at_start_spec a") by auto
       have b: "ground_act_pres_pos (at_start_spec a)" using start_snap_pre_pos_conj a_in_acts by blast
       have "(set \<circ> pre_spec) (at_start_spec a) \<union> (set \<circ> adds_spec) (at_start_spec a) \<union> (set \<circ> dels_spec) (at_start_spec a) \<subseteq> set props_spec"
@@ -73,9 +72,9 @@ proof
       then show ?thesis using 1 unfolding action_and_prop_set.snap_consts_def by blast
     next
       case 2
-      obtain pre eff where
-        a': "Ground_Action pre eff = at_end_spec a"
-        "wf_ground_action (Ground_Action pre eff)" 
+      obtain n anno pre eff where
+        a': "Ground_Action n anno pre eff = at_end_spec a"
+        "wf_ground_action (Ground_Action n anno pre eff)" 
         using end_snaps_wf[OF a_in_acts] apply (cases "at_end_spec a") by auto
       have b: "ground_act_pres_pos (at_end_spec a)" using end_snap_pre_pos_conj a_in_acts by blast
       have "(set \<circ> pre_spec) (at_end_spec a) \<union> (set \<circ> adds_spec) (at_end_spec a) \<union> (set \<circ> dels_spec) (at_end_spec a) \<subseteq> set props_spec"
@@ -107,6 +106,6 @@ proof
       unfolding distinct_map by blast
   qed
 qed
-end (* context groundast_problem *)
+end (* context ground_ast_problem *)
 
 end
