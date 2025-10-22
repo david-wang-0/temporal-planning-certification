@@ -21,7 +21,6 @@ session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp =
   TP_NTA_Reduction +
   sessions Temporal_AI_Planning_Languages_Semantics
   theories 
-    PDDL_TP_Reduction 
     Check_Unsolvability
     Unsolvability_Code_Compile
     

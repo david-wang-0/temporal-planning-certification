@@ -2,7 +2,7 @@ theory Ground_PDDL_Plan_Defs
   imports Ground_PDDL_Problem_Defs
     "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics_Alt"
 begin
-  
+
 locale ground_plan_defs = 
   ground_ast_problem_defs P 
   for P::ast_problem +
@@ -55,10 +55,10 @@ lemma ref_plan_pairwise_if:
   using list_pairwise_map by blast
                             
 text \<open>Properties specific to later proofs\<close>
-fun plan_act_no_args where
-"plan_act_no_args (Simple_Plan_Action n []) = True" |
-"plan_act_no_args (Durative_Plan_Action n [] d) = True" |
-"plan_act_no_args _ = False"
+fun plan_act_no_params where
+"plan_act_no_params (Simple_Plan_Action n []) = True" |
+"plan_act_no_params (Durative_Plan_Action n [] d) = True" |
+"plan_act_no_params _ = False"
 
 fun timed_plan_action_durs_integer::"rat \<times> plan_action \<Rightarrow> bool" where
 "timed_plan_action_durs_integer (t, Simple_Plan_Action n as) = (is_integer t)" |
@@ -99,6 +99,35 @@ lemma ran_abstr_plan_ref_planE:
   using assms unfolding abstr_plan_def plan_imp_def ran_map_option comp_def ran_nth_opt 
   by auto
 
+lemma abstr_plan_binary_prop':
+  assumes secondary:
+    "i \<in> dom abstr_plan" 
+    "j \<in> dom abstr_plan" 
+    "i \<noteq> j"
+    "abstr_plan i = Some (a, ta, da)"
+    "abstr_plan j = Some (b, tb, db)"
+  and refl:
+    "\<forall>a ta da b tb db. Q a ta da b tb db = Q b tb db a ta da"
+  and primary: "(\<forall>i j a ta da b tb db. i < length ref_plan \<longrightarrow> j < length ref_plan \<longrightarrow> i \<noteq> j 
+      \<longrightarrow> (ref_plan ! i) = (a, ta, da) \<longrightarrow> (ref_plan ! j) = (b, tb, db)
+      \<longrightarrow> Q a (rat_of_int ta) (rat_of_int da) b (rat_of_int tb) (rat_of_int db))"
+shows "Q a ta da b tb db"
+proof -
+  show ?thesis
+    using secondary 
+    unfolding abstr_plan_def plan_imp_def 
+    unfolding ran_map_option comp_def ran_nth_opt 
+    unfolding dom_map_option comp_def dom_nth_opt
+    unfolding map_option_eq_Some
+    apply -
+    apply (elim exE conjE)
+    subgoal for x y
+      apply (drule nth_opt_Some)+
+      apply (induction x; induction y)
+      unfolding map_prod_simp using primary by auto
+    done
+qed
+
 lemma abstr_plan_binary_prop:
   assumes secondary:
     "i \<in> dom abstr_plan" 
@@ -121,19 +150,7 @@ proof -
       \<longrightarrow> (ref_plan ! i) = (a, ta, da) \<longrightarrow> (ref_plan ! j) = (b, tb, db)
       \<longrightarrow> Q a (rat_of_int ta) (rat_of_int da) b (rat_of_int tb) (rat_of_int db))"
     using primary by fastforce
-  show ?thesis
-    using secondary 
-    unfolding abstr_plan_def plan_imp_def 
-    unfolding ran_map_option comp_def ran_nth_opt 
-    unfolding dom_map_option comp_def dom_nth_opt
-    unfolding map_option_eq_Some
-    apply -
-    apply (elim exE conjE)
-    subgoal for x y
-      apply (drule nth_opt_Some)+
-      apply (induction x; induction y)
-      unfolding map_prod_simp using 1 by auto
-    done
+  show ?thesis using assms abstr_plan_binary_prop' 1 by blast
 qed
 
 (* --- *)
@@ -215,10 +232,11 @@ lemma add_preds: "to_predicate ` set (adds (ground_action.effect a)) = set (adds
 lemma del_preds: "to_predicate ` set (dels (ground_action.effect a)) = set (dels_spec a)"
   apply (cases a) by simp
 
-
 lemma acts_non_intrf_imp_mutex_snap_action:
   assumes non_int: "acts_non_intrf a b"
       and pres_pos: "ground_act_pres_pos a" "ground_act_pres_pos b"
+      and wf: "wf_ground_action a" "wf_ground_action b"
+      and no_args: "ground_act_no_args a" "ground_act_no_args b"
   shows "\<not> imp_defs.rat_impl.set_impl.mutex_snap_action a b"
 proof -
   have "to_predicate ` Atom `(atoms (ground_action.precondition a)) = set (pre_spec a)"
@@ -239,28 +257,92 @@ proof -
   have "to_predicate ` set (dels (ground_action.effect b)) = set (dels_spec b)"
     using del_preds by simp
   moreover
+  note pad_alt = calculation[symmetric]
+  
+  ultimately have True by simp (* clearing calculation *)
 
-  have x: "(\<not> x \<noteq> y) = (x = y)" for x y by simp
-
-  find_theorems "?f ` ?x \<inter> ?f ` ?y"
-  have inj_to_predicate: "inj_on to_predicate {x. is_pos_lit x \<and> form_preds_no_args x}"
+  have x: "(\<not> x \<noteq> y) = (x = y)" for x y by simp (* SMT.smt_arith_simplify(277) *)
+                           
+  have inj_to_predicate: "inj_on to_predicate {x. is_predAtom x \<and> form_preds_no_args x}" (is "inj_on to_predicate ?S")
     apply (rule inj_onI)
-    apply (elim CollectE conjE is_pos_lit.elims)
-       apply simp
+    apply (elim CollectE conjE is_predAtom.elims)
+    unfolding form_preds_no_args_def 
+    apply (drule bspec, simp)+
+    apply (erule atom_no_args.elims)+
+    by auto
     
-    apply (elim Collect_is_pos_litE)
-    subgoal for x
+  have "Atom ` atoms (ground_action.precondition a) \<subseteq> ?S" 
+    using is_pos_conj_atoms_preds pres_pos no_args
+    apply (induction a)
+    using form_preds_no_args_imp_atoms_no_args by auto
+  moreover
+  have "set (adds (ground_action.effect a)) \<subseteq> ?S" 
+    using no_args wf apply (induction a)
+    unfolding ground_action.sel
+    subgoal for n anno pre eff
+      apply (induction eff)
+      unfolding ground_act_no_args.simps list_all_iff 
+      using wf_fmla_atom_imp_is_predAtom by fastforce
+    done
+  moreover
+  have "set (dels (ground_action.effect a)) \<subseteq> ?S" 
+    using no_args wf apply (induction a)
+    unfolding ground_action.sel
+    subgoal for n anno pre eff
+      apply (induction eff)
+      unfolding ground_act_no_args.simps list_all_iff 
+      using wf_fmla_atom_imp_is_predAtom by fastforce
+    done
+  moreover
+  have "Atom ` atoms (ground_action.precondition b) \<subseteq> ?S" 
+    using is_pos_conj_atoms_preds pres_pos no_args
+    apply (induction b)
+    using form_preds_no_args_imp_atoms_no_args by auto
+  moreover
+  have "set (adds (ground_action.effect b)) \<subseteq> ?S" 
+    using no_args wf apply (induction b)
+    unfolding ground_action.sel
+    subgoal for n anno pre eff
+      apply (induction eff)
+      unfolding ground_act_no_args.simps list_all_iff 
+      using wf_fmla_atom_imp_is_predAtom by fastforce
+    done
+  moreover
+  have "set (dels (ground_action.effect b)) \<subseteq> ?S" 
+    using no_args wf apply (induction b)
+    unfolding ground_action.sel
+    subgoal for n anno pre eff
+      apply (induction eff)
+      unfolding ground_act_no_args.simps list_all_iff 
+      using wf_fmla_atom_imp_is_predAtom by fastforce
+    done
+  moreover
+  note in_set = calculation
+  ultimately have True by simp (* clearing calculation *)
+
+  
 
   show ?thesis
     unfolding imp_defs.rat_impl.set_impl.mutex_snap_action_def
-    unfolding comp_def calculation[symmetric]
+    unfolding comp_def pad_alt
     unfolding de_Morgan_disj x 
     unfolding image_Un[symmetric]
     apply (intro conjI)
     using non_int 
     unfolding acts_non_intrf_def Let_def
+    using inj_on_image_Int[symmetric, OF inj_to_predicate] in_set 
+    by simp+
 qed
 
+lemma non_ground_action_not_mutex:
+  shows "\<not>imp_defs.rat_impl.set_impl.mutex_snap_action (non_ground_action a anno) b"
+        "\<not>imp_defs.rat_impl.set_impl.mutex_snap_action b (non_ground_action a anno)"
+  unfolding non_ground_action_def imp_defs.rat_impl.set_impl.mutex_snap_action_def by simp+
+
+lemma non_ground_action_non_intrf:
+  shows "acts_non_intrf (non_ground_action a anno) b"
+        "acts_non_intrf b (non_ground_action a anno)"
+  unfolding non_ground_action_def acts_non_intrf_def by simp+
 end
 
 locale valid_ground_plan =
@@ -316,6 +398,11 @@ proof -
   thus ?thesis using assms valid_state_seq_final_state by blast
 qed
 
+lemma all_htps_acts_non_intrf':
+  assumes "t\<^sub>i \<in> set htps" "a \<in> acts_of_plan_at t\<^sub>i tp" "b \<in> acts_of_plan_at t\<^sub>i tp" "a \<noteq> b"
+  shows "acts_non_intrf a b"
+  using all_htps_acts_non_intrf assms by simp
+
 (* Needs an assumption that durations are integers. *)
 
 lemma wf_plan_actions:
@@ -329,12 +416,12 @@ lemma durative_plan_action_durs:
   using durative_plan_action_schema_type1 assms by force
 
 
-lemma plan_acts_no_args: "list_all (snd #> plan_act_no_args) tp"
+lemma plan_acts_no_args: "list_all (snd #> plan_act_no_params) tp"
 proof -
   { fix t a 
     assume "(t, a) \<in> set tp"
     hence wf: "wf_plan_action a" using wf_plan_actions by auto
-    have "plan_act_no_args a"
+    have "plan_act_no_params a"
     proof (cases a)
       case a: (Simple_Plan_Action n ps)
       hence wf: "wf_plan_action (Simple_Plan_Action n ps)" using wf by auto
@@ -342,7 +429,7 @@ proof -
         res: "resolve_action_schema n = Some (Simple_Action_Schema n as pre eff)"
         using simple_plan_action_schema_type1 by blast
       have pm: "action_params_match (Simple_Action_Schema n as pre eff) ps" using wf res by auto
-      have "as = []" using resolve_action_schema_def index_by_eq_SomeD acts_no_args res
+      have "as = []" using resolve_action_schema_def index_by_eq_SomeD acts_no_params res
         unfolding list_all_iff by fastforce
       then show ?thesis using pm a action_params_match_def by simp
     next
@@ -352,7 +439,7 @@ proof -
         res: "resolve_action_schema n = Some (Durative_Action_Schema n as pre eff dcs)"
         using durative_plan_action_schema_type1 by blast
       have pm: "action_params_match (Durative_Action_Schema n as pre eff dcs) ps" using wf res by auto
-      have "as = []" using resolve_action_schema_def index_by_eq_SomeD acts_no_args res
+      have "as = []" using resolve_action_schema_def index_by_eq_SomeD acts_no_params res
         unfolding list_all_iff by fastforce
       then show ?thesis using pm a action_params_match_def by simp
     qed
@@ -522,6 +609,7 @@ lemma ref_plan_end_in_htps_if_durative:
   shows "rat_of_int (t + d) \<in> set htps"
   using ref_plan_end_is_htp_if_durative[OF assms] 
     htps_seq_htps htps_seq_def by blast
+  
 
 (* Hence, we know that the starts and ends are well-formed *)
 
@@ -533,6 +621,7 @@ lemma ref_plan_snaps_wf:
   using assms ref_plan_acts_in_actions 
   by (blast intro: start_snaps_wf end_snaps_wf over_all_snap_wf)+
 
+
 (* Prove that these are in the acts_of_plan_at *)
 
 
@@ -540,6 +629,8 @@ lemma ref_plan_snaps_wf:
 equality is asserted on the ground action, which means that a can interfere with b
 if dels b = {x}, pre b = {x}, adds b = {}, dels a = {x}, pre a = {x}, adds a = {x}. *)
 
+
+(* To do: remove the name *)
 
 lemma at_start_snap_at_t:
   assumes "(a, t, d) \<in> set ref_plan"
@@ -614,8 +705,8 @@ lemma PDDL_no_self_overlap_imp_ref_no_self_overlap:
   assumes "PDDL_no_self_overlap a b"
       and "wf_plan_action (snd a)"
       and "wf_plan_action (snd b)"
-      and "plan_act_no_args (snd a)"
-      and "plan_act_no_args (snd b)"
+      and "plan_act_no_params (snd a)"
+      and "plan_act_no_params (snd b)"
       and "timed_plan_action_durs_integer a"
       and "timed_plan_action_durs_integer b"
   shows "ref_no_self_overlap (timed_plan_action_to_ref_plan_action a) (timed_plan_action_to_ref_plan_action b)"
@@ -762,7 +853,7 @@ proof -
 
     have nso: "list_all (PDDL_no_self_overlap pa) pas" using Cons by simp
     have wf: "list_all (\<lambda>x. wf_plan_action (snd x)) (pa # pas)" using Cons by blast
-    have no_args: "list_all (\<lambda>x. plan_act_no_args (snd x)) (pa # pas)" using Cons by blast
+    have no_args: "list_all (\<lambda>x. plan_act_no_params (snd x)) (pa # pas)" using Cons by blast
     have are_integer: "list_all timed_plan_action_durs_integer (pa # pas)" using Cons by blast
 
     have 2: "list_all (ref_no_self_overlap (timed_plan_action_to_ref_plan_action pa)) (map timed_plan_action_to_ref_plan_action pas)"
@@ -858,8 +949,9 @@ find_theorems acts_non_intrf name: local
 lemma temp_plan_valid:
   "imp_defs.rat_impl.valid_plan"
 proof -
-  have "\<exists>M. imp_defs.rat_impl.valid_state_sequence M \<and> M 0 = set init_spec \<and> set goal_spec \<subseteq> M (length imp_defs.rat_impl.htpl)" sorry
-  have "imp_defs.rat_impl.durations_ge_0"
+  have vss: "\<exists>M. imp_defs.rat_impl.valid_state_sequence M \<and> M 0 = set init_spec \<and> set goal_spec \<subseteq> M (length imp_defs.rat_impl.htpl)" sorry
+  moreover
+  have durs_ge_0: "imp_defs.rat_impl.durations_ge_0"
   proof -
     have "\<forall>a t d. (a, t, d) \<in> ran abstr_plan \<longrightarrow> 0 \<le> d"
     proof (intro strip, elim ran_abstr_plan_ref_planE in_set_ref_planE)
@@ -873,7 +965,8 @@ proof -
     qed
     thus ?thesis unfolding imp_defs.rat_impl.durations_ge_0_def abstr_plan_def by simp
   qed
-  have "imp_defs.rat_impl.durations_valid"
+  moreover
+  have durs_valid: "imp_defs.rat_impl.durations_valid"
   proof -
     have "\<forall>a t d. (a, t, d) \<in> ran abstr_plan \<longrightarrow> imp_defs.rat_impl.satisfies_duration_bounds a d"
     proof (intro strip, elim ran_abstr_plan_ref_planE in_set_ref_planE)
@@ -934,7 +1027,8 @@ proof -
     qed
     thus ?thesis unfolding imp_defs.rat_impl.durations_valid_def abstr_plan_def by simp
   qed
-  have "imp_defs.rat_impl.mutex_valid_plan"
+  moreover
+  have mutex_valid: "imp_defs.rat_impl.mutex_valid_plan"
   proof -
     show ?thesis 
       unfolding imp_defs.rat_impl.mutex_valid_plan_eq
@@ -944,12 +1038,187 @@ proof -
       show "\<forall>i j a ta da b tb db. i \<in> dom abstr_plan \<and> j \<in> dom abstr_plan \<and> i \<noteq> j 
           \<and> abstr_plan i = Some (a, ta, da) \<and> abstr_plan j = Some (b, tb, db) 
         \<longrightarrow> imp_defs.rat_impl.mutex_sched a ta da b tb db" 
-        unfolding imp_defs.rat_impl.mutex_sched_def 
-        apply (intro strip | elim conjE disjE)+
-               apply (linarith)
-        sorry
+      proof -
+        have 1: "\<forall>i j a ta da b tb db. i < length ref_plan \<longrightarrow> j < length ref_plan \<longrightarrow> i \<noteq> j \<longrightarrow> ref_plan ! i = (a, ta, da) \<longrightarrow> ref_plan ! j = (b, tb, db) \<longrightarrow> imp_defs.rat_impl.mutex_sched a (rat_of_int ta) (rat_of_int da) b (rat_of_int tb) (rat_of_int db)"
+        proof (intro strip)
+          fix i j a ta da b tb db
+          assume i:   "i < length ref_plan"
+            and j:    "j < length ref_plan" 
+            and ij:   "i \<noteq> j" 
+            and atd:  "ref_plan ! i = (a, ta, da)"
+            and btd:  "ref_plan ! j = (b, tb, db)"
+
+
+          have in_ref_plan: "(a, ta, da) \<in> set ref_plan" 
+            "(b, tb, db) \<in> set ref_plan"
+            using nth_mem[OF i] nth_mem[OF j] unfolding atd btd by simp+
+
+          
+          have durs_ge0: "0 \<le> da"
+                         "0 \<le> db" 
+            using in_ref_plan ref_plan_durs by blast+
+
+          have nso_cond: "ref_no_self_overlap (a, ta, da) (b, tb, db)" 
+            using ref_plan_no_self_overlap unfolding ref_plan_no_self_overlap_def
+            unfolding list_pairwise_nth_refl[OF ref_no_self_overlap_refl]
+            using i j ij atd[symmetric] btd[symmetric]
+            by auto
+            
+
+          have a_start: "at_start_spec a \<in> acts_of_plan_at (rat_of_int ta) tp"
+            using at_start_snap_at_t in_ref_plan by simp
+
+          have "at_end_spec a \<in> acts_of_plan_at (rat_of_int (ta + da)) tp \<or> (\<exists>n anno. at_end_spec a = non_ground_action n anno)"
+            apply (cases a)
+            using at_end_snap_at_t_if_durative in_ref_plan by auto
+          then
+          consider "at_end_spec a \<in> acts_of_plan_at (rat_of_int (ta + da)) tp" | "\<exists>n anno. at_end_spec a = non_ground_action n anno"
+            by blast
+          note a_end = this
+            
+
+          have b_start: "at_start_spec b \<in> acts_of_plan_at (rat_of_int tb) tp"
+            using btd at_start_snap_at_t nth_mem[OF j] by simp
+          have "at_end_spec b \<in> acts_of_plan_at (rat_of_int (tb + db)) tp \<or> (\<exists>n anno. at_end_spec b = non_ground_action n anno)"
+            apply (cases b)
+            using at_end_snap_at_t_if_durative in_ref_plan by auto
+          then
+          consider "at_end_spec b \<in> acts_of_plan_at (rat_of_int (tb + db)) tp" | "(\<exists>n anno. at_end_spec b = non_ground_action n anno)"
+            by blast
+          note b_end = this
+
+          have a_in_acts: "a \<in> set actions_spec" 
+           and b_in_acts: "b \<in> set actions_spec" 
+            using in_ref_plan
+            using ref_plan_acts_in_actions by auto
+          note ab_in_acts = this
+
+          have acts_pres_pos: 
+                "ground_act_pres_pos (at_start_spec a)"
+                "ground_act_pres_pos (at_start_spec b)" 
+                "ground_act_pres_pos (at_end_spec a)"
+                "ground_act_pres_pos (at_end_spec b)"
+            using ab_in_acts start_snap_pre_pos_conj end_snap_pre_pos_conj by blast+
+          have acts_no_args: 
+                "ground_act_no_args (at_start_spec a)"
+                "ground_act_no_args (at_start_spec b)"
+                "ground_act_no_args (at_end_spec a)"
+                "ground_act_no_args (at_end_spec b)"
+            using ab_in_acts start_snap_no_args end_snap_no_args by blast+
+          have acts_wf:
+                "wf_ground_action (at_start_spec a)"
+                "wf_ground_action (at_start_spec b)"
+                "wf_ground_action (at_end_spec a)"
+                "wf_ground_action (at_end_spec b)"
+            using ab_in_acts start_snaps_wf end_snaps_wf by blast+
+
+          have start_times_in_htps: 
+            "rat_of_int ta \<in> set htps" 
+            "rat_of_int tb \<in> set htps" 
+            using ref_plan_start_in_htps in_ref_plan by force+
+
+          have "rat_of_int (ta + da) \<in> set htps \<or> (\<exists>n anno. at_end_spec a = non_ground_action n anno)" 
+            apply (cases a)
+            using ref_plan_end_in_htps_if_durative in_ref_plan
+            by auto
+          then
+          consider "rat_of_int (ta + da) \<in> set htps" | "(\<exists>n anno. at_end_spec a = non_ground_action n anno)"
+            by blast+
+          note a_end_time = this
+
+          have "rat_of_int (tb + db) \<in> set htps \<or> (\<exists>n anno. at_end_spec b = non_ground_action n anno)" 
+            apply (cases b)
+            using ref_plan_end_in_htps_if_durative in_ref_plan
+            by auto
+          then
+          consider "rat_of_int (tb + db) \<in> set htps" | "(\<exists>n anno. at_end_spec b = non_ground_action n anno)"
+            by blast+
+          note b_end_time = this
+
+          show "imp_defs.rat_impl.mutex_sched a (rat_of_int ta) (rat_of_int da) b (rat_of_int tb) (rat_of_int db)" 
+          proof (intro imp_defs.rat_impl.mutex_sched_zero_sepI acts_non_intrf_imp_mutex_snap_action acts_pres_pos acts_no_args acts_wf)
+            show "rat_of_int 0 = 0" by simp
+          next 
+            assume t: "rat_of_int ta = rat_of_int tb"
+
+            have "a \<noteq> b"
+              apply (rule notI)
+              using t nso_cond durs_ge0 by auto
+            hence ne: "at_start_spec a \<noteq> at_start_spec b" 
+              using inj_on_at_start_spec a_in_acts b_in_acts by (force dest: inj_on_contraD)
+            
+
+            show "acts_non_intrf (at_start_spec a) (at_start_spec b)" 
+              apply (rule all_htps_acts_non_intrf')
+              using start_times_in_htps(1)
+              using a_start b_start t[symmetric] ne by auto 
+
+          next
+            assume t: "rat_of_int ta = rat_of_int tb + rat_of_int db" 
+            { assume b_end: "at_end_spec b \<in> acts_of_plan_at (rat_of_int (tb + db)) tp"
+              
+              have "a \<noteq> b"
+                apply (rule notI)
+                using t nso_cond durs_ge0 by auto
+              hence ne: "at_start_spec a \<noteq> at_end_spec b" 
+                using at_start_spec_at_end_spec_disj a_in_acts b_in_acts by auto
+            
+              have "acts_non_intrf (at_start_spec a) (at_end_spec b)" 
+                apply (rule all_htps_acts_non_intrf')
+                using start_times_in_htps(1)
+                using a_start b_end ne t by auto
+            }
+            thus " acts_non_intrf (at_start_spec a) (at_end_spec b)" 
+              apply (cases rule: b_end)
+              using non_ground_action_non_intrf by auto
+          next 
+            assume t: "rat_of_int ta + rat_of_int da = rat_of_int tb" 
+            { assume a_end: "at_end_spec a \<in> acts_of_plan_at (rat_of_int (ta + da)) tp"
+              have "a \<noteq> b"
+                apply (rule notI)
+                using t nso_cond durs_ge0 by auto
+              hence ne: "at_end_spec a \<noteq> at_start_spec b" 
+                using at_start_spec_at_end_spec_disj a_in_acts b_in_acts by auto
+            
+              have  "acts_non_intrf (at_end_spec a) (at_start_spec b)" 
+                apply (rule all_htps_acts_non_intrf')
+                using start_times_in_htps(2)
+                using a_end b_start ne t by auto
+            }
+            thus "acts_non_intrf (at_end_spec a) (at_start_spec b)" 
+              apply (cases rule: a_end)
+              using non_ground_action_non_intrf by auto
+          next 
+            assume t: "rat_of_int ta + rat_of_int da = rat_of_int tb + rat_of_int db" 
+            { assume a_end: "at_end_spec a \<in> acts_of_plan_at (rat_of_int (ta + da)) tp"
+              assume b_end: "at_end_spec b \<in> acts_of_plan_at (rat_of_int (tb + db)) tp"
+              assume a_end_time: "rat_of_int (plus_int ta da) \<in> set htps"
+              have "a \<noteq> b"
+                apply (rule notI)
+                using t nso_cond durs_ge0 by auto
+              hence ne: "at_end_spec a \<noteq> at_end_spec b" 
+                using inj_on_at_end_spec a_in_acts b_in_acts by (force dest: inj_on_contraD)
+            
+              have "acts_non_intrf (at_end_spec a) (at_end_spec b)" 
+                apply (rule all_htps_acts_non_intrf')
+                using a_end_time
+                using a_end b_end ne t by auto
+            }
+            thus "acts_non_intrf (at_end_spec a) (at_end_spec b)" 
+              apply (cases rule: a_end; cases rule: b_end; cases rule: a_end_time)
+              using non_ground_action_non_intrf by auto
+          qed
+        qed
+        show ?thesis
+        apply (intro strip, elim conjE)
+        subgoal
+          apply (rule abstr_plan_binary_prop')
+          using imp_defs.rat_impl.mutex_sched_refl 
+          using 1 by blast+
+        done
+      qed
       show "\<forall>(a, t, d)\<in>ran abstr_plan. d = 0 \<or> d < rat_of_int 0 
-        \<longrightarrow> \<not> imp_defs.rat_impl.set_impl.mutex_snap_action (at_start_spec a) (at_end_spec a)"
+      \<longrightarrow> \<not> imp_defs.rat_impl.set_impl.mutex_snap_action (at_start_spec a) (at_end_spec a)"
       proof -
         { fix a' t' d'
           assume "(a', t', d') \<in> ran abstr_plan"
@@ -959,6 +1228,9 @@ proof -
             assume a: "(a, t, d) \<in> set ref_plan"
               and d: "rat_of_int d = 0 \<or> rat_of_int d < rat_of_int 0" 
             have d[simp]: "d = 0" using a d ref_plan_durs by fastforce
+  
+            have a_in_acts: "a \<in> set actions_spec" using a ref_plan_acts_in_actions by simp
+            
             show "\<not> imp_defs.rat_impl.set_impl.mutex_snap_action (at_start_spec a) (at_end_spec a)"
             proof (cases a)
               case (Simple_Action_Schema n ps pre eff)
@@ -975,18 +1247,26 @@ proof -
                 using ref_plan_start_in_htps[OF a]
                 using start_spec_end_spec_neq by auto
               thus ?thesis 
-                unfolding imp_defs.rat_impl.set_impl.mutex_snap_action_def 
-                acts_non_intrf_def Let_def 
+                apply (rule acts_non_intrf_imp_mutex_snap_action)
+                using start_snap_pre_pos_conj start_snaps_wf start_snap_no_args
+                using end_snap_pre_pos_conj end_snaps_wf end_snap_no_args
+                using a_in_acts by blast+
             qed
           qed
-        } thus ?thesis by blast
+        }
+        thus ?thesis by auto
       qed
     qed
   qed
-  have "imp_defs.rat_impl.finite_plan" 
+  moreover
+  have finite: "imp_defs.rat_impl.finite_plan" 
     unfolding imp_defs.rat_impl.finite_plan_def
     unfolding dom_map_option comp_def
     using dom_plan_imp by simp
+  ultimately
+  show "imp_defs.rat_impl.valid_plan" 
+    unfolding imp_defs.rat_impl.valid_plan_def
+    by simp
 qed
 
 sublocale red_corr: tp_nta_reduction_correctness' init_spec goal_spec 

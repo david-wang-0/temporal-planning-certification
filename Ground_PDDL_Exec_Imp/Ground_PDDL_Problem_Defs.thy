@@ -91,6 +91,11 @@ locale ground_ast_problem_defs = ast_problem P
   for P :: ast_problem
 begin
 
+lemma (in ast_problem) wf_fmla_atom_imp_is_predAtom:
+  assumes "wf_fmla_atom M a"
+  shows "is_predAtom a"
+  using assms by (induction a rule: wf_fmla_atom.induct) auto
+
 definition "props_spec \<equiv> map pred (predicates D)"
 
 definition "prop_to_name_spec \<equiv> predicate.name"
@@ -221,10 +226,6 @@ fun is_pos_conj :: "'a atom Formulas.formula \<Rightarrow> bool" where
 
 text \<open>End: Adapted from M. Vollath\<close>
 
-fun is_pred::"'a atom formula \<Rightarrow> bool" where
-"is_pred (Atom (predAtm n args)) = True" |
-"is_pred _ = False"
-
 fun atom_no_args::"'a atom \<Rightarrow> bool" where
 "atom_no_args (predAtm p []) = True" |
 "atom_no_args _ = False"
@@ -235,9 +236,9 @@ definition form_preds_no_args::"'a atom Formulas.formula \<Rightarrow> bool" whe
 fun pred_no_args::"predicate_decl \<Rightarrow> bool" where
 "pred_no_args (PredDecl p as) = (as = [])"
 
-fun act_no_args::"ast_action_schema \<Rightarrow> bool" where
-"act_no_args (Simple_Action_Schema n ps pre eff) = (ps = [])" |
-"act_no_args (Durative_Action_Schema n ps d pre eff) = (ps = [])" 
+fun act_no_params::"ast_action_schema \<Rightarrow> bool" where
+"act_no_params (Simple_Action_Schema n ps pre eff) = (ps = [])" |
+"act_no_params (Durative_Action_Schema n ps d pre eff) = (ps = [])" 
 
 fun act_pres_pos::"ast_action_schema \<Rightarrow> bool" where
 "act_pres_pos (Simple_Action_Schema n ps pre eff) = (is_pos_conj (pre))" |
@@ -260,9 +261,16 @@ fun act_dcs_integers::"ast_action_schema \<Rightarrow> bool" where
 fun ground_act_pres_pos::"ground_action \<Rightarrow> bool" where
 "ground_act_pres_pos (Ground_Action n anno pre eff) = (is_pos_conj pre)"
 
+fun ground_act_no_args::"ground_action \<Rightarrow> bool" where
+"ground_act_no_args (Ground_Action n anno pre eff) = (
+  form_preds_no_args pre
+\<and> list_all form_preds_no_args (ast_effect.adds eff)
+\<and> list_all form_preds_no_args (ast_effect.dels eff)
+)"
+
 lemma wf_pos_conj_fmla_imp_wf_atoms: 
     assumes "wf_fmla M form"
-        and "is_pos_conj form"
+        and "is_pos_conj form"                
       shows "list_all (wf_fmla_atom M) (to_literals form)"
   using assms
   apply (induction form)
@@ -308,6 +316,16 @@ lemma is_pos_conj_to_literals_conv_atoms:
     by simp+
   by auto
 
+lemma is_pos_conj_atoms_preds:
+  assumes "is_pos_conj form"
+  shows "\<forall>a \<in> Atom ` atoms form. is_predAtom a"
+  using assms
+  apply (induction form rule: is_pos_conj.induct)
+       apply auto[1]
+  subgoal for v by (cases v) auto
+  apply simp
+  subgoal for v by (cases v) auto
+  by auto
 
 lemma is_pos_conj_predicates: 
   assumes "is_pos_conj form"
@@ -316,6 +334,34 @@ lemma is_pos_conj_predicates:
   using is_pos_conj_to_literals_conv_atoms
   by simp  
 
+lemma form_preds_no_args_imp_atoms_no_args:
+  assumes "form_preds_no_args form"
+  shows "\<forall>a \<in> Atom ` atoms form. form_preds_no_args a"
+  using assms
+  unfolding form_preds_no_args_def by simp
+
+lemma form_preds_no_args_Big_And:
+  assumes "list_all form_preds_no_args x"
+  shows "form_preds_no_args (BigAnd x)"
+  using assms unfolding form_preds_no_args_def by (induction x) auto
+
+lemma eff_adds_no_args_conjunct_effect:
+  assumes "\<forall>eff \<in> set effs. list_all form_preds_no_args (adds eff)"
+  shows "list_all form_preds_no_args (adds (\<And>\<^sub>e\<^sub>f\<^sub>f effs))"
+  using assms
+  unfolding list_all_iff conjunct_effects_def
+  unfolding ast_effect.sel
+  unfolding comp_def set_concat
+  by auto
+
+lemma eff_dels_no_args_conjunct_effect:
+  assumes "\<forall>eff \<in> set effs. list_all form_preds_no_args (dels eff)"
+  shows "list_all form_preds_no_args (dels (\<And>\<^sub>e\<^sub>f\<^sub>f effs))"
+  using assms
+  unfolding list_all_iff conjunct_effects_def
+  unfolding ast_effect.sel
+  unfolding comp_def set_concat
+  by auto
 
 lemma Collect_is_pos_litE:
   assumes "x \<in> Collect is_pos_lit"
@@ -420,12 +466,22 @@ locale ground_ast_problem =
   for P :: ast_problem +
   assumes positive_goal: "is_pos_conj (goal P)"
       and preds_no_args: "list_all pred_no_args (predicates D)"
-      and acts_no_args: "list_all act_no_args (actions D)"
+      and acts_no_params: "list_all act_no_params (actions D)"
       and acts_no_func_dcs: "list_all act_no_func_dcs (actions D)" 
       and acts_dcs_integers: "list_all act_dcs_integers (actions D)"
       and positive_act_pres: "list_all act_pres_pos (actions D)"
       and no_functions: "functions D = []"
+      and no_consts: "consts D = []"
 begin
+
+lemma acts_wf:
+  assumes "a \<in> set actions_spec"
+  shows " wf_action_schema a"
+  using wf_domain assms unfolding wf_domain_def actions_spec_def by blast
+
+lemma distinct_act_names:
+  "distinct (map ast_action_schema.name actions_spec)"
+  unfolding actions_spec_def using wf_domain wf_domain_def by simp
 
 lemma resolve_action_in_actions:
   assumes "resolve_action_schema n = Some a"
@@ -438,7 +494,7 @@ lemma act_params_match_empty:
   shows "action_params_match a []"
   using assms
   apply (induction a)
-  using acts_no_args 
+  using acts_no_params 
   unfolding action_params_match_def actions_spec_def list_all_iff 
   by auto
   
@@ -529,7 +585,7 @@ proof (induction a)
     unfolding at_start_spec.simps
   proof (rule wf_inst_action_schema)
     have 1: "ps = []" 
-      using acts_no_args Simple_Action_Schema
+      using acts_no_params Simple_Action_Schema
       unfolding actions_spec_def list_all_iff by auto
     show "action_params_match (Simple_Action_Schema n ps pre eff) []" 
       unfolding action_params_match_def 1 by simp
@@ -543,7 +599,7 @@ next
     unfolding at_start_spec.simps
   proof (rule wf_inst_durative_action_schema)
     have 1: "ps = []" 
-      using acts_no_args Durative_Action_Schema
+      using acts_no_params Durative_Action_Schema
       unfolding actions_spec_def list_all_iff by auto
     show "action_params_match (Durative_Action_Schema n ps d pre eff) []"
       unfolding action_params_match_def using 1 by simp
@@ -568,7 +624,7 @@ next
     unfolding at_end_spec.simps
   proof (rule wf_inst_durative_action_schema)
     have 1: "ps = []" 
-      using acts_no_args Durative_Action_Schema
+      using acts_no_params Durative_Action_Schema
       unfolding actions_spec_def list_all_iff by auto
     show "action_params_match (Durative_Action_Schema n ps d pre eff) []"
       unfolding action_params_match_def using 1 by simp
@@ -594,7 +650,7 @@ next
     unfolding over_all_snap.simps
   proof (rule wf_inst_durative_action_schema)
     have 1: "ps = []" 
-      using acts_no_args Durative_Action_Schema
+      using acts_no_params Durative_Action_Schema
       unfolding actions_spec_def list_all_iff by auto
     show "action_params_match (Durative_Action_Schema n ps d pre eff) []"
       unfolding action_params_match_def using 1 by simp
@@ -604,6 +660,224 @@ next
   qed
 qed
 
+text \<open>Snap actions have no arguments\<close>
+lemma act_no_params:
+  assumes "a \<in> set actions_spec"
+  shows "act_no_params a"
+  using assms unfolding actions_spec_def using acts_no_params unfolding list_all_iff 
+  by simp
+
+lemma constT_None:
+  "constT x = None"
+  unfolding constT_def no_consts by simp
+
+lemma wf_fmla_no_args: 
+  assumes "wf_fmla (ty_term (map_of []) constT) form" 
+  shows "form_preds_no_args form" 
+  using assms
+  apply (induction form)
+  unfolding form_preds_no_args_def apply (intro strip ballI)
+  unfolding Formulas.formula.set
+  subgoal for a x apply (induction a)
+    subgoal for n obs 
+      apply (cases obs)
+       apply simp 
+      subgoal for ob' obs'
+        unfolding wf_fmla.simps wf_atom.simps
+        unfolding wf_pred_atom.simps
+        apply (cases "sig n")
+         apply simp
+        subgoal for as
+          apply (cases as)
+           apply simp
+          unfolding is_of_type_def
+          apply (cases ob')
+          unfolding constT_None by auto
+        done
+      done 
+    subgoal for x1 x2
+      unfolding wf_fmla.simps wf_atom.simps constT_def no_consts
+      apply (cases x1)
+      by auto
+    done
+  by auto
+
+lemma wf_fmla_atom_no_args:
+  assumes "wf_fmla_atom (ty_term (map_of []) constT) form" 
+  shows "form_preds_no_args form" 
+  using assms wf_fmla_no_args wf_fmla_atom_alt by auto
+
+lemma map_formula_no_args:
+  assumes "form_preds_no_args form"
+  shows "form_preds_no_args ((Formulas.map_formula o map_atom) f form)"
+  using assms 
+  unfolding form_preds_no_args_def
+  apply (induction form)
+  subgoal for x apply (induction x)
+    subgoal for n as
+      by (cases as) auto
+    by simp
+  by auto
+
+lemma map_effect_adds_no_args:
+  assumes "list_all form_preds_no_args (adds eff)"
+  shows "list_all form_preds_no_args (adds (map_ast_effect f eff))"
+  using assms
+  unfolding list_all_iff
+  unfolding ast_effect.map_sel
+  using map_formula_no_args by auto
+
+lemma map_effect_dels_no_args:
+  assumes "list_all form_preds_no_args (dels eff)"
+  shows "list_all form_preds_no_args (dels (map_ast_effect f eff))"
+  using assms
+  unfolding list_all_iff
+  unfolding ast_effect.map_sel
+  using map_formula_no_args by auto
+
+lemma instantiate_action_schema_no_params:
+  assumes "act_no_params (Simple_Action_Schema n ps pre eff)"
+      and "wf_action_schema (Simple_Action_Schema n ps pre eff)"
+    shows "ground_act_no_args (instantiate_action_schema (Simple_Action_Schema n ps pre eff) as anno)"
+proof -
+  have p: "wf_fmla (ty_term (map_of []) constT) pre" 
+   and e: "wf_effect (ty_term (map_of []) constT) eff" 
+    using assms unfolding act_no_params.simps wf_action_schema.simps Let_def by blast+
+
+
+  have pre_no_args: "form_preds_no_args pre" using wf_fmla_no_args p by auto
+
+  have eff_adds_no_args: "list_all form_preds_no_args (adds eff)"
+    apply (cases eff) 
+    using wf_fmla_atom_no_args e unfolding list_all_iff
+    by auto
+
+  have eff_dels_no_args: "list_all form_preds_no_args (dels eff)"
+    apply (cases eff) 
+    using wf_fmla_atom_no_args e unfolding list_all_iff
+    by auto
+
+  show ?thesis
+    unfolding instantiate_action_schema.simps Let_def
+    using pre_no_args eff_adds_no_args eff_dels_no_args 
+    using map_formula_no_args map_effect_adds_no_args map_effect_dels_no_args by fastforce
+qed
+
+
+lemma inst_snap_action_no_params:
+  assumes "act_no_params (Durative_Action_Schema n ps dcs pres effs)"
+      and "wf_action_schema (Durative_Action_Schema n ps dcs pres effs)"
+    shows "ground_act_no_args (inst_snap_action (Durative_Action_Schema n ps dcs pres effs) as anno)"
+proof -
+  have p: "\<forall>(t, pre) \<in> set pres. wf_fmla (ty_term (map_of []) constT) pre" 
+   and e: "\<forall>(t, eff) \<in> set effs. wf_effect (ty_term (map_of []) constT) eff" 
+    using assms unfolding act_no_params.simps wf_action_schema.simps Let_def by blast+
+  
+  have pre_no_args: "\<forall>(t, pre) \<in> set pres. form_preds_no_args pre" using wf_fmla_no_args p by auto
+
+  have eff_adds_no_args: "\<forall>(t, eff) \<in> set effs. list_all form_preds_no_args (adds eff)"
+    using wf_fmla_atom_no_args e unfolding list_all_iff
+    apply (intro ballI)
+    subgoal for x
+      apply (cases x)
+      subgoal for t eff
+        apply (cases eff)
+        by auto
+      done
+    done
+
+  have eff_dels_no_args: "\<forall>(t, eff) \<in> set effs. list_all form_preds_no_args (dels eff)"
+    using wf_fmla_atom_no_args e unfolding list_all_iff
+    apply (intro ballI)
+    subgoal for x
+      apply (cases x)
+      subgoal for t eff
+        apply (cases eff)
+        by auto
+      done
+    done
+
+  show ?thesis unfolding inst_snap_action.simps Let_def 
+    unfolding ground_act_no_args.simps
+    apply (intro conjI)
+      apply (rule map_formula_no_args)
+      apply (rule form_preds_no_args_Big_And)
+      apply (subst filter_time_spec_def)
+      apply (subst list_all_iff)
+    using pre_no_args apply auto[1]
+     apply (rule map_effect_adds_no_args)
+     apply (rule eff_adds_no_args_conjunct_effect)
+    apply (subst filter_time_spec_def)
+    using eff_adds_no_args apply auto[1]
+     apply (rule map_effect_dels_no_args)
+     apply (rule eff_dels_no_args_conjunct_effect)
+    apply (subst filter_time_spec_def)
+    using eff_dels_no_args by auto
+qed
+
+lemma start_snap_no_args:
+  assumes "a \<in> set actions_spec"
+  shows "ground_act_no_args (at_start_spec a)"
+  using assms
+proof (induction a)
+  case a: (Simple_Action_Schema n ps pre eff)
+  show ?case 
+    unfolding at_start_spec.simps 
+    apply (rule instantiate_action_schema_no_params)
+    using act_no_params
+    using acts_wf
+    using a by blast+
+next
+  case a: (Durative_Action_Schema n ps dcs pre eff)
+  show ?case 
+    unfolding at_start_spec.simps 
+    apply (rule inst_snap_action_no_params)
+    using act_no_params
+    using acts_wf
+    using a by blast+
+qed
+
+lemma end_snap_no_args:
+  assumes "a \<in> set actions_spec"
+  shows "ground_act_no_args (at_end_spec a)"
+  using assms
+proof (induction a)
+  case a: (Simple_Action_Schema n ps pre eff)
+  show ?case 
+    using non_ground_action_def 
+    using form_preds_no_args_def by fastforce
+next
+  case a: (Durative_Action_Schema n ps dcs pre eff)
+  show ?case 
+    unfolding at_end_spec.simps 
+    apply (rule inst_snap_action_no_params)
+    using act_no_params
+    using acts_wf
+    using a by blast+
+qed
+
+text \<open>The over-all condition is obtained by first instantiating the action.\<close>
+
+lemma over_all_snap_no_args:
+  assumes "a \<in> set actions_spec"
+  shows "ground_act_no_args (over_all_snap a)"
+  using assms
+proof (induction a)
+  case a: (Simple_Action_Schema n ps pre eff)
+  show ?case 
+    using non_ground_action_def 
+    using form_preds_no_args_def by fastforce
+next
+  case a: (Durative_Action_Schema n ps dcs pre eff)
+  show ?case 
+    unfolding over_all_snap.simps 
+    apply (rule inst_snap_action_no_params)
+    using act_no_params
+    using acts_wf
+    using a by blast+
+qed
+
+text \<open>Conditions\<close>
 lemma start_snap_pre_pos_conj:
   assumes "a \<in> set actions_spec"
   shows "ground_act_pres_pos (at_start_spec a)"
@@ -718,6 +992,65 @@ next
   show ?case unfolding over_all_spec.simps
     using wf_ground_action_pres_in_props[simplified comp_def]
     using over_all_snap_wf  1 over_all_snap_pre_pos_conj by blast+
+qed
+
+text \<open>Snap actions are identifiable\<close>
+
+lemma inj_on_at_start_spec: "inj_on at_start_spec (set actions_spec)"
+proof -
+  { fix x y
+    assume x_in_acts: "x \<in> set actions_spec" 
+      and y_in_acts: "y \<in> set actions_spec" 
+      and neq: "x \<noteq> y"
+
+    have "inj_on ast_action_schema.name (set actions_spec)" using distinct_act_names distinct_map by blast
+    hence names_neq: "ast_action_schema.name x \<noteq> ast_action_schema.name y" using neq x_in_acts y_in_acts 
+      by (force dest: inj_on_contraD)
+    
+    have "at_start_spec x \<noteq> at_start_spec y"
+      apply (cases x; cases y)
+      using names_neq by auto
+    }
+  thus ?thesis
+    apply -
+    apply (rule inj_onI)
+    by auto
+qed
+
+lemma inj_on_at_end_spec: "inj_on at_end_spec (set actions_spec)"
+proof -
+  { fix x y
+    assume x_in_acts: "x \<in> set actions_spec" 
+      and y_in_acts: "y \<in> set actions_spec" 
+      and neq: "x \<noteq> y"
+
+    have "inj_on ast_action_schema.name (set actions_spec)" using distinct_act_names distinct_map by blast
+    hence names_neq: "ast_action_schema.name x \<noteq> ast_action_schema.name y" using neq x_in_acts y_in_acts 
+      by (force dest: inj_on_contraD)
+    
+    have "at_end_spec x \<noteq> at_end_spec y"
+      apply (cases x; cases y)
+      using names_neq non_ground_action_def by auto
+    }
+  thus ?thesis
+    apply -
+    apply (rule inj_onI)
+    by auto
+qed
+
+lemma at_start_spec_at_end_spec_disj: 
+  "at_start_spec ` (set actions_spec) \<inter> at_end_spec ` (set actions_spec) = {}"
+proof -
+  { fix x y
+    assume x_in_acts: "x \<in> set actions_spec" 
+      and y_in_acts: "y \<in> set actions_spec" 
+    
+    have "at_start_spec x \<noteq> at_end_spec y"
+      apply (cases x; cases y)
+      using non_ground_action_def by auto
+    }
+  thus ?thesis
+    by auto
 qed
 
 text \<open>The initial state and goal are in the props\<close>

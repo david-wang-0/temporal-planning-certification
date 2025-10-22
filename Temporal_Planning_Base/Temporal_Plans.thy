@@ -103,6 +103,10 @@ lemma snaps_disj_onE:
     shows "thesis"
   using assms unfolding snaps_disj_on_def inj_on_def by auto
 
+lemma mutex_snap_action_refl:
+  "mutex_snap_action a b = mutex_snap_action b a"
+  unfolding mutex_snap_action_def by blast
+
 end
 
 text \<open>Unique snap actions\<close>
@@ -483,6 +487,40 @@ lemma mutex_valid_plan_eq: "mutex_valid_plan \<longleftrightarrow> mutex_valid_p
   unfolding mutex_valid_plan_def mutex_valid_plan_alt_def mutex_sched_def 
   apply (rule iffI; intro conjI)
   by blast+
+
+lemma mutex_sched_refl:
+  "mutex_sched a ta da b tb db = mutex_sched b tb db a ta da"
+  unfolding mutex_sched_def
+  apply (intro iffI)
+   apply (subst mutex_snap_action_refl)
+  apply blast
+   apply (subst mutex_snap_action_refl)
+  by blast
+
+lemma mutex_schedI:
+  assumes 
+    "ta - tb < \<epsilon> \<Longrightarrow> tb - ta < \<epsilon> \<Longrightarrow> \<not> mutex_snap_action (at_start a) (at_start b)"
+    "ta = tb \<Longrightarrow> \<not>mutex_snap_action (at_start a) (at_start b)"
+    "ta - (tb + db) < \<epsilon> \<Longrightarrow> tb + db - ta < \<epsilon> \<Longrightarrow> \<not> mutex_snap_action (at_start a) (at_end b)"
+    "ta = tb + db \<Longrightarrow> \<not> mutex_snap_action (at_start a) (at_end b)"
+    "ta + da - tb < \<epsilon> \<Longrightarrow> tb - (ta + da) < \<epsilon> \<Longrightarrow> \<not> mutex_snap_action (at_end a) (at_start b)"
+    "ta + da = tb \<Longrightarrow> \<not> mutex_snap_action (at_end a) (at_start b)"
+    "ta + da - (tb + db) < \<epsilon> \<Longrightarrow> tb + db - (ta + da) < \<epsilon> \<Longrightarrow> \<not> mutex_snap_action (at_end a) (at_end b)"
+    "ta + da = tb + db \<Longrightarrow> \<not> mutex_snap_action (at_end a) (at_end b)"
+  shows "mutex_sched a ta da b tb db"
+  unfolding mutex_sched_def
+  apply (intro strip, elim conjE disjE)
+  using assms by simp+
+
+lemma mutex_sched_zero_sepI:
+  assumes "\<epsilon> = 0"
+    "ta = tb \<Longrightarrow> \<not>mutex_snap_action (at_start a) (at_start b)"
+    "ta = tb + db \<Longrightarrow> \<not> mutex_snap_action (at_start a) (at_end b)"
+    "ta + da = tb \<Longrightarrow> \<not> mutex_snap_action (at_end a) (at_start b)"
+    "ta + da = tb + db \<Longrightarrow> \<not> mutex_snap_action (at_end a) (at_end b)"
+  shows "mutex_sched a ta da b tb db"
+  using mutex_schedI assms by simp
+  
 
 subsubsection \<open>Valid state sequence\<close>
 
