@@ -176,4 +176,52 @@ lemma is_integer_floor_ne:
   using assms is_integer_floor_less 
   by (force elim: neqE)
 
+lemma linorder_leE:
+  assumes "(x::'a::linorder) \<le> y"
+    and "x < y \<Longrightarrow> thesis"
+    and "x = y \<Longrightarrow> thesis"
+  shows thesis
+  using assms by fastforce
+
+lemma strict_sorted_dropWhile_nth:
+  assumes "n < length (ts::('a::linorder) list)"
+    and "sorted_wrt (<) ts"
+  shows "dropWhile (\<lambda>x. x < (ts ! n)) ts = (drop n) ts"
+  using assms 
+proof (induction ts arbitrary: n)
+  case Nil
+  then show ?case by simp
+next
+  case 1: (Cons t ts)
+  then show ?case 
+    apply (induction n)
+    by auto
+qed
+
+lemma dropWhile_all:
+  assumes "\<forall>x \<in> set (xs::('a::linorder) list). x < t"
+  shows "dropWhile (\<lambda>x. x < t) xs = []"
+  using assms by auto
+
+lemma strict_sorted_takeWhile_nth:
+  assumes "n < length (ts::('a::linorder) list)"
+    and "sorted_wrt (<) ts"
+  shows "takeWhile (\<lambda>x. x < (ts ! n)) ts = (take n) ts"
+  using assms 
+proof (induction ts arbitrary: n)
+  case Nil
+  then show ?case by simp
+next
+  case 1: (Cons t ts)
+  then show ?case 
+    apply (induction n)
+    by auto
+qed
+
+lemma takeWhile_all:
+  assumes "\<forall>x \<in> set (xs::('a::linorder) list). x < t"
+  shows "takeWhile (\<lambda>x. x < t) xs = xs"
+  using assms by auto
+
+
 end

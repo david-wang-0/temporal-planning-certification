@@ -459,4 +459,19 @@ lemma nth_opt_Some:
   by (cases "n < length xs"; simp)+
 
 
+lemma sorted_wrt_append: 
+  assumes "\<forall>t \<in> set ts. t < x"
+    and "sorted_wrt (<) ts"
+  shows "sorted_wrt (<) (ts@[x])"
+proof -
+  have rev: "rev (xs@[x]) = x#(rev xs)" for xs x
+    by simp
+  show ?thesis
+    using assms
+    apply (subst sorted_wrt_rev[symmetric])
+    apply (subst (asm) sorted_wrt_rev[symmetric])
+    unfolding rev
+    by auto
+qed
+
 end

@@ -726,6 +726,12 @@ lemma valid_state_sequenceE:
   apply (erule conjE)+
   using assms(3) by blast
 
+lemma valid_state_sequenceI:
+  assumes "\<And>i. i < length htpl \<Longrightarrow> apply_effects (happ_at plan_happ_seq (time_index i)) (MS i) = MS (Suc i)" 
+      and "\<And>i. i < length htpl \<Longrightarrow> invs_at plan_inv_seq (time_index i) \<subseteq> MS i" 
+      and "\<And>i. i < length htpl \<Longrightarrow> \<Union> (pre ` happ_at plan_happ_seq (time_index i)) \<subseteq> MS i"
+  shows "valid_state_sequence MS"
+  using assms unfolding valid_state_sequence_def by simp
 text \<open>Time\<close>
     
 lemma time_index_bij_betw_list: "bij_betw time_index {n. n < length htpl} (set htpl)"
@@ -742,6 +748,8 @@ lemma card_htps_len_htpl: "card htps = length htpl" unfolding htpl_def by simp
 
 lemmas time_index_strict_sorted_list = strict_sorted_list_of_set[of htps, 
     simplified htpl_def[symmetric], THEN sorted_wrt_nth_less, simplified time_index_def[symmetric]]
+
+lemma sorted_htpl: "sorted_wrt (<) htpl" unfolding htpl_def by simp
 
 lemma time_index_strict_mono_on_list: 
   "strict_mono_on {n. n < length htpl} time_index" 

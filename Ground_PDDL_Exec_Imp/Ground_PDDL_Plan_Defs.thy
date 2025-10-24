@@ -2,7 +2,11 @@ theory Ground_PDDL_Plan_Defs
   imports Ground_PDDL_Problem_Defs
     "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics_Alt"
 begin
-
+                         
+instantiation real::infinity
+begin
+instance ..
+end
 locale ground_plan_defs = 
   ground_ast_problem_defs P 
   for P::ast_problem +
@@ -48,6 +52,11 @@ lemma in_set_ref_planE:
     done
   done
 
+lemma in_set_ref_planI:
+  "(t, Simple_Plan_Action n as) \<in> set tp \<Longrightarrow> (the (resolve_action_schema n), floor t, 0) \<in> set ref_plan"
+  "(t, Durative_Plan_Action n as d) \<in> set tp \<Longrightarrow> (the (resolve_action_schema n), floor t, floor d) \<in> set ref_plan"
+  unfolding ref_plan_def by force+
+
 lemma ref_plan_pairwise_if:
   assumes "list_pairwise (\<lambda>a b. Q (timed_plan_action_to_ref_plan_action a) (timed_plan_action_to_ref_plan_action b)) tp"
   shows "list_pairwise Q ref_plan"
@@ -90,6 +99,23 @@ sublocale imp_defs: temp_plan_for_problem_list_defs_int
   init_spec goal_spec 0 props_spec actions_spec plan_imp  
   by unfold_locales simp
 
+(* leaky abstraction? 
+To do (low prio): move into other locale that converts a plan from a list into a function. *)
+sublocale temp_plan_finite at_start_spec at_end_spec "set o over_all_spec"
+  "(map_option (map_lower_bound rat_of_int)) o lower_spec" 
+  "(map_option (map_upper_bound rat_of_int)) o upper_spec" 
+  "set o pre_spec" "set o adds_spec" "set o dels_spec"
+  "set init_spec" "set goal_spec" "rat_of_int 0" 
+  "map_option (map_prod id (map_prod rat_of_int rat_of_int)) o plan_imp"
+  apply unfold_locales 
+  unfolding imp_defs.rat_impl.finite_plan_def
+  unfolding comp_def
+  unfolding dom_map_option
+  unfolding plan_imp_def
+  unfolding dom_nth_opt
+  by blast
+  
+
 definition "abstr_plan \<equiv> (map_option (map_prod id (map_prod rat_of_int rat_of_int))) o plan_imp"
 
 lemma ran_abstr_plan_ref_planE:
@@ -98,6 +124,10 @@ lemma ran_abstr_plan_ref_planE:
     shows "Q a t d"
   using assms unfolding abstr_plan_def plan_imp_def ran_map_option comp_def ran_nth_opt 
   by auto
+
+lemma ran_abstr_planI:
+  "(a, t, d) \<in> set ref_plan \<Longrightarrow> (a, rat_of_int t, rat_of_int d) \<in> ran abstr_plan"
+  unfolding abstr_plan_def plan_imp_def ran_map_option comp_def ran_nth_opt by force
 
 lemma abstr_plan_binary_prop':
   assumes secondary:
@@ -691,7 +721,7 @@ proof -
 qed
 
 (* The above is needed for non-interference of starting snaps.
-Ending snaps for durative (but not simple actions) actions need a similar one.
+Ending snaps for durative (but not simple) actions need a similar one.
 Simple actions' ends need to be considered separately *)
 
 find_theorems "inst_of_plan_action"
@@ -946,10 +976,358 @@ find_theorems happ_enabled name: local
 find_theorems happ_non_intrf name: local
 find_theorems acts_non_intrf name: local
 
+
+definition "is_state_at \<pi> ts initial final t M \<equiv> 
+  valid_state_seq initial (takeWhile (\<lambda>x. x < t) ts) \<pi> M 
+  \<and> valid_state_seq M (dropWhile (\<lambda>x. x < t) ts) \<pi> final"
+
+definition "state_at \<pi> ts initial final t \<equiv> SOME M. is_state_at \<pi> ts initial final t M"
+
+definition "time_after_all ts \<equiv> SOME t. \<forall>t' \<in> set ts. t' < t"
+
+definition "add_final_time_point ts \<equiv> ts @ [time_after_all ts]" 
+
+definition "abstr_state_list \<equiv> (map (state_at tp htps I final_state) (add_final_time_point htps))"
+
+definition "plan_state_list \<equiv> abstr_state_list 
+  |> map (\<lambda>atomic_formulas. \<Union>((to_literals #> map to_predicate #> set) ` atomic_formulas))"
+
+
+lemma time_after_all_is_after_all:
+  "\<forall>t \<in> set ts. t < time_after_all (ts::rat list)"
+  unfolding time_after_all_def
+  apply (rule someI_ex)
+  apply (induction ts)
+   apply simp
+  subgoal for t ts
+    apply (erule exE)
+    subgoal for x
+      apply (cases "x < t")
+       apply (intro exI[of _ "t+1"] ballI)
+       apply auto[1]
+      apply (intro exI[of _ "x + 1"])
+      by auto
+    done
+  done
+      
+
+lemma length_add_final_time_point:
+  "length (add_final_time_point ts) = Suc (length ts)"
+  unfolding add_final_time_point_def by auto
+
+lemma nth_add_final_time_point_length:
+  "add_final_time_point ts ! (length ts) = (time_after_all ts)"
+  unfolding add_final_time_point_def by simp
+
+lemma nth_add_final_time_point:
+  assumes "n < length ts"
+  shows "add_final_time_point ts ! n = ts ! n"
+  using assms
+  unfolding add_final_time_point_def by auto
+
+
+lemma strict_sorted_add_final_time_point:
+  assumes "strict_sorted (ts::rat list)"
+  shows "strict_sorted (add_final_time_point ts)"
+  unfolding add_final_time_point_def
+  apply (rule sorted_wrt_append)
+  using assms time_after_all_is_after_all[of ts] by auto
+
+lemma abstr_state_list_nth_length:
+  "abstr_state_list ! length htps = (state_at tp htps I final_state (time_after_all htps))" 
+  unfolding abstr_state_list_def apply (subst nth_map, subst length_add_final_time_point, blast)
+  apply (subst nth_add_final_time_point_length)
+  by simp
+
+lemma state_at_is_state_at:
+  assumes "valid_state_seq M ts \<pi> M'"
+      and "strict_sorted ts"
+  shows "is_state_at \<pi> ts M M' t (state_at \<pi> ts M M' t)"
+proof -
+  show ?thesis
+    unfolding state_at_def
+    apply (rule someI_ex)
+    unfolding is_state_at_def 
+    apply (subst valid_state_seq_app_iff[symmetric])
+    using assms by auto
+qed
+
+lemma is_state_at_unique:
+  fixes X Y
+  assumes "is_state_at \<pi> ts M M' t X"
+     and "is_state_at \<pi> ts M M' t Y"
+  shows "X = Y" 
+  using assms valid_state_seq_state_unique is_state_at_def by blast
+
+
+
+lemma abstr_state_list_nth_valid:
+  assumes "n \<le> length htps"
+  shows "is_state_at tp htps I final_state ((add_final_time_point htps) ! n) (abstr_state_list ! n)"
+  unfolding abstr_state_list_def
+   apply (subst nth_map)
+    apply (subst length_add_final_time_point)
+  using assms apply simp
+   apply (rule state_at_is_state_at)
+  using valid_state_seq_final_state 
+  using htps_seq_htps unfolding htps_seq_def 
+  by blast+
+
+lemma abstr_state_list_nth_Suc:
+  assumes "n < length htps"
+  shows "(abstr_state_list ! (Suc n)) = apply_eff (acts_of_plan_at (htps ! n) tp) (abstr_state_list ! n)"
+proof -
+  have 1: "sorted_wrt (<) htps" using htps_seq_htps unfolding htps_seq_def by blast
+
+  have take_Sn: "take (Suc n) htps = take n htps @ [htps ! n]" using take_Suc_conv_app_nth assms by auto
+  
+  
+  have sn: "is_state_at tp htps I final_state ((add_final_time_point htps) ! (Suc n)) (abstr_state_list ! (Suc n))" 
+    using assms 1 abstr_state_list_nth_valid by auto
+  hence 2: "valid_state_seq I (takeWhile (\<lambda>x. x < add_final_time_point htps ! Suc n) htps) tp (abstr_state_list ! Suc n)" 
+    unfolding is_state_at_def by simp
+  have "valid_state_seq I (take (Suc n) htps) tp (abstr_state_list ! Suc n)" 
+  proof (cases "Suc n < length htps")
+    case True
+    show ?thesis 
+      apply (insert 2 True)
+      apply (subst (asm) nth_add_final_time_point, simp)
+     apply (subst (asm) strict_sorted_takeWhile_nth)
+    using 1 by simp+
+  next
+    case False
+    hence n': "Suc n = length htps" using assms by simp
+    show ?thesis
+      apply (insert 2)
+      unfolding n' 
+      apply (subst (asm) nth_add_final_time_point_length)
+      apply (subst (asm) takeWhile_all)
+      using time_after_all_is_after_all
+      by auto
+  qed 
+  hence "\<exists>Mj. valid_state_seq I (take n htps) tp Mj \<and> valid_state_seq Mj [htps ! n] tp (abstr_state_list ! Suc n)" 
+    unfolding take_Sn valid_state_seq_app_iff by auto
+  then obtain Mj where
+    Ij: "valid_state_seq I (take n htps) tp Mj" 
+    and jSn: "valid_state_seq Mj [htps ! n] tp (abstr_state_list ! Suc n)" by auto
+
+  have Mj_eff_Sn: "apply_eff (acts_of_plan_at (htps ! n) tp) Mj = abstr_state_list ! Suc n" 
+    using jSn unfolding valid_state_seq.simps Let_def by auto
+
+  have n: "is_state_at tp htps I final_state ((add_final_time_point htps) ! n) (abstr_state_list ! n)" 
+    using assms 1 abstr_state_list_nth_valid by auto
+  hence "valid_state_seq I (takeWhile (\<lambda>x. x < add_final_time_point htps ! n) htps) tp (abstr_state_list ! n)" 
+    unfolding is_state_at_def by blast
+  hence In: "valid_state_seq I (take n htps) tp (abstr_state_list ! n)"
+    apply (subst (asm) nth_add_final_time_point)
+    using assms apply simp
+    using strict_sorted_takeWhile_nth[OF assms 1] by simp 
+
+  have eq: "Mj = (abstr_state_list ! n)" using Ij In valid_state_seq_state_unique by blast
+
+  show ?thesis using Mj_eff_Sn eq by blast
+qed
+
+text \<open>\<close>
+
+find_theorems name: "ran*map_op"
+
+lemma ref_htpl_eq_htps: "imp_defs.rat_impl.htpl = htps"
+proof (rule strict_sorted_equal)
+  have "htps_seq tp htps" using htps_seq_htps by blast
+  hence htps_prop: "(\<forall>t. (t \<in> set htps) = ((\<exists>\<pi>. (t, \<pi>) \<in> set tp) \<or> (\<exists>(t\<^sub>\<pi>, \<pi>)\<in>durative_acts tp. t = t\<^sub>\<pi> + duration \<pi>)))"
+    unfolding htps_seq_def is_htp_def by argo
+
+  show "strict_sorted htps"
+    using htps_seq_htps htps_seq_def by blast
+  show "strict_sorted imp_defs.rat_impl.htpl" 
+    using imp_defs.rat_impl.sorted_htpl by simp
+  show "set imp_defs.rat_impl.htpl = set htps"
+  proof (intro equalityI subsetI)
+    fix x
+    assume "x \<in> set imp_defs.rat_impl.htpl"
+    hence "x \<in> imp_defs.rat_impl.htps" using htps_set_htpl by simp
+    thus "x \<in> set htps" 
+      apply (elim imp_defs.rat_impl.htpsE ssubst)
+      unfolding abstr_plan_def[symmetric]
+    proof goal_cases
+      fix a t d
+      assume "(a, t, d) \<in> ran abstr_plan"
+      thus "t + d \<in> set htps" 
+      proof (elim ran_abstr_plan_ref_planE)
+        fix a t d
+        assume "(a, t, d) \<in> set ref_plan" 
+        thus "rat_of_int t + rat_of_int d \<in> set htps"
+        proof (elim in_set_ref_planE)
+          fix t n as
+          assume a: "(t, Simple_Plan_Action n as) \<in> set tp" 
+          have "is_integer t" using plan_acts_durs_integer a unfolding list_all_iff by fastforce
+          moreover
+          have "t \<in> set htps" using a htps_prop by blast
+          ultimately
+          show "rat_of_int \<lfloor>t\<rfloor> + rat_of_int 0 \<in> set htps" 
+            using is_integer_of_int by fastforce
+        next
+          fix t n as d
+          assume a: "(t, Durative_Plan_Action n as d) \<in> set tp"
+          have "is_integer t" "is_integer d" using plan_acts_durs_integer a 
+            unfolding list_all_iff by fastforce+
+          moreover
+          {
+            have "(t, Durative_Plan_Action n as d) \<in> (durative_acts tp)" using a 
+              unfolding durative_acts_def comp_def set_filter is_act_simple_alt by auto
+            hence "t + d \<in> set htps" using htps_prop by fastforce
+          }
+          ultimately
+          show "rat_of_int \<lfloor>t\<rfloor> + rat_of_int \<lfloor>d\<rfloor> \<in> set htps" 
+            by(fastforce simp: is_integer_of_int)
+        qed
+      qed
+    next
+      fix a t d
+      assume "(a, t, d) \<in> ran abstr_plan"
+      thus "t \<in> set htps"
+      proof (elim ran_abstr_plan_ref_planE)
+        fix a t d
+        assume "(a, t, d) \<in> set ref_plan" 
+        thus "rat_of_int t \<in> set htps"
+        proof (elim in_set_ref_planE)
+          fix t n as
+          assume a: "(t, Simple_Plan_Action n as) \<in> set tp" 
+          have "is_integer t" using plan_acts_durs_integer a unfolding list_all_iff by fastforce
+          moreover
+          have "t \<in> set htps" using a htps_prop by blast
+          ultimately
+          show "rat_of_int \<lfloor>t\<rfloor> \<in> set htps" 
+            using is_integer_of_int by fastforce
+        next
+          fix t n as d
+          assume a: "(t, Durative_Plan_Action n as d) \<in> set tp"
+          have "is_integer t"  using plan_acts_durs_integer a 
+            unfolding list_all_iff by fastforce+
+          moreover
+          have "t \<in> set htps" using htps_prop a by fastforce
+          ultimately
+          show "rat_of_int \<lfloor>t\<rfloor> \<in> set htps" 
+            by (fastforce simp: is_integer_of_int)
+        qed
+      qed
+    qed
+  next
+    fix x
+    assume "x \<in> set htps" 
+    hence "((\<exists>\<pi>. (x, \<pi>) \<in> set tp) \<or> (\<exists>(t\<^sub>\<pi>, \<pi>)\<in>durative_acts tp. x = t\<^sub>\<pi> + duration \<pi>))"
+      using htps_prop by blast
+    then consider 
+          a where "(x, a) \<in> set tp" 
+      | t a where "(t, a) \<in> durative_acts tp" "x = t + duration a"
+      by blast
+    then consider
+        n as  where "(x, (Simple_Plan_Action n as)) \<in> set tp" 
+      | n as d where "(x, (Durative_Plan_Action n as d)) \<in> set tp" 
+      | t n as d where "(t, (Durative_Plan_Action n as d)) \<in> set tp" 
+        "x = t + d"
+      apply cases
+      subgoal for a apply (cases a)
+        by auto
+      subgoal for t a
+        apply (cases a)
+        unfolding durative_acts_def is_act_simple_alt 
+        by auto
+      done
+    hence "x \<in> imp_defs.rat_impl.htps"
+    proof (cases)
+      case 1
+      have 2: "(the (resolve_action_schema n), \<lfloor>x\<rfloor>, 0) \<in> set ref_plan" 
+        using in_set_ref_planI 1 by simp
+      {
+        have "(the (resolve_action_schema n), rat_of_int \<lfloor>x\<rfloor>, rat_of_int 0) \<in> ran abstr_plan" 
+          using ran_abstr_planI 2 by blast
+        moreover
+        have "is_integer x" using plan_acts_durs_integer 1
+            unfolding list_all_iff by fastforce+
+        ultimately
+        have "(the (resolve_action_schema n), x, rat_of_int 0) \<in> ran abstr_plan" 
+          using is_integer_of_int by fastforce
+      }
+      then show ?thesis using imp_defs.rat_impl.htpsI 
+        unfolding abstr_plan_def by auto
+    next
+      case 2
+      have 3: "(the (resolve_action_schema n), \<lfloor>x\<rfloor>, \<lfloor>d\<rfloor>) \<in> set ref_plan" 
+        using in_set_ref_planI 2 by blast
+      {
+        have "(the (resolve_action_schema n), rat_of_int \<lfloor>x\<rfloor>, rat_of_int \<lfloor>d\<rfloor>) \<in> ran abstr_plan" 
+          using ran_abstr_planI 3 by blast
+        moreover
+        have "is_integer x" "is_integer d" using plan_acts_durs_integer 2
+            unfolding list_all_iff by fastforce+
+        ultimately
+        have "(the (resolve_action_schema n), x, d) \<in> ran abstr_plan" 
+          using is_integer_of_int by fastforce
+      }
+      then show ?thesis using imp_defs.rat_impl.htpsI 
+        unfolding abstr_plan_def by auto
+    next
+      case 3
+      have 4: "(the (resolve_action_schema n), \<lfloor>t\<rfloor>, \<lfloor>d\<rfloor>) \<in> set ref_plan" 
+        using in_set_ref_planI 3 by blast
+      {
+        have "(the (resolve_action_schema n), rat_of_int \<lfloor>t\<rfloor>, rat_of_int \<lfloor>d\<rfloor>) \<in> ran abstr_plan" 
+          using ran_abstr_planI 4 by blast
+        moreover
+        have "is_integer t" "is_integer d" using plan_acts_durs_integer 3
+            unfolding list_all_iff by fastforce+
+        ultimately
+        have "(the (resolve_action_schema n), t, d) \<in> ran abstr_plan" 
+          using is_integer_of_int by fastforce
+      }
+      then show ?thesis using imp_defs.rat_impl.htpsI 
+        unfolding abstr_plan_def 3 by auto
+    qed
+    thus "x \<in> set imp_defs.rat_impl.htpl" using htps_set_htpl by simp
+  qed
+qed
+
+lemma "(imp_defs.rat_impl.happ_at imp_defs.rat_impl.plan_happ_seq t) = acts_of_plan_at t tp"
+proof (intro subsetI equalityI CollectI; (elim CollectE)?)
+  fix a
+  assume "(t, a) \<in> imp_defs.rat_impl.plan_happ_seq"
+  show "a \<in> acts_of_plan_at t tp" sorry
+next
+  fix a 
+  assume "a \<in> acts_of_plan_at t tp"
+  show "(t, a) \<in> imp_defs.rat_impl.plan_happ_seq" sorry
+qed
+
+lemma 
+  assumes "i < length imp_defs.rat_impl.htpl" 
+  shows "imp_defs.rat_impl.apply_effects 
+      (imp_defs.rat_impl.happ_at imp_defs.rat_impl.plan_happ_seq (imp_defs.rat_impl.time_index i)) 
+      (plan_state_list ! i) = plan_state_list ! Suc i"
+proof -
+  have "(imp_defs.rat_impl.happ_at imp_defs.rat_impl.plan_happ_seq (imp_defs.rat_impl.time_index i)) = undefined"
+    unfolding imp_defs.rat_impl.time_index_def ref_htpl_eq_htps sorry
+  
+  find_theorems name: "in_happ_seqE"
+  show ?thesis
+    unfolding plan_state_list_def
+qed
+
+lemma "length imp_defs.rat_impl.htpl = length htps"
+  sorry
+
+
 lemma temp_plan_valid:
   "imp_defs.rat_impl.valid_plan"
 proof -
-  have vss: "\<exists>M. imp_defs.rat_impl.valid_state_sequence M \<and> M 0 = set init_spec \<and> set goal_spec \<subseteq> M (length imp_defs.rat_impl.htpl)" sorry
+  have vss: "\<exists>M. imp_defs.rat_impl.valid_state_sequence M \<and> M 0 = set init_spec \<and> set goal_spec \<subseteq> M (length imp_defs.rat_impl.htpl)" 
+  proof (intro exI conjI)
+    show "imp_defs.rat_impl.valid_state_sequence ((!) plan_state_list)"
+    proof (rule imp_defs.rat_impl.valid_state_sequenceI)
+
+    qed
+  qed                                              
   moreover
   have durs_ge_0: "imp_defs.rat_impl.durations_ge_0"
   proof -
@@ -1072,7 +1450,8 @@ proof -
             apply (cases a)
             using at_end_snap_at_t_if_durative in_ref_plan by auto
           then
-          consider "at_end_spec a \<in> acts_of_plan_at (rat_of_int (ta + da)) tp" | "\<exists>n anno. at_end_spec a = non_ground_action n anno"
+          consider "at_end_spec a \<in> acts_of_plan_at (rat_of_int (ta + da)) tp" 
+            | "\<exists>n anno. at_end_spec a = non_ground_action n anno"
             by blast
           note a_end = this
             
@@ -1083,7 +1462,8 @@ proof -
             apply (cases b)
             using at_end_snap_at_t_if_durative in_ref_plan by auto
           then
-          consider "at_end_spec b \<in> acts_of_plan_at (rat_of_int (tb + db)) tp" | "(\<exists>n anno. at_end_spec b = non_ground_action n anno)"
+          consider "at_end_spec b \<in> acts_of_plan_at (rat_of_int (tb + db)) tp" 
+            | "(\<exists>n anno. at_end_spec b = non_ground_action n anno)"
             by blast
           note b_end = this
 
@@ -1122,7 +1502,8 @@ proof -
             using ref_plan_end_in_htps_if_durative in_ref_plan
             by auto
           then
-          consider "rat_of_int (ta + da) \<in> set htps" | "(\<exists>n anno. at_end_spec a = non_ground_action n anno)"
+          consider "rat_of_int (ta + da) \<in> set htps" 
+            | "(\<exists>n anno. at_end_spec a = non_ground_action n anno)"
             by blast+
           note a_end_time = this
 
@@ -1131,7 +1512,8 @@ proof -
             using ref_plan_end_in_htps_if_durative in_ref_plan
             by auto
           then
-          consider "rat_of_int (tb + db) \<in> set htps" | "(\<exists>n anno. at_end_spec b = non_ground_action n anno)"
+          consider "rat_of_int (tb + db) \<in> set htps" 
+            | "(\<exists>n anno. at_end_spec b = non_ground_action n anno)"
             by blast+
           note b_end_time = this
 

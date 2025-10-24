@@ -181,11 +181,10 @@ sublocale restr_to_props_ref: valid_temp_plan_restr_to_props AtStart AtEnd over_
   subgoal using domain_action_consts_in_init_consts
     unfolding action_consts_def
     unfolding restr_to_props.plan_consts_def
-    unfolding pre_imp_restr_def over_all_restr_def
+    unfolding act_consts_def restr_to_props.act_consts_def 
+    unfolding snap_consts_def restr_to_props.snap_consts_def
     unfolding add_imp_def del_imp_def pre_imp_def
-    using domain_acts_mod_props 
-    using pap unfolding plan_actions_in_problem_def 
-    by auto
+    using pap unfolding plan_actions_in_problem_def by auto
   done
 
 
@@ -459,9 +458,9 @@ sublocale restr_to_props_ref: valid_temp_plan_restr_to_props AtStart AtEnd "set 
   subgoal using act_consts_in_init_consts
     unfolding set_impl.action_consts_def
     unfolding restr_to_props.plan_consts_def
-    unfolding set_impl.pre_imp_restr_def set_impl.over_all_restr_def
+    unfolding set_impl.act_consts_def set_impl.snap_consts_def
+    unfolding restr_to_props.act_consts_def restr_to_props.snap_consts_def
     unfolding set_impl.add_imp_def set_impl.del_imp_def set_impl.pre_imp_def
-    using domain_acts_mod_props 
     using pap unfolding plan_actions_in_problem_def 
     by auto
   done
