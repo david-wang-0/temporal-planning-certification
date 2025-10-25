@@ -130,7 +130,7 @@ definition goal_spec::"predicate list" where
   |> map to_predicate
   |> remdups"
 
-definition "non_ground_action n anno \<equiv> Ground_Action n anno (Formulas.Not Formulas.Bot) (Effect [] [])"
+definition "ground_non_action n anno \<equiv> Ground_Action n anno (Formulas.Not Formulas.Bot) (Effect [] [])"
 
 
 fun at_start_spec::"ast_action_schema \<Rightarrow> ground_action" where
@@ -138,12 +138,12 @@ fun at_start_spec::"ast_action_schema \<Rightarrow> ground_action" where
 "at_start_spec (Durative_Action_Schema n ps d cond eff) = inst_snap_action (Durative_Action_Schema n ps d cond eff) [] At_Start"
 
 fun at_end_spec::"ast_action_schema \<Rightarrow> ground_action" where
-"at_end_spec (Simple_Action_Schema n ps pre eff) = non_ground_action n At_End" |
+"at_end_spec (Simple_Action_Schema n ps pre eff) = ground_non_action n At_End" |
 "at_end_spec (Durative_Action_Schema n ps d cond eff) = inst_snap_action (Durative_Action_Schema n ps d cond eff) [] At_End"
 
 fun over_all_snap::"ast_action_schema \<Rightarrow> ground_action" where
 "over_all_snap (Simple_Action_Schema n ps pre eff) = 
-   non_ground_action n Over_All" |
+   ground_non_action n Over_All" |
 "over_all_snap (Durative_Action_Schema n ps d cond eff) = 
   inst_snap_action (Durative_Action_Schema n ps d cond eff) [] Over_All"
 
@@ -449,7 +449,7 @@ lemma dc_integer_imp_ub_integer:
 lemma start_spec_end_spec_neq:
   "at_start_spec a \<noteq> at_end_spec a" 
   apply (cases a)
-  using non_ground_action_def apply simp
+  using ground_non_action_def apply simp
   by simp
 
 sublocale imp_defs: temp_planning_problem_list_defs_int 
@@ -457,6 +457,45 @@ sublocale imp_defs: temp_planning_problem_list_defs_int
   lower_spec upper_spec pre_spec adds_spec dels_spec
   init_spec goal_spec 0 props_spec actions_spec
   by unfold_locales simp
+
+
+lemma ground_non_action_pre:
+  assumes "x \<in> {ground_non_action n anno|n anno. True}"
+  shows "pre_spec x = []"
+  using assms unfolding ground_non_action_def by auto
+
+lemma ground_non_action_adds:
+  assumes "x \<in> {ground_non_action n anno|n anno. True}"
+  shows "adds_spec x = []"
+  using assms unfolding ground_non_action_def by auto
+
+lemma ground_non_action_dels:
+  assumes "x \<in> {ground_non_action n anno|n anno. True}"
+  shows "dels_spec x = []"
+  using assms unfolding ground_non_action_def by auto
+
+lemma inj_on_to_predicate:
+  "inj_on to_predicate {x. form_preds_no_args x \<and> is_predAtom x}"
+proof (rule inj_onI)
+    fix x y::"object atom Formulas.formula"
+    assume xy: "x \<in> {x. form_preds_no_args x \<and> is_predAtom x}" 
+      "y \<in> {x. form_preds_no_args x \<and> is_predAtom x}"
+    assume eq: "to_predicate x = to_predicate y"
+    obtain m as where
+      x: "x = Atom (predAtm m as)"  using xy
+      apply (cases x rule: is_predAtom.cases) by auto
+    obtain n bs where
+      y: "y = Atom (predAtm n bs)" using xy
+      apply (cases y rule: is_predAtom.cases) by auto
+
+    have x: "x = Atom (predAtm m [])" using xy x unfolding form_preds_no_args_def 
+      by (cases as) auto
+    
+    have y: "y = Atom (predAtm n [])" using xy y unfolding form_preds_no_args_def 
+      by (cases bs) auto
+
+    show "x = y" using eq x y by simp
+qed
 
 end
 
@@ -617,7 +656,7 @@ proof (induction a)
   case (Simple_Action_Schema n ps pre eff)
   show ?case 
     unfolding at_end_spec.simps
-    unfolding non_ground_action_def by auto
+    unfolding ground_non_action_def by auto
 next
   case (Durative_Action_Schema n ps d pre eff)
   show ?case 
@@ -643,7 +682,7 @@ proof (induction a)
   case (Simple_Action_Schema n ps pre eff)
   show ?case 
     unfolding over_all_snap.simps
-    unfolding non_ground_action_def by auto
+    unfolding ground_non_action_def by auto
 next
   case (Durative_Action_Schema n ps d pre eff)
   show ?case 
@@ -844,7 +883,7 @@ lemma end_snap_no_args:
 proof (induction a)
   case a: (Simple_Action_Schema n ps pre eff)
   show ?case 
-    using non_ground_action_def 
+    using ground_non_action_def 
     using form_preds_no_args_def by fastforce
 next
   case a: (Durative_Action_Schema n ps dcs pre eff)
@@ -865,7 +904,7 @@ lemma over_all_snap_no_args:
 proof (induction a)
   case a: (Simple_Action_Schema n ps pre eff)
   show ?case 
-    using non_ground_action_def 
+    using ground_non_action_def 
     using form_preds_no_args_def by fastforce
 next
   case a: (Durative_Action_Schema n ps dcs pre eff)
@@ -900,7 +939,7 @@ lemma end_snap_pre_pos_conj:
   using assms
 proof (induction a)
   case 1: (Simple_Action_Schema n ps pre eff)
-  show ?case unfolding at_end_spec.simps non_ground_action_def by auto
+  show ?case unfolding at_end_spec.simps ground_non_action_def by auto
 next
   case 1: (Durative_Action_Schema n ps d pre eff)
   have "act_pres_pos (Durative_Action_Schema n ps d pre eff)" using 1 positive_act_pres 
@@ -914,7 +953,7 @@ lemma over_all_snap_pre_pos_conj:
   using assms
 proof (induction a)
   case 1: (Simple_Action_Schema n ps pre eff)
-  show ?case unfolding  over_all_snap.simps non_ground_action_def by simp
+  show ?case unfolding  over_all_snap.simps ground_non_action_def by simp
 next
   case 1: (Durative_Action_Schema n ps d pre eff)
   have "act_pres_pos (Durative_Action_Schema n ps d pre eff)" using 1 positive_act_pres 
@@ -1030,7 +1069,7 @@ proof -
     
     have "at_end_spec x \<noteq> at_end_spec y"
       apply (cases x; cases y)
-      using names_neq non_ground_action_def by auto
+      using names_neq ground_non_action_def by auto
     }
   thus ?thesis
     apply -
@@ -1047,7 +1086,7 @@ proof -
     
     have "at_start_spec x \<noteq> at_end_spec y"
       apply (cases x; cases y)
-      using non_ground_action_def by auto
+      using ground_non_action_def by auto
     }
   thus ?thesis
     by auto

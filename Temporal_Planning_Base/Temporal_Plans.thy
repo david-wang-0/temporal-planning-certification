@@ -676,6 +676,14 @@ lemma in_happ_seqE:
   shows thesis
   using in_happ_seq_exD assms by blast
 
+lemma in_happ_seq_propE:
+  assumes "(time, snap) \<in> plan_happ_seq"
+    and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> Q t (at_start a)"
+    and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> Q (t + d) (at_end a)"
+  shows "Q time snap"
+  apply (rule in_happ_seqE[OF assms(1)])
+  using assms by auto
+
 lemma in_happ_seq_exD_act:
   assumes in_happ_seq: "(time, snap) \<in> plan_happ_seq"
   shows "\<exists>a t d. (a, t, d) \<in> ran \<pi> \<and> (at_start a = snap \<or> at_end a = snap)"
