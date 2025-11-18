@@ -7,6 +7,72 @@ instantiation real::infinity
 begin
 instance ..
 end
+
+context ast_problem
+begin
+lemma in_acts_of_plan_atE:
+  assumes "a \<in> acts_of_plan_at t p"
+      and "\<And>\<pi>. (t, \<pi>) \<in> simple_acts p \<Longrightarrow> Some a = res_inst \<pi> At_Start \<Longrightarrow> Q a t p"
+          "\<And>\<pi>. (t, \<pi>) \<in> durative_acts p \<Longrightarrow> Some a = res_inst_snap_action \<pi> At_Start \<Longrightarrow> Q a t p"
+          "\<And>t' \<pi>. (t', \<pi>) \<in> durative_acts p \<Longrightarrow> t = t' + duration \<pi> \<Longrightarrow> Some a = res_inst_snap_action \<pi> At_End \<Longrightarrow> Q a t p"
+  shows "Q a t p"
+  using assms unfolding acts_of_plan_at_def
+  by blast
+
+
+
+lemma valid_state_seq_prop_pred_final:
+  assumes "valid_state_seq M ts \<pi> M'"
+      and "\<forall>p \<in> M'. Q p"
+      and "\<forall>t \<in> set ts. \<forall>a \<in> acts_of_plan_at t \<pi>. \<forall>p \<in> set (adds (ground_action.effect a)) \<union> set (dels (ground_action.effect a)). Q p"
+  shows "\<forall>p \<in> M. Q p"
+  using assms
+proof (induction M ts \<pi> M' arbitrary: M rule: valid_state_seq.induct)
+  case (1 M \<pi>s M')
+  then show ?case by simp
+next
+  case (2 M t\<^sub>i ts \<pi>s M')
+  have "\<forall>a\<in>acts_of_plan_at t\<^sub>i \<pi>s. \<forall>a\<in>set (adds (ground_action.effect a)) \<union> set (dels (ground_action.effect a)). Q a" using 2 by simp
+  moreover
+  have "\<forall>p\<in>apply_eff (acts_of_plan_at t\<^sub>i \<pi>s) M. Q p" using 2 by auto
+  ultimately
+  show ?case by auto
+qed
+
+lemma valid_state_seq_prop_pred_initial:
+  assumes "valid_state_seq M ts \<pi> M'"
+      and "\<forall>p \<in> M. Q p"
+      and "\<forall>t \<in> set ts. \<forall>a \<in> acts_of_plan_at t \<pi>. \<forall>p \<in> set (adds (ground_action.effect a)) \<union> set (dels (ground_action.effect a)). Q p"
+  shows "\<forall>p \<in> M'. Q p"
+  using assms
+proof (induction M ts \<pi> M' rule: valid_state_seq.induct)
+  case (1 M \<pi>s M')
+  then show ?case by simp
+next
+  case (2 M t\<^sub>i ts \<pi>s M')
+  have a: "valid_state_seq (apply_eff (acts_of_plan_at t\<^sub>i \<pi>s) M) ts \<pi>s M'"
+    using 2(2) unfolding valid_state_seq.simps Let_def by blast
+  moreover
+  have b: "\<forall>t\<in>set ts. \<forall>a\<in>acts_of_plan_at t \<pi>s. 
+    \<forall>a\<in>set (adds (ground_action.effect a)) \<union> set (dels (ground_action.effect a)). Q a"
+    using 2(4) by auto
+  moreover
+  {
+    have "\<forall>a\<in>acts_of_plan_at t\<^sub>i \<pi>s. 
+      \<forall>a\<in>set (adds (ground_action.effect a)) \<union> set (dels (ground_action.effect a)). Q a"
+      using 2(4) by simp
+    moreover
+    have "\<forall>p \<in> M. Q p" using 2 by blast
+    ultimately
+    have "\<forall>p \<in> (apply_eff (acts_of_plan_at t\<^sub>i \<pi>s) M). Q p" by auto
+  }
+  ultimately
+  show ?case using 2(1) by blast
+qed
+  
+
+end
+
 locale ground_plan_defs = 
   ground_ast_problem_defs P 
   for P::ast_problem +
@@ -64,10 +130,10 @@ lemma ref_plan_pairwise_if:
   using list_pairwise_map by blast
                             
 text \<open>Properties specific to later proofs\<close>
-fun plan_act_no_params where
-"plan_act_no_params (Simple_Plan_Action n []) = True" |
-"plan_act_no_params (Durative_Plan_Action n [] d) = True" |
-"plan_act_no_params _ = False"
+fun plan_act_no_args where
+"plan_act_no_args (Simple_Plan_Action n []) = True" |
+"plan_act_no_args (Durative_Plan_Action n [] d) = True" |
+"plan_act_no_args _ = False"
 
 fun timed_plan_action_durs_integer::"rat \<times> plan_action \<Rightarrow> bool" where
 "timed_plan_action_durs_integer (t, Simple_Plan_Action n as) = (is_integer t)" |
@@ -412,6 +478,8 @@ assumes valid_plan: "valid_plan tp"
     and plan_acts_durs_integer: "list_all (timed_plan_action_durs_integer) tp"
 begin
 
+lemma wf_plan: "wf_plan tp" using valid_plan valid_plan_def valid_plan_from_def by simp
+
 text \<open>We obtain some other constants\<close>
 definition "htps_and_final_state \<equiv> 
   let
@@ -437,6 +505,7 @@ proof -
        "final_state \<^sup>c\<TTurnstile>\<^sub>= goal P"
     unfolding htps_def final_state_def by auto
 qed
+
 
 lemma all_htps_acts_non_intrf:
   assumes "A\<^sub>i = acts_of_plan_at t\<^sub>i tp"
@@ -487,7 +556,7 @@ lemma simple_act_ex_simple_plan_act:
 
 lemma res_simple_act_name:
   assumes "(t, a) \<in> simple_acts tp"
-  shows "\<exists>n ps pre eff. resolve_action_schema (plan_action.name a) = Some (Simple_Action_Schema n ps pre eff)"
+  shows "\<exists>ps pre eff. resolve_action_schema (plan_action.name a) = Some (Simple_Action_Schema (plan_action.name a) ps pre eff)"
   using assms[THEN simple_act_ex_simple_plan_act]
   using assms[THEN simple_acts_in_plan] 
   using wf_plan_actions
@@ -502,19 +571,123 @@ lemma durative_act_ex_durative_plan_act:
 
 lemma res_durative_act_name:
   assumes "(t, a) \<in> durative_acts tp"
-  shows "\<exists>n ps dcs pre eff. resolve_action_schema (plan_action.name a) = Some (Durative_Action_Schema n ps dcs pre eff)"
+  shows "\<exists>ps dcs pre eff. resolve_action_schema (plan_action.name a) = Some (Durative_Action_Schema (plan_action.name a) ps dcs pre eff)"
   using assms[THEN durative_act_ex_durative_plan_act]
   using assms[THEN durative_acts_in_plan] 
   using wf_plan_actions
   using durative_plan_action_schema_type1 
   by fastforce 
 
-lemma plan_acts_no_args: "list_all (snd #> plan_act_no_params) tp"
+lemma in_simple_actsE:
+  assumes "(t, a) \<in> simple_acts tp"
+      and "\<And>n as. (t, Simple_Plan_Action n as) \<in> set tp \<Longrightarrow> Q (Simple_Plan_Action n as) t tp"
+    shows "Q a t tp"
+  using assms unfolding simple_acts_def is_act_simple_alt 
+  apply (cases a)
+  by auto
+
+lemma in_simple_actsE':
+  assumes "(t, a) \<in> simple_acts tp"
+      and "\<And>n as. (t, Simple_Plan_Action n as) \<in> set tp \<Longrightarrow> thesis"
+    shows "thesis"
+  using assms unfolding simple_acts_def is_act_simple_alt 
+  apply (cases a)
+  by auto
+
+lemma in_durative_actsE:
+  assumes "(t, a) \<in> durative_acts tp"
+      and "\<And>n as d. (t, Durative_Plan_Action n as d) \<in> set tp \<Longrightarrow> Q (Durative_Plan_Action n as d) t tp"
+    shows "Q a t tp"
+  using assms unfolding durative_acts_def is_act_simple_alt 
+  apply (cases a)
+  by auto
+
+lemma in_durative_actsE':
+  assumes "(t, a) \<in> durative_acts tp"
+      and "\<And>n as d. (t, Durative_Plan_Action n as d) \<in> set tp \<Longrightarrow> thesis"
+    shows "thesis"
+  using assms unfolding durative_acts_def is_act_simple_alt 
+  apply (cases a)
+  by auto
+
+text \<open>The acts of a plan at a time point are wf\<close>
+
+lemma acts_of_plan_at_wf:
+  assumes "a \<in> acts_of_plan_at t tp"
+  shows "wf_ground_action a"
+proof (rule in_acts_of_plan_atE[OF assms], goal_cases)
+  case (1 \<pi>)
+  obtain n as where
+    \<pi>: "\<pi> = Simple_Plan_Action n as" 
+        "(t, Simple_Plan_Action n as) \<in> set tp"
+    using 1 unfolding simple_acts_def is_act_simple_alt by (cases \<pi>) auto
+  obtain ps pre eff where
+    res: "resolve_action_schema n = Some (Simple_Action_Schema n ps pre eff)"
+    using res_simple_act_name 1 \<pi> by fastforce
+  hence "wf_action_schema (Simple_Action_Schema n ps pre eff)" using resolve_action_wf by blast
+  moreover
+  have "action_params_match (Simple_Action_Schema n ps pre eff) as"
+    using wf_plan_action_params_match[OF wf_plan] \<pi> res by fastforce
+  ultimately
+  have "wf_ground_action (the (res_inst \<pi> At_Start))" 
+    unfolding \<pi> res_inst.simps res option.sel
+    using wf_inst_action_schema by auto
+  moreover
+  have "a = the (res_inst \<pi> At_Start)" using 1 option.sel by metis
+  ultimately
+  show ?case by simp 
+next
+  case (2 \<pi>)
+  then obtain n as d where
+    \<pi>: "\<pi> = Durative_Plan_Action n as d" 
+        "(t, Durative_Plan_Action n as d) \<in> set tp"
+    unfolding durative_acts_def is_act_simple_alt by (cases \<pi>) auto
+  obtain ps dcs pre eff where
+    res: "resolve_action_schema n = Some (Durative_Action_Schema n ps dcs pre eff)"
+    using res_durative_act_name 2 \<pi> using plan_action.sel by metis
+  hence "wf_action_schema (Durative_Action_Schema n ps dcs pre eff)" using resolve_action_wf by blast
+  moreover
+  have "action_params_match (Durative_Action_Schema n ps dcs pre eff) as"
+    using wf_plan_action_params_match[OF wf_plan] \<pi> res by fastforce
+  ultimately
+  have "wf_ground_action (the (res_inst_snap_action \<pi> At_Start))" 
+    unfolding \<pi> res_inst_snap_action.simps res option.sel
+    using wf_inst_durative_action_schema by simp
+  moreover
+  have "a = the (res_inst_snap_action \<pi> At_Start)" using 2 option.sel by metis
+  ultimately
+  show ?case by simp 
+next
+  case (3 t' \<pi>)
+  then obtain n as d where
+    \<pi>: "\<pi> = Durative_Plan_Action n as d" 
+        "(t', Durative_Plan_Action n as d) \<in> set tp"
+    unfolding durative_acts_def is_act_simple_alt by (cases \<pi>) auto
+  obtain ps dcs pre eff where
+    res: "resolve_action_schema n = Some (Durative_Action_Schema n ps dcs pre eff)"
+    using res_durative_act_name 3 \<pi> using plan_action.sel by metis
+  hence "wf_action_schema (Durative_Action_Schema n ps dcs pre eff)" using resolve_action_wf by blast
+  moreover
+  have "action_params_match (Durative_Action_Schema n ps dcs pre eff) as"
+    using wf_plan_action_params_match[OF wf_plan] \<pi> res by fastforce
+  ultimately
+  have "wf_ground_action (the (res_inst_snap_action \<pi> At_End))" 
+    unfolding \<pi> res_inst_snap_action.simps res option.sel
+    using wf_inst_durative_action_schema by simp
+  moreover
+  have "a = the (res_inst_snap_action \<pi> At_End)" using 3 option.sel by metis
+  ultimately
+  show ?case by simp
+qed
+
+text \<open>Plan actions provide no arguments\<close>
+
+lemma plan_acts_no_args: "list_all (snd #> plan_act_no_args) tp"
 proof -
   { fix t a 
     assume "(t, a) \<in> set tp"
     hence wf: "wf_plan_action a" using wf_plan_actions by auto
-    have "plan_act_no_params a"
+    have "plan_act_no_args a"
     proof (cases a)
       case a: (Simple_Plan_Action n ps)
       hence wf: "wf_plan_action (Simple_Plan_Action n ps)" using wf by auto
@@ -540,6 +713,90 @@ proof -
   thus ?thesis unfolding list_all_iff by fastforce
 qed
 
+text \<open>The ground actions of the plan at a timepoint have no arguments\<close>
+
+lemma acts_of_plan_at_no_args:
+  assumes "a \<in> acts_of_plan_at t tp"
+  shows "ground_act_no_args a"
+proof (rule in_acts_of_plan_atE[OF assms], goal_cases)
+  case (1 \<pi>)
+  obtain n as where
+    \<pi>: "\<pi> = Simple_Plan_Action n as" 
+        "(t, Simple_Plan_Action n as) \<in> set tp"
+    using 1 unfolding simple_acts_def is_act_simple_alt by (cases \<pi>) auto
+  obtain ps pre eff where
+    res: "resolve_action_schema n = Some (Simple_Action_Schema n ps pre eff)"
+    using res_simple_act_name 1 \<pi> by fastforce
+  hence "wf_action_schema (Simple_Action_Schema n ps pre eff)" using resolve_action_wf by blast
+  moreover
+  {
+    have "action_params_match (Simple_Action_Schema n ps pre eff) []"
+      using res resolve_action_in_actions act_params_match_empty by simp
+    hence "act_no_params (Simple_Action_Schema n ps pre eff)" 
+      unfolding action_params_match_def by simp
+  }
+  ultimately
+  have "ground_act_no_args (the (res_inst \<pi> At_Start))" 
+    unfolding \<pi> res_inst.simps res option.sel
+    using instantiate_action_schema_no_params by auto
+  moreover
+  have "a = the (res_inst \<pi> At_Start)" using 1 option.sel by metis
+  ultimately
+  show ?case by simp 
+next
+  case (2 \<pi>)
+  then obtain n as d where
+    \<pi>: "\<pi> = Durative_Plan_Action n as d" 
+        "(t, Durative_Plan_Action n as d) \<in> set tp"
+    unfolding durative_acts_def is_act_simple_alt by (cases \<pi>) auto
+  obtain ps dcs pre eff where
+    res: "resolve_action_schema n = Some (Durative_Action_Schema n ps dcs pre eff)"
+    using res_durative_act_name 2 \<pi> using plan_action.sel by metis
+  hence "wf_action_schema (Durative_Action_Schema n ps dcs pre eff)" using resolve_action_wf by blast
+  moreover
+  {
+    have "action_params_match (Durative_Action_Schema n ps dcs pre eff) []"
+      using res resolve_action_in_actions act_params_match_empty by simp
+    hence "act_no_params (Durative_Action_Schema n ps dcs pre eff)" using \<pi>(2)
+      unfolding action_params_match_def by simp
+  }
+  ultimately
+  have "ground_act_no_args (the (res_inst_snap_action \<pi> At_Start))" 
+    unfolding \<pi> res_inst_snap_action.simps res option.sel
+    using inst_snap_action_no_params by simp
+  moreover
+  have "a = the (res_inst_snap_action \<pi> At_Start)" using 2 option.sel by metis
+  ultimately
+  show ?case by simp 
+next
+  case (3 t' \<pi>)
+  then obtain n as d where
+    \<pi>: "\<pi> = Durative_Plan_Action n as d" 
+        "(t', Durative_Plan_Action n as d) \<in> set tp"
+    unfolding durative_acts_def is_act_simple_alt by (cases \<pi>) auto
+  obtain ps dcs pre eff where
+    res: "resolve_action_schema n = Some (Durative_Action_Schema n ps dcs pre eff)"
+    using res_durative_act_name 3 \<pi> using plan_action.sel by metis
+  hence "wf_action_schema (Durative_Action_Schema n ps dcs pre eff)" using resolve_action_wf by blast
+  moreover
+  {
+    have "action_params_match (Durative_Action_Schema n ps dcs pre eff) []"
+      using res resolve_action_in_actions act_params_match_empty by simp
+    hence "act_no_params (Durative_Action_Schema n ps dcs pre eff)" 
+      unfolding action_params_match_def by simp
+  }
+  ultimately
+  have "ground_act_no_args (the (res_inst_snap_action \<pi> At_End))" 
+    unfolding \<pi> res_inst_snap_action.simps res option.sel
+    using inst_snap_action_no_params by simp
+  moreover
+  moreover
+  have "a = the (res_inst_snap_action \<pi> At_End)" using 3 option.sel by metis
+  ultimately
+  show ?case by simp
+qed
+
+text \<open>Plan actions have no arguments\<close>
 
 lemma simple_action_in_ref_plan:
   assumes "(Simple_Action_Schema n ps pre eff, t, d) \<in> set ref_plan"
@@ -610,6 +867,7 @@ proof -
   ultimately
   show ?thesis using a(1) by fast
 qed
+
 
 lemma resolve_action_schema_inj_on_dom:
   assumes "resolve_action_schema x = resolve_action_schema y"
@@ -812,8 +1070,8 @@ lemma PDDL_no_self_overlap_imp_ref_no_self_overlap:
   assumes "PDDL_no_self_overlap a b"
       and "wf_plan_action (snd a)"
       and "wf_plan_action (snd b)"
-      and "plan_act_no_params (snd a)"
-      and "plan_act_no_params (snd b)"
+      and "plan_act_no_args (snd a)"
+      and "plan_act_no_args (snd b)"
       and "timed_plan_action_durs_integer a"
       and "timed_plan_action_durs_integer b"
   shows "ref_no_self_overlap (timed_plan_action_to_ref_plan_action a) (timed_plan_action_to_ref_plan_action b)"
@@ -960,7 +1218,7 @@ proof -
 
     have nso: "list_all (PDDL_no_self_overlap pa) pas" using Cons by simp
     have wf: "list_all (\<lambda>x. wf_plan_action (snd x)) (pa # pas)" using Cons by blast
-    have no_args: "list_all (\<lambda>x. plan_act_no_params (snd x)) (pa # pas)" using Cons by blast
+    have no_args: "list_all (\<lambda>x. plan_act_no_args (snd x)) (pa # pas)" using Cons by blast
     have are_integer: "list_all timed_plan_action_durs_integer (pa # pas)" using Cons by blast
 
     have 2: "list_all (ref_no_self_overlap (timed_plan_action_to_ref_plan_action pa)) (map timed_plan_action_to_ref_plan_action pas)"
@@ -1048,11 +1306,6 @@ proof -
   apply (subst (asm) 1)
   using ref_plan_actions_in_actions by force
 qed
-
-find_theorems happ_enabled name: local
-find_theorems happ_non_intrf name: local
-find_theorems acts_non_intrf name: local
-
 
 definition "is_state_at \<pi> ts initial final t M \<equiv> 
   valid_state_seq initial (takeWhile (\<lambda>x. x < t) ts) \<pi> M 
@@ -1166,6 +1419,37 @@ lemma abstr_state_list_nth_valid:
   using htps_seq_htps unfolding htps_seq_def 
   by blast+
 
+lemma valid_state_seq_abstr_state_list_f:
+  assumes "i < length htps"
+  shows "valid_state_seq (abstr_state_list ! i) (drop i htps) tp final_state"
+proof -
+  have htps_sorted: "sorted_wrt (<) htps" using htps_seq_htps unfolding htps_seq_def by blast
+  have state_at_i: "is_state_at tp htps I final_state ((add_final_time_point htps) ! i) (abstr_state_list ! i)"
+    apply (rule abstr_state_list_nth_valid)
+    using assms abstr_state_list_nth_valid by simp 
+  hence "valid_state_seq (abstr_state_list ! i) (dropWhile (\<lambda>x. x < add_final_time_point htps ! i) htps) tp final_state" 
+    unfolding is_state_at_def by blast
+  thus "valid_state_seq (abstr_state_list ! i) (drop i htps) tp final_state"
+    apply (subst (asm) nth_add_final_time_point)
+    using assms apply simp
+    using strict_sorted_dropWhile_nth[OF assms htps_sorted] by simp
+qed
+
+lemma valid_state_seq_abstr_state_list_i:
+  assumes "i < length htps"
+  shows "valid_state_seq I (take i htps) tp (abstr_state_list ! i)"
+proof -
+  have htps_sorted: "strict_sorted htps"  using htps_seq_htps unfolding htps_seq_def by blast
+  have n: "is_state_at tp htps I final_state ((add_final_time_point htps) ! i) (abstr_state_list ! i)" 
+    using assms htps_sorted abstr_state_list_nth_valid by auto
+  hence "valid_state_seq I (takeWhile (\<lambda>x. x < add_final_time_point htps ! i) htps) tp (abstr_state_list ! i)" 
+    unfolding is_state_at_def by blast
+  thus "valid_state_seq I (take i htps) tp (abstr_state_list ! i)"
+    apply (subst (asm) nth_add_final_time_point)
+    using assms apply simp
+    using strict_sorted_takeWhile_nth[OF assms htps_sorted] by simp
+qed
+
 lemma abstr_state_list_nth_Suc:
   assumes "n < length htps"
   shows "(abstr_state_list ! (Suc n)) = apply_eff (acts_of_plan_at (htps ! n) tp) (abstr_state_list ! n)"
@@ -1207,23 +1491,13 @@ proof -
   have Mj_eff_Sn: "apply_eff (acts_of_plan_at (htps ! n) tp) Mj = abstr_state_list ! Suc n" 
     using jSn unfolding valid_state_seq.simps Let_def by auto
 
-  have n: "is_state_at tp htps I final_state ((add_final_time_point htps) ! n) (abstr_state_list ! n)" 
-    using assms 1 abstr_state_list_nth_valid by auto
-  hence "valid_state_seq I (takeWhile (\<lambda>x. x < add_final_time_point htps ! n) htps) tp (abstr_state_list ! n)" 
-    unfolding is_state_at_def by blast
-  hence In: "valid_state_seq I (take n htps) tp (abstr_state_list ! n)"
-    apply (subst (asm) nth_add_final_time_point)
-    using assms apply simp
-    using strict_sorted_takeWhile_nth[OF assms 1] by simp 
-
+  have In: "valid_state_seq I (take n htps) tp (abstr_state_list ! n)" 
+    using valid_state_seq_abstr_state_list_i assms by blast
   have eq: "Mj = (abstr_state_list ! n)" using Ij In valid_state_seq_state_unique by blast
 
   show ?thesis using Mj_eff_Sn eq by blast
 qed
 
-text \<open>\<close>
-
-find_theorems name: "ran*map_op"
 
 lemma ref_htpl_eq_htps: "imp_defs.rat_impl.htpl = htps"
 proof (rule strict_sorted_equal)
@@ -1586,47 +1860,102 @@ proof (rule subsetI)
     by auto
 qed
 
-lemma
+
+lemma Union_diff_eq_diff:
+  assumes "\<forall>x \<in> S. f x = {x}"
+     and "\<forall>x \<in> T. f x = {x}"
+   shows "\<Union>(f ` S - f ` T) = S - T"
+  using assms by auto
+
+lemma apply_effects_if:
   assumes "S - (\<Union>x\<in>h. set (dels (ground_action.effect x))) \<union> (\<Union>x\<in>h. set (adds (ground_action.effect x))) = T"
      and S_props: "S \<subseteq> {x. form_preds_no_args x \<and> is_predAtom x}"
-     and "h \<subseteq> {x. ground_act_no_args x \<and> wf_ground_action x}" (* From where do we deduce that effects are predAtoms? wf_effect 
-                From where to we deduce that effects have no args? Definition of locale *)
+     and h_props: "h \<subseteq> {x. ground_act_no_args x \<and> wf_ground_action x}" 
   shows "(\<Union>x\<in>S. set (map to_predicate (to_literals x))) - (\<Union>x\<in>h. set (dels_spec x)) \<union> (\<Union>x\<in>h. set (adds_spec x)) 
     = (\<Union>x\<in>T. set (map to_predicate (to_literals x)))"
 proof -
-  thm del_preds
+  
+  have S_lits: "(\<Union>x \<in> S. set (to_literals x)) = S" 
+    using is_predAtom_literals S_props by force
+
+  have S_lits': "\<forall>x \<in> S. set (to_literals x) = {x}"
+    using is_predAtom_literals S_props by force
+
+  have del_props: "(\<Union>x\<in>h. set (dels (ground_action.effect x))) \<subseteq> {x. form_preds_no_args x \<and> is_predAtom x}"
+    using h_props wf_ground_action_dels_preds ground_act_no_args_imp_dels_no_args
+    by blast
+  
+  have add_props: "(\<Union>x\<in>h. set (adds (ground_action.effect x))) \<subseteq> {x. form_preds_no_args x \<and> is_predAtom x}"
+    using h_props wf_ground_action_adds_preds ground_act_no_args_imp_adds_no_args
+    by blast
+
+  have del_lits': "\<forall>f \<in> (\<Union>x\<in>h. set (dels (ground_action.effect x))). to_literals f = [f]"
+    using is_predAtom_literals del_props by blast
+  hence del_lits: "(\<Union>x\<in>h. set (dels (ground_action.effect x))) 
+    = (\<Union>x\<in>\<Union>x\<in>h. set (dels (ground_action.effect x)). set (to_literals x))"
+    by simp
+
+  
+
+  have add_lits': "\<forall>f \<in> (\<Union>x\<in>h. set (adds (ground_action.effect x))). to_literals f = [f]"
+    using is_predAtom_literals add_props by blast
+  hence add_lits: "(\<Union>x\<in>h. set (adds (ground_action.effect x))) 
+    = (\<Union>x\<in>\<Union>x\<in>h. set (adds (ground_action.effect x)). set (to_literals x))"
+    by simp
 
 
-  have 2: "(\<Union>x \<in> S. set (to_literals x)) = S" 
-    apply (intro equalityI subsetI)
-    subgoal for x
-      apply (erule UnionE)
-      apply (erule imageE)
-      subgoal for x' x''
-        apply (frule preds[THEN bspec])
-        apply (erule is_predAtom.elims)
-        by auto
-      done
-    apply (frule preds[THEN bspec])
-    apply (erule is_predAtom.elims)
-    by fastforce
-
-      
-  have "(\<Union>x\<in>S. to_predicate ` set (to_literals x)) - (\<Union>x\<in>h. to_predicate ` set (dels (ground_action.effect x))) \<union> (\<Union>x\<in>h. to_predicate ` set (adds (ground_action.effect x))) =
-    to_predicate ` ((\<Union>x\<in>S. set (to_literals x)) - (\<Union>x\<in>h. set (dels (ground_action.effect x))) \<union> (\<Union>x\<in>h. set (adds (ground_action.effect x))))"
-    unfolding image_UN[symmetric]
-    apply (subst inj_on_image_set_diff[symmetric])
-       apply (rule i)
-    using 2 apply simp
-    
-    
-  have "(\<Union>x\<in>S. set (map to_predicate (to_literals x))) - (\<Union>x\<in>h. set (dels_spec x)) \<union> (\<Union>x\<in>h. set (adds_spec x)) 
-    = (\<Union>x\<in>S - (\<Union>x\<in>h. set (dels (ground_action.effect x))) \<union> (\<Union>x\<in>h. set (adds (ground_action.effect x))). set (map to_predicate (to_literals x)))" 
-  unfolding del_preds[symmetric] add_preds[symmetric] set_map 
+  find_theorems "to_literals ?x = [?x]"
+  {
+    have "(\<Union>x\<in>S. to_predicate ` set (to_literals x))
+      - (\<Union>x\<in>h. to_predicate ` set (dels (ground_action.effect x))) 
+      \<union> (\<Union>x\<in>h. to_predicate ` set (adds (ground_action.effect x))) 
+    = to_predicate ` ((\<Union>x\<in>S. set (to_literals x)) 
+      - (\<Union>x\<in>h. set (dels (ground_action.effect x))) 
+      \<union> (\<Union>x\<in>h. set (adds (ground_action.effect x))))"
+      unfolding image_UN[symmetric]
+      apply (subst inj_on_image_set_diff[symmetric])
+         apply (rule inj_on_to_predicate)
+      using S_lits S_props apply blast
+      using del_props apply blast
+      by blast
+    also
+    have "... = to_predicate `
+      ((\<Union>x\<in>S. set (to_literals x)) 
+        - (\<Union>x\<in>\<Union>x\<in>h. set (dels (ground_action.effect x)). set (to_literals x))
+        \<union> (\<Union>x\<in>\<Union>x\<in>h. set (adds (ground_action.effect x)). set (to_literals x)))"
+      apply (subst del_lits)
+      apply (subst add_lits)
+      by blast
+    also 
+    have "...
+      = to_predicate ` 
+        (S 
+        - (\<Union>x\<in>h. set (dels (ground_action.effect x))) 
+        \<union> (\<Union>x\<in>h. set (adds (ground_action.effect x))))"
+      using S_lits' add_lits' del_lits' by auto
+    finally
+    have 1: "(\<Union>x\<in>S. to_predicate ` set (to_literals x))
+      - (\<Union>x\<in>h. to_predicate ` set (dels (ground_action.effect x))) 
+      \<union> (\<Union>x\<in>h. to_predicate ` set (adds (ground_action.effect x))) 
+      = to_predicate ` 
+        (S 
+        - (\<Union>x\<in>h. set (dels (ground_action.effect x))) 
+        \<union> (\<Union>x\<in>h. set (adds (ground_action.effect x))))" by blast
+  } note 1 = this
+  {
+    have "T = \<Union>((\<lambda>x. set (to_literals x)) ` T)"
+      unfolding assms(1)[symmetric]
+      using S_lits' del_lits' add_lits' by simp
+    hence 2: "(\<Union>x\<in>T. to_predicate ` (set (to_literals x))) = to_predicate ` T" by fastforce
+  } note 2 = this
   show ?thesis
-    unfolding assms[symmetric]
-  qed
-lemma 
+    unfolding adds_spec_alt dels_spec_alt 
+    unfolding set_map set_remdups
+    using 1 2 assms(1) by argo
+qed
+  
+
+lemma apply_effects_subseq:
   assumes "i < length imp_defs.rat_impl.htpl" 
   shows "imp_defs.rat_impl.apply_effects 
       (imp_defs.rat_impl.happ_at imp_defs.rat_impl.plan_happ_seq (imp_defs.rat_impl.time_index i)) 
@@ -1641,6 +1970,54 @@ proof -
 
   have x: "apply_eff (acts_of_plan_at (htps ! i) tp) (abstr_state_list ! i) = abstr_state_list ! Suc i"
     using abstr_state_list_nth_Suc i' by blast
+
+  have 2: "acts_of_plan_at (htps ! i) tp \<subseteq> {x. ground_act_no_args x \<and> wf_ground_action x}"
+    using acts_of_plan_at_wf acts_of_plan_at_no_args by blast
+
+  have 3: "abstr_state_list ! i \<subseteq> {x. form_preds_no_args x \<and> is_predAtom x}"
+  proof -
+    have "\<forall>p \<in> abstr_state_list ! i. form_preds_no_args p \<and> is_predAtom p"
+    proof (rule valid_state_seq_prop_pred_initial)
+      show "valid_state_seq I (take i htps) tp (abstr_state_list ! i)"
+        using valid_state_seq_abstr_state_list_i i' by blast
+      show "\<forall>p\<in>I. form_preds_no_args p \<and> is_predAtom p"
+      proof -
+        presume "\<forall>p \<in> I. form_preds_no_args p"
+        thus ?thesis unfolding I_def by auto
+      next
+        show "\<forall>p \<in> I. form_preds_no_args p" 
+          using init_no_args unfolding I_def list_all_iff by simp
+      qed
+      have "\<forall>t\<in>set htps. \<forall>a\<in>acts_of_plan_at t tp. 
+        \<forall>p\<in>set (adds (ground_action.effect a)) \<union> set (dels (ground_action.effect a)). 
+          form_preds_no_args p \<and> is_predAtom p"
+      proof (intro ballI)
+        fix t a p
+        assume t: "t \<in> set htps" 
+          and a: "a \<in> acts_of_plan_at t tp" 
+          and p: "p \<in> set (adds (ground_action.effect a)) \<union> set (dels (ground_action.effect a))"
+        have "ground_act_no_args a \<and> wf_ground_action a" 
+          using a acts_of_plan_at_wf acts_of_plan_at_no_args by blast
+        thus "form_preds_no_args p \<and> is_predAtom p"
+          using p 
+          apply (induction a)
+          subgoal for _ _ _ eff
+            apply (induction eff)
+            unfolding wf_ground_action.simps ground_act_no_args.simps wf_effect.simps
+            unfolding ground_action.sel
+            unfolding ast_effect.sel
+            unfolding list_all_iff
+            using wf_fmla_atom_imp_is_predAtom by blast
+          done
+      qed
+      thus "\<forall>t\<in>set (take i htps). \<forall>a\<in>acts_of_plan_at t tp. 
+        \<forall>p\<in>set (adds (ground_action.effect a)) \<union> set (dels (ground_action.effect a)). 
+          form_preds_no_args p \<and> is_predAtom p"
+        using set_take_subset by fast 
+    qed 
+    thus ?thesis by blast
+  qed
+
   have "imp_defs.rat_impl.apply_effects (acts_of_plan_at (htps ! i) tp) (plan_state_list ! i) = plan_state_list ! Suc i"
     using x
     unfolding apply_eff.simps imp_defs.rat_impl.apply_effects_def
@@ -1648,7 +2025,8 @@ proof -
     unfolding plan_state_list_nth_conv_abstr_state_list_nth[OF ip]
     unfolding plan_state_list_nth_conv_abstr_state_list_nth[OF Sip]
     unfolding image_image image_set
-    using dels_spec.simps
+    apply (rule apply_effects_if)
+    using 2 3 by blast+
   thus ?thesis
     unfolding plan_happ_seq_alt
     apply (subst ground_non_action_no_effs)
@@ -1657,7 +2035,168 @@ proof -
     by blast
 qed
 
+lemma inst_cond_alt:
+  "set (map to_predicate (to_literals (inst_cond (Durative_Action_Schema n ps dcs pre eff) [] Over_All)))
+   = set (over_all_spec (Durative_Action_Schema n ps dcs pre eff))"
+proof -
+  show ?thesis 
+    unfolding over_all_spec.simps over_all_snap.simps
+    unfolding inst_snap_action.simps Let_def pre_spec.simps
+    unfolding inst_cond.simps Let_def
+    by auto
+qed
 
+lemma plan_inv_seq_alt:
+  "imp_defs.rat_impl.invs_at imp_defs.rat_impl.plan_inv_seq t = \<Union> (set ` (map to_predicate) ` to_literals ` invs_of_plan_at t tp)"
+proof -
+  presume "{p. \<exists>a d t'. p \<in> (set \<circ> over_all_spec) a \<and> (a, t', d) \<in> ran abstr_plan \<and> t' < t \<and> t \<le> t' + d} 
+    = \<Union> (set ` (map to_predicate) ` to_literals ` invs_of_plan_at t tp)"
+  moreover
+  have "imp_defs.rat_impl.invs_at imp_defs.rat_impl.plan_inv_seq t = 
+    {p. \<exists>a d t'. p \<in> (set \<circ> over_all_spec) a \<and> (a, t', d) \<in> ran abstr_plan \<and> t' < t \<and> t \<le> t' + d}"
+    unfolding imp_defs.rat_impl.invs_at_plan_inv_seq_alt
+    unfolding abstr_plan_def[symmetric]
+    by auto
+  ultimately
+  show ?thesis by auto
+next
+  show "{p. \<exists>a d t'. p \<in> (set \<circ> over_all_spec) a \<and> (a, t', d) \<in> ran abstr_plan \<and> t' < t \<and> t \<le> t' + d} 
+    = \<Union> (set ` (map to_predicate) ` to_literals ` invs_of_plan_at t tp)" 
+  proof (intro subsetI equalityI CollectI; (elim exE CollectE conjE)?)
+    fix x a t' d
+    assume 
+      x: "x \<in> (set \<circ> over_all_spec) a" 
+      and plan_act: "(a, t', d) \<in> ran abstr_plan" 
+      and t: "t' < t" "t \<le> t' + d" 
+    moreover
+    presume "\<And>a t' d. (a, t', d) \<in> ran abstr_plan \<Longrightarrow> 
+      x \<in> (set \<circ> over_all_spec) a \<longrightarrow> t' < t \<longrightarrow> t \<le> t' + d 
+      \<longrightarrow> x \<in> \<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at t tp)" 
+    ultimately
+    show "x \<in> \<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at t tp)" 
+      by simp
+  next
+    fix x a t' d
+    assume plan_act: "(a, t', d) \<in> ran abstr_plan"
+    presume a: "\<And>a ta d taa n as da. (taa, Durative_Plan_Action n as da) \<in> set tp 
+      \<Longrightarrow> x \<in> (set \<circ> over_all_spec) (the (resolve_action_schema n)) 
+        \<longrightarrow> rat_of_int \<lfloor>taa\<rfloor> < t 
+        \<longrightarrow> t \<le> rat_of_int \<lfloor>taa\<rfloor> + rat_of_int \<lfloor>da\<rfloor> 
+        \<longrightarrow> x \<in> \<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at t tp)"
+    show "x \<in> (set \<circ> over_all_spec) a \<longrightarrow> t' < t \<longrightarrow> t \<le> t' + d
+        \<longrightarrow> x \<in> \<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at t tp)"
+      using plan_act
+      apply (rule ran_abstr_plan_ref_planE)
+      apply (erule in_set_ref_planE)
+      using a by simp+
+  next 
+    fix x ta n as da
+    assume act: "(ta, Durative_Plan_Action n as da) \<in> set tp" 
+    show "x \<in> (set \<circ> over_all_spec) (the (resolve_action_schema n)) 
+      \<longrightarrow> rat_of_int \<lfloor>ta\<rfloor> < t 
+      \<longrightarrow> t \<le> rat_of_int \<lfloor>ta\<rfloor> + rat_of_int \<lfloor>da\<rfloor> 
+      \<longrightarrow> x \<in> \<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at t tp)"
+    proof (intro strip)
+      assume x: "x \<in> (set \<circ> over_all_spec) (the (resolve_action_schema n))" 
+        and t: "rat_of_int \<lfloor>ta\<rfloor> < t" "t \<le> rat_of_int \<lfloor>ta\<rfloor> + rat_of_int \<lfloor>da\<rfloor>" 
+      have t: "ta < t" "t \<le> ta + da" 
+        using plan_acts_durs_integer unfolding list_all_iff
+        using act is_integer_of_int[of ta] is_integer_of_int[of da] t 
+        by fastforce+
+      have dur_act: "(ta, Durative_Plan_Action n as da) \<in> durative_acts tp" 
+        unfolding durative_acts_def is_act_simple_alt using act by force
+
+      have as: "as = []" using plan_acts_no_args act unfolding list_all_iff by (cases as) auto
+    
+      obtain ps dcs pre eff where
+        res: "the (resolve_action_schema n) = Durative_Action_Schema n ps dcs pre eff"
+        using dur_act[THEN res_durative_act_name] by auto 
+      obtain inv where
+        inv: "Some inv = res_inst_inv (Durative_Plan_Action n as da)" by auto
+      hence "x \<in> set (map to_predicate (to_literals inv))"
+        using inst_cond_alt x as res by auto
+      thus "x \<in> \<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at t tp)" 
+        unfolding invs_of_plan_at_def using inv dur_act t by fastforce
+    qed
+  next
+    fix x
+    assume "x \<in> \<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at t tp)" 
+    then obtain t' a inv where
+      x: "x \<in> set (map to_predicate (to_literals inv))"
+      and act: "(t', a) \<in> durative_acts tp" 
+      and t: "t' < t" "t \<le> t' + duration a" 
+      and inv: "Some inv = res_inst_inv a" unfolding invs_of_plan_at_def by blast
+    obtain n as da where
+      a: "a = Durative_Plan_Action n as da" 
+      using act unfolding durative_acts_def is_act_simple_alt by (cases a) auto
+    have act: "(t', Durative_Plan_Action n as da) \<in> durative_acts tp" using act a by simp
+
+    have as: "as = []" using plan_acts_no_args act unfolding list_all_iff durative_acts_def by (cases as) auto
+  
+    obtain ps dcs pre eff where
+      res: "the (resolve_action_schema n) = Durative_Action_Schema n ps dcs pre eff"
+      using res_durative_act_name[OF act] by auto
+    have inv: "Some inv = res_inst_inv (Durative_Plan_Action n as da)" using inv a by blast
+    have x: "x \<in> (set \<circ> over_all_spec) (Durative_Action_Schema n ps dcs pre eff)" 
+      using inv inst_cond_alt x as res by simp
+
+    have "(Durative_Action_Schema n ps dcs pre eff, rat_of_int \<lfloor>t'\<rfloor>, rat_of_int \<lfloor>da\<rfloor>) \<in> ran abstr_plan"
+      using ran_abstr_planI in_set_ref_planI act res unfolding durative_acts_def by fastforce
+    moreover
+    have "is_integer t'" "is_integer da" using act plan_acts_durs_integer 
+      unfolding durative_acts_def list_all_iff by auto
+    ultimately
+    have "(Durative_Action_Schema n ps dcs pre eff, t', da) \<in> ran abstr_plan" 
+      using is_integer_of_int by simp
+    thus "\<exists>a d t'. x \<in> (set \<circ> over_all_spec) a \<and> (a, t', d) \<in> ran abstr_plan \<and> t' < t \<and> t \<le> t' + d" 
+      using x t a by force
+  qed
+qed
+
+lemma invs_of_plan_at_pos_conj:
+  "\<forall>f \<in> invs_of_plan_at t tp. is_pos_conj f"
+
+lemma invs_sat:
+  assumes "i < length imp_defs.rat_impl.htpl" 
+  shows "imp_defs.rat_impl.invs_at imp_defs.rat_impl.plan_inv_seq (imp_defs.rat_impl.time_index i) \<subseteq> plan_state_list ! i"
+proof -
+  have i': "i < length htps" using assms ref_htpl_eq_htps by argo
+  hence Sia: "Suc i < length abstr_state_list" 
+    and Sip: "Suc i < length plan_state_list" 
+      using length_abstr_state_list length_plan_state_list by simp+
+  hence ia: "i < length abstr_state_list" 
+    and ip: "i < length plan_state_list" by simp+
+  have "\<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at (htps ! i) tp) 
+    \<subseteq> plan_state_list ! i"
+  proof -
+    presume "\<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at (htps ! i) tp) 
+      \<subseteq> (\<Union>x\<in>abstr_state_list ! i. set (map to_predicate (to_literals x)))"
+    thus ?thesis 
+    unfolding plan_state_list_def
+    using Sia by simp
+  next 
+    have v: "valid_state_seq (abstr_state_list ! i) (drop i htps) tp final_state" 
+      using valid_state_seq_abstr_state_list_f i' by blast
+    
+    have "length (drop i htps) > 0" using length_drop i' by simp
+    then
+    obtain t ts where
+      "drop i htps = t#ts" by (cases "drop i htps") auto
+    hence di: "drop i htps = (htps ! i)#ts" using i' using hd_drop_conv_nth by fastforce
+    have "\<forall>f \<in> invs_of_plan_at (htps ! i) tp. abstr_state_list ! i \<^sup>c\<TTurnstile>\<^sub>= f" 
+      using v unfolding di valid_state_seq.simps Let_def by blast
+    hence "invs_of_plan_at (htps ! i) tp \<subseteq> abstr_state_list ! i"
+      
+    thus "\<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at (htps ! i) tp)
+      \<subseteq> (\<Union>x\<in>abstr_state_list ! i. set (map to_predicate (to_literals x)))"
+      
+  qed
+  show ?thesis
+    unfolding plan_inv_seq_alt 
+    unfolding imp_defs.rat_impl.time_index_def ref_htpl_eq_htps 
+  
+    
+qed
 
 lemma temp_plan_valid:
   "imp_defs.rat_impl.valid_plan"
@@ -1665,8 +2204,15 @@ proof -
   have vss: "\<exists>M. imp_defs.rat_impl.valid_state_sequence M \<and> M 0 = set init_spec \<and> set goal_spec \<subseteq> M (length imp_defs.rat_impl.htpl)" 
   proof (intro exI conjI)
     show "imp_defs.rat_impl.valid_state_sequence ((!) plan_state_list)"
-    proof (rule imp_defs.rat_impl.valid_state_sequenceI)
-
+    proof (rule imp_defs.rat_impl.valid_state_sequenceI, goal_cases)
+      case (1 i)
+      then show ?case using apply_effects_subseq by simp
+    next
+      case (2 i)
+      then show ?case sorry
+    next
+      case (3 i)
+      then show ?case sorry
     qed
   qed                                              
   moreover

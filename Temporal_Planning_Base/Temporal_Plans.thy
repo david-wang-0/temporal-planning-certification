@@ -170,7 +170,7 @@ lemma at_start_inj_on_acts:
 lemma at_end_inj_on_acts:
   "inj_on at_end actions" 
   using snaps_disj_on_acts unfolding snaps_disj_on_def by auto
-lemma end_not_start_on_acts:
+lemma end_start_disj_on_acts:
   "at_start ` actions \<inter> at_end ` actions = {}" 
   using snaps_disj_on_acts snaps_disj_on_def by auto
   
@@ -394,7 +394,8 @@ text \<open>It is possible to reason about plans without relating them to the se
 Assumptions regarding propositions and plans can be added later.\<close>
 
 text \<open>First, we define things w.r.t. a plan\<close>
-locale temp_plan_defs = temp_planning_problem at_start at_end over_all lower upper pre adds dels init goal \<epsilon>
+locale temp_plan_defs = temp_planning_problem  
+  at_start at_end over_all lower upper pre adds dels init goal \<epsilon>
     for at_start::"'action  \<Rightarrow> 'snap_action"
     and at_end::  "'action  \<Rightarrow> 'snap_action"
     and over_all::"'action  \<Rightarrow> 'proposition set"
@@ -623,7 +624,7 @@ subsubsection \<open>Non-Interference w.r.t the Happening Sequence\<close>
 text \<open>This definition comes from the statement in \<^cite>\<open>gigante_decidability_2022\<close>, that every at-start 
 snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
 snap-actions. Moreover, in their definition of a planning problem, the assumption is made that 
-no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at_end(b) and at-start(a) \<noteq> at-end(a).\<close>
+no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at-end(b) and at-start(a) \<noteq> at-end(a).\<close>
 
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_happ_seq B \<equiv> 
@@ -666,7 +667,8 @@ qed
 text \<open>If something is in the happening sequence, then there must be an action in the plan.\<close>
 lemma in_happ_seq_exD:
   assumes in_happ_seq: "(time, snap) \<in> plan_happ_seq"
-  shows "\<exists>a t d. (a, t, d) \<in> ran \<pi> \<and> (at_start a = snap \<and> time = t \<or> at_end a = snap \<and> time = t + d)"
+  shows "\<exists>a t d. (a, t, d) \<in> ran \<pi> 
+    \<and> (at_start a = snap \<and> time = t \<or> at_end a = snap \<and> time = t + d)"
   using assms unfolding plan_happ_seq_def by blast
 
 lemma in_happ_seqE:
@@ -888,6 +890,11 @@ proof -
   ultimately
   show ?thesis by blast
 qed
+
+lemma invs_at_plan_inv_seq_alt:
+  "invs_at plan_inv_seq t = {p. \<exists>a d t'. p \<in> over_all a \<and> (a, t', d) \<in> ran \<pi> \<and> t' < t \<and> t \<le> t' + d}"
+  unfolding invs_at_def plan_inv_seq_def by auto
+  
 end
 
 

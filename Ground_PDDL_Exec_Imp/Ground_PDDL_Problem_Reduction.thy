@@ -34,9 +34,9 @@ proof
       apply (induction a)
        apply (subst over_all_spec.simps)
        apply (subst over_all_snap.simps)
-       apply (subst non_ground_action_def)
+       apply (subst ground_non_action_def)
        apply simp
-      using distinct_remdups non_ground_action_def by simp
+      using distinct_remdups ground_non_action_def by simp
     done
   show "set goal_spec - set props_spec \<subseteq> set init_spec - set props_spec"
     using init_in_props goal_in_props by auto

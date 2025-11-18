@@ -495,7 +495,107 @@ proof (rule inj_onI)
       by (cases bs) auto
 
     show "x = y" using eq x y by simp
-qed
+  qed
+
+lemma is_predAtom_imp_is_pos_conj:
+  assumes "is_predAtom f"
+  shows "is_pos_conj f"
+  using assms 
+  by (induction f rule: is_predAtom.induct) simp+
+  
+lemma is_predAtom_literals:
+  assumes "is_predAtom f"
+  shows "to_literals f = [f]"
+  using assms
+  by (induction f rule: is_predAtom.induct) simp+
+
+lemma ground_act_no_args_imp_dels_no_args:
+  assumes "ground_act_no_args h"
+      and  "x \<in> set (dels (ground_action.effect h))"
+    shows "form_preds_no_args x"
+  using assms
+  apply (induction h)
+  unfolding ground_act_no_args.simps
+  subgoal for n anno pre eff
+    apply (induction eff)
+    unfolding list_all_iff
+    unfolding ground_action.sel
+    by blast
+  done
+
+lemma ground_act_no_args_imp_adds_no_args:
+  assumes "ground_act_no_args h"
+      and  "x \<in> set (adds (ground_action.effect h))"
+    shows "form_preds_no_args x"
+  using assms
+  apply (induction h)
+  unfolding ground_act_no_args.simps
+  subgoal for n anno pre eff
+    apply (induction eff)
+    unfolding list_all_iff
+    unfolding ground_action.sel
+    by blast
+  done
+
+lemma wf_ground_action_dels_preds:
+  assumes "wf_ground_action h"
+      and  "x \<in> set (dels (ground_action.effect h))"
+    shows "is_predAtom x"
+  using assms
+  apply (induction h)
+  unfolding wf_ground_action.simps wf_effect.simps ground_action.sel 
+  subgoal for _ _ pre eff
+    apply (induction eff)
+    using wf_fmla_atom_imp_is_predAtom
+    by auto
+  done
+
+lemma wf_ground_action_adds_preds:
+  assumes "wf_ground_action h"
+      and  "x \<in> set (adds (ground_action.effect h))"
+    shows "is_predAtom x"
+  using assms
+  apply (induction h)
+  unfolding wf_ground_action.simps wf_effect.simps ground_action.sel 
+  subgoal for _ _ pre eff
+    apply (induction eff)
+    using wf_fmla_atom_imp_is_predAtom
+    by auto
+  done
+
+lemma inj_on_to_literals:
+  "inj_on to_literals {x. is_predAtom x}"
+  apply (rule inj_onI)
+  apply (elim CollectE)
+  subgoal for x y
+    apply (induction x rule: is_predAtom.induct; induction y rule: is_predAtom.induct)
+    by simp+
+  done
+
+lemma inj_on_set_to_literals:
+  "inj_on (\<lambda>x. set (to_literals x)) {x. is_predAtom x}"
+  apply (rule inj_onI)
+  apply (elim CollectE)
+  subgoal for x y
+    apply (induction x rule: is_predAtom.induct; induction y rule: is_predAtom.induct)
+    by auto
+  done
+
+lemma adds_spec_alt:
+  "adds_spec h = 
+    ground_action.effect h
+    |> ast_effect.adds
+    |> map to_predicate
+    |> remdups"
+  by (cases h) auto
+
+lemma dels_spec_alt:
+  "dels_spec h = 
+    ground_action.effect h
+    |> ast_effect.dels
+    |> map to_predicate
+    |> remdups"
+  by (cases h) auto
 
 end
 
@@ -511,6 +611,7 @@ locale ground_ast_problem =
       and positive_act_pres: "list_all act_pres_pos (actions D)"
       and no_functions: "functions D = []"
       and no_consts: "consts D = []"
+      and init_no_args: "list_all form_preds_no_args (init P)"
 begin
 
 lemma acts_wf:
@@ -1093,11 +1194,13 @@ proof -
 qed
 
 text \<open>The initial state and goal are in the props\<close>
-lemma init_in_props: "set init_spec \<subseteq> set props_spec"
+
+lemma init_wf_fmla_atoms:
+  "\<forall>f\<in>set (init P). wf_fmla_atom objT f"
 proof -
   have 1: "\<forall>f\<in>set (init P). wf_fmla_atom objT f \<or> wf_func_assign f"
     using wf_problem unfolding wf_problem_def wf_domain_def by auto
-  have "\<forall>f\<in>set (init P). wf_fmla_atom objT f" 
+  show "\<forall>f\<in>set (init P). wf_fmla_atom objT f" 
   proof (intro strip ballI)
     fix f
     assume "f \<in> set (init P)"
@@ -1124,8 +1227,11 @@ proof -
       thus ?thesis by auto
     qed
   qed
-  thus ?thesis using wf_fmla_atom_in_props init_spec_def by auto
 qed
+
+lemma init_in_props: "set init_spec \<subseteq> set props_spec"
+  using init_wf_fmla_atoms wf_fmla_atom_in_props init_spec_def by auto
+
 
 lemma goal_in_props: "set goal_spec \<subseteq> set props_spec"
 proof -

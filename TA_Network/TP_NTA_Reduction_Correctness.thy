@@ -87,13 +87,13 @@ lemma nth_start_end_disj:
   assumes "a \<in> set actions"
       and "n < length actions"
     shows "at_start (actions ! n) \<noteq> at_end a"
-  using assms in_set_conv_nth[of "actions ! n" actions] rat_impl.set_impl.end_not_start_on_acts by blast
+  using assms in_set_conv_nth[of "actions ! n" actions] rat_impl.set_impl.end_start_disj_on_acts by blast
 
 lemma nth_end_start_disj:
   assumes "a \<in> set actions"
       and "n < length actions"
     shows "at_end (actions ! n) \<noteq> at_start a"
-  using assms in_set_conv_nth[of "actions ! n" actions] rat_impl.set_impl.end_not_start_on_acts by blast
+  using assms in_set_conv_nth[of "actions ! n" actions] rat_impl.set_impl.end_start_disj_on_acts by blast
   
 
 lemma set_nthI:
@@ -970,8 +970,8 @@ proof (rule planning_sem.pre_sat_by_arbitrary_intermediate_state[simplified comp
     subgoal for b
       using rat_impl.set_impl.at_start_inj_on_acts[THEN inj_on_contraD, THEN notE, of "actions ! n" b]
       using actions_before_not_include n_in_act actions_before_in_actions n by auto
-    using rat_impl.set_impl.end_not_start_on_acts actions_before_in_actions n_in_act n apply blast
-    using rat_impl.set_impl.end_not_start_on_acts actions_before_in_actions n_in_act n apply blast
+    using rat_impl.set_impl.end_start_disj_on_acts actions_before_in_actions n_in_act n apply blast
+    using rat_impl.set_impl.end_start_disj_on_acts actions_before_in_actions n_in_act n apply blast
     subgoal for b
       using rat_impl.set_impl.at_end_inj_on_acts[THEN inj_on_contraD, THEN notE, of "actions ! n" b]
       using actions_before_not_include n_in_act actions_before_in_actions n by auto
@@ -1124,7 +1124,7 @@ proof -
   have is_act: "actions ! n \<in> set actions" using n by auto
   have non_int: "(set o pre) (at_end (actions ! n)) \<inter> (set o dels) (at_start (actions ! n)) = {}"
        "(set o pre) (at_end (actions ! n)) \<inter> (set o adds) (at_start (actions ! n)) = {}"
-    using rat_impl.set_impl.end_not_start_on_acts planning_sem.mutex_not_in_same_instant[OF happening] 
+    using rat_impl.set_impl.end_start_disj_on_acts planning_sem.mutex_not_in_same_instant[OF happening] 
     unfolding planning_sem.mutex_snap_action_def 
     using is_act by fast+
   hence p': "p \<notin> (set o dels) (at_start (actions ! n)) \<union> (set o adds) (at_start (actions ! n))" using p by auto
@@ -1257,7 +1257,7 @@ proof (rule planning_sem.pre_sat_by_arbitrary_intermediate_state[simplified comp
         using h_start
         using rat_impl.set_impl.at_start_inj_on_acts[THEN inj_onD, of "actions ! n", OF _ n_in_act] by auto
       unfolding h_start 
-      using rat_impl.set_impl.end_not_start_on_acts n_in_act by blast
+      using rat_impl.set_impl.end_start_disj_on_acts n_in_act by blast
   next
     assume "h \<in> starting_snaps_before n"
     thus False 
@@ -1404,7 +1404,7 @@ proof (rule planning_sem.pre_sat_by_arbitrary_intermediate_state[simplified comp
       apply -
       apply (elim UnE imageE CollectE conjE)
       unfolding h_end
-      subgoal using rat_impl.set_impl.end_not_start_on_acts n_in_act by blast
+      subgoal using rat_impl.set_impl.end_start_disj_on_acts n_in_act by blast
       subgoal for b
         apply (insert n_ending) 
         unfolding index_case_defs 
@@ -1416,7 +1416,7 @@ proof (rule planning_sem.pre_sat_by_arbitrary_intermediate_state[simplified comp
     assume "h \<in> planning_sem.starting_snaps_at t"
     thus False 
       unfolding planning_sem.starting_snaps_at_def planning_sem.starting_actions_at_def
-      unfolding h_end using rat_impl.set_impl.end_not_start_on_acts n_in_act by blast
+      unfolding h_end using rat_impl.set_impl.end_start_disj_on_acts n_in_act by blast
   next
     assume "h \<in> ending_snaps_before n"
     thus False 
@@ -3471,7 +3471,7 @@ lemma ending_actions_sat_mutex_const_specs:
      apply (intro ballI impI)
     subgoal for b
       apply (cases "(t, at_end b) \<in> planning_sem.plan_happ_seq")
-      using clocks rat_impl.set_impl.end_not_start_on_acts in_acts 
+      using clocks rat_impl.set_impl.end_start_disj_on_acts in_acts 
       by (blast intro: planning_sem.is_ending_actionI planning_sem.is_not_happening_actionI)+
     apply (intro ballI impI)
     subgoal for b
@@ -3486,7 +3486,7 @@ lemma ending_actions_sat_mutex_const_specs:
    apply (intro ballI impI)
   subgoal for b
     apply (cases "(t, at_end b) \<in> planning_sem.plan_happ_seq")
-    using clocks rat_impl.set_impl.end_not_start_on_acts in_acts 
+    using clocks rat_impl.set_impl.end_start_disj_on_acts in_acts 
     by (blast intro: planning_sem.is_ending_actionI planning_sem.is_not_happening_actionI)+
   apply (intro ballI impI)
   subgoal for b
@@ -3522,7 +3522,7 @@ proof -
     apply (intro ballI impI)
     subgoal for b
       apply (cases "(t, at_start b) \<in> planning_sem.plan_happ_seq")
-      using clocks rat_impl.set_impl.end_not_start_on_acts in_acts planning_sem.is_starting_actionI 
+      using clocks rat_impl.set_impl.end_start_disj_on_acts in_acts planning_sem.is_starting_actionI 
       by (blast intro: planning_sem.is_starting_actionI planning_sem.is_not_happening_actionI)+
     done
   show ?thesis
@@ -3547,8 +3547,8 @@ proof -
     apply (intro ballI impI)
     subgoal for b
       apply (cases "(t, at_end b) \<in> planning_sem.plan_happ_seq")
-      subgoal using clocks rat_impl.set_impl.end_not_start_on_acts in_acts planning_sem.is_ending_actionI by blast
-      subgoal using clocks rat_impl.set_impl.end_not_start_on_acts in_acts planning_sem.is_not_happening_actionI by blast
+      subgoal using clocks rat_impl.set_impl.end_start_disj_on_acts in_acts planning_sem.is_ending_actionI by blast
+      subgoal using clocks rat_impl.set_impl.end_start_disj_on_acts in_acts planning_sem.is_not_happening_actionI by blast
       done
     done
   have 3: "\<forall>b\<in>set actions. (t, at_end b) \<notin> planning_sem.plan_happ_seq \<or> at_end a = at_end b \<longrightarrow> act_clock_pre_happ_spec c act_to_end_clock b t"
@@ -3586,7 +3586,7 @@ proof -
     apply (intro ballI impI)
     subgoal for b
       apply (cases "(t, at_start b) \<in> planning_sem.plan_happ_seq")
-      using clocks rat_impl.set_impl.end_not_start_on_acts in_acts planning_sem.is_starting_actionI 
+      using clocks rat_impl.set_impl.end_start_disj_on_acts in_acts planning_sem.is_starting_actionI 
       by (blast intro: planning_sem.is_starting_actionI planning_sem.is_not_happening_actionI)+
     done
   show ?thesis

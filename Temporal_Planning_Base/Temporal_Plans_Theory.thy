@@ -5,32 +5,31 @@ begin
 context temp_plan_for_actions_with_unique_snaps_nso_dg0
 begin                                  
 lemma at_start_of_act_in_happ_seq_exD: 
-    assumes in_happ_seq: "(s, at_start a) \<in> plan_happ_seq"
-        and a_in_actions: "a \<in> actions"
-    shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t"
-  proof (rule ex_ex1I)
-    from in_happ_seq in_happ_seq_exD
-    have "\<exists>(a', t, d) \<in> ran \<pi>. (at_start a' = at_start a \<and> s = t \<or> at_end a' = at_start a \<and> s = t + d)"
-      by blast
-    hence  "\<exists>(a', t, d) \<in> ran \<pi>. at_start a' = at_start a \<and> s = t" 
-      using a_in_actions acts_in_prob
-      using at_start_inj_on_acts snaps_disj_on_acts 
-      unfolding inj_on_def snaps_disj_on_def by blast
-    moreover
-    have "\<forall>(a', t, d) \<in> ran \<pi>. at_start a = at_start a' \<longrightarrow> a = a'" 
-      using a_in_actions acts_in_prob
-      using at_start_inj_on_acts 
-      unfolding inj_on_def by blast
-    ultimately
-    show "\<exists>x. case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t" by auto
-  next
-    have "t = t' \<and> d = d'" 
-         if "(a, t, d) \<in> ran \<pi> \<and> s = t" 
-        and "(a, t', d') \<in> ran \<pi> \<and> s = t'" for t d t' d'
-      using that nso dg0 nso_no_double_start by blast
-    thus "\<And>x y. case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t 
-    \<Longrightarrow> case y of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t \<Longrightarrow> x = y" by blast
-  qed
+  assumes in_happ_seq: "(s, at_start a) \<in> plan_happ_seq"
+      and a_in_actions: "a \<in> actions"
+  shows "\<exists>!(t, d). (a, t, d) \<in> ran \<pi> \<and> s = t"
+proof (rule ex_ex1I)
+  from in_happ_seq in_happ_seq_exD
+  have "\<exists>(a', t, d) \<in> ran \<pi>. 
+    (at_start a' = at_start a \<and> s = t \<or> at_end a' = at_start a \<and> s = t + d)"
+    by blast
+  hence "\<exists>(a', t, d) \<in> ran \<pi>. at_start a' = at_start a \<and> s = t" 
+    using a_in_actions acts_in_prob
+    using at_start_inj_on_acts[THEN inj_onD] 
+    using end_start_disj_on_acts by blast
+  moreover
+  have "\<forall>(a', t, d) \<in> ran \<pi>. at_start a = at_start a' \<longrightarrow> a = a'" 
+    using a_in_actions acts_in_prob
+    using at_start_inj_on_acts[THEN inj_onD]
+    by blast
+  ultimately
+  show "\<exists>x. case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t" by auto
+next
+  fix x y
+  assume "case x of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t"
+         "case y of (t, d) \<Rightarrow> (a, t, d) \<in> ran \<pi> \<and> s = t"
+  thus "x = y" using nso_no_double_start by blast
+qed
 
   lemma at_end_of_act_in_happ_seq_exD:
     assumes in_happ_seq: "(s, at_end a) \<in> plan_happ_seq"
