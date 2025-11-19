@@ -3,6 +3,7 @@ theory Ground_PDDL_Problem_Defs
     "TP_NTA_Reduction.TP_NTA_Reduction_Model_Checking"
 begin
 
+
 instantiation lower_bound::(linorder) linorder
 begin
 fun less_eq_lower_bound::"('a::linorder) lower_bound \<Rightarrow> ('a::linorder) lower_bound \<Rightarrow> bool" where
@@ -332,7 +333,86 @@ lemma is_pos_conj_predicates:
   shows "to_predicate ` Atom ` atoms form = set (map to_predicate (to_literals form))"
   using assms unfolding set_remdups set_map 
   using is_pos_conj_to_literals_conv_atoms
-  by simp  
+  by simp 
+
+
+lemma wf_world_model_sat_pos_conj_iff_superset:
+  assumes "wf_world_model M"
+      and "is_pos_conj form"
+    shows "M \<TTurnstile> form \<longleftrightarrow> (set (to_literals form) \<subseteq> M)"
+  using assms
+proof (induction form rule: is_pos_conj.induct)
+  case (1 f g)
+  {
+    assume "M \<TTurnstile> f \<^bold>\<and> g"
+    hence "M \<TTurnstile> f" "M \<TTurnstile> g" unfolding entailment_def by auto
+    hence "set (to_literals f) \<subseteq> M" "set (to_literals g) \<subseteq> M" using 1 by auto
+    hence "(set (to_literals (f \<^bold>\<and> g)) \<subseteq> M)" by auto
+  }
+  moreover
+  {
+    assume "(set (to_literals (f \<^bold>\<and> g)) \<subseteq> M)"
+    hence "set (to_literals f) \<subseteq> M" "set (to_literals g) \<subseteq> M" using 1 by auto
+    hence "M \<TTurnstile> f" "M \<TTurnstile> g" using 1 by auto
+    hence "M \<TTurnstile> f \<^bold>\<and> g" unfolding entailment_def by auto
+  }
+  ultimately
+  show ?case by blast
+next
+  case ("2_1" v)
+  {
+    assume prem: "\<forall>\<A>. (\<forall>G\<in>M. \<A> \<Turnstile> G) \<longrightarrow> \<A> \<Turnstile> Atom v"
+    have "Atom v \<in> M" 
+    proof (rule ccontr)
+      assume a: "Atom v \<notin> M"
+      { fix A
+        assume "\<forall>G. A \<Turnstile> G \<longleftrightarrow> G \<in> M"
+        hence "\<not>(A \<Turnstile> Atom v)" using a by blast
+      }
+      {
+        define A where "A \<equiv> (\<lambda>x. x \<in> \<Union>(atoms ` M))"
+        have "\<forall>f \<in> M. is_predAtom f" 
+          using \<open>wf_world_model M\<close> unfolding wf_world_model_def 
+          using wf_fmla_atom_imp_is_predAtom by blast
+        hence "\<forall>x \<in> \<Union>(atoms ` M). Atom x \<in> M"
+          apply (intro ballI)
+          subgoal for x 
+            apply (erule UnionE)
+            apply (erule imageE)
+            subgoal for a f
+              apply (induction f rule: is_predAtom.induct)
+              by auto
+            done
+          done
+        hence "\<forall>G. (formula_semantics A G) \<longleftrightarrow> (G \<in> M)"
+          using \<open>wf_world_model M\<close>
+      }
+      hence "\<exists>\<A>. \<not>((\<forall>G\<in>M. \<A> \<Turnstile> G) \<longrightarrow> \<A> \<Turnstile> Atom v)" apply (cases "card M") 
+      thus False using prem 
+    qed
+    have "set (to_literals (Atom v)) = {Atom v}" 
+      using is_pos_conj_to_literals_conv_atoms "2_1" by fastforce
+    
+    have "set (to_literals (Atom v)) \<subseteq> M" sorry
+  }
+  show ?case 
+    apply -
+    apply (rule iffI)
+    unfolding entailment_def 
+next
+  case "2_2"
+  then show ?case sorry
+next
+  case ("2_3" v)
+  then show ?case sorry
+next
+  case ("2_4" v va)
+  then show ?case sorry
+next
+  case ("2_5" v va)
+  then show ?case sorry
+qed
+  
 
 lemma form_preds_no_args_imp_atoms_no_args:
   assumes "form_preds_no_args form"

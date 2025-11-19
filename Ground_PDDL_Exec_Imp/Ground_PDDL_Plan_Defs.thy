@@ -10,6 +10,7 @@ end
 
 context ast_problem
 begin
+
 lemma in_acts_of_plan_atE:
   assumes "a \<in> acts_of_plan_at t p"
       and "\<And>\<pi>. (t, \<pi>) \<in> simple_acts p \<Longrightarrow> Some a = res_inst \<pi> At_Start \<Longrightarrow> Q a t p"
@@ -69,7 +70,80 @@ next
   ultimately
   show ?case using 2(1) by blast
 qed
+
+
+
+
+lemma wf_apply_eff:
+  assumes "wf_world_model M"
+      and "\<forall>h \<in> A. wf_ground_action h"
+    shows "wf_world_model (apply_eff A M)"
+  using assms
+  unfolding apply_eff.simps
+  unfolding wf_world_model_def 
+  apply -
+  apply (rule ballI)
+  apply (erule UnE)
+   apply simp
+  apply (erule UnionE)
+  apply (subst (asm) image_image)+
+  apply (erule imageE)
+  subgoal for f add act
+    apply (drule bspec, assumption)
+    apply (induction rule: wf_ground_action.induct)
+    unfolding wf_ground_action.simps
+    apply (erule conjE)
+    subgoal for _ _ pre eff
+      apply (induction eff)
+      by auto
+    done
+  done         
+
+
+end
+
+context wf_ast_problem
+begin
+
+lemma valid_state_seq_wf_world_model:
+  assumes "wf_world_model M"
+      and "valid_state_seq M ts \<pi> M'"
+      and "wf_plan \<pi>"
+      and "\<forall>t \<in>set ts. is_htp \<pi> t"
+    shows "wf_world_model M'"
+  using assms 
+proof (induction M ts \<pi> M' rule: valid_state_seq.induct)
+  case (1 M \<pi>s M')
+  then show ?case by auto
+next
+  case (2 M t\<^sub>i ts \<pi>s M')
+
+  obtain hs where
+    ihs: "ind_happ_seq \<pi>s hs" 
+    using ind_happ_seq_exists 2 by presburger
   
+  have htp: "is_htp \<pi>s t\<^sub>i" using 2 by auto
+  
+  obtain A where
+    ahs: "(t\<^sub>i, A) \<in> set hs" using htp_in_ind_happ_seq htp ihs by blast
+  hence a_acts: "set A = acts_of_plan_at t\<^sub>i \<pi>s" using htp ihs ind_happ_seq_htp_acts_of_plan_at by auto
+
+  have whs: "wf_happ_seq hs" using 2 ihs inst_wf_plan_wf_happ_seq by blast
+
+  have wf: "\<forall>a \<in> acts_of_plan_at t\<^sub>i \<pi>s. wf_ground_action a"
+    using whs ahs a_acts by auto
+
+  have wf_M1: "wf_world_model (apply_eff (acts_of_plan_at t\<^sub>i \<pi>s) M)"
+    using wf_apply_eff wf 2 by blast
+
+  show ?case using 2 wf_M1 by simp
+qed
+  (* Obtain some induced happening sequence, from a valid plan *)
+  (* Every ground action of a plan at a time point is in the induced happening sequence *)
+  (* The induced happening sequence is well formed *)
+  (* The actions at the time point are well formed *)
+  (* Application of well formed ground actions resutls in a well formed world model *)
+  (* Induction *)
 
 end
 
@@ -1419,35 +1493,73 @@ lemma abstr_state_list_nth_valid:
   using htps_seq_htps unfolding htps_seq_def 
   by blast+
 
-lemma valid_state_seq_abstr_state_list_f:
-  assumes "i < length htps"
-  shows "valid_state_seq (abstr_state_list ! i) (drop i htps) tp final_state"
+lemma abstr_state_list_nth_length_is_final:
+  "abstr_state_list ! (length htps) = final_state"
 proof -
+  have "is_state_at tp htps I final_state ((add_final_time_point htps) ! length htps) (abstr_state_list ! length htps)"
+    using abstr_state_list_nth_valid by blast
+  hence "valid_state_seq I (takeWhile (\<lambda>x. x < add_final_time_point htps ! length htps) htps) tp (abstr_state_list ! length htps)" 
+    unfolding is_state_at_def by auto
+  moreover
+  have "takeWhile (\<lambda>x. x < add_final_time_point htps ! length htps) htps = htps"
+    apply (subst nth_add_final_time_point_length)
+    using time_after_all_is_after_all by simp
+  ultimately
+  have "valid_state_seq I htps tp (abstr_state_list ! length htps)"
+    by simp
+  moreover
+  have "valid_state_seq I htps tp final_state" using valid_state_seq_final_state by simp
+  ultimately
+  show ?thesis using valid_state_seq_state_unique by simp
+qed
+
+lemma valid_state_seq_abstr_state_list_f:
+  assumes "i \<le> length htps"
+  shows "valid_state_seq (abstr_state_list ! i) (drop i htps) tp final_state"
+proof (cases "i < length htps")
+  case True
   have htps_sorted: "sorted_wrt (<) htps" using htps_seq_htps unfolding htps_seq_def by blast
   have state_at_i: "is_state_at tp htps I final_state ((add_final_time_point htps) ! i) (abstr_state_list ! i)"
     apply (rule abstr_state_list_nth_valid)
-    using assms abstr_state_list_nth_valid by simp 
+    using True abstr_state_list_nth_valid by simp 
   hence "valid_state_seq (abstr_state_list ! i) (dropWhile (\<lambda>x. x < add_final_time_point htps ! i) htps) tp final_state" 
     unfolding is_state_at_def by blast
   thus "valid_state_seq (abstr_state_list ! i) (drop i htps) tp final_state"
     apply (subst (asm) nth_add_final_time_point)
-    using assms apply simp
-    using strict_sorted_dropWhile_nth[OF assms htps_sorted] by simp
+    using True apply simp
+    using strict_sorted_dropWhile_nth[OF True htps_sorted] by simp
+next
+  case False
+  hence i: "i = length htps" using assms by auto
+  have "drop i htps = []" using i by auto
+  moreover
+  have "abstr_state_list ! i = final_state" using abstr_state_list_nth_length_is_final i by simp
+  ultimately 
+  show ?thesis by auto
 qed
 
 lemma valid_state_seq_abstr_state_list_i:
-  assumes "i < length htps"
+  assumes "i \<le> length htps"
   shows "valid_state_seq I (take i htps) tp (abstr_state_list ! i)"
-proof -
+proof (cases "i < length htps")
+  case True
   have htps_sorted: "strict_sorted htps"  using htps_seq_htps unfolding htps_seq_def by blast
   have n: "is_state_at tp htps I final_state ((add_final_time_point htps) ! i) (abstr_state_list ! i)" 
-    using assms htps_sorted abstr_state_list_nth_valid by auto
+    using True htps_sorted abstr_state_list_nth_valid by auto
   hence "valid_state_seq I (takeWhile (\<lambda>x. x < add_final_time_point htps ! i) htps) tp (abstr_state_list ! i)" 
     unfolding is_state_at_def by blast
   thus "valid_state_seq I (take i htps) tp (abstr_state_list ! i)"
     apply (subst (asm) nth_add_final_time_point)
-    using assms apply simp
-    using strict_sorted_takeWhile_nth[OF assms htps_sorted] by simp
+    using True apply simp
+    using strict_sorted_takeWhile_nth[OF True htps_sorted] by simp
+next
+  case False
+  hence i: "i = length htps" using assms by auto
+  have "take i htps = htps" using i by auto
+  moreover
+  have "abstr_state_list ! i = final_state" using abstr_state_list_nth_length_is_final i by simp
+  ultimately 
+  show ?thesis using valid_state_seq_final_state by presburger
 qed
 
 lemma abstr_state_list_nth_Suc:
@@ -1492,12 +1604,23 @@ proof -
     using jSn unfolding valid_state_seq.simps Let_def by auto
 
   have In: "valid_state_seq I (take n htps) tp (abstr_state_list ! n)" 
-    using valid_state_seq_abstr_state_list_i assms by blast
+    using valid_state_seq_abstr_state_list_i assms by simp
   have eq: "Mj = (abstr_state_list ! n)" using Ij In valid_state_seq_state_unique by blast
 
   show ?thesis using Mj_eff_Sn eq by blast
 qed
 
+lemma abstr_state_list_nth_wf_world_model:
+  assumes "i \<le> length htps"
+  shows "wf_world_model (abstr_state_list ! i)"
+proof (rule valid_state_seq_wf_world_model)
+  show "wf_world_model I" using wf_I by simp
+  show "valid_state_seq I (take i htps) tp (abstr_state_list ! i)" 
+    using assms valid_state_seq_abstr_state_list_i by simp
+  show "wf_plan tp" using wf_plan by simp
+  show "\<forall>t\<in>set (take i htps). is_htp tp t"
+    using set_take_subset htps_seq_htps unfolding htps_seq_def by fast
+qed
 
 lemma ref_htpl_eq_htps: "imp_defs.rat_impl.htpl = htps"
 proof (rule strict_sorted_equal)
@@ -1979,7 +2102,7 @@ proof -
     have "\<forall>p \<in> abstr_state_list ! i. form_preds_no_args p \<and> is_predAtom p"
     proof (rule valid_state_seq_prop_pred_initial)
       show "valid_state_seq I (take i htps) tp (abstr_state_list ! i)"
-        using valid_state_seq_abstr_state_list_i i' by blast
+        using valid_state_seq_abstr_state_list_i i' by fastforce
       show "\<forall>p\<in>I. form_preds_no_args p \<and> is_predAtom p"
       proof -
         presume "\<forall>p \<in> I. form_preds_no_args p"
@@ -2153,8 +2276,6 @@ next
   qed
 qed
 
-lemma invs_of_plan_at_pos_conj:
-  "\<forall>f \<in> invs_of_plan_at t tp. is_pos_conj f"
 
 lemma invs_sat:
   assumes "i < length imp_defs.rat_impl.htpl" 
@@ -2176,7 +2297,7 @@ proof -
     using Sia by simp
   next 
     have v: "valid_state_seq (abstr_state_list ! i) (drop i htps) tp final_state" 
-      using valid_state_seq_abstr_state_list_f i' by blast
+      using valid_state_seq_abstr_state_list_f i' by simp
     
     have "length (drop i htps) > 0" using length_drop i' by simp
     then
@@ -2185,8 +2306,21 @@ proof -
     hence di: "drop i htps = (htps ! i)#ts" using i' using hd_drop_conv_nth by fastforce
     have "\<forall>f \<in> invs_of_plan_at (htps ! i) tp. abstr_state_list ! i \<^sup>c\<TTurnstile>\<^sub>= f" 
       using v unfolding di valid_state_seq.simps Let_def by blast
-    hence "invs_of_plan_at (htps ! i) tp \<subseteq> abstr_state_list ! i"
+    hence "invs_of_plan_at (htps ! i) tp \<subseteq> abstr_state_list ! i" sorry
+      (* cw entailment is superset, if world is atomic and condition is positive conj *)
+
+    (* To literals returns the literals. If something is an atomic predicate, then it returns it
+        in a list. Hence, we get to shift a few of these functions. *)
+    have abstr_state_list_i_atomic: "\<forall>f \<in> abstr_state_list ! i. is_predAtom f" 
+      using abstr_state_list_nth_wf_world_model[of i] i' 
+      unfolding wf_world_model_def wf_fmla_atom_alt by simp
+
+    have "\<forall>f \<in> invs_of_plan_at (htps ! i) tp. is_pos_conj f"
+    proof -
       
+    qed
+
+    have "(\<Union>x\<in>abstr_state_list ! i. set (map to_predicate (to_literals x)))"
     thus "\<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at (htps ! i) tp)
       \<subseteq> (\<Union>x\<in>abstr_state_list ! i. set (map to_predicate (to_literals x)))"
       
