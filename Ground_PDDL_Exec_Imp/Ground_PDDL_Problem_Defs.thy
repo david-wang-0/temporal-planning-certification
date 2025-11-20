@@ -119,6 +119,7 @@ definition "to_predicates \<equiv> to_literals #> map to_predicate"
 definition init_spec::"predicate list" where
 "init_spec \<equiv>
   init P
+  |> filter (is_predAtom)
   |> map to_predicate
   |> remdups"
 
@@ -269,6 +270,15 @@ fun ground_act_no_args::"ground_action \<Rightarrow> bool" where
 \<and> list_all form_preds_no_args (ast_effect.dels eff)
 )"
 
+lemma pre_spec_alt:
+  "pre_spec a = 
+  ground_action.precondition a
+  |> to_literals
+  |> map to_predicate
+  |> remdups"
+  by (cases a) simp
+
+
 lemma wf_pos_conj_fmla_imp_wf_atoms: 
     assumes "wf_fmla M form"
         and "is_pos_conj form"                
@@ -336,16 +346,28 @@ lemma is_pos_conj_predicates:
   by simp 
 
 
-lemma wf_world_model_sat_pos_conj_iff_superset:
-  assumes "wf_world_model M"
+lemma is_predAtom_imp_is_pos_conj:
+  assumes "is_predAtom f"
+  shows "is_pos_conj f"
+  using assms 
+  by (induction f rule: is_predAtom.induct) simp+
+  
+lemma is_predAtom_literals:
+  assumes "is_predAtom f"
+  shows "to_literals f = [f]"
+  using assms
+  by (induction f rule: is_predAtom.induct) simp+
+
+lemma wm_basic_sat_pos_conj_iff_superset:
+  assumes "wm_basic M"
       and "is_pos_conj form"
-    shows "M \<TTurnstile> form \<longleftrightarrow> (set (to_literals form) \<subseteq> M)"
+    shows "valuation M \<Turnstile> form \<longleftrightarrow> (set (to_literals form) \<subseteq> M)"
   using assms
 proof (induction form rule: is_pos_conj.induct)
   case (1 f g)
   {
-    assume "M \<TTurnstile> f \<^bold>\<and> g"
-    hence "M \<TTurnstile> f" "M \<TTurnstile> g" unfolding entailment_def by auto
+    assume "valuation M \<Turnstile> f \<^bold>\<and> g"
+    hence "valuation M \<Turnstile> f" "valuation M \<Turnstile> g" by auto
     hence "set (to_literals f) \<subseteq> M" "set (to_literals g) \<subseteq> M" using 1 by auto
     hence "(set (to_literals (f \<^bold>\<and> g)) \<subseteq> M)" by auto
   }
@@ -353,66 +375,54 @@ proof (induction form rule: is_pos_conj.induct)
   {
     assume "(set (to_literals (f \<^bold>\<and> g)) \<subseteq> M)"
     hence "set (to_literals f) \<subseteq> M" "set (to_literals g) \<subseteq> M" using 1 by auto
-    hence "M \<TTurnstile> f" "M \<TTurnstile> g" using 1 by auto
-    hence "M \<TTurnstile> f \<^bold>\<and> g" unfolding entailment_def by auto
+    hence "valuation M \<Turnstile> f" "valuation M \<Turnstile> g" using 1 by auto
+    hence "valuation M \<Turnstile> f \<^bold>\<and> g" unfolding entailment_def by auto
   }
   ultimately
   show ?case by blast
 next
   case ("2_1" v)
-  {
-    assume prem: "\<forall>\<A>. (\<forall>G\<in>M. \<A> \<Turnstile> G) \<longrightarrow> \<A> \<Turnstile> Atom v"
-    have "Atom v \<in> M" 
-    proof (rule ccontr)
-      assume a: "Atom v \<notin> M"
-      { fix A
-        assume "\<forall>G. A \<Turnstile> G \<longleftrightarrow> G \<in> M"
-        hence "\<not>(A \<Turnstile> Atom v)" using a by blast
-      }
-      {
-        define A where "A \<equiv> (\<lambda>x. x \<in> \<Union>(atoms ` M))"
-        have "\<forall>f \<in> M. is_predAtom f" 
-          using \<open>wf_world_model M\<close> unfolding wf_world_model_def 
-          using wf_fmla_atom_imp_is_predAtom by blast
-        hence "\<forall>x \<in> \<Union>(atoms ` M). Atom x \<in> M"
-          apply (intro ballI)
-          subgoal for x 
-            apply (erule UnionE)
-            apply (erule imageE)
-            subgoal for a f
-              apply (induction f rule: is_predAtom.induct)
-              by auto
-            done
-          done
-        hence "\<forall>G. (formula_semantics A G) \<longleftrightarrow> (G \<in> M)"
-          using \<open>wf_world_model M\<close>
-      }
-      hence "\<exists>\<A>. \<not>((\<forall>G\<in>M. \<A> \<Turnstile> G) \<longrightarrow> \<A> \<Turnstile> Atom v)" apply (cases "card M") 
-      thus False using prem 
-    qed
-    have "set (to_literals (Atom v)) = {Atom v}" 
-      using is_pos_conj_to_literals_conv_atoms "2_1" by fastforce
-    
-    have "set (to_literals (Atom v)) \<subseteq> M" sorry
-  }
-  show ?case 
-    apply -
-    apply (rule iffI)
-    unfolding entailment_def 
+  thus ?case unfolding valuation_def apply (cases v) by auto
 next
   case "2_2"
-  then show ?case sorry
+  then show ?case by auto
 next
   case ("2_3" v)
-  then show ?case sorry
+  then show ?case apply (induction v rule: is_pos_conj.induct) by (auto simp: entailment_def)
 next
   case ("2_4" v va)
-  then show ?case sorry
+  then show ?case by auto
 next
   case ("2_5" v va)
-  then show ?case sorry
+  then show ?case by simp
 qed
-  
+
+lemma wm_basic_entails_pos_conj_iff_superset:
+  assumes "wm_basic M"
+      and "is_pos_conj \<phi>"
+    shows "M \<^sup>c\<TTurnstile>\<^sub>= \<phi> \<longleftrightarrow> (set (to_literals \<phi>) \<subseteq> M)"
+  using assms
+  using wm_basic_sat_pos_conj_iff_superset valuation_iff_close_world 
+  unfolding wf_fmla_atom_alt 
+  by simp
+
+lemma wm_basic_entails_pos_conj_iff_superset':
+  assumes "wm_basic M"
+      and "is_pos_conj \<phi>"
+    shows "M \<^sup>c\<TTurnstile>\<^sub>= \<phi> \<longleftrightarrow> (set (to_literals \<phi>) \<subseteq> \<Union>(set `to_literals ` M))"
+  using wm_basic_entails_pos_conj_iff_superset[OF assms]
+  using is_predAtom_literals assms(1) unfolding wm_basic_def by simp
+
+lemma wm_basic_set_literals_eq_wm:
+  assumes "wm_basic M"
+  shows "\<Union>(set ` to_literals ` M) = M"
+proof -
+  have "\<forall>f \<in> M. is_predAtom f" 
+    using assms unfolding wm_basic_def by simp
+  hence "\<forall>f \<in> M. to_literals f = [f]"
+    using is_predAtom_literals by auto
+  thus ?thesis by auto
+qed
 
 lemma form_preds_no_args_imp_atoms_no_args:
   assumes "form_preds_no_args form"
@@ -576,18 +586,6 @@ proof (rule inj_onI)
 
     show "x = y" using eq x y by simp
   qed
-
-lemma is_predAtom_imp_is_pos_conj:
-  assumes "is_predAtom f"
-  shows "is_pos_conj f"
-  using assms 
-  by (induction f rule: is_predAtom.induct) simp+
-  
-lemma is_predAtom_literals:
-  assumes "is_predAtom f"
-  shows "to_literals f = [f]"
-  using assms
-  by (induction f rule: is_predAtom.induct) simp+
 
 lemma ground_act_no_args_imp_dels_no_args:
   assumes "ground_act_no_args h"
@@ -1141,6 +1139,7 @@ next
     unfolding actions_spec_def list_all_iff by auto
   then show ?case using inst_snap_act_pres_pos act_params_match_empty 1 by fastforce
 qed
+
 
 text \<open>Conditions and effects of well formed ground actions are in props. Snap actions are ground actions\<close>
 lemma wf_ground_action_pres_in_props:
