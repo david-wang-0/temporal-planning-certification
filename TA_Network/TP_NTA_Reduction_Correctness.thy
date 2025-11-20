@@ -5360,17 +5360,21 @@ schematic_goal dom_map_of_bounds_spec_exact: "dom (map_of bounds_spec) = ?x"
   ..
 
 
-lemma initial_step_possible: "graph_impl.steps ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0]) \<and> init_planning_state_props' (last ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0]))"
+lemma initial_step_possible: "graph_impl.steps ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0]) 
+    \<and> init_planning_state_props' (last ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0]))"
 proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composable[where R = init_state_props and S = init_planning_state_props])
-  show "graph_impl.steps [a\<^sub>0] \<and> init_state_props (last [a\<^sub>0])"
+  show "graph_impl.steps (map (\<lambda>(x, y). (x, case y of (x, y) \<Rightarrow> (x, \<lambda>x. real_of_int (y x)))) [a\<^sub>0]) \<and> init_state_props (last (map (\<lambda>(x, y). (x, case y of (x, y) \<Rightarrow> (x, \<lambda>x. real_of_int (y x)))) [a\<^sub>0]))"
   proof (intro conjI, goal_cases)
     case 1
-    then show ?case by rule
+    then show ?case unfolding a\<^sub>0_def 
+      apply (subst list.map)+
+      by rule
   next
     case 2
-    then show ?case 
+    then show ?case  unfolding a\<^sub>0_alt
+      apply (subst list.map)+
+      unfolding prod.case
       apply (subst last_ConsL[OF HOL.refl])
-      unfolding a\<^sub>0_alt
       apply (rule init_state_propsI)
       apply (rule HOL.refl)
       using init_vars_spec_bounded 

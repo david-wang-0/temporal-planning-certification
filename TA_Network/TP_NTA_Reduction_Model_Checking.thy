@@ -141,7 +141,7 @@ lemma locations_unique:
 thm Simple_Network_Rename_Formula.models_iff[no_vars, unfolded Simple_Network_Rename_Start.a\<^sub>0_def]
 term "Simple_Network_Language_Model_Checking.N broadcast_spec automata_spec bounds_spec,Simple_Network_Rename_Start.a\<^sub>0 init_vars_spec init_locs_spec \<Turnstile> formula_spec"
 
-definition "a\<^sub>0 = (init_locs_spec, map_of init_vars_spec, \<lambda>_. 0)"
+definition "a\<^sub>0 = (init_locs_spec, map_of init_vars_spec, (\<lambda>_::String.literal. 0::int))"
 
 (* definition "net_sem = Simple_Network_Impl.sem automata_spec broadcast_spec bounds_spec" *)
 text \<open>Locales for theory\<close>

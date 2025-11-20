@@ -6,6 +6,5 @@ Basics.sml
 Library.sml
 Unsynchronized.sml
 Util.sml
-TP_NTA_Printing.sml
 Temporal_Planning_Certification_Main.sml
 Mlton_Main.sml

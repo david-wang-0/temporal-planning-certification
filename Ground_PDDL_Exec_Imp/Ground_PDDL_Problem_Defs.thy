@@ -88,6 +88,71 @@ fun comp_opt_ge::"('a::linorder) option \<Rightarrow> ('a::linorder) option \<Ri
 "comp_opt_ge (Some x) None = True" |
 "comp_opt_ge (Some x) (Some y) = (x \<ge> y)"
 
+text \<open>Begin: Adapted from Maximillian Vollath\<close>
+fun is_pos_lit :: "'a atom Formulas.formula \<Rightarrow> bool" where
+  f: "is_pos_lit (\<^bold>\<not>\<bottom>) = True" |
+  "is_pos_lit (Atom (predAtm n args)) = True" |
+  "is_pos_lit _ = False"
+
+fun is_pos_conj :: "'a atom Formulas.formula \<Rightarrow> bool" where
+  "is_pos_conj (f \<^bold>\<and> g) \<longleftrightarrow> is_pos_conj f \<and> is_pos_conj g" |
+  "is_pos_conj f \<longleftrightarrow> is_pos_lit f"
+(* This does not have to be right recursive for our purposes. It originally was. *) 
+
+text \<open>End: Adapted from M. Vollath\<close>
+
+fun atom_no_args::"'a atom \<Rightarrow> bool" where
+"atom_no_args (predAtm p []) = True" |
+"atom_no_args _ = False"
+
+definition form_preds_no_args::"'a atom Formulas.formula \<Rightarrow> bool" where
+"form_preds_no_args form \<equiv> \<forall>a \<in> formula.atoms form. atom_no_args a"
+
+fun max_lb_opt::"('x::linorder) lower_bound option list \<Rightarrow> ('x::linorder) lower_bound option \<Rightarrow> ('x::linorder) lower_bound option" where
+"max_lb_opt [] l = l" |
+"max_lb_opt (x#xs) l = max_lb_opt xs (if (comp_opt_ge x l) then x else l)"
+
+fun min_ub_opt::"('x::linorder) upper_bound option list \<Rightarrow> ('x::linorder) upper_bound option \<Rightarrow> ('x::linorder) upper_bound option" where
+"min_ub_opt [] u = u" |
+"min_ub_opt (x#xs) u = min_ub_opt xs (if (comp_opt_le x u) then x else u)"
+
+subsection \<open>Additional well-formedness considerations\<close>
+
+fun pred_no_args::"predicate_decl \<Rightarrow> bool" where
+"pred_no_args (PredDecl p as) = (as = [])"
+
+fun act_no_params::"ast_action_schema \<Rightarrow> bool" where
+"act_no_params (Simple_Action_Schema n ps pre eff) = (ps = [])" |
+"act_no_params (Durative_Action_Schema n ps d pre eff) = (ps = [])" 
+
+fun act_pres_pos::"ast_action_schema \<Rightarrow> bool" where
+"act_pres_pos (Simple_Action_Schema n ps pre eff) = (is_pos_conj (pre))" |
+"act_pres_pos (Durative_Action_Schema n ps d pre eff) = (list_all is_pos_conj (map snd pre))"
+
+fun act_no_func_dcs::"ast_action_schema \<Rightarrow> bool" where
+"act_no_func_dcs (Simple_Action_Schema n ps pre eff) = True" |
+"act_no_func_dcs (Durative_Action_Schema n ps dcs pre eff) = (list_all (\<lambda>d. \<not> is_Func_Const d) dcs)"
+
+fun duration_constraint_integer::"term duration_constraint \<Rightarrow> bool" where
+"duration_constraint_integer No_Const = True" |
+"duration_constraint_integer (Time_Const duration_op.EQ x) = is_integer x" |
+"duration_constraint_integer (Time_Const duration_op.GEQ x) = is_integer x" |
+"duration_constraint_integer (Time_Const duration_op.LEQ x) = is_integer x"
+
+fun act_dcs_integers::"ast_action_schema \<Rightarrow> bool" where
+"act_dcs_integers (Simple_Action_Schema n ps pre eff) = True" |
+"act_dcs_integers (Durative_Action_Schema n ps dcs pre eff) = (list_all duration_constraint_integer dcs)"
+
+fun ground_act_pres_pos::"ground_action \<Rightarrow> bool" where
+"ground_act_pres_pos (Ground_Action n anno pre eff) = (is_pos_conj pre)"
+
+fun ground_act_no_args::"ground_action \<Rightarrow> bool" where
+"ground_act_no_args (Ground_Action n anno pre eff) = (
+  form_preds_no_args pre
+\<and> list_all form_preds_no_args (ast_effect.adds eff)
+\<and> list_all form_preds_no_args (ast_effect.dels eff)
+)"
+
 locale ground_ast_problem_defs = ast_problem P
   for P :: ast_problem
 begin
@@ -133,7 +198,6 @@ definition goal_spec::"predicate list" where
   |> remdups"
 
 definition "ground_non_action n anno \<equiv> Ground_Action n anno (Formulas.Not Formulas.Bot) (Effect [] [])"
-
 
 fun at_start_spec::"ast_action_schema \<Rightarrow> ground_action" where
 "at_start_spec (Simple_Action_Schema n ps pre eff) = instantiate_action_schema (Simple_Action_Schema n ps pre eff) [] At_Start" |
@@ -184,9 +248,6 @@ fun dc_to_lb::"term duration_constraint \<Rightarrow> rat lower_bound option" wh
 "dc_to_lb (Time_Const duration_op.GEQ x) = Some (lower_bound.GE x)" |
 "dc_to_lb (Time_Const duration_op.LEQ x) = None"
 
-fun max_lb_opt::"('x::linorder) lower_bound option list \<Rightarrow> ('x::linorder) lower_bound option \<Rightarrow> ('x::linorder) lower_bound option" where
-"max_lb_opt [] l = l" |
-"max_lb_opt (x#xs) l = max_lb_opt xs (if (comp_opt_ge x l) then x else l)"
 
 definition dc_list_lower::"term duration_constraint list \<Rightarrow> rat lower_bound option" where
 "dc_list_lower xs \<equiv> map dc_to_lb xs |> (\<lambda>xs. max_lb_opt xs None)" 
@@ -197,10 +258,6 @@ fun dc_to_ub::"term duration_constraint \<Rightarrow> rat upper_bound option" wh
 "dc_to_ub (Time_Const duration_op.EQ x) = Some (upper_bound.LE  x)" |
 "dc_to_ub (Time_Const duration_op.GEQ x) = None" |
 "dc_to_ub (Time_Const duration_op.LEQ x) = Some (upper_bound.LE x)"
-
-fun min_ub_opt::"('x::linorder) upper_bound option list \<Rightarrow> ('x::linorder) upper_bound option \<Rightarrow> ('x::linorder) upper_bound option" where
-"min_ub_opt [] u = u" |
-"min_ub_opt (x#xs) u = min_ub_opt xs (if (comp_opt_le x u) then x else u)"
 
 definition dc_list_upper::"term duration_constraint list \<Rightarrow> rat upper_bound option" where
 "dc_list_upper xs = map dc_to_ub xs |> (\<lambda>xs. min_ub_opt xs None)" 
@@ -213,62 +270,6 @@ fun upper_spec::"ast_action_schema \<Rightarrow> _" where
 "upper_spec (Simple_Action_Schema n ps pre eff) = Some (upper_bound.LE 0)" | (* could also be None *)
 "upper_spec (Durative_Action_Schema n ps d cond eff) = map_option (map_upper_bound floor) (dc_list_upper d)"
 
-subsection \<open>Additional well-formedness considerations\<close>
-
-text \<open>Begin: Adapted from Maximillian Vollath\<close>
-fun is_pos_lit :: "'a atom Formulas.formula \<Rightarrow> bool" where
-  f: "is_pos_lit (\<^bold>\<not>\<bottom>) = True" |
-  "is_pos_lit (Atom (predAtm n args)) = True" |
-  "is_pos_lit _ = False"
-
-fun is_pos_conj :: "'a atom Formulas.formula \<Rightarrow> bool" where
-  "is_pos_conj (f \<^bold>\<and> g) \<longleftrightarrow> is_pos_conj f \<and> is_pos_conj g" |
-  "is_pos_conj f \<longleftrightarrow> is_pos_lit f"
-(* This does not have to be right recursive for our purposes. It originally was. *) 
-
-text \<open>End: Adapted from M. Vollath\<close>
-
-fun atom_no_args::"'a atom \<Rightarrow> bool" where
-"atom_no_args (predAtm p []) = True" |
-"atom_no_args _ = False"
-
-definition form_preds_no_args::"'a atom Formulas.formula \<Rightarrow> bool" where
-"form_preds_no_args form \<equiv> \<forall>a \<in> formula.atoms form. atom_no_args a"
-
-fun pred_no_args::"predicate_decl \<Rightarrow> bool" where
-"pred_no_args (PredDecl p as) = (as = [])"
-
-fun act_no_params::"ast_action_schema \<Rightarrow> bool" where
-"act_no_params (Simple_Action_Schema n ps pre eff) = (ps = [])" |
-"act_no_params (Durative_Action_Schema n ps d pre eff) = (ps = [])" 
-
-fun act_pres_pos::"ast_action_schema \<Rightarrow> bool" where
-"act_pres_pos (Simple_Action_Schema n ps pre eff) = (is_pos_conj (pre))" |
-"act_pres_pos (Durative_Action_Schema n ps d pre eff) = (list_all is_pos_conj (map snd pre))"
-
-fun act_no_func_dcs::"ast_action_schema \<Rightarrow> bool" where
-"act_no_func_dcs (Simple_Action_Schema n ps pre eff) = True" |
-"act_no_func_dcs (Durative_Action_Schema n ps dcs pre eff) = (list_all (\<lambda>d. \<not> is_Func_Const d) dcs)"
-
-fun duration_constraint_integer::"term duration_constraint \<Rightarrow> bool" where
-"duration_constraint_integer No_Const = True" |
-"duration_constraint_integer (Time_Const duration_op.EQ x) = is_integer x" |
-"duration_constraint_integer (Time_Const duration_op.GEQ x) = is_integer x" |
-"duration_constraint_integer (Time_Const duration_op.LEQ x) = is_integer x"
-
-fun act_dcs_integers::"ast_action_schema \<Rightarrow> bool" where
-"act_dcs_integers (Simple_Action_Schema n ps pre eff) = True" |
-"act_dcs_integers (Durative_Action_Schema n ps dcs pre eff) = (list_all duration_constraint_integer dcs)"
-
-fun ground_act_pres_pos::"ground_action \<Rightarrow> bool" where
-"ground_act_pres_pos (Ground_Action n anno pre eff) = (is_pos_conj pre)"
-
-fun ground_act_no_args::"ground_action \<Rightarrow> bool" where
-"ground_act_no_args (Ground_Action n anno pre eff) = (
-  form_preds_no_args pre
-\<and> list_all form_preds_no_args (ast_effect.adds eff)
-\<and> list_all form_preds_no_args (ast_effect.dels eff)
-)"
 
 lemma pre_spec_alt:
   "pre_spec a = 

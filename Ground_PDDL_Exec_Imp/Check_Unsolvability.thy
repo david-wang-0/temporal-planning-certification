@@ -1,7 +1,52 @@
 theory Check_Unsolvability
   imports Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code Containers.Containers
-    Ground_PDDL_NTA_Reduction_Correctness
+    Ground_PDDL_NTA_Reduction_Correctness "Show.Shows_Literal"
 begin
+
+
+term ast_problem.wf_func_assign
+print_derives
+find_theorems name: "show*int"
+
+typ String.literal
+
+
+
+instantiation predicate::"show"
+begin
+definition "shows_prec p (x::predicate) \<equiv> \<lambda>y. show ''Pred'' @ show (predicate.name x) @ y"
+definition "shows_list (x::predicate list) = showsp_list shows_prec 0 x"
+instance
+  by standard (simp_all add: shows_prec_predicate_def shows_list_predicate_def show_law_simps)
+end
+
+instantiation func::"show"
+begin
+definition "shows_prec p (x::func) \<equiv> \<lambda>y. show ''Func'' @ show (func.name x) @ y"
+definition "shows_list (x::func list) = showsp_list shows_prec 0 x"
+instance
+  by standard (simp_all add: shows_prec_func_def shows_list_func_def show_law_simps)
+end
+
+instantiation atom::("show") "show"
+begin
+
+fun showf_atom where
+"showf_atom (predAtm n as) y = show ''('' @ show n @ show as @ show '')'' @ y" |
+"showf_atom (eqAtm a b) y = show ''('' @ show a @ show ''='' @ show b @ show '')'' @ y"
+
+definition "shows_prec p (x::('a::show) atom) \<equiv> \<lambda>y. showf_atom x y"
+definition "shows_list (x::('a::show) atom list) = showsp_list shows_prec 0 x"
+instance
+  apply standard 
+  subgoal for _ x apply (cases x) by (simp add: shows_prec_atom_def shows_list_atom_def show_law_simps)+
+  unfolding shows_prec_atom_def shows_list_atom_def
+  apply (rule showsp_list_append)
+  apply (intro ballI)
+  subgoal for _ _ _ _ _ _ x  
+    apply (cases x) by (simp add: shows_prec_atom_def shows_list_atom_def show_law_simps)+
+  done
+end
 
 
 definition compute_model::"
@@ -217,10 +262,149 @@ of Result c \<Rightarrow> do {
 
 find_theorems name: tp_nta_reduction_spec
 
+find_theorems name: "form_not_sat*ground"
+
+thm ground_ast_problem.form_not_sat_imp_no_valid_ground_plan[no_vars]
+
 definition make_network where
-"make_network \<equiv> undefined"
+"make_network P \<equiv> (
+    (tp_nta_reduction_spec.timed_automaton_net_spec (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.init_spec P))
+      (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.goal_spec P)) AtStart AtEnd
+      (temp_planning_problem_list_defs.over_all_restr_list ground_ast_problem_defs.over_all_spec (ground_ast_problem_defs.props_spec P)) ground_ast_problem_defs.lower_spec ground_ast_problem_defs.upper_spec
+      (temp_planning_problem_list_defs.pre_imp_restr_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.pre_spec (ground_ast_problem_defs.props_spec P))
+      (temp_planning_problem_list_defs.add_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.adds_spec)
+      (temp_planning_problem_list_defs.del_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.dels_spec) 0 (ground_ast_problem_defs.actions_spec P)
+      ground_ast_problem_defs.act_to_name_spec ground_ast_problem_defs.prop_to_name_spec),
+    tp_nta_reduction_spec.broadcast_spec,
+    (tp_nta_reduction_spec.all_vars_spec (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.init_spec P))
+      (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.goal_spec P)) AtStart AtEnd
+      (temp_planning_problem_list_defs.over_all_restr_list ground_ast_problem_defs.over_all_spec (ground_ast_problem_defs.props_spec P))
+      (temp_planning_problem_list_defs.pre_imp_restr_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.pre_spec (ground_ast_problem_defs.props_spec P))
+      (temp_planning_problem_list_defs.add_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.adds_spec)
+      (temp_planning_problem_list_defs.del_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.dels_spec) (ground_ast_problem_defs.props_spec P)
+      (ground_ast_problem_defs.actions_spec P)
+      ground_ast_problem_defs.prop_to_name_spec),
+    tp_nta_reduction_model_checking.a\<^sub>0 
+      (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.init_spec P))
+      (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.goal_spec P)) 
+      AtStart AtEnd
+      (temp_planning_problem_list_defs.over_all_restr_list ground_ast_problem_defs.over_all_spec (ground_ast_problem_defs.props_spec P))
+      (temp_planning_problem_list_defs.pre_imp_restr_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.pre_spec (ground_ast_problem_defs.props_spec P))
+      (temp_planning_problem_list_defs.add_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.adds_spec)
+      (temp_planning_problem_list_defs.del_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.dels_spec)
+      (ground_ast_problem_defs.props_spec P) 
+      (ground_ast_problem_defs.actions_spec P) 
+      ground_ast_problem_defs.prop_to_name_spec,
+    tp_nta_reduction_spec.formula_spec
+)"
+
+schematic_goal make_network_alt[code]:
+  "make_network P \<equiv> ?x"
+  unfolding make_network_def
+  apply (abstract_let "tp_nta_reduction_spec.timed_automaton_net_spec (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.init_spec P))
+      (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.goal_spec P)) AtStart AtEnd
+      (temp_planning_problem_list_defs.over_all_restr_list ground_ast_problem_defs.over_all_spec (ground_ast_problem_defs.props_spec P)) ground_ast_problem_defs.lower_spec
+      ground_ast_problem_defs.upper_spec
+      (temp_planning_problem_list_defs.pre_imp_restr_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.pre_spec
+        (ground_ast_problem_defs.props_spec P))
+      (temp_planning_problem_list_defs.add_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.adds_spec)
+      (temp_planning_problem_list_defs.del_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.dels_spec) 0
+      (ground_ast_problem_defs.actions_spec P) ground_ast_problem_defs.act_to_name_spec ground_ast_problem_defs.prop_to_name_spec" autos)
+  apply (abstract_let "tp_nta_reduction_spec.all_vars_spec (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.init_spec P))
+      (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.goal_spec P)) AtStart AtEnd
+      (temp_planning_problem_list_defs.over_all_restr_list ground_ast_problem_defs.over_all_spec (ground_ast_problem_defs.props_spec P))
+      (temp_planning_problem_list_defs.pre_imp_restr_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.pre_spec
+        (ground_ast_problem_defs.props_spec P))
+      (temp_planning_problem_list_defs.add_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.adds_spec)
+      (temp_planning_problem_list_defs.del_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.dels_spec) (ground_ast_problem_defs.props_spec P)
+      (ground_ast_problem_defs.actions_spec P) ground_ast_problem_defs.prop_to_name_spec" vars)
+  apply (abstract_let "tp_nta_reduction_model_checking.a\<^sub>0 (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.init_spec P))
+         (filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.goal_spec P)) AtStart AtEnd
+         (temp_planning_problem_list_defs.over_all_restr_list ground_ast_problem_defs.over_all_spec (ground_ast_problem_defs.props_spec P))
+         (temp_planning_problem_list_defs.pre_imp_restr_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.pre_spec
+           (ground_ast_problem_defs.props_spec P))
+         (temp_planning_problem_list_defs.add_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.adds_spec)
+         (temp_planning_problem_list_defs.del_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.dels_spec)
+         (ground_ast_problem_defs.props_spec P) (ground_ast_problem_defs.actions_spec P) ground_ast_problem_defs.prop_to_name_spec" init_vars)
+  apply (abstract_let "(filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.init_spec P))" init')
+  apply (abstract_let "(filter (\<lambda>p. p \<in> set (ground_ast_problem_defs.props_spec P)) (ground_ast_problem_defs.goal_spec P))" goal')
+  apply (abstract_let "ground_ast_problem_defs.init_spec P" init)
+  apply (abstract_let "ground_ast_problem_defs.goal_spec P" goal)
+  apply (abstract_let "temp_planning_problem_list_defs.pre_imp_restr_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.pre_spec
+           (ground_ast_problem_defs.props_spec P)" pre')
+  apply (abstract_let "temp_planning_problem_list_defs.over_all_restr_list ground_ast_problem_defs.over_all_spec (ground_ast_problem_defs.props_spec P)" over_all')
+  apply (abstract_let "ground_ast_problem_defs.props_spec P" props)
+  apply (abstract_let "ground_ast_problem_defs.actions_spec P" actions)
+  apply (abstract_let "ground_ast_problem_defs.act_to_name_spec" act_names)
+  apply (abstract_let "ground_ast_problem_defs.prop_to_name_spec" prop_names)
+  apply (abstract_let "ground_ast_problem_defs.over_all_spec" over_all)
+  apply (abstract_let "temp_planning_problem_list_defs.add_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.adds_spec" add')
+  apply (abstract_let "temp_planning_problem_list_defs.del_imp_list ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec ground_ast_problem_defs.dels_spec" del')
+  apply (abstract_let "ground_ast_problem_defs.at_start_spec" at_start)
+  apply (abstract_let "ground_ast_problem_defs.at_end_spec" at_end)
+  apply (abstract_let "ground_ast_problem_defs.adds_spec" adds)
+  apply (abstract_let "ground_ast_problem_defs.dels_spec" dels)
+  apply (abstract_let "ground_ast_problem_defs.pre_spec" pre)
+  .
+
+term "make_network P"
+
+
+find_theorems name: "abs*let"
+
+term "ground_ast_problem P"
+definition "example_domain =
+Domain [] [] [] [] []
+"
+
+definition "example_problem = 
+  Problem example_domain [] [] (\<^bold>\<not>\<bottom>)
+"
+
+value "check_wf_problem example_problem"
+
+definition "check_ground_problem P \<equiv> do {
+  let D = ast_problem.domain P;
+  let stg = ast_domain.STG D;
+  let conT = ast_domain.mp_constT D;
+  let mp = ast_problem.mp_objT P;
+  check_wf_problem P stg conT mp;
+  check (is_pos_conj (goal P)) (ERRS ''Goal not a conjunction of positive literals'');
+  check_all_list pred_no_args (predicates D) ''Predicate not grounded (i.e. it has some argument)'' (shows o predicate.name o predicate_decl.pred);
+  check_all_list act_no_params (actions D) ''Action not grounded, it has a/some parameter(s)'' (shows o ast_action_schema.name);
+  check_all_list act_no_func_dcs (actions D) ''Action not grounded, it has a functional duration constraint'' (shows o ast_action_schema.name);
+  check_all_list act_dcs_integers (actions D) ''Action's duration constraint is not an integer'' (shows o ast_action_schema.name);
+  check_all_list act_pres_pos (actions D) ''Action has a conditions that is not a conjunction of positive literals'' (shows o ast_action_schema.name);
+  check (functions D = []) (ERRS ''Domain has functions'');
+  check (consts D = []) (ERRS ''Domain has constants'');
+  check_all_list form_preds_no_args (init P) ''Initial literal not grounded (it refers to constants)'' 
+    (\<lambda>(x::object atom Formulas.formula) (y::string). show y)
+}"
+
+lemma check_ground_problem_return_iff[return_iff]:
+  "check_ground_problem P = Inr () \<longleftrightarrow> ground_ast_problem P"
+proof -
+  interpret ast_problem P .
+  show ?thesis 
+    unfolding check_ground_problem_def 
+    unfolding ground_ast_problem_def
+    unfolding wf_ast_problem_def
+    unfolding ground_ast_problem_axioms_def
+    unfolding list_all_iff
+    by (fastforce simp: wf_problem'_correct return_iff)
+qed
+
+
+
+value "make_network example_problem"
+value "check_ground_problem example_problem"
 
 (* Need a function that can be called with the computed certificate and renaming *)
+
+(* To do:
+  - Write a function, which checks all the conditions of the locale.
+  - Do the functions implemented in the locale need to be re-implemented for executability?
+*)
 
 definition make_certified_net where
 "make_certified_net problem certifier \<equiv> 
