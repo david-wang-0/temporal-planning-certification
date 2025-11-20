@@ -2904,20 +2904,6 @@ proof -
     by simp
 qed
 
-sublocale red_corr: tp_nta_reduction_correctness' init_spec goal_spec 
-  at_start_spec at_end_spec over_all_spec
-  lower_spec upper_spec pre_spec adds_spec dels_spec
-  0 
-  props_spec actions_spec plan_imp  
-  act_to_name_spec prop_to_name_spec
-  apply unfold_locales
-  subgoal sorry
-  subgoal sorry
-  subgoal sorry
-  subgoal sorry
-  subgoal sorry
-  subgoal sorry
-
 end
 
 end

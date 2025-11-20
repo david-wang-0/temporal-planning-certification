@@ -1,6 +1,6 @@
 theory Check_Unsolvability
   imports Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code Containers.Containers
-    TP_NTA_Reduction.TP_NTA_Reduction_Correctness
+    Ground_PDDL_NTA_Reduction_Correctness
 begin
 
 
