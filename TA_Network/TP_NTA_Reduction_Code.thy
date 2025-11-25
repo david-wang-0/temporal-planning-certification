@@ -1,0 +1,4 @@
+theory TP_NTA_Reduction_Code
+  imports TP_NTA_Reduction_Model_Checking
+begin
+end

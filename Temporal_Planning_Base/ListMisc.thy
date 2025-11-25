@@ -474,4 +474,9 @@ proof -
     by auto
 qed
 
+lemma filter_eq_conv:
+  assumes "\<forall>x \<in> set xs. P x = Q x"
+  shows "filter P xs = filter Q xs"
+  using assms apply (induction xs) by auto
+
 end

@@ -242,7 +242,7 @@ definition pre_imp_list::"'action snap_action \<Rightarrow> 'proposition list" w
 
 definition add_imp_list::"'action snap_action \<Rightarrow> 'proposition list" where
 "add_imp_list x = set_impl.app_snap adds x"
-
+                          
 definition del_imp_list::"'action snap_action \<Rightarrow> 'proposition list" where
 "del_imp_list x = set_impl.app_snap dels x"
 

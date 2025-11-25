@@ -756,39 +756,6 @@ proof -
     unfolding props_spec_def
     using p_dom unfolding sig_def
     unfolding dom_map_of_conv_image_fst by auto
-  (* have "snd ` set (map (\<lambda>x. case x of PredDecl p n \<Rightarrow> (p, n)) (predicates local.D)) = {[]}"
-  proof (rule equalityI)
-    show pred_args: "snd ` (set (map (\<lambda>x. case x of PredDecl p n \<Rightarrow> (p, n)) (predicates D))) \<subseteq> {[]}"
-    proof (intro  subsetI)
-      fix x
-      assume "x \<in> snd ` set (map (\<lambda>x. case x of PredDecl p n \<Rightarrow> (p, n)) (predicates local.D))" 
-      then obtain predd p' n' where
-        "predd \<in> set (predicates D)"
-        "predd = PredDecl p' n'"
-        "x = n'" 
-        unfolding set_map
-        unfolding image_image
-        apply -
-        apply (erule imageE)
-        subgoal for predd
-          apply (cases predd)
-          by auto
-        done
-      thus "x \<in> {[]}" using preds_no_args 
-        unfolding list_all_iff by fastforce
-    qed
-    show "{[]} \<subseteq> snd ` set (map (\<lambda>x. case x of PredDecl p n \<Rightarrow> (p, n)) (predicates local.D))"
-    proof -
-      have 1: "Ts \<in> snd ` set (map (\<lambda>x. case x of PredDecl p n \<Rightarrow> (p, n)) (predicates local.D))"
-        apply (rule set_mp)
-        apply (rule Misc.ran_map_of)
-        using Ts_ran
-        unfolding sig_def by auto
-      with pred_args
-      have "Ts = []" by blast
-      thus ?thesis using Ts_ran 1 by auto
-    qed
-  qed *)
 qed
 
 
@@ -1212,6 +1179,58 @@ next
   show ?case unfolding over_all_spec.simps
     using wf_ground_action_pres_in_props[simplified comp_def]
     using over_all_snap_wf  1 over_all_snap_pre_pos_conj by blast+
+qed
+
+lemma start_pre_in_props:
+  assumes "a \<in> set actions_spec"
+  shows "set (pre_spec (at_start_spec a)) \<subseteq> set props_spec"
+proof (rule wf_ground_action_pres_in_props[simplified comp_def])
+  show "wf_ground_action (at_start_spec a)"
+    using start_snaps_wf assms by blast
+  show "ground_act_pres_pos (at_start_spec a)" 
+    using start_snap_pre_pos_conj assms by blast
+qed
+
+lemma start_dels_in_props:
+  assumes "a \<in> set actions_spec"
+  shows "set (dels_spec (at_start_spec a)) \<subseteq> set props_spec"
+proof (rule wf_ground_action_dels_in_props[simplified comp_def])
+  show "wf_ground_action (at_start_spec a)"
+    using start_snaps_wf assms by blast
+qed
+
+lemma start_adds_in_props:
+  assumes "a \<in> set actions_spec"
+  shows "set (adds_spec (at_start_spec a)) \<subseteq> set props_spec"
+proof (rule wf_ground_action_adds_in_props[simplified comp_def])
+  show "wf_ground_action (at_start_spec a)"
+    using start_snaps_wf assms by blast
+qed
+
+lemma end_pre_in_props:
+  assumes "a \<in> set actions_spec"
+  shows "set (pre_spec (at_end_spec a)) \<subseteq> set props_spec"
+proof (rule wf_ground_action_pres_in_props[simplified comp_def])
+  show "wf_ground_action (at_end_spec a)"
+    using end_snaps_wf assms by blast
+  show "ground_act_pres_pos (at_end_spec a)" 
+    using end_snap_pre_pos_conj assms by blast
+qed
+
+lemma end_dels_in_props:
+  assumes "a \<in> set actions_spec"
+  shows "set (dels_spec (at_end_spec a)) \<subseteq> set props_spec"
+proof (rule wf_ground_action_dels_in_props[simplified comp_def])
+  show "wf_ground_action (at_end_spec a)"
+    using end_snaps_wf assms by blast
+qed
+
+lemma end_adds_in_props:
+  assumes "a \<in> set actions_spec"
+  shows "set (adds_spec (at_end_spec a)) \<subseteq> set props_spec"
+proof (rule wf_ground_action_adds_in_props[simplified comp_def])
+  show "wf_ground_action (at_end_spec a)"
+    using end_snaps_wf assms by blast
 qed
 
 text \<open>Snap actions are identifiable\<close>

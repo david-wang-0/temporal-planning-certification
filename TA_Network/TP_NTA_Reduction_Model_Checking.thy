@@ -18,6 +18,28 @@ lemma b:
 lemmas names_unique = a b
 end
 
+locale tp_nta_reduction_model_checking_defs =
+  fixes init :: "'proposition list"
+    and goal :: "'proposition list"
+    and at_start :: "'action \<Rightarrow> 'snap_action"
+    and at_end :: "'action \<Rightarrow> 'snap_action"
+    and over_all :: "'action \<Rightarrow> 'proposition list"
+    and lower :: "'action \<Rightarrow> int lower_bound option"
+    and upper :: "'action \<Rightarrow> int upper_bound option"
+    and pre :: "'snap_action \<Rightarrow> 'proposition list"
+    and adds :: "'snap_action \<Rightarrow> 'proposition list"
+    and dels :: "'snap_action \<Rightarrow> 'proposition list"
+    and \<epsilon> :: "int"
+    and props :: "'proposition list"
+    and actions :: "'action list"
+    and act_to_name :: "'action \<Rightarrow> String.literal"
+    and prop_to_name :: "'proposition \<Rightarrow> String.literal"
+begin
+
+definition "a\<^sub>0 = (init_locs_spec, map_of init_vars_spec, (\<lambda>_::String.literal. 0::int))"
+
+end
+
 locale tp_nta_reduction_model_checking = tp_nta_reduction_spec
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name +
   action_names: unique_names act_to_name "set actions" +
@@ -142,6 +164,9 @@ thm Simple_Network_Rename_Formula.models_iff[no_vars, unfolded Simple_Network_Re
 term "Simple_Network_Language_Model_Checking.N broadcast_spec automata_spec bounds_spec,Simple_Network_Rename_Start.a\<^sub>0 init_vars_spec init_locs_spec \<Turnstile> formula_spec"
 
 definition "a\<^sub>0 = (init_locs_spec, map_of init_vars_spec, (\<lambda>_::String.literal. 0::int))"
+
+lemma [code]: "a\<^sub>0 = (init_locs_spec, map_of init_vars_spec, (\<lambda>_::String.literal. 0::int))"
+  using a\<^sub>0_def by auto
 
 (* definition "net_sem = Simple_Network_Impl.sem automata_spec broadcast_spec bounds_spec" *)
 text \<open>Locales for theory\<close>
