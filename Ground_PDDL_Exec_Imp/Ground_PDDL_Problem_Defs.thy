@@ -3,6 +3,13 @@ theory Ground_PDDL_Problem_Defs
     "TP_NTA_Reduction.TP_NTA_Reduction_Model_Checking"
 begin
 
+fun to_literals::"object atom Formulas.formula \<Rightarrow> object atom Formulas.formula list" where
+"to_literals (Atom (predAtm x as)) = [Atom (predAtm x as)]" |
+"to_literals (x \<^bold>\<and> y) = to_literals x @ to_literals y" |
+"to_literals (\<^bold>\<not>\<bottom>) = []"
+
+fun to_predicate::"object atom Formulas.formula \<Rightarrow> predicate" where
+"to_predicate (Atom (predAtm x _)) = x"
 
 instantiation lower_bound::(linorder) linorder
 begin
@@ -153,6 +160,24 @@ fun ground_act_no_args::"ground_action \<Rightarrow> bool" where
 \<and> list_all form_preds_no_args (ast_effect.dels eff)
 )"
 
+fun dc_to_lb::"term duration_constraint \<Rightarrow> rat lower_bound option" where
+"dc_to_lb No_Const = None" |
+"dc_to_lb (Time_Const duration_op.EQ x) = Some (lower_bound.GE x)" |
+"dc_to_lb (Time_Const duration_op.GEQ x) = Some (lower_bound.GE x)" |
+"dc_to_lb (Time_Const duration_op.LEQ x) = None"
+
+definition dc_list_lower::"term duration_constraint list \<Rightarrow> rat lower_bound option" where
+"dc_list_lower xs \<equiv> map dc_to_lb xs |> (\<lambda>xs. max_lb_opt xs None)" 
+
+fun dc_to_ub::"term duration_constraint \<Rightarrow> rat upper_bound option" where
+"dc_to_ub No_Const = None" |
+"dc_to_ub (Time_Const duration_op.EQ x) = Some (upper_bound.LE  x)" |
+"dc_to_ub (Time_Const duration_op.GEQ x) = None" |
+"dc_to_ub (Time_Const duration_op.LEQ x) = Some (upper_bound.LE x)"
+
+definition dc_list_upper::"term duration_constraint list \<Rightarrow> rat upper_bound option" where
+"dc_list_upper xs = map dc_to_ub xs |> (\<lambda>xs. min_ub_opt xs None)" 
+
 locale ground_ast_problem_defs = ast_problem P
   for P :: ast_problem
 begin
@@ -169,15 +194,6 @@ definition "prop_to_name_spec \<equiv> predicate.name"
 definition "actions_spec \<equiv> actions D"
 
 definition "act_to_name_spec \<equiv> ast_action_schema.name"
-
-
-fun to_predicate::"object atom Formulas.formula \<Rightarrow> predicate" where
-"to_predicate (Atom (predAtm x _)) = x"
-
-fun to_literals::"object atom Formulas.formula \<Rightarrow> object atom Formulas.formula list" where
-"to_literals (Atom (predAtm x as)) = [Atom (predAtm x as)]" |
-"to_literals (x \<^bold>\<and> y) = to_literals x @ to_literals y" |
-"to_literals (\<^bold>\<not>\<bottom>) = []"
 
 definition "to_predicates \<equiv> to_literals #> map to_predicate"
 
@@ -241,26 +257,6 @@ fun dels_spec::"ground_action \<Rightarrow> predicate list" where
   |> map to_predicate
   |> remdups
 "
-
-fun dc_to_lb::"term duration_constraint \<Rightarrow> rat lower_bound option" where
-"dc_to_lb No_Const = None" |
-"dc_to_lb (Time_Const duration_op.EQ x) = Some (lower_bound.GE x)" |
-"dc_to_lb (Time_Const duration_op.GEQ x) = Some (lower_bound.GE x)" |
-"dc_to_lb (Time_Const duration_op.LEQ x) = None"
-
-
-definition dc_list_lower::"term duration_constraint list \<Rightarrow> rat lower_bound option" where
-"dc_list_lower xs \<equiv> map dc_to_lb xs |> (\<lambda>xs. max_lb_opt xs None)" 
-
-
-fun dc_to_ub::"term duration_constraint \<Rightarrow> rat upper_bound option" where
-"dc_to_ub No_Const = None" |
-"dc_to_ub (Time_Const duration_op.EQ x) = Some (upper_bound.LE  x)" |
-"dc_to_ub (Time_Const duration_op.GEQ x) = None" |
-"dc_to_ub (Time_Const duration_op.LEQ x) = Some (upper_bound.LE x)"
-
-definition dc_list_upper::"term duration_constraint list \<Rightarrow> rat upper_bound option" where
-"dc_list_upper xs = map dc_to_ub xs |> (\<lambda>xs. min_ub_opt xs None)" 
 
 fun lower_spec::"ast_action_schema \<Rightarrow> _" where
 "lower_spec (Simple_Action_Schema n ps pre eff) = Some (lower_bound.GE 0)" | (* could also be None *)

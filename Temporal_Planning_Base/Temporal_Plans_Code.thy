@@ -36,6 +36,5 @@ lemma [code]: "temp_planning_problem_list_defs.del_imp_list =
    apply blast
   by simp
 
-(* in some cases code theorems need to be pure lambda expressions on the RHS *)
 code_thms "action_defs.mutex_snap_action"
 end

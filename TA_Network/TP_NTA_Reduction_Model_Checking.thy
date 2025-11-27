@@ -18,28 +18,6 @@ lemma b:
 lemmas names_unique = a b
 end
 
-locale tp_nta_reduction_model_checking_defs =
-  fixes init :: "'proposition list"
-    and goal :: "'proposition list"
-    and at_start :: "'action \<Rightarrow> 'snap_action"
-    and at_end :: "'action \<Rightarrow> 'snap_action"
-    and over_all :: "'action \<Rightarrow> 'proposition list"
-    and lower :: "'action \<Rightarrow> int lower_bound option"
-    and upper :: "'action \<Rightarrow> int upper_bound option"
-    and pre :: "'snap_action \<Rightarrow> 'proposition list"
-    and adds :: "'snap_action \<Rightarrow> 'proposition list"
-    and dels :: "'snap_action \<Rightarrow> 'proposition list"
-    and \<epsilon> :: "int"
-    and props :: "'proposition list"
-    and actions :: "'action list"
-    and act_to_name :: "'action \<Rightarrow> String.literal"
-    and prop_to_name :: "'proposition \<Rightarrow> String.literal"
-begin
-
-definition "a\<^sub>0 = (init_locs_spec, map_of init_vars_spec, (\<lambda>_::String.literal. 0::int))"
-
-end
-
 locale tp_nta_reduction_model_checking = tp_nta_reduction_spec
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name +
   action_names: unique_names act_to_name "set actions" +

@@ -64,6 +64,10 @@ section \<open>Abstract definition of reduction\<close>
     
   *)
 
+fun bexp_and_all::"('a, 'b) bexp list \<Rightarrow> ('a, 'b) bexp" where
+"bexp_and_all [] = bexp.true" |
+"bexp_and_all (x#xs) = bexp.and x (bexp_and_all xs)"
+
 locale tp_nta_reduction_spec = temp_planning_problem_list_impl_int
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
   for init :: "'proposition list"
@@ -106,10 +110,6 @@ abbreviation "var_is n v \<equiv> bexp.eq (exp.var v) (exp.const n)"
 abbreviation "inc_var n v \<equiv> (v, exp.binop (+) (exp.var v) (exp.const n))"
 abbreviation "set_var n v \<equiv> (v, exp.const n)"
 
-
-fun bexp_and_all::"('a, 'b) bexp list \<Rightarrow> ('a, 'b) bexp" where
-"bexp_and_all [] = bexp.true" |
-"bexp_and_all (x#xs) = bexp.and x (bexp_and_all xs)"
 
 
 definition is_prop_ab::"
