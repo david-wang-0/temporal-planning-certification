@@ -344,17 +344,32 @@ find_theorems "List.ord.lexordp"
 
 instantiation String.literal :: proper_interval
 begin
-value "String.digit7 (Char True True True True True True True False)"
-value "String.ascii_of (Char True True True True True True True False)"
-
-fun char_less_one::"char \<Rightarrow> char \<Rightarrow> bool"where
-"char_less_one c d = (of_char d - of_char c > (0::nat))"
-
 fun list_less_one::"char list \<Rightarrow> char list \<Rightarrow> bool" where
 "list_less_one _ [] = False" |
-"list_less_one [] (y#ys) = (char_less_one (CHR 0x00) y \<or> length ys > 0)" |
-"list_less_one [x] (y#ys) = (char_less_one x (CHR 0x7F) \<or> list_less_one [] ys)" |
-"list_less_one (x#xs) (y#ys) = (char_less_one x y \<or> list_less_one xs ys)"
+"list_less_one [] (y#ys) = ((of_char (CHR 0x00)::nat) < (of_char y) \<or> length ys > 0)" |
+"list_less_one (x#xs) (y#ys) = (
+  if (x = y) then list_less_one xs ys
+  else if ((of_char y::nat) < of_char x) then False
+  else True
+)"
+
+
+  
+
+lemma list_less_one_induct_cases:
+  assumes "(\<And>xs. P xs [])" 
+    and "(\<And>y ys. P [] (y # ys))"
+    and "(\<And>x xs y ys. x = y \<Longrightarrow> P xs ys \<Longrightarrow> P (x # xs) (y # ys))" 
+    and "(\<And>x xs y ys. (of_char y::nat) < of_char x \<Longrightarrow> P (x # xs) (y # ys))" 
+    and "(\<And>x xs y ys. (of_char x::nat) < of_char y \<Longrightarrow> P (x # xs) (y # ys))" 
+  shows "P xs ys"
+  apply (induction rule: list_less_one.induct)
+    apply (use assms in simp)
+   apply (use assms in simp)
+  subgoal for x _ y
+    apply (cases "(of_char y::nat) < of_char x"; cases "(of_char x::nat) < of_char y")
+    using assms by auto
+  done
 
 
 fun proper_interval_literal::"String.literal option \<Rightarrow> String.literal option \<Rightarrow> bool" where
@@ -363,9 +378,199 @@ fun proper_interval_literal::"String.literal option \<Rightarrow> String.literal
 "proper_interval_literal None (Some s) = (s \<noteq> (STR ''''))" |
 "proper_interval_literal (Some s) (Some t) = (list_less_one (literal.explode s) (literal.explode t))"
 
-instance 
-proof
-  show "proper_interval None (None::String.literal option) = True" by simp
+lemma valid_char_ran: "(of_char c::nat) > of_char (CHR 0x7F) \<longleftrightarrow> digit7 c"
+  apply (cases c)
+  subgoal for a b c d e f g h
+    apply (cases h; cases a; cases b; cases c; cases d; cases e; cases f; cases g)
+    by simp_all (* 10ms per case; 128 cases; slow *)
+  done
+
+lemma of_char_7F: "of_char (CHR 0x7F) = 127"
+  by simp
+
+
+lemma valid_char_ran': "\<not>digit7 c \<longleftrightarrow> (of_char c::nat) \<le> 127"
+  using valid_char_ran of_char_7F by force
+
+lemma list_less_one_correct:
+  assumes xs: "xs \<in> {cs. \<forall>c\<in>set cs. \<not> digit7 c}"
+    and ys: "ys \<in> {cs. \<forall>c\<in>set cs. \<not> digit7 c}"
+  shows "list_less_one xs ys = (\<exists>z>literal.Abs_literal xs. z < literal.Abs_literal ys)"
+  using assms
+proof (induction xs ys rule: list_less_one_induct_cases)
+  case (1 xs)
+  hence "literal.Abs_literal [] \<le> literal.Abs_literal xs" 
+    apply -
+    apply (induction xs) 
+    apply simp
+    apply (rule preorder_class.less_imp_le)
+    apply (subst String.less_literal.abs_eq)
+      apply (rule zero_literal.rsp)
+     apply (subst eq_onp_def) 
+     apply simp 
+    by auto
+  then show ?case by auto
+next
+  case (2 y ys)
+  show ?case 
+  proof (cases "list_less_one [] (y # ys)")
+    case True
+    then consider (y_ord) "of_char (CHR 0x00) < (of_char y::nat)" | (ys_len) "0 < length ys"
+      apply (-, subst (asm) list_less_one.simps) by blast
+    then show ?thesis
+    proof cases
+      case y_ord
+      have "literal.Abs_literal [] < literal.Abs_literal ((CHR 0x00)#ys)"
+        apply (subst String.less_literal.abs_eq)
+          apply (rule zero_literal.rsp)
+         apply (subst eq_onp_def)
+        using 2 apply simp
+        by simp
+      moreover
+      have "literal.Abs_literal (CHR 0x00#ys) < literal.Abs_literal (y#ys)"
+        apply (subst String.less_literal.abs_eq)
+        unfolding eq_onp_def using 2 y_ord by simp+
+      ultimately
+      show ?thesis using True by blast
+    next
+      case ys_len
+      have "literal.Abs_literal [] < literal.Abs_literal [y]"
+        apply (subst String.less_literal.abs_eq)
+        unfolding eq_onp_def using 2 by simp+
+      moreover
+      obtain y' ys' where
+        ys: "ys = y' # ys'" using ys_len by (cases ys) auto
+      have "literal.Abs_literal [y] < literal.Abs_literal (y # ys)"
+        apply (subst ys)
+        apply (subst String.less_literal.abs_eq)
+        using ys ys_len 2 unfolding eq_onp_def
+        by simp+
+      ultimately
+      show ?thesis by auto
+    qed
+  next
+    case False
+    hence "of_char y < (1::nat)" using False 
+      by auto 
+    hence "of_char y = (0::nat)" by simp
+    hence "y = (CHR 0x00)" using inj_of_char 
+      by (auto dest: injD[of _ y "CHR 0x00"])
+    {
+      fix z
+      assume n: "literal.Abs_literal [] < z" 
+         and y: "z < literal.Abs_literal [y]"
+      have ordn: "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) [] (literal.explode z)" 
+        using n less_literal.rep_eq by auto
+      have ordy: "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (literal.explode z) [y]" 
+        using y unfolding less_literal.rep_eq 
+        using literal.Abs_literal_inverse 2 by simp
+      have "length (literal.explode z) = 1" 
+        using \<open>of_char y = 0\<close> ord.lexordp.simps ordn ordy by fastforce
+      then obtain z' where
+        "literal.explode z = [z']"
+        "(of_char z'::nat) < of_char y"
+        using ordy apply (cases "literal.explode z")
+        by auto
+      hence False using \<open>of_char y = 0\<close> by auto
+    }
+    then show ?thesis using False by auto
+  qed
+next
+  case (3 x xs y ys)
+  have "list_less_one xs ys = (\<exists>z>literal.Abs_literal xs. z < literal.Abs_literal ys)" 
+    using 3 by auto
+  also
+  have "... = (\<exists>z>literal.Abs_literal (x#xs). z < literal.Abs_literal (x#ys))"
+  proof (rule iffI; elim exE conjE)
+    fix z
+    assume xz: "literal.Abs_literal xs < z" 
+       and yz: "z < literal.Abs_literal ys" 
+
+    obtain zs where
+      z: "z = literal.Abs_literal zs"
+      and zs_wf: "zs \<in> {cs. \<forall>c\<in>set cs. \<not> digit7 c}"
+      using literal.Abs_literal_cases by blast
+
+    have xzs: "literal.Abs_literal xs < literal.Abs_literal zs"
+     and yzs:"literal.Abs_literal zs < literal.Abs_literal ys" using xz yz z by simp+
+
+    have "literal.Abs_literal (x#xs) < literal.Abs_literal (x#zs)"
+      using xzs
+      unfolding less_literal.rep_eq 
+      using literal.Abs_literal_inverse 3 zs_wf by simp
+    moreover
+    have "literal.Abs_literal (x#zs) < literal.Abs_literal (x#ys)"
+      using yzs
+      unfolding less_literal.rep_eq 
+      using literal.Abs_literal_inverse 3 zs_wf by simp
+    ultimately
+    show "\<exists>z>literal.Abs_literal (x # xs). z < literal.Abs_literal (x # ys)" by blast
+  next
+    fix z
+    assume xxz: "literal.Abs_literal (x # xs) < z" 
+       and yyz: "z < literal.Abs_literal (x # ys)" 
+    
+    obtain zs where
+      z: "z = literal.Abs_literal zs"
+      and zs_wf: "zs \<in> {cs. \<forall>c\<in>set cs. \<not> digit7 c}"
+      using literal.Abs_literal_cases by blast
+
+    obtain z' zs' where
+      zs: "zs = z' # zs'" 
+      using xxz 
+      unfolding less_literal.rep_eq z
+      using literal.Abs_literal_inverse 3 zs_wf by (cases zs) auto
+
+    have xzs': "literal.Abs_literal (x # xs) < literal.Abs_literal (z' # zs')"
+     and yzs': "literal.Abs_literal (z' # zs') < literal.Abs_literal (x # ys)"
+     and zs'_wf: "z' # zs' \<in> {cs. \<forall>c\<in>set cs. \<not> digit7 c}" using xxz yyz zs_wf unfolding z zs by blast+
+
+    have xzo: "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (x # xs) (z' # zs')" 
+      and yzo: "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (z' # zs') (x # ys)" 
+      using xzs' yzs'
+      unfolding less_literal.rep_eq
+      using literal.Abs_literal_inverse zs'_wf 3(3,4) 
+      by simp+
+    hence "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (xs) (zs')" 
+          "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (zs') (ys)" 
+      by auto
+    hence "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (literal.explode (literal.Abs_literal xs)) (literal.explode (literal.Abs_literal zs'))" 
+          "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (literal.explode (literal.Abs_literal zs')) (literal.explode (literal.Abs_literal ys))"
+      using literal.Abs_literal_inverse zs'_wf 3(3,4) 
+      by simp+
+    thus "\<exists>z>literal.Abs_literal xs. z < literal.Abs_literal ys" 
+      unfolding less_literal.rep_eq
+      by blast
+  qed
+  finally
+  show ?case using \<open>x = y\<close> by auto
+next
+  case (4 x xs y ys)
+  have "\<not>(list_less_one (x # xs) (y # ys))" using 4 by auto
+  moreover
+  have "\<not>literal.Abs_literal (x # xs) < literal.Abs_literal (y # ys)" 
+    using 4 unfolding less_literal.rep_eq using literal.Abs_literal_inverse by simp
+  ultimately
+  show ?case by auto
+next
+  case (5 x xs y ys)
+  have "literal.Abs_literal (x # xs) < literal.Abs_literal (x # xs @ [CHR 0x00])"
+    unfolding less_literal.rep_eq 
+    using literal.Abs_literal_inverse 5 apply (induction xs) by simp+
+  moreover
+  have "literal.Abs_literal (x # xs @ [CHR 0x00]) < literal.Abs_literal (y # ys)"
+    unfolding less_literal.rep_eq 
+    using literal.Abs_literal_inverse 5 apply (induction xs) by simp+
+  ultimately
+  show ?case using 5 by auto
+qed
+
+lemma proper_interval_literal_lemmas: "proper_interval None (None::String.literal option) = True"
+  "\<And>y::String.literal. proper_interval None (Some y) = (\<exists>z. z < y)"
+  "\<And>x::String.literal. proper_interval (Some x) None = (\<exists>z. x < z)" 
+  "\<And>x y::String.literal. proper_interval (Some x) (Some y) = (\<exists>z>x. z < y)"
+proof -
+show "proper_interval None (None::String.literal option) = True" by simp
   show "\<And>y::String.literal. proper_interval None (Some y) = (\<exists>z. z < y)"
   proof
     fix y::"String.literal"
@@ -414,44 +619,183 @@ proof
     thus "proper_interval (Some x) None = (\<exists>z. x < z)" by force
   qed
   show "\<And>x y::String.literal. proper_interval (Some x) (Some y) = (\<exists>z>x. z < y)"
-  proof -
-    fix x y::String.literal
-    {
-      assume "proper_interval (Some x) (Some y)" 
-      hence undefined unfolding proper_interval_literal.simps
-      have "\<exists>z>x. z < y" sorry
-    }
-    moreover 
-    {
-      assume "\<exists>z>x. z < y"
-      have "proper_interval (Some x) (Some y)" sorry
-    }
-    ultimately
-    show "proper_interval (Some x) (Some y) = (\<exists>z>x. z < y)" by blast
-  qed
+    apply (subst proper_interval_literal.simps)
+    apply (subst list_less_one_correct)
+    using literal.explode literal.explode_inverse by simp+
 qed
+
+
+instance apply intro_classes 
+  using proper_interval_literal_lemmas by blast+
 end
 
+find_theorems "OFCLASS(String.literal, proper_interval_class)"
 
+find_theorems name: "proper_interval*lite"
 value "STR '''' < STR ''a''"
+
 
 instantiation predicate :: proper_interval
 begin
 fun proper_interval_predicate::"predicate option \<Rightarrow> predicate option \<Rightarrow> bool" where
 "proper_interval_predicate None None = True" |
-"proper_interval_predicate (Some p) None = undefined" |
-"proper_interval_predicate None (Some p) = undefined" |
-"proper_interval_predicate (Some p) (Some q) = undefined"
+"proper_interval_predicate (Some (Pred p)) None = proper_interval (Some p) None" |
+"proper_interval_predicate None (Some (Pred q)) = proper_interval None (Some q)" |
+"proper_interval_predicate (Some (Pred p)) (Some (Pred q)) = proper_interval (Some p) (Some q)"
+
+
+lemma predicate_proper_interval_lemmas:
+   "proper_interval None (None::predicate option) = True"
+    "\<And>y::predicate. proper_interval None (Some y) = (\<exists>z. z < y)" 
+"\<And>x::predicate. proper_interval (Some x) None = (\<exists>z. x < z)" 
+"\<And>x y::predicate. proper_interval (Some x) (Some y) = (\<exists>z>x. z < y)" 
+proof -
+  show "proper_interval None (None::predicate option) = True" by simp
+  show "\<And>y::predicate. proper_interval None (Some y) = (\<exists>z. z < y)" 
+    subgoal for y
+      apply (induction y)
+      apply (subst proper_interval_predicate.simps)
+      apply (subst proper_interval_literal_lemmas)
+      apply (rule iffI)
+       apply (erule exE)
+      subgoal for z n
+        apply (rule exI[of _ "Pred n"])
+        unfolding less_predicate_def
+        unfolding comparator_predicate_def
+        unfolding partial_comparator_predicate_def
+        unfolding lt_of_comp_def
+        unfolding comp_def id_def
+        unfolding predicate.rec predicate.case
+        unfolding comparator_of_def 
+        unfolding comp_lex.simps
+        by auto
+      apply (erule exE)
+      subgoal for z n 
+        apply (induction n)
+        subgoal for y
+          apply (rule exI[of _ y])
+        apply (cases "y < z"; cases "y = z")
+        unfolding less_predicate_def
+        unfolding comparator_predicate_def
+        unfolding partial_comparator_predicate_def
+        unfolding lt_of_comp_def
+        unfolding comp_def id_def
+        unfolding predicate.rec predicate.case
+        unfolding comparator_of_def 
+        unfolding comp_lex.simps
+        by simp+
+      done
+    done
+  done
+  show "\<And>x::predicate. proper_interval (Some x) None = (\<exists>z. x < z)" 
+    subgoal for y
+      apply (induction y)
+      apply (subst proper_interval_predicate.simps)
+      apply (subst proper_interval_literal_lemmas)
+      apply (rule iffI)
+       apply (erule exE)
+      subgoal for z n
+        apply (rule exI[of _ "Pred n"])
+        unfolding less_predicate_def
+        unfolding comparator_predicate_def
+        unfolding partial_comparator_predicate_def
+        unfolding lt_of_comp_def
+        unfolding comp_def id_def
+        unfolding predicate.rec predicate.case
+        unfolding comparator_of_def 
+        unfolding comp_lex.simps
+        by auto
+      apply (erule exE)
+      subgoal for z n 
+        apply (induction n)
+        subgoal for y
+          apply (rule exI[of _ y])
+        apply (cases "z < y"; cases "y = z")
+        unfolding less_predicate_def
+        unfolding comparator_predicate_def
+        unfolding partial_comparator_predicate_def
+        unfolding lt_of_comp_def
+        unfolding comp_def id_def
+        unfolding predicate.rec predicate.case
+        unfolding comparator_of_def 
+        unfolding comp_lex.simps
+        by simp+
+      done
+    done
+  done
+  show "\<And>x y::predicate. proper_interval (Some x) (Some y) = (\<exists>z>x. z < y)" 
+    subgoal for x y
+      apply (induction x; induction y)
+      apply (subst proper_interval_predicate.simps)
+      apply (subst proper_interval_literal_lemmas)
+      apply (rule iffI)
+       apply (erule exE)
+      subgoal for y x z
+        apply (rule exI[of _ "Pred z"])
+        apply (elim conjE)
+        unfolding less_predicate_def
+        unfolding comparator_predicate_def
+        unfolding partial_comparator_predicate_def
+        unfolding lt_of_comp_def
+        unfolding comp_def id_def
+        unfolding predicate.rec predicate.case
+        unfolding comparator_of_def 
+        unfolding comp_lex.simps
+        by simp
+     apply (erule exE)
+      subgoal for y x n
+        apply (induction n)
+        subgoal for z
+          apply (elim conjE)
+          apply (rule exI[of _ z])
+        unfolding less_predicate_def
+        unfolding comparator_predicate_def
+        unfolding partial_comparator_predicate_def
+        unfolding lt_of_comp_def
+        unfolding comp_def id_def
+        unfolding predicate.rec predicate.case
+        unfolding comparator_of_def 
+        unfolding comp_lex.simps
+        apply (cases "x < z"; cases "x = z"; cases "z < y"; cases "z = y")
+        by auto
+      done
+    done
+  done
+qed
+
+lemma predicate_proper_interval:
+  "OFCLASS(predicate, proper_interval_class)"
+  by (intro_classes; rule predicate_proper_interval_lemmas)
+instance using predicate_proper_interval .
 end
+
+find_theorems name: "proper_interval*predi"
 
 instantiation predicate :: cproper_interval
 begin
-  
+definition "cproper_interval = (proper_interval :: predicate proper_interval)"
+instance apply intro_classes 
+  unfolding cproper_interval_predicate_def
+  unfolding ccompare_predicate_def
+  unfolding ID_Some option.sel
+  using predicate_proper_interval
+  unfolding class.proper_interval_def
+  using predicate_proper_interval_lemmas
+  unfolding less_predicate_def by blast
 end
 
-print_derives
+derive (rbt) set_impl predicate
+
 
 lemmas ground_ast_problem_code =
+  ground_ast_problem_defs.ground_non_action_def
+  ground_ast_problem_defs.over_all_snap.simps
+  ground_ast_problem_defs.over_all_spec.simps
+  ground_ast_problem_defs.goal_spec_def 
+  ground_ast_problem_defs.dels_spec.simps 
+  ground_ast_problem_defs.adds_spec.simps
+  ground_ast_problem_defs.pre_spec.simps
+  action_defs.app_snap.simps
   ground_ast_problem_defs.at_start_spec.simps
   ground_ast_problem_defs.at_end_spec.simps
   ground_ast_problem_defs.actions_spec_def
@@ -460,6 +804,7 @@ lemmas ground_ast_problem_code =
   ground_ast_problem_defs.start_edge_spec'_def
   ground_ast_problem_defs.edge_2_spec'_def
   ground_ast_problem_defs.edge_3_spec'_def
+  ground_ast_problem_defs.end_edge_spec'_def
   ground_ast_problem_defs.instant_trans_edge_spec'_def
   ground_ast_problem_defs.action_to_automaton_spec'_def
   ground_ast_problem_defs.init_spec'_def
