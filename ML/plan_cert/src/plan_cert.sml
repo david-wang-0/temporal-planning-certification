@@ -144,7 +144,7 @@ fun check_and_cert_problem extra domain problem renaming cert compression certif
         val parsedProb = PddlParser.get_prob domain problem;
         
         val certifier = 
-            NetworkConversion.convert_network 
+            NetworkConversion.convert_network
             #> (check_and_cert_network extra renaming cert compression certification num_threads)       
             #> Either.mapR CertificateConversion.convert_certificate
             #> Either.either (fn err => NONE) (fn res => SOME res);

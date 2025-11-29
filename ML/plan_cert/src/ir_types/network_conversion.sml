@@ -37,7 +37,12 @@ structure NetworkConversionTypes = struct
         (string * inta) list
     
     (* (ids_to_names, process_names_to_index,
-     broadcast, automata, bounds, formula, init_locs, init_vars) *)
+     broadcast, automata, bounds, formula, init_locs, init_vars) 
+     where
+        - ids_to_names: auto id -> loc id -> loc name
+        - process_names_to_index: auto name -> auto id
+        
+     *)
     
     (* names, network *)
     type named_isa_network =

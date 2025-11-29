@@ -1,6 +1,6 @@
 theory Check_Unsolvability
-  imports Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code Containers.Containers
-    Ground_PDDL_NTA_Reduction_Correctness "Show.Shows_Literal"
+  imports Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code 
+    Ground_PDDL_NTA_Reduction_Impl "Show.Shows_Literal"
 begin
 
 
@@ -202,17 +202,18 @@ instance Error_List_Monad.result::(heap)heap
 (* Note, that the state_space variable is the certificate. The naming convention is from the 
 original function written by Simon Wimmer. *)
 definition convert_check ::
-    "mode
-     \<Rightarrow> nat
-        \<Rightarrow> bool
-           \<Rightarrow> (nat \<Rightarrow> nat \<Rightarrow> String.literal) \<times>
-              (String.literal \<Rightarrow> nat) \<times>
-              String.literal list \<times>
-              (nat list \<times>
-               nat list \<times>
-               (nat \<times> (String.literal, int) Simple_Expressions.bexp \<times> (String.literal, int) acconstraint list \<times> String.literal act \<times> (String.literal \<times> (String.literal, int) exp) list \<times> String.literal list \<times> nat) list \<times> (nat \<times> (String.literal, int) acconstraint list) list) list \<times>
-              (String.literal \<times> int \<times> int) list \<times> (nat, nat, String.literal, int) Simple_Network_Language_Model_Checking.formula \<times> nat list \<times> (String.literal \<times> int) list
-              \<Rightarrow> (String.literal \<Rightarrow> nat) \<times> (String.literal \<Rightarrow> nat) \<times> (nat \<Rightarrow> nat \<Rightarrow> nat) \<times> (nat \<Rightarrow> String.literal) \<times> (nat \<Rightarrow> String.literal) \<times> (nat \<Rightarrow> nat \<Rightarrow> nat) \<Rightarrow> int state_space \<Rightarrow> bool \<Rightarrow> Simple_Network_Language_Export_Code.result Error_List_Monad.result Heap" where
+"mode
+\<Rightarrow> nat
+  \<Rightarrow> bool
+     \<Rightarrow> (nat \<Rightarrow> nat \<Rightarrow> String.literal) \<times>
+        (String.literal \<Rightarrow> nat) \<times>
+        String.literal list \<times>
+        (nat list \<times>
+         nat list \<times>
+         (nat \<times> (String.literal, int) Simple_Expressions.bexp \<times> (String.literal, int) acconstraint list \<times> String.literal act \<times> (String.literal \<times> (String.literal, int) exp) list \<times> String.literal list \<times> nat) list \<times> (nat \<times> (String.literal, int) acconstraint list) list) list \<times>
+        (String.literal \<times> int \<times> int) list \<times> (nat, nat, String.literal, int) Simple_Network_Language_Model_Checking.formula \<times> nat list \<times> (String.literal \<times> int) list
+        \<Rightarrow> (String.literal \<Rightarrow> nat) \<times> (String.literal \<Rightarrow> nat) \<times> (nat \<Rightarrow> nat \<Rightarrow> nat) \<times> (nat \<Rightarrow> String.literal) \<times> (nat \<Rightarrow> String.literal) \<times> (nat \<Rightarrow> nat \<Rightarrow> nat) \<Rightarrow> int state_space \<Rightarrow> bool \<Rightarrow> 
+  Simple_Network_Language_Export_Code.result Error_List_Monad.result Heap" where
 "convert_check mode num_split dc model renaming state_space show_cert \<equiv> 
 (case do {
     r \<leftarrow> compute_model model renaming;
@@ -263,17 +264,38 @@ of Result c \<Rightarrow> do {
 (* To do:
   - Write a function, which checks all the conditions of the locale.
   - Do the functions implemented in the locale need to be re-implemented for executability?
+  - Which names do we need to pass here?
 *)
 
+find_theorems name: "Error_Monad*catch"
+
+(* The certifier takes a list of names clocks and automata, 
+  which it would otherwise obtain when parsing *)
 definition make_certified_net where
 "make_certified_net problem certifier \<equiv> 
-do {
-  let (names, network) = undefined problem;
-  (renaming, cert) \<leftarrow> (case certifier (names, network) of
-    None \<Rightarrow> (Error [STR ''Certificate could not be generated''])
-  | Some x \<Rightarrow> (Result x));
-  Result (network, renaming, cert)
-}"
+case check_and_make_network problem of
+  Inl e \<Rightarrow> Error [STR ''Could not make network'', (e () []) |> String.implode]
+| Inr (clocks, names, network) \<Rightarrow>
+  do {
+    (renaming, cert) \<leftarrow> (case certifier (clocks, (names, network)) of
+      None \<Rightarrow> (Error [STR ''Certificate could not be generated''])
+    | Some x \<Rightarrow> (Result x));
+    Result (network, renaming, cert)
+  }" for certifier::"_ \<Rightarrow> (
+    ((String.literal \<Rightarrow> nat) \<times> 
+    (String.literal \<Rightarrow> nat) \<times> 
+    (nat \<Rightarrow> nat \<Rightarrow> nat) \<times> 
+    (nat \<Rightarrow> String.literal) \<times> 
+    (nat \<Rightarrow> String.literal) \<times> 
+    (nat \<Rightarrow> nat \<Rightarrow> nat)) \<times> 
+    int state_space) option"
+
+(* (nat \<Rightarrow> nat \<Rightarrow> String.literal) \<times>
+  (String.literal \<Rightarrow> nat) \<times>
+  String.literal list \<times>
+  (nat list \<times> nat list \<times> (nat \<times> (String.literal, int) Simple_Expressions.bexp \<times> (String.literal, int) acconstraint list \<times> String.literal act \<times> (String.literal \<times> (String.literal, int) exp) list \<times> String.literal list \<times> nat) list \<times> (nat \<times> (String.literal, int) acconstraint list) list
+    ) list \<times>
+  (String.literal \<times> int \<times> int) list \<times> (nat, nat, String.literal, int) Simple_Network_Language_Model_Checking.formula \<times> nat list \<times> (String.literal \<times> int) list *)
 
 (* The problem and domain must be parsed using the code from the validator *)
 (* The network is generated by calling a function that converts a ground problem into a network *)
@@ -290,7 +312,7 @@ case make_certified_net problem certifier of
     Heap_Monad.return ()
   }
 | Error es \<Rightarrow> do {let _ = map println es; Heap_Monad.return ()}
-" for num_split 
+" for num_split
 
 (* To do:
   - Change the parser for PDDL. (ML)
