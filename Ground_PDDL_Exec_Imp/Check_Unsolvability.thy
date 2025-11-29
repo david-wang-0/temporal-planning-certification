@@ -259,6 +259,123 @@ of Result c \<Rightarrow> do {
 | Error es \<Rightarrow> Heap_Monad.return (Error es))
 " for num_split and state_space :: "int state_space"
 
+lemma convert_check_okay:
+  fixes num_split state_space
+  assumes mode: "mode \<noteq> Buechi" "mode \<noteq> Debug"
+      and model: "model = (ids_to_names, process_names_to_index, broadcast, automata, bounds, formula, L\<^sub>0, s\<^sub>0)"
+  shows "
+    <emp> 
+      convert_check mode num_split False model renaming state_space show_cert
+    <\<lambda> 
+      Result Sat \<Rightarrow> \<up>((\<not> N broadcast automata bounds,(L\<^sub>0, map_of s\<^sub>0, \<lambda>_ . 0) \<Turnstile> formula))
+    | Result Renaming_Failed \<Rightarrow> true
+    | Result Preconds_Unsat \<Rightarrow> true
+    | Result Unsat \<Rightarrow> true
+    | Error e \<Rightarrow> true
+    >\<^sub>t"
+proof (cases "make_renaming broadcast automata bounds")
+  case res1: (Result x1)
+
+  obtain a b c d e f where
+    renaming: "renaming = (a, b, c, d, e, f)" by (cases renaming) auto
+
+  obtain aa ba ca da ea fa g where
+    x1: "x1 = (aa, ba, ca, da, ea, fa, g)" by (cases x1) auto
+
+  obtain renum_states uu  uua  uub where
+    g: "g = (renum_states, uu, uua, uub)" by (cases g) auto
+
+  obtain broadcast' automata' bounds' where
+    rename: "rename_network broadcast bounds automata da a b c = (broadcast', automata', bounds')" 
+    by (cases "rename_network broadcast bounds automata da a b c") auto
+
+  show ?thesis
+  proof (cases "Error_List_Monad.assert (fa STR ''_urge'' = aa) STR ''Computed renaming: _urge is not last clock!''")
+    case res2: (Result x2)
+    show ?thesis 
+    proof (cases "Error_List_Monad.assert (b STR ''_urge'' = aa) STR ''Given renaming: _urge is not last clock!''")
+      case res3: (Result x1)
+      show ?thesis 
+        unfolding convert_check_def 
+        unfolding Let_def
+        unfolding compute_model_def Let_def
+        unfolding model prod.case
+        unfolding renaming
+        unfolding prod.case
+        unfolding res1
+        unfolding x1
+        unfolding bind.simps
+        unfolding Error_List_Monad.result.case
+        unfolding g prod.case
+        unfolding res2
+        unfolding Error_List_Monad.result.case 
+        unfolding res3
+        unfolding Error_List_Monad.result.case 
+        unfolding rename prod.case
+        unfolding Error_List_Monad.result.case 
+        unfolding prod.case 
+        unfolding Error_List_Monad.result.case 
+        unfolding bind.simps
+        apply (rule bind_rule)
+         apply (rule certificate_check_okay[OF mode])
+        apply (rule return_cons_rule) subgoal for x
+          by (cases x) auto
+        done
+    next
+      case err3: (Error x2)
+      show ?thesis 
+        unfolding convert_check_def Let_def
+        unfolding compute_model_def Let_def
+        unfolding model prod.case
+        unfolding renaming
+        unfolding prod.case
+        unfolding res1
+        unfolding x1
+        unfolding bind.simps
+        unfolding Error_List_Monad.result.case
+        unfolding g prod.case
+        unfolding res2
+        unfolding Error_List_Monad.result.case 
+        unfolding err3
+        unfolding Error_List_Monad.result.case 
+        apply (rule return_cons_rule)
+        by simp
+    qed
+  next
+    case err2: (Error x2)
+    show ?thesis 
+      unfolding convert_check_def Let_def
+      unfolding compute_model_def Let_def
+      unfolding model prod.case
+      unfolding renaming
+      unfolding prod.case
+      unfolding res1
+      unfolding x1
+      unfolding bind.simps
+      unfolding Error_List_Monad.result.case
+      unfolding g prod.case
+      unfolding err2
+      unfolding Error_List_Monad.result.case 
+      apply (rule return_cons_rule)
+      by simp
+  qed
+next
+  case err3: (Error x2)
+  show ?thesis 
+    unfolding convert_check_def Let_def
+    unfolding compute_model_def Let_def
+    unfolding model prod.case
+    apply (induction renaming)
+    unfolding prod.case
+    unfolding err3
+    unfolding bind.simps
+    unfolding Error_List_Monad.result.case
+    apply (rule return_cons_rule)
+    unfolding Error_List_Monad.result.case
+    by auto
+qed
+  
+
 (* Need a function that can be called with the computed certificate and renaming *)
 
 (* To do:
@@ -281,14 +398,47 @@ case check_and_make_network problem of
       None \<Rightarrow> (Error [STR ''Certificate could not be generated''])
     | Some x \<Rightarrow> (Result x));
     Result (network, renaming, cert)
-  }" for certifier::"_ \<Rightarrow> (
-    ((String.literal \<Rightarrow> nat) \<times> 
-    (String.literal \<Rightarrow> nat) \<times> 
-    (nat \<Rightarrow> nat \<Rightarrow> nat) \<times> 
-    (nat \<Rightarrow> String.literal) \<times> 
-    (nat \<Rightarrow> String.literal) \<times> 
-    (nat \<Rightarrow> nat \<Rightarrow> nat)) \<times> 
-    int state_space) option"
+  }" 
+
+lemma make_certified_net_okay:
+  assumes "make_certified_net problem certifier = Result (network, renaming, cert)"
+      and net: "network = (ids_to_names, process_names_to_index, broadcast, automata, bounds, formula, init_locs, init_vars)"
+      and not_sat: "\<not> (Simple_Network_Impl.sem automata broadcast bounds, (init_locs, map_of init_vars, (\<lambda>_. 0)) \<Turnstile> formula)"
+    shows "(\<nexists>tp. valid_ground_plan problem tp)"
+proof (cases "check_and_make_network problem")
+  case (Inl a)
+  thus ?thesis using assms(1)
+    unfolding make_certified_net_def by simp
+next
+  case inr: (Inr k)
+  show ?thesis
+  proof (cases k)
+    case (fields a b c d e f g)
+    show ?thesis 
+    proof (cases "certifier (a, b, c, d, e, f, g)")
+      case None
+      then show ?thesis 
+        using assms(1)
+        unfolding make_certified_net_def
+        unfolding inr
+        unfolding sum.case
+        unfolding fields
+        unfolding prod.case by simp
+    next
+      case (Some h)
+      obtain x y where
+        h: "h = (x, y)" by (cases h) auto
+      have vars: "((c, d, e, f, g), x, y) = ((ids_to_names, process_names_to_index, broadcast, automata, bounds, formula, init_locs, init_vars), renaming, cert)"
+        using assms(1)
+        unfolding make_certified_net_def
+        using inr fields Some h net by simp
+      show ?thesis 
+        using inr vars fields
+        using not_sat
+        using check_and_make_network_and_plan by simp
+    qed
+  qed
+qed
 
 (* (nat \<Rightarrow> nat \<Rightarrow> String.literal) \<times>
   (String.literal \<Rightarrow> nat) \<times>
@@ -309,9 +459,91 @@ case make_certified_net problem certifier of
         Sat \<Rightarrow> do {let _ = println STR ''The planning problem is unsolvable.''; Heap_Monad.return ()}
       | _   \<Rightarrow> do {let _ = println STR ''Something went wrong.''; Heap_Monad.return ()})
     | Error es \<Rightarrow> do {let _ = map println es; Heap_Monad.return ()});
-    Heap_Monad.return ()
+    Heap_Monad.return (res)
   }
-| Error es \<Rightarrow> do {let _ = map println es; Heap_Monad.return ()}
+| Error es \<Rightarrow> do {let _ = map println es; Heap_Monad.return (Error es)}
+" for num_split
+
+lemma check_and_cert_pddl_problem_okay: 
+  assumes mode: "mode \<noteq> Buechi" "mode \<noteq> Debug"
+  shows "
+    <emp> 
+      check_and_cert_pddl_problem problem mode num_split certifier show_cert 
+    <\<lambda> Result Sat \<Rightarrow> \<up>((\<nexists>tp. valid_ground_plan problem tp))
+     | _ \<Rightarrow> true>\<^sub>t"
+proof (cases "make_certified_net problem certifier")
+  case (Result res)
+  obtain network renaming cert where
+    res: "res = (network, renaming, cert)" by (cases res) auto
+  obtain ids_to_names process_names_to_index 
+    broadcast automata bounds formula init_locs init_vars where
+    net: "network = (ids_to_names, process_names_to_index, broadcast, automata, bounds, formula, init_locs, init_vars)"
+    by (cases network) auto
+
+  have intermediate_res: "\<not> Simple_Network_Impl.sem automata broadcast bounds,(init_locs, map_of init_vars, \<lambda>_. 0) \<Turnstile> formula 
+    \<Longrightarrow> \<nexists>tp. valid_ground_plan problem tp" 
+    apply (rule make_certified_net_okay[OF Result[simplified res net]])
+    by auto
+
+
+  have conv_commute: "(Simple_Network_Language.conv_A \<circ> automaton_of) x = (automaton_of \<circ> conv_automaton) x" for x
+  proof -
+    have 1: "map conv_ac (default_map_of [] d x) = default_map_of [] (map (\<lambda>(s, cc). (s, map conv_ac cc)) d) x" for d x
+      unfolding default_map_of_def unfolding FinFun.map_default_def unfolding map_of_map
+      by (cases "map_of d x") auto
+    show ?thesis 
+      apply (induction x)
+      unfolding Simple_Network_Language.conv_A_def Simple_Network_Language.conv_t_def 
+      unfolding conv_automaton_def
+      unfolding automaton_of_def
+      unfolding comp_def
+      unfolding prod.case
+      unfolding set_map
+      unfolding 1 by simp
+  qed
+      
+
+  show ?thesis 
+    unfolding check_and_cert_pddl_problem_def
+    unfolding Result Error_List_Monad.result.case
+    unfolding res prod.case
+    apply (rule bind_rule)
+     apply (rule convert_check_okay[OF mode])
+     apply (rule net)
+    unfolding Let_def
+    apply (rule return_cons_rule)
+    subgoal for x
+      apply (cases x)
+      subgoal for b apply (cases b)
+           apply simp
+          apply simp
+         apply simp
+         apply (intro strip)
+         apply (erule conjE)
+        unfolding Simple_Network_Language.conv_def 
+        unfolding prod.case 
+        unfolding map_map
+        unfolding conv_commute
+        using intermediate_res
+        unfolding Simple_Network_Impl.sem_def
+        by auto
+      by auto
+    done
+next
+  case (Error x2)
+  show ?thesis unfolding check_and_cert_pddl_problem_def
+    unfolding Error
+    unfolding Error_List_Monad.result.case Let_def
+    apply (rule return_cons_rule) 
+    by auto
+qed
+
+definition check_and_cert_pddl_problem_no_return where
+"check_and_cert_pddl_problem_no_return problem mode num_split certifier show_cert =
+do {
+  _ \<leftarrow> check_and_cert_pddl_problem problem mode num_split certifier show_cert;
+  Heap_Monad.return ()
+}
 " for num_split
 
 (* To do:
