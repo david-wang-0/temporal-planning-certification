@@ -2,7 +2,7 @@ theory Unsolvability_Code_Compile
   imports Check_Unsolvability
 begin
 
-(* compile_generated_files "code/Check_Unsolvability.ML" (in Simple_Network_Language_Certificate_Code)
+compile_generated_files "code/Check_Unsolvability.ML" (in Check_Unsolvability)
   external_files
     \<open>Unsynchronized.sml\<close>
     \<open>Writeln.sml\<close>
@@ -11,27 +11,9 @@ begin
     \<open>Mlton_Main.sml\<close>
     \<open>sequential.sml\<close>
     \<open>muntac.mlb\<close>
-    \<open>check_benchmark.sh\<close>
-    (in "ML")
-  and
-    \<open>HDDI_02.muntax\<close>
-    \<open>HDDI_02_broadcast.muntax\<close>
-    \<open>HDDI_08_broadcast.muntax\<close>
-    \<open>PM_all_1.muntax\<close>
-    \<open>PM_all_2.muntax\<close>
-    \<open>PM_all_3.muntax\<close>
-    \<open>PM_all_4.muntax\<close>
-    \<open>PM_all_5.muntax\<close>
-    \<open>PM_all_6.muntax\<close>
-    \<open>PM_all_urgent.muntax\<close>
-    \<open>bridge.muntax\<close>
-    \<open>csma_05.muntax\<close>
-    \<open>csma_06.muntax\<close>
-    \<open>fischer.muntax\<close>
-    \<open>fischer_05.muntax\<close>
-    \<open>hddi_08.muntax\<close>
-    \<open>light_switch.muntax\<close> (in "benchmarks")
-  export_files \<open>muntac\<close> (exe)
+    (in "$AFP/Munta_Certificate_Checker/ML")
+  export_files \<open>cert_check\<close> (exe)
+    and \<open>idk.txt\<close>
   where \<open>fn dir =>
     let
       val exec = Generated_Files.execute dir
@@ -105,7 +87,7 @@ begin
       val _ = exec \<open>Test PM_all_5\<close> (check_cert muntac_path "PM_all_5")
 
       val _ = exec \<open>Test deadlock HDDI_02\<close> (check_cert muntac_path_dc "HDDI_02") *)
-    in () end\<close> *)
+    in () end\<close> 
 
 
 end

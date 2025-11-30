@@ -1,53 +1,44 @@
 theory Check_Unsolvability
-  imports Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code 
-    Ground_PDDL_NTA_Reduction_Impl "Show.Shows_Literal"
+  imports 
+    Ground_PDDL_NTA_Reduction_Impl 
+    "Show.Shows_Literal"
+    Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code
 begin
 
+find_theorems name: "map*Mapping"
 
-term ast_problem.wf_func_assign
-print_derives
-find_theorems name: "show*int"
-
-typ String.literal
-
-
-
-instantiation predicate::"show"
-begin
-definition "shows_prec p (x::predicate) \<equiv> \<lambda>y. show ''Pred'' @ show (predicate.name x) @ y"
-definition "shows_list (x::predicate list) = showsp_list shows_prec 0 x"
-instance
-  by standard (simp_all add: shows_prec_predicate_def shows_list_predicate_def show_law_simps)
-end
-
-instantiation func::"show"
-begin
-definition "shows_prec p (x::func) \<equiv> \<lambda>y. show ''Func'' @ show (func.name x) @ y"
-definition "shows_list (x::func list) = showsp_list shows_prec 0 x"
-instance
-  by standard (simp_all add: shows_prec_func_def shows_list_func_def show_law_simps)
-end
-
-instantiation atom::("show") "show"
-begin
-
-fun showf_atom where
-"showf_atom (predAtm n as) y = show ''('' @ show n @ show as @ show '')'' @ y" |
-"showf_atom (eqAtm a b) y = show ''('' @ show a @ show ''='' @ show b @ show '')'' @ y"
-
-definition "shows_prec p (x::('a::show) atom) \<equiv> \<lambda>y. showf_atom x y"
-definition "shows_list (x::('a::show) atom list) = showsp_list shows_prec 0 x"
-instance
-  apply standard 
-  subgoal for _ x apply (cases x) by (simp add: shows_prec_atom_def shows_list_atom_def show_law_simps)+
-  unfolding shows_prec_atom_def shows_list_atom_def
-  apply (rule showsp_list_append)
-  apply (intro ballI)
-  subgoal for _ _ _ _ _ _ x  
-    apply (cases x) by (simp add: shows_prec_atom_def shows_list_atom_def show_law_simps)+
-  done
-end
-
+definition "make_renaming' \<equiv> \<lambda> broadcast automata bounds.
+  let
+    action_set = Simple_Network_Impl.action_set automata broadcast |> list_of_set;
+    clk_set = Simple_Network_Impl.clk_set' automata |> list_of_set;
+    clk_set = clk_set @ [STR ''_urge''];
+    loc_set' = (\<lambda>i. Simple_Network_Impl.loc_set' automata i |> list_of_set);
+    loc_set = Prod_TA_Defs.loc_set
+      (set broadcast, map automaton_of automata, (\<lambda>x. None));
+    loc_set_diff = (\<lambda>i. loc_set |> list_of_set);
+    loc_set = list_of_set loc_set;
+    var_set = Prod_TA_Defs.var_set
+      (set broadcast, map automaton_of automata, (\<lambda>x. None)) |> list_of_set;
+    n_ps = length automata;
+    num_actions = length action_set;
+    m = length (remdups clk_set);
+    num_states_list = map (\<lambda>i. loc_set' i |> remdups |> length) [0..<n_ps];
+    num_states = (\<lambda>i. num_states_list ! i);
+    mk_renaming = mk_renaming (\<lambda>x. x)
+  in do {
+    ((renum_acts, _), (renum_clocks, inv_renum_clocks), (renum_vars, inv_renum_vars)) \<leftarrow>
+      mk_renaming action_set <|> mk_renaming clk_set <|> mk_renaming var_set;
+    let renum_clocks = Suc o renum_clocks;
+    let inv_renum_clocks = (\<lambda>c. if c = 0 then STR ''0'' else inv_renum_clocks (c - 1));
+    renum_states_list' \<leftarrow> combine_map (\<lambda>i. mk_renaming' (loc_set' i)) [0..<n_ps];
+    let renum_states_list = map fst renum_states_list';
+    let renum_states_list = map_index
+      (\<lambda>i m. extend_domain m (loc_set_diff i) (length (loc_set' i))) renum_states_list;
+    let renum_states = (\<lambda>i. renum_states_list ! i);
+    let inv_renum_states = (\<lambda>i. map snd renum_states_list' ! i);
+    Result (m, num_states, num_actions, renum_acts, renum_vars, renum_clocks, renum_states,
+      inv_renum_states, inv_renum_vars, inv_renum_clocks)
+  }"
 
 definition compute_model::"
     (nat \<Rightarrow> nat \<Rightarrow> String.literal) \<times>
@@ -104,11 +95,9 @@ definition compute_model::"
       inv_renum_states) = renaming;
     (m, num_states, num_actions, renum_acts, _, renum_clocks, renum_states, _, _, _)
       \<leftarrow> make_renaming broadcast automata bounds;
-    assert (renum_clocks STR ''_urge'' = m) STR ''Computed renaming: _urge is not last clock!'';
     let renum_vars = var_renaming;
     let renum_clocks = clock_renaming;
     let renum_states = location_renaming;
-    assert (renum_clocks STR ''_urge'' = m) STR ''Given renaming: _urge is not last clock!'';
     let _ = println (STR ''Renaming'');
     let (broadcast', automata', bounds') = rename_network
       broadcast bounds automata renum_acts renum_vars renum_clocks renum_states;
@@ -119,6 +108,10 @@ definition compute_model::"
           m, num_states, num_actions, renum_acts, renum_vars, renum_clocks, renum_states,
           inv_renum_states, inv_renum_vars, inv_renum_clocks)
    }"
+
+(* 
+    assert (renum_clocks STR ''_urge'' = m) STR ''Computed renaming: _urge is not last clock!'';
+    assert (renum_clocks STR ''_urge'' = m) STR ''Given renaming: _urge is not last clock!''; *)
 
 
 definition "certificate_check" where
@@ -273,7 +266,7 @@ lemma convert_check_okay:
     | Result Unsat \<Rightarrow> true
     | Error e \<Rightarrow> true
     >\<^sub>t"
-proof (cases "make_renaming broadcast automata bounds")
+proof (cases "make_renaming' broadcast automata bounds")
   case res1: (Result x1)
 
   obtain a b c d e f where
@@ -374,7 +367,43 @@ next
     unfolding Error_List_Monad.result.case
     by auto
 qed
-  
+
+instantiation predicate::"show"
+begin
+definition "shows_prec p (x::predicate) \<equiv> \<lambda>y. show ''Pred'' @ show (predicate.name x) @ y"
+definition "shows_list (x::predicate list) = showsp_list shows_prec 0 x"
+instance
+  by standard (simp_all add: shows_prec_predicate_def shows_list_predicate_def show_law_simps)
+end
+
+instantiation func::"show"
+begin
+definition "shows_prec p (x::func) \<equiv> \<lambda>y. show ''Func'' @ show (func.name x) @ y"
+definition "shows_list (x::func list) = showsp_list shows_prec 0 x"
+instance
+  by standard (simp_all add: shows_prec_func_def shows_list_func_def show_law_simps)
+end
+
+instantiation atom::("show") "show"
+begin
+
+fun showf_atom where
+"showf_atom (predAtm n as) y = show ''('' @ show n @ show as @ show '')'' @ y" |
+"showf_atom (eqAtm a b) y = show ''('' @ show a @ show ''='' @ show b @ show '')'' @ y"
+
+definition "shows_prec p (x::('a::show) atom) \<equiv> \<lambda>y. showf_atom x y"
+definition "shows_list (x::('a::show) atom list) = showsp_list shows_prec 0 x"
+instance
+  apply standard 
+  subgoal for _ x apply (cases x) by (simp add: shows_prec_atom_def shows_list_atom_def show_law_simps)+
+  unfolding shows_prec_atom_def shows_list_atom_def
+  apply (rule showsp_list_append)
+  apply (intro ballI)
+  subgoal for _ _ _ _ _ _ x  
+    apply (cases x) by (simp add: shows_prec_atom_def shows_list_atom_def show_law_simps)+
+  done
+end
+
 
 (* Need a function that can be called with the computed certificate and renaming *)
 
@@ -546,6 +575,110 @@ do {
 }
 " for num_split
 
+
+
+declare make_renaming_def[code del]
+
+declare Simple_Network_Impl.action_set_def[code del]
+
+thm make_renaming_def
+
+fun act_sym where
+"act_sym (In a) = a" |
+"act_sym (Out a) = a" |
+"act_sym (Sil a) = a"
+
+
+definition action_list where
+"action_list automata broadcast \<equiv>
+(
+  automata 
+  |> map (\<lambda>(_, _, trans, _). trans)
+  |> foldl (@) []
+  |> map (\<lambda>(_, _, _, a, _, _, _). a)
+  |> map act_sym
+)@ broadcast"
+
+declare Simple_Network_Impl.action_set_def[code del]
+
+lemma 1[code]: "Simple_Network_Impl.action_set = (\<lambda> automata broadcast. set (action_list automata broadcast))"
+  apply (intro ext)
+  unfolding Simple_Network_Impl.action_set_def action_list_def
+  sorry
+
+definition "clkp_list' automata =
+automata
+|> map (\<lambda>A. snd (snd (snd A)))
+|> map (map (\<lambda>g. collect_clock_pairs (snd g)))
+|> foldl (@) []
+|> foldl (\<union>) {}"
+
+declare Simple_Network_Impl.clkp_set'_def[code del]
+
+lemma 2[code]: "Simple_Network_Impl.clkp_set' = clkp_list' "
+  sorry
+
+definition "clk_list' automata = 
+(fst ` clkp_list' automata)
+\<union> (
+automata
+|> map (\<lambda>A. (fst (snd (snd A))))
+|> map (map (\<lambda>(_, _, _, _, _, r, _). set r))
+|> foldl (@) []
+|> foldl (\<union>) {}
+)"
+
+
+declare Simple_Network_Impl.clk_set'_def[code del]
+
+lemma 3[code]: "Simple_Network_Impl.clk_set' = clk_list' "
+  sorry
+
+definition "loc_list' automata p \<equiv>
+(fst (snd (snd (automata ! p))))
+|> map (\<lambda>(l, _, _, _, _, _, l'). {l, l'})
+|> foldl (\<union>) {}"
+
+term "(\<Union>(l, _, _, _, _, _, l')\<in>set (fst (snd (snd (automata ! p)))). {l, l'})"
+
+declare Simple_Network_Impl.loc_set'_def[code del]
+
+
+lemma 4[code]: "Simple_Network_Impl.loc_set' = loc_list'"
+  sorry
+
+declare Prod_TA_Defs.loc_set_def[code del]
+
+definition "loc_set x \<equiv> {}"
+
+lemma 5[code]: "Prod_TA_Defs.loc_set = loc_set "
+  sorry
+
+declare Prod_TA_Defs.var_set_def[code del]
+
+definition "var_set x \<equiv> {}"
+
+lemma 6[code]: "Prod_TA_Defs.var_set x = var_set x"
+  sorry
+
+derive (eq) ceq Simple_Expressions.bexp act acconstraint exp
+derive compare act acconstraint
+derive (compare) ccompare act acconstraint
+derive (collect) set_impl Simple_Expressions.bexp act acconstraint
+
+derive (no) ccompare exp bexp
+
+lemma [code]: "make_renaming = make_renaming'"
+  sorry
+
+declare make_renaming'_def[code del]
+thm make_renaming'_def make_renaming'_def[simplified 1 2 3 4 5 6 bind.simps Let_def]
+lemmas [code] = make_renaming'_def[simplified 1 2 3 4 5 6]
+
+export_code make_renaming'
+
+export_code check_and_cert_pddl_problem
+  in Eval module_name Certifier
 (* To do:
   - Change the parser for PDDL. (ML)
   - Extend the theory of the temporal validator to express facts about ground domains. (Isabelle)

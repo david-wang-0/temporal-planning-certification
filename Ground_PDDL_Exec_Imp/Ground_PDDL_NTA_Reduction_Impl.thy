@@ -1468,5 +1468,6 @@ lemma check_and_make_network_and_plan:
   find_theorems name: "a\<^sub>0"
   by force
 
-  
+export_code check_and_make_network
+  in Eval module_name Certifier
 end
