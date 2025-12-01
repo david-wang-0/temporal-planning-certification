@@ -5,20 +5,158 @@ theory Check_Unsolvability
     Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code
 begin
 
-find_theorems name: "map*Mapping"
 
-definition "make_renaming' \<equiv> \<lambda> broadcast automata bounds.
+fun act_sym'  where
+"act_sym' (In a) = a" |
+"act_sym' (Out a) = a" |
+"act_sym' (Sil a) = a"
+
+declare act_sym'.simps[code del]
+
+
+
+code_thms act_sym'
+
+
+fun act_sym where
+"act_sym (In a) = a" |
+"act_sym (Out a) = a" |
+"act_sym (Sil a) = a"
+
+
+definition action_list where
+"action_list automata broadcast \<equiv>
+((
+  automata 
+  |> map (\<lambda>(_, _, trans, _). trans)
+  |> foldl (@) []
+  |> map (\<lambda>(_, _, _, a, _, _, _). a)
+  |> map act_sym) 
+@ broadcast)"
+
+declare Simple_Network_Impl.action_set_def[code del]
+
+lemma [code]: "Simple_Network_Impl.action_set = (\<lambda>automata broadcast. action_list automata broadcast |> set)"
+  sorry
+
+
+definition "clkp_list' automata =
+automata
+|> map (\<lambda>A. snd (snd (snd A)))
+|> map (map (\<lambda>(l, invs). invs))
+|> map (map collect_clock_pairs)
+|> foldl (@) []
+|> foldl (\<union>) {}"
+
+
+definition "clk_list' automata = 
+(automata 
+|> clkp_list'
+|> (`) fst)
+\<union> (
+automata
+|> map (\<lambda>A. (fst (snd (snd A))))
+|> map (map (\<lambda>(_, _, _, _, _, r, _). set r))
+|> foldl (@) []
+|> foldl (\<union>) {})"
+
+
+
+declare Simple_Network_Impl.clk_set'_def[code del] 
+
+(* Don't use List.list.set here. Circular dependency. Need to use set_aux (of_phantom set_impl) *)
+lemma [code]: "Simple_Network_Impl.clk_set' = (\<lambda>automata. clk_list' automata)"
+  sorry
+
+definition "loc_list' automata p \<equiv>
+(fst (snd (snd (automata ! p))))
+|> map (\<lambda>(l, _, _, _, _, _, l'). {l, l'})
+|> foldl (\<union>) {}"
+
+declare Simple_Network_Impl.loc_set'_def[code del]
+
+lemma [code]: "Simple_Network_Impl.loc_set' = (\<lambda>automata p. loc_list' automata p)"
+  sorry
+
+
+fun loc_list where
+"loc_list (broadcast, automata, bounds) = 
+(
+let trans = [0..<length automata] 
+    |> (map (\<lambda>p. automata ! p |> (\<lambda>(_, _, trans,_). trans)));
+  locs = trans 
+    |> map (map (\<lambda>(l, _, _, _, _, _, l'). {l, l'})) 
+    |> foldl (@) []
+    |> foldl (\<union>) {}
+in locs
+)"
+
+
+declare Prod_TA_Defs.var_set_def[code del]
+
+lemma loc_set_alt:
+  "Prod_TA_Defs.loc_set (set broadcast, map automaton_of automata, map_of bounds) = 
+    loc_list (broadcast, automata, bounds)"
+  sorry
+
+
+fun var_set where
+"var_set (broadcast, automata, bounds) = 
+([0..<length automata]
+|> (map (\<lambda>p. automata ! p |> (\<lambda>(_, _, trans,_). trans)))
+|> (map (map (\<lambda>(_, b, _, _, _, _, _). b)))
+|> (map (map vars_of_bexp))
+|> foldl (@) []
+|> foldl (\<union>) {}) 
+\<union>
+([0..<length automata]
+|> (map (\<lambda>p. automata ! p |> (\<lambda>(_, _, trans,_). trans)))
+|> (map (map (\<lambda>(_, _, _, _, u, _, _). u)))
+|> (map (map (map (\<lambda>(x, e). {x} \<union> vars_of_exp e))))
+|> foldl (@) []
+|> foldl (@) []
+|> foldl (\<union>) {}) "
+
+declare Prod_TA_Defs.var_set_def[code del]
+
+lemma var_set_alt:
+  "Prod_TA_Defs.var_set (set broadcast, map automaton_of automata, map_of bounds) 
+    = var_set (broadcast, automata, bounds)"
+  sorry
+
+
+fun act_set where
+"act_set (broadcast, automata, bounds) =
+undefined"
+
+lemma act_set_alt:
+  "Prod_TA_Defs.act_set (set broadcast, map automaton_of automata, map_of bounds)
+    = act_set (broadcast, automata, bounds)" sorry
+
+derive (eq) ceq bexp act acconstraint exp
+
+derive compare act acconstraint
+derive (compare) ccompare act acconstraint
+
+derive (collect) set_impl bexp exp
+
+derive (rbt) set_impl act acconstraint
+
+derive (no) ccompare exp bexp
+
+
+(* definition "make_renaming \<equiv> \<lambda> broadcast automata bounds.
   let
     action_set = Simple_Network_Impl.action_set automata broadcast |> list_of_set;
     clk_set = Simple_Network_Impl.clk_set' automata |> list_of_set;
     clk_set = clk_set @ [STR ''_urge''];
     loc_set' = (\<lambda>i. Simple_Network_Impl.loc_set' automata i |> list_of_set);
     loc_set = Prod_TA_Defs.loc_set
-      (set broadcast, map automaton_of automata, (\<lambda>x. None));
-    loc_set_diff = (\<lambda>i. loc_set |> list_of_set);
+      (set broadcast, map automaton_of automata, map_of bounds);
+    loc_set_diff = (\<lambda>i. loc_set - Simple_Network_Impl.loc_set' automata i |> list_of_set);
     loc_set = list_of_set loc_set;
     var_set = Prod_TA_Defs.var_set
-      (set broadcast, map automaton_of automata, (\<lambda>x. None)) |> list_of_set;
+      (set broadcast, map automaton_of automata, map_of bounds) |> list_of_set;
     n_ps = length automata;
     num_actions = length action_set;
     m = length (remdups clk_set);
@@ -36,9 +174,25 @@ definition "make_renaming' \<equiv> \<lambda> broadcast automata bounds.
       (\<lambda>i m. extend_domain m (loc_set_diff i) (length (loc_set' i))) renum_states_list;
     let renum_states = (\<lambda>i. renum_states_list ! i);
     let inv_renum_states = (\<lambda>i. map snd renum_states_list' ! i);
+    assert (fst ` set bounds \<subseteq> set var_set)
+      STR ''State variables are declared but do not appear in model'';
     Result (m, num_states, num_actions, renum_acts, renum_vars, renum_clocks, renum_states,
       inv_renum_states, inv_renum_vars, inv_renum_clocks)
-  }"
+  }" *)
+
+declare make_renaming_def[code del]
+
+
+schematic_goal make_renaming'[code]: "make_renaming \<equiv> ?x"
+  apply (rule HOL.eq_reflection)
+  unfolding make_renaming_def
+  unfolding var_set_alt
+  unfolding loc_set_alt
+  ..
+
+export_code make_renaming
+  in Eval module_name make_renaming file_prefix Test
+
 
 definition compute_model::"
     (nat \<Rightarrow> nat \<Rightarrow> String.literal) \<times>
@@ -95,9 +249,11 @@ definition compute_model::"
       inv_renum_states) = renaming;
     (m, num_states, num_actions, renum_acts, _, renum_clocks, renum_states, _, _, _)
       \<leftarrow> make_renaming broadcast automata bounds;
+    assert (renum_clocks STR ''_urge'' = m) STR ''Computed renaming: _urge is not last clock!'';
     let renum_vars = var_renaming;
     let renum_clocks = clock_renaming;
     let renum_states = location_renaming;
+    assert (renum_clocks STR ''_urge'' = m) STR ''Given renaming: _urge is not last clock!'';
     let _ = println (STR ''Renaming'');
     let (broadcast', automata', bounds') = rename_network
       broadcast bounds automata renum_acts renum_vars renum_clocks renum_states;
@@ -109,9 +265,21 @@ definition compute_model::"
           inv_renum_states, inv_renum_vars, inv_renum_clocks)
    }"
 
+declare Simple_Network_Impl_nat_defs.clkp_set''_def[code del]
+
+definition "clkp_set''_impl automata i l \<equiv> 
+Simple_Network_Impl_nat_defs.clkp_inv automata i l \<union> 
+(automata ! i
+|> (\<lambda>a. fst (snd (snd a)))
+|> map (\<lambda>(l', b, g, _). if l' = l then collect_clock_pairs g else {})
+|> foldl (\<union>) {})"
+
+lemma x[code]: "Simple_Network_Impl_nat_defs.clkp_set'' = clkp_set''_impl"
+  sorry
+
 (* 
-    assert (renum_clocks STR ''_urge'' = m) STR ''Computed renaming: _urge is not last clock!'';
-    assert (renum_clocks STR ''_urge'' = m) STR ''Given renaming: _urge is not last clock!''; *)
+export_code compute_model
+  in Eval module_name make_renaming file_prefix 1234 *)
 
 
 definition "certificate_check" where
@@ -266,7 +434,7 @@ lemma convert_check_okay:
     | Result Unsat \<Rightarrow> true
     | Error e \<Rightarrow> true
     >\<^sub>t"
-proof (cases "make_renaming' broadcast automata bounds")
+proof (cases "make_renaming broadcast automata bounds")
   case res1: (Result x1)
 
   obtain a b c d e f where
@@ -413,7 +581,14 @@ end
   - Which names do we need to pass here?
 *)
 
-find_theorems name: "Error_Monad*catch"
+thm Simple_Network_Rename_Formula_String_Defs.check_renaming_def
+
+schematic_goal [code]: "Simple_Network_Rename_Formula_String_Defs.check_renaming = ?x"
+  unfolding Simple_Network_Rename_Formula_String_Defs.check_renaming_def
+  unfolding var_set_alt loc_set_alt
+
+export_code Simple_Network_Rename_Formula_String_Defs.check_renaming
+  in Eval module_name convert_check file_prefix 1234 
 
 (* The certifier takes a list of names clocks and automata, 
   which it would otherwise obtain when parsing *)
@@ -576,109 +751,17 @@ do {
 " for num_split
 
 
+thm Simple_Network_Rename_Formula_String_Defs.check_renaming_def[no_vars]
 
-declare make_renaming_def[code del]
-
-declare Simple_Network_Impl.action_set_def[code del]
-
-thm make_renaming_def
-
-fun act_sym where
-"act_sym (In a) = a" |
-"act_sym (Out a) = a" |
-"act_sym (Sil a) = a"
-
-
-definition action_list where
-"action_list automata broadcast \<equiv>
-(
-  automata 
-  |> map (\<lambda>(_, _, trans, _). trans)
-  |> foldl (@) []
-  |> map (\<lambda>(_, _, _, a, _, _, _). a)
-  |> map act_sym
-)@ broadcast"
-
-declare Simple_Network_Impl.action_set_def[code del]
-
-lemma 1[code]: "Simple_Network_Impl.action_set = (\<lambda> automata broadcast. set (action_list automata broadcast))"
-  apply (intro ext)
-  unfolding Simple_Network_Impl.action_set_def action_list_def
-  sorry
-
-definition "clkp_list' automata =
-automata
-|> map (\<lambda>A. snd (snd (snd A)))
-|> map (map (\<lambda>g. collect_clock_pairs (snd g)))
-|> foldl (@) []
-|> foldl (\<union>) {}"
-
-declare Simple_Network_Impl.clkp_set'_def[code del]
-
-lemma 2[code]: "Simple_Network_Impl.clkp_set' = clkp_list' "
-  sorry
-
-definition "clk_list' automata = 
-(fst ` clkp_list' automata)
-\<union> (
-automata
-|> map (\<lambda>A. (fst (snd (snd A))))
-|> map (map (\<lambda>(_, _, _, _, _, r, _). set r))
-|> foldl (@) []
-|> foldl (\<union>) {}
-)"
-
+export_code Simple_Network_Impl.clk_set'
 
 declare Simple_Network_Impl.clk_set'_def[code del]
 
-lemma 3[code]: "Simple_Network_Impl.clk_set' = clk_list' "
-  sorry
+export_code Simple_Network_Rename_Formula_String_Defs.check_renaming
 
-definition "loc_list' automata p \<equiv>
-(fst (snd (snd (automata ! p))))
-|> map (\<lambda>(l, _, _, _, _, _, l'). {l, l'})
-|> foldl (\<union>) {}"
-
-term "(\<Union>(l, _, _, _, _, _, l')\<in>set (fst (snd (snd (automata ! p)))). {l, l'})"
-
-declare Simple_Network_Impl.loc_set'_def[code del]
-
-
-lemma 4[code]: "Simple_Network_Impl.loc_set' = loc_list'"
-  sorry
-
-declare Prod_TA_Defs.loc_set_def[code del]
-
-definition "loc_set x \<equiv> {}"
-
-lemma 5[code]: "Prod_TA_Defs.loc_set = loc_set "
-  sorry
-
-declare Prod_TA_Defs.var_set_def[code del]
-
-definition "var_set x \<equiv> {}"
-
-lemma 6[code]: "Prod_TA_Defs.var_set x = var_set x"
-  sorry
-
-derive (eq) ceq Simple_Expressions.bexp act acconstraint exp
-derive compare act acconstraint
-derive (compare) ccompare act acconstraint
-derive (collect) set_impl Simple_Expressions.bexp act acconstraint
-
-derive (no) ccompare exp bexp
-
-lemma [code]: "make_renaming = make_renaming'"
-  sorry
-
-declare make_renaming'_def[code del]
-thm make_renaming'_def make_renaming'_def[simplified 1 2 3 4 5 6 bind.simps Let_def]
-lemmas [code] = make_renaming'_def[simplified 1 2 3 4 5 6]
-
-export_code make_renaming'
 
 export_code check_and_cert_pddl_problem
-  in Eval module_name Certifier
+  in Eval module_name Certifier file_prefix certifier
 (* To do:
   - Change the parser for PDDL. (ML)
   - Extend the theory of the temporal validator to express facts about ground domains. (Isabelle)
