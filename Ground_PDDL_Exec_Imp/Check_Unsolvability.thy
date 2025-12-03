@@ -5,35 +5,81 @@ theory Check_Unsolvability
     Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code
 begin
 
+
+lemma set_foldl_append: "(set (foldl (@) xs ys)) = \<Union>(set ` (insert xs (set ys)))"
+  apply (induction ys arbitrary: xs)
+  by auto
+
+lemma foldl_union: "foldl (\<union>) S xs = S \<union> \<Union>(insert S (set xs))"
+  apply (induction xs arbitrary: S)
+  by auto
+
+lemma Union_set_insert_empty:
+  "\<Union>(set ` (insert [] S)) = \<Union>(set ` S)"
+  by auto
+
+lemma Union_insert_empty:
+  "\<Union>(insert {} S) = \<Union>S"
+  by blast
+
 fun act_sym where
 "act_sym (In a) = a" |
 "act_sym (Out a) = a" |
 "act_sym (Sil a) = a"
 
+lemma act_sym_union_set_act:
+  "\<Union>(set_act ` S) = act_sym ` S"
+  apply (intro equalityI subsetI)
+   apply (erule UnionE)
+   apply (erule imageE)
+  subgoal for x Xs a
+    apply (cases a)
+    by force+
+  apply (erule imageE)
+  subgoal for x a
+    apply (cases a)
+    by fastforce+
+  done
 
-definition action_list where
-"action_list automata broadcast \<equiv>
+
+definition action_set_impl where
+"action_set_impl automata broadcast \<equiv>
 ((
   automata 
   |> map (\<lambda>(_, _, trans, _). trans)
   |> foldl (@) []
   |> map (\<lambda>(_, _, _, a, _, _, _). a)
   |> map act_sym) 
-@ broadcast)"
+@ broadcast) |> set"
 
 declare Simple_Network_Impl.action_set_def[code del]
 
-lemma [code]: "Simple_Network_Impl.action_set = (\<lambda>automata broadcast. action_list automata broadcast |> set)"
-  sorry                               
-
+lemma [code]: "Simple_Network_Impl.action_set = action_set_impl"
+  apply (intro ext)
+  unfolding Simple_Network_Impl.action_set_def
+  unfolding action_set_impl_def
+  unfolding set_append
+  unfolding set_map
+  unfolding set_foldl_append
+  unfolding set_map
+  unfolding act_sym_union_set_act[symmetric]
+  unfolding Union_set_insert_empty
+  by fast
+  
 
 definition "clkp_set_impl automata =
-automata
+(automata
 |> map (\<lambda>A. snd (snd (snd A)))
-|> map (map (\<lambda>(l, invs). invs))
-|> map (map collect_clock_pairs)
+|> map (map (\<lambda>g. collect_clock_pairs (snd g)))
 |> foldl (@) []
-|> foldl (\<union>) {}"
+|> foldl (\<union>) {})
+\<union> (
+automata 
+|> map (\<lambda>A. (fst (snd (snd A))))
+|> map (map (\<lambda>(l, b, g, _). collect_clock_pairs g))
+|> foldl (@) []
+|> foldl (\<union>) {}
+)"
 
 
 definition "clk_set_impl automata = 
@@ -48,19 +94,48 @@ automata
 |> foldl (\<union>) {})"
 
 lemma trans_refine:
-  "(\<Union>(l, e, g, a, r, u, l')\<in>Simple_Network_Language.trans (Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of automata, map_of bounds') i). {l, l'}) = 
+  assumes "i < length automata"
+  shows "(\<Union>(l, e, g, a, r, u, l')\<in>Simple_Network_Language.trans (Simple_Network_Language.Prod_TA_Defs.N (set broadcast, map automaton_of automata, map_of bounds') i). {l, l'}) = 
   (automata ! i
   |> (\<lambda>(_,_,ts,_). ts)
   |> map (\<lambda>(l, _, _, _, _, _, l'). {l, l'})
   |> foldl (\<union>) {}
   )"
-  sorry
+  unfolding Simple_Network_Language.trans_def
+  unfolding Simple_Network_Language.Prod_TA_Defs.N_def
+  unfolding foldl_union
+  unfolding set_map
+  unfolding fst_conv snd_conv automaton_of_def
+  apply (subst nth_map)
+   apply (rule assms)
+  apply (cases "automata ! i")
+  by auto
+
 
 
 declare Simple_Network_Impl.clk_set'_def[code del] 
 
-lemma [code]: "Simple_Network_Impl.clk_set' = (\<lambda>automata. clk_set_impl automata)"
-  sorry
+lemma clkp_set_impl_correct: "Simple_Network_Impl.clkp_set' = clkp_set_impl"
+  unfolding Simple_Network_Impl.clkp_set'_def 
+  unfolding clkp_set_impl_def
+  unfolding foldl_union
+  unfolding set_foldl_append
+  unfolding set_map
+  unfolding Union_set_insert_empty Union_insert_empty
+  unfolding image_image
+  unfolding set_map
+  by fast
+  
+
+lemma [code]: "Simple_Network_Impl.clk_set' = clk_set_impl"
+  unfolding Simple_Network_Impl.clk_set'_def 
+  unfolding clk_set_impl_def
+  unfolding foldl_union
+  unfolding set_foldl_append
+  unfolding clkp_set_impl_correct
+  unfolding Union_insert_empty Union_set_insert_empty
+  by fastforce
+
 
 definition "loc_set_impl automata p \<equiv>
 (fst (snd (snd (automata ! p))))
@@ -69,9 +144,18 @@ definition "loc_set_impl automata p \<equiv>
 
 declare Simple_Network_Impl.loc_set'_def[code del]
 
-lemma [code]: "Simple_Network_Impl.loc_set' = (\<lambda>automata p. loc_set_impl automata p)"
-  sorry
+lemma [code]: "Simple_Network_Impl.loc_set' = loc_set_impl"
+  unfolding Simple_Network_Impl.loc_set'_def
+  unfolding loc_set_impl_def
+  unfolding foldl_union set_map
+  unfolding Union_insert_empty Union_set_insert_empty
+  by simp
 
+lemma n_ps_impl: "Prod_TA_Defs.n_ps (broadcast, automata, bounds) = length automata"
+  unfolding Prod_TA_Defs.n_ps_def by auto
+
+lemma N_impl: "Simple_Network_Language.Prod_TA_Defs.N (broadcast, automata, bounds) n = automata ! n"
+  unfolding Simple_Network_Language.Prod_TA_Defs.N_def by auto
 
 fun prod_TA_loc_set_impl where
 "prod_TA_loc_set_impl (broadcast, automata, bounds) = 
@@ -93,8 +177,82 @@ declare Prod_TA_Defs.loc_set_def[code del] *)
 lemma loc_set_alt:
   "Prod_TA_Defs.loc_set (set broadcast, map automaton_of automata, map_of bounds) = 
     prod_TA_loc_set_impl (broadcast, automata, bounds)"
-  sorry
-
+proof -
+  { fix l
+    assume "l \<in> (\<Union>p\<in>{p. p < length automata}. fst ` fst (snd (snd (map (\<lambda>(committed, urgent, trans, inv). (set committed, set urgent, set trans, default_map_of [] inv)) automata ! p))))"
+    then obtain p tr trs a b c where 
+      p: "p < length automata"
+      and l: "l = fst tr"
+      and tr: "tr \<in> set trs"
+      and a: "automata ! p = (a, b, trs, c)"
+      apply -
+      apply (erule UnionE)
+      apply (erule imageE)
+      subgoal for x p
+        apply (cases "automata ! p")
+        by auto
+      done
+    hence "l \<in> \<Union> (\<Union> (set ` map (\<lambda>(l, _, _, _, _, _, l'). {l, l'}) ` (\<lambda>p. case automata ! p of (_, _, tr, _) \<Rightarrow> tr) ` set [0..<length automata]))"
+      apply (intro UnionI)
+        apply (rule imageI)+
+        apply simp
+      by auto
+  } note 1 = this
+  
+  { fix l
+    assume "l \<in> (\<Union>p\<in>{p. p < length automata}. (snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd) ` fst (snd (snd (map (\<lambda>(committed, urgent, trans, inv). (set committed, set urgent, set trans, default_map_of [] inv)) automata ! p))))"
+    then obtain p tr trs a b c where 
+      p: "p < length automata"
+      and l: "l = (snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd) tr"
+      and tr: "tr \<in> set trs"
+      and a: "automata ! p = (a, b, trs, c)"
+      apply -
+      apply (erule UnionE)
+      apply (erule imageE)
+      subgoal for x p
+        apply (cases "automata ! p")
+        by auto
+      done
+    hence "l \<in> \<Union> (\<Union> (set ` map (\<lambda>(l, _, _, _, _, _, l'). {l, l'}) ` (\<lambda>p. case automata ! p of (_, _, tr, _) \<Rightarrow> tr) ` set [0..<length automata]))"
+      apply (intro UnionI)
+        apply (rule imageI)+
+        apply simp
+      by auto
+  } note 2 = this
+  
+  { fix l
+    assume "l \<in> \<Union> (\<Union> (set ` map (\<lambda>(l, _, _, _, _, _, l'). {l, l'}) ` (\<lambda>p. case automata ! p of (_, _, tr, _) \<Rightarrow> tr) ` set [0..<length automata]))"
+    then obtain p tr trs a b c where 
+      p: "p < length automata"
+      and l: "l = (snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd) tr \<or> l = fst tr"
+      and tr: "tr \<in> set trs"
+      and a: "automata ! p = (a, b, trs, c)"
+      apply -
+      apply (erule UnionE)+
+      apply (erule imageE)+
+      subgoal for _ _ _ _ p
+        apply (cases "automata ! p")
+        by fastforce
+      done
+    hence "l \<in> (\<Union>p\<in>{p. p < length automata}. fst ` fst (snd (snd (map (\<lambda>(committed, urgent, trans, inv). (set committed, set urgent, set trans, default_map_of [] inv)) automata ! p)))) \<union>
+    (\<Union>p\<in>{p. p < length automata}. (snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd \<circ> snd) ` fst (snd (snd (map (\<lambda>(committed, urgent, trans, inv). (set committed, set urgent, set trans, default_map_of [] inv)) automata ! p))))" 
+      by auto
+  } note 3 = this
+  
+  show ?thesis 
+    unfolding Prod_TA_Defs.loc_set_def
+    unfolding prod_TA_loc_set_impl.simps
+    unfolding n_ps_impl length_map N_impl
+    unfolding Let_def
+    unfolding foldl_union set_foldl_append set_map Union_insert_empty Union_set_insert_empty Un_empty_left
+    unfolding Simple_Network_Language.trans_def automaton_of_def
+    unfolding image_Collect[symmetric]
+    apply (intro equalityI subsetI)
+     apply (erule UnE)
+      apply (erule 1)
+     apply (erule 2)
+    by (rule 3)
+qed
 
 
 fun prop_TA_var_set_impl where
@@ -119,7 +277,142 @@ fun prop_TA_var_set_impl where
 lemma var_set_alt:
   "Prod_TA_Defs.var_set (set broadcast, map automaton_of automata, map_of bounds) 
     = prop_TA_var_set_impl (broadcast, automata, bounds)"
-  sorry
+proof -
+  have 1: "{f ` Simple_Network_Language.trans (map automaton_of automata ! p) |p. p < length automata} =
+    (set o (map f)) ` (\<lambda>p. case automata ! p of (_, _, t, _) \<Rightarrow> t) ` set [0..<length automata]" for f
+  proof (intro equalityI subsetI)
+    fix x
+    assume "x \<in> {f ` Simple_Network_Language.trans (map automaton_of automata ! p) |p. p < length automata}"
+    then obtain p trs a b c  where
+      "x = f ` set trs"
+      "automata ! p = (a, b, trs, c)"
+      "p < length automata"
+      unfolding trans_def automaton_of_def
+      apply (elim CollectE imageE exE conjE)
+      subgoal for p
+        by (cases "automata ! p") auto
+      done
+    thus "x \<in> (set \<circ>\<circ> map) f ` (\<lambda>p. case automata ! p of (x, xa, t, xb) \<Rightarrow> t) ` set [0..<length automata]"
+      unfolding comp_def by force
+  next 
+    fix x 
+    assume "x \<in> (set \<circ>\<circ> map) f ` (\<lambda>p. case automata ! p of (x, xa, t, xb) \<Rightarrow> t) ` set [0..<length automata]"then obtain p trs a b c  where
+      "x = f ` set trs"
+      "automata ! p = (a, b, trs, c)"
+      "p < length automata"
+      unfolding trans_def automaton_of_def
+      apply (elim CollectE imageE exE conjE)
+      subgoal for _ p
+        by (cases "automata ! p") auto
+      done
+    thus "x \<in> {f ` Simple_Network_Language.trans (map automaton_of automata ! p) |p. p < length automata}" 
+      unfolding trans_def automaton_of_def 
+      apply (intro CollectI imageI exI)
+      by auto
+  qed
+  have 2: "(\<Union>x\<in>set [0..<length automata]. \<Union> (vars_of_bexp ` (set \<circ>\<circ> map) (fst \<circ> snd) (case automata ! x of (x, xaa, t, xba) \<Rightarrow> t)))
+    =
+    \<Union> (\<Union>x\<in>set [0..<length automata]. (\<lambda>x. vars_of_bexp (case x of (_, b, _, _, _, _, _) \<Rightarrow> b)) ` set (case automata ! x of (_, _, tr, _) \<Rightarrow> tr))"
+  proof (intro equalityI subsetI)
+    fix x
+    assume "x \<in> (\<Union>x\<in>set [0..<length automata]. \<Union> (vars_of_bexp ` (set \<circ>\<circ> map) (fst \<circ> snd) (case automata ! x of (x, xaa, t, xba) \<Rightarrow> t)))"
+    then obtain tr p trs a b c where
+      "p < length automata"
+      "automata ! p = (a, b, trs, c)"
+      "tr \<in> set trs"
+      "x \<in> vars_of_bexp ((fst o snd) tr)"
+      apply -
+      apply (erule UnionE)
+      apply (erule imageE)
+      subgoal for _ p
+        apply (cases "automata ! p")
+        by auto
+      done
+    thus "x \<in> \<Union> (\<Union>x\<in>set [0..<length automata]. (\<lambda>x. vars_of_bexp (case x of (x, b, xa, xb, xc, xd, xe) \<Rightarrow> b)) ` set (case automata ! x of (x, xa, tr, xb) \<Rightarrow> tr))"
+      apply (cases tr) by force
+  next
+    fix x
+    assume "x \<in> \<Union> (\<Union>x\<in>set [0..<length automata]. (\<lambda>x. vars_of_bexp (case x of (x, b, xa, xb, xc, xd, xe) \<Rightarrow> b)) ` set (case automata ! x of (x, xa, tr, xb) \<Rightarrow> tr))"
+    then obtain tr p trs a b c where
+      "p < length automata"
+      "automata ! p = (a, b, trs, c)"
+      "tr \<in> set trs"
+      "x \<in> vars_of_bexp ((fst o snd) tr)"
+      apply -
+      apply (erule UnionE)
+      apply (erule UnionE)
+      apply (elim imageE)
+      subgoal for _ _ p
+        apply (cases "automata ! p")
+        by auto
+      done
+    thus "x \<in> (\<Union>x\<in>set [0..<length automata]. \<Union> (vars_of_bexp ` (set \<circ>\<circ> map) (fst \<circ> snd) (case automata ! x of (x, xaa, t, xba) \<Rightarrow> t)))" 
+      by fastforce
+  qed
+
+  have 3: "(\<Union>x\<in>set [0..<length automata]. \<Union>f\<in>(set \<circ>\<circ> map) (fst \<circ> snd \<circ> snd \<circ> snd \<circ> snd) (case automata ! x of (x, xaa, t, xba) \<Rightarrow> t). \<Union>(x, e)\<in>set f. {x} \<union> vars_of_exp e)
+    = \<Union> (\<Union> (set ` (\<Union>x\<in>set [0..<length automata]. (\<lambda>x. map (\<lambda>(x, e). {x} \<union> vars_of_exp e) (case x of (_, _, _, _, u, _, _) \<Rightarrow> u)) ` set (case automata ! x of (_, _, tr, _) \<Rightarrow> tr))))"
+  proof (intro equalityI subsetI)
+    fix x
+    assume "x \<in> (\<Union>x\<in>set [0..<length automata]. \<Union>f\<in>(set \<circ>\<circ> map) (fst \<circ> snd \<circ> snd \<circ> snd \<circ> snd) (case automata ! x of (x, xaa, t, xba) \<Rightarrow> t). \<Union>(x, e)\<in>set f. {x} \<union> vars_of_exp e)"
+    then obtain v e tr p trs a b c where
+      "p < length automata"
+      "automata ! p = (a, b, trs, c)"
+      "tr \<in> set trs"
+      "(v, e) \<in> set ((fst \<circ> snd \<circ> snd \<circ> snd \<circ> snd) tr)"
+      "x \<in> vars_of_exp e \<or> x = v"
+      apply -
+      apply (erule UnionE)
+      apply (erule imageE)
+      subgoal for _ p
+        apply (cases "automata ! p")
+        by auto
+      done
+    thus "x \<in> \<Union> (\<Union> (set ` (\<Union>x\<in>set [0..<length automata]. (\<lambda>x. map (\<lambda>(x, e). {x} \<union> vars_of_exp e) (case x of (x, xa, xb, xc, u, xd, xe) \<Rightarrow> u)) ` set (case automata ! x of (x, xa, tr, xb) \<Rightarrow> tr))))"
+      apply (intro UnionI)
+        apply (rule imageI)
+        apply (rule UnionI)
+         apply (rule imageI)
+         apply simp
+        apply fastforce
+       apply (cases tr)
+      by auto
+  next
+    fix x
+    assume "x \<in> \<Union> (\<Union> (set ` (\<Union>x\<in>set [0..<length automata]. (\<lambda>x. map (\<lambda>(x, e). {x} \<union> vars_of_exp e) (case x of (x, xa, xb, xc, u, xd, xe) \<Rightarrow> u)) ` set (case automata ! x of (x, xa, tr, xb) \<Rightarrow> tr))))"
+    then obtain v e tr p trs a b c where
+      "p < length automata"
+      "automata ! p = (a, b, trs, c)"
+      "tr \<in> set trs"
+      "(v, e) \<in> set ((fst \<circ> snd \<circ> snd \<circ> snd \<circ> snd) tr)"
+      "x \<in> vars_of_exp e \<or> x = v"
+      apply -
+      apply (erule UnionE)
+      apply (erule UnionE)
+      apply (erule imageE)
+      apply (erule UnionE)
+      apply (erule imageE)
+      subgoal for _ _ _ _ p
+        apply (cases "automata ! p") by auto
+      done
+    thus "x \<in> (\<Union>x\<in>set [0..<length automata]. \<Union>f\<in>(set \<circ>\<circ> map) (fst \<circ> snd \<circ> snd \<circ> snd \<circ> snd) (case automata ! x of (x, xaa, t, xba) \<Rightarrow> t). \<Union>(x, e)\<in>set f. {x} \<union> vars_of_exp e)"
+      by fastforce
+  qed
+
+  show ?thesis
+    unfolding Prod_TA_Defs.var_set_def
+    unfolding prop_TA_var_set_impl.simps
+    unfolding n_ps_impl length_map N_impl
+    unfolding Let_def
+    unfolding foldl_union set_foldl_append set_map Union_insert_empty Union_set_insert_empty Un_empty_left
+    unfolding 1
+    unfolding image_image set_map
+    unfolding 2 3 by blast  
+  qed
+  
+
+
+
 
 
 fun prod_TA_act_set_impl where
@@ -176,9 +469,6 @@ Simple_Network_Impl_nat_defs.clkp_inv automata i l \<union>
 lemma [code]: "Simple_Network_Impl_nat_defs.clkp_set'' = clkp_set''_impl"
   sorry
 
-lemma set_foldl_append: "(set (foldl (@) xs ys)) = \<Union>(set ` (insert xs (set ys)))"
-  apply (induction ys arbitrary: xs)
-  by auto
 
 lemma invs_refine: "\<Union> ((\<lambda>g. fst ` set g) ` set (map (snd o snd o snd) automata)) =
   automata
@@ -192,12 +482,13 @@ lemma invs_refine: "\<Union> ((\<lambda>g. fst ` set g) ` set (map (snd o snd o 
   unfolding set_foldl_append
   by force
 
-schematic_goal in_states_refine: "L \<in> Prod_TA_Defs.states (set broadcast, map automaton_of automata, map_of bounds')
-  = ?x"
+lemma in_states_refine: "L \<in> Prod_TA_Defs.states (set broadcast, map automaton_of automata, map_of bounds')
+  = (length L = Prod_TA_Defs.n_ps (set broadcast, map automaton_of automata, map_of bounds') 
+  \<and> (\<forall>i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of automata, map_of bounds'). L ! i \<in> foldl (\<union>) {} (map (\<lambda>(l, _, _, _, _, _, l'). {l, l'}) (case automata ! i of (_, uua_, ts, uub_) \<Rightarrow> ts))))"
   unfolding Prod_TA_Defs.states_def
   unfolding mem_Collect_eq
-  unfolding trans_refine 
-  ..
+  using trans_refine 
+  unfolding Prod_TA_Defs.n_ps_def by fastforce
 
 thm Simple_Network_Rename_Formula_String_Defs.check_renaming_def[no_vars]
 
@@ -212,6 +503,7 @@ schematic_goal check_renaming_imp[code]: "Simple_Network_Rename_Formula_String_D
   unfolding invs_refine
   unfolding in_states_refine
   ..
+
 
 declare Simple_Network_Impl_nat_defs.check_precond2_def[code del]
 
@@ -898,8 +1190,9 @@ do {
 " for num_split
 
 
-export_code check_and_cert_pddl_problem_no_return
-  in Eval module_name Certifier file_prefix certifier
+export_code
+  check_and_cert_pddl_problem_no_return
+  in Eval module_name Certifier file_prefix Check_Unsolvability
 (* To do:
   - Change the parser for PDDL. (ML)
   - Extend the theory of the temporal validator to express facts about ground domains. (Isabelle)
