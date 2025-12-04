@@ -7,3 +7,6 @@
 [submodule "ML/lib/cmlib"]
 	path = ML/lib/cmlib
 	url = https://github.com/standardml/cmlib.git
+[submodule "ML/lib/temporal-pddl-validation"]
+	path = ML/lib/temporal-pddl-validation
+	url = git@github.com:david-wang-0/temporal-pddl-validation.git
