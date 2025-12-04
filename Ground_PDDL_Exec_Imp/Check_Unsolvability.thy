@@ -151,10 +151,10 @@ lemma [code]: "Simple_Network_Impl.loc_set' = loc_set_impl"
   unfolding Union_insert_empty Union_set_insert_empty
   by simp
 
-lemma n_ps_impl: "Prod_TA_Defs.n_ps (broadcast, automata, bounds) = length automata"
+lemma n_ps_alt: "Prod_TA_Defs.n_ps (broadcast, automata, bounds) = length automata"
   unfolding Prod_TA_Defs.n_ps_def by auto
 
-lemma N_impl: "Simple_Network_Language.Prod_TA_Defs.N (broadcast, automata, bounds) n = automata ! n"
+lemma N_alt: "Simple_Network_Language.Prod_TA_Defs.N (broadcast, automata, bounds) n = automata ! n"
   unfolding Simple_Network_Language.Prod_TA_Defs.N_def by auto
 
 fun prod_TA_loc_set_impl where
@@ -242,7 +242,7 @@ proof -
   show ?thesis 
     unfolding Prod_TA_Defs.loc_set_def
     unfolding prod_TA_loc_set_impl.simps
-    unfolding n_ps_impl length_map N_impl
+    unfolding n_ps_alt length_map N_alt
     unfolding Let_def
     unfolding foldl_union set_foldl_append set_map Union_insert_empty Union_set_insert_empty Un_empty_left
     unfolding Simple_Network_Language.trans_def automaton_of_def
@@ -274,12 +274,13 @@ fun prop_TA_var_set_impl where
 
 (* declare Prod_TA_Defs.var_set_def[code del] *)
 
+
 lemma var_set_alt:
   "Prod_TA_Defs.var_set (set broadcast, map automaton_of automata, map_of bounds) 
     = prop_TA_var_set_impl (broadcast, automata, bounds)"
 proof -
   have 1: "{f ` Simple_Network_Language.trans (map automaton_of automata ! p) |p. p < length automata} =
-    (set o (map f)) ` (\<lambda>p. case automata ! p of (_, _, t, _) \<Rightarrow> t) ` set [0..<length automata]" for f
+      (set o (map f)) ` (\<lambda>p. case automata ! p of (_, _, t, _) \<Rightarrow> t) ` set [0..<length automata]" for f
   proof (intro equalityI subsetI)
     fix x
     assume "x \<in> {f ` Simple_Network_Language.trans (map automaton_of automata ! p) |p. p < length automata}"
@@ -310,6 +311,7 @@ proof -
       apply (intro CollectI imageI exI)
       by auto
   qed
+
   have 2: "(\<Union>x\<in>set [0..<length automata]. \<Union> (vars_of_bexp ` (set \<circ>\<circ> map) (fst \<circ> snd) (case automata ! x of (x, xaa, t, xba) \<Rightarrow> t)))
     =
     \<Union> (\<Union>x\<in>set [0..<length automata]. (\<lambda>x. vars_of_bexp (case x of (_, b, _, _, _, _, _) \<Rightarrow> b)) ` set (case automata ! x of (_, _, tr, _) \<Rightarrow> tr))"
@@ -402,13 +404,13 @@ proof -
   show ?thesis
     unfolding Prod_TA_Defs.var_set_def
     unfolding prop_TA_var_set_impl.simps
-    unfolding n_ps_impl length_map N_impl
+    unfolding n_ps_alt length_map N_alt
     unfolding Let_def
     unfolding foldl_union set_foldl_append set_map Union_insert_empty Union_set_insert_empty Un_empty_left
     unfolding 1
     unfolding image_image set_map
     unfolding 2 3 by blast  
-  qed
+qed
   
 
 
@@ -430,7 +432,61 @@ set broadcast"
 
 lemma act_set_alt:
   "Prod_TA_Defs.act_set (set broadcast, map automaton_of automata, map_of bounds)
-    = prod_TA_act_set_impl (broadcast, automata, bounds)" sorry
+    = prod_TA_act_set_impl (broadcast, automata, bounds)"
+proof -
+  have 1: "(\<Union>p\<in>{0..<length automata}. \<Union>(l, e, g, a, _)\<in>Simple_Network_Language.trans (map automaton_of automata ! p). set_act a) =
+    \<Union> (\<Union> (set ` map (\<lambda>(_, _, _, a, _, _, _). set_act a) ` (\<lambda>p. case automata ! p of (_, _, tr, _) \<Rightarrow> tr) ` set [0..<length automata]))"
+  proof (intro equalityI subsetI)
+    fix x
+    assume "x \<in> (\<Union>p\<in>{0..<length automata}. \<Union>(l, e, g, a, _)\<in>Simple_Network_Language.trans (map automaton_of automata ! p). set_act a)"
+    then obtain p tr trs a b c d e f g h where  
+      "x \<in> set_act a"
+      "tr = (b, c, d, a, e)"
+      "tr \<in> set trs"
+      "automata ! p = (f, g, trs, h)"
+      "p < length automata"
+      apply -
+      unfolding trans_def automaton_of_def
+      apply (elim UnionE imageE)
+      subgoal for _ n
+        apply (cases "automata ! n")
+        by force
+      done
+    thus "x \<in> \<Union> (\<Union> (set ` map (\<lambda>(_, _, _, a, _, _, _). set_act a) ` (\<lambda>p. case automata ! p of (x, xa, tr, xb) \<Rightarrow> tr) ` set [0..<length automata]))"
+      apply (intro UnionI)
+        apply (rule imageI)+
+        apply simp
+       apply fastforce
+      by blast
+    next
+      fix x
+      assume "x \<in> \<Union> (\<Union> (set ` map (\<lambda>(_, _, _, a, _, _, _). set_act a) ` (\<lambda>p. case automata ! p of (x, xa, tr, xb) \<Rightarrow> tr) ` set [0..<length automata]))"
+      then obtain p tr trs a b c d e f g h where  
+        "x \<in> set_act a"
+        "tr = (b, c, d, a, e)"
+        "tr \<in> set trs"
+        "automata ! p = (f, g, trs, h)"
+        "p < length automata"
+        apply -
+        unfolding trans_def automaton_of_def
+        apply (elim UnionE imageE)
+        subgoal for _ _ _ _ n
+          apply (cases "automata ! n")
+          by auto
+        done
+      thus "x \<in> (\<Union>p\<in>{0..<length automata}. \<Union>(l, e, g, a, _)\<in>Simple_Network_Language.trans (map automaton_of automata ! p). set_act a)" 
+        unfolding trans_def automaton_of_def
+        by force
+    qed
+  show ?thesis
+    unfolding Prod_TA_Defs.act_set_def
+    unfolding prod_TA_act_set_impl.simps
+    unfolding n_ps_alt unfolding N_alt
+    unfolding foldl_union set_foldl_append
+    unfolding length_map set_map Union_insert_empty Union_set_insert_empty Un_empty_left
+    unfolding 1
+    unfolding Prod_TA_Defs.broadcast_def by simp
+qed
 
 
 derive (eq) ceq bexp act acconstraint exp
@@ -467,7 +523,9 @@ Simple_Network_Impl_nat_defs.clkp_inv automata i l \<union>
 |> foldl (\<union>) {})"
 
 lemma [code]: "Simple_Network_Impl_nat_defs.clkp_set'' = clkp_set''_impl"
-  sorry
+  unfolding Simple_Network_Impl_nat_defs.clkp_set''_def
+  unfolding clkp_set''_impl_def
+  unfolding foldl_union by simp
 
 
 lemma invs_refine: "\<Union> ((\<lambda>g. fst ` set g) ` set (map (snd o snd o snd) automata)) =
@@ -484,7 +542,7 @@ lemma invs_refine: "\<Union> ((\<lambda>g. fst ` set g) ` set (map (snd o snd o 
 
 lemma in_states_refine: "L \<in> Prod_TA_Defs.states (set broadcast, map automaton_of automata, map_of bounds')
   = (length L = Prod_TA_Defs.n_ps (set broadcast, map automaton_of automata, map_of bounds') 
-  \<and> (\<forall>i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of automata, map_of bounds'). L ! i \<in> foldl (\<union>) {} (map (\<lambda>(l, _, _, _, _, _, l'). {l, l'}) (case automata ! i of (_, uua_, ts, uub_) \<Rightarrow> ts))))"
+  \<and> (\<forall>i<Prod_TA_Defs.n_ps (set broadcast, map automaton_of automata, map_of bounds'). L ! i \<in> foldl (\<union>) {} (map (\<lambda>(l, _, _, _, _, _, l'). {l, l'}) (case automata ! i of (_, a_, ts, b_) \<Rightarrow> ts))))"
   unfolding Prod_TA_Defs.states_def
   unfolding mem_Collect_eq
   using trans_refine 
