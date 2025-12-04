@@ -1,4 +1,5 @@
 # How to use
+
 ## Install Mercurial
 Find instructions here: https://www.mercurial-scm.org/install
 
@@ -45,3 +46,10 @@ Start Isabelle/jEdit with the Munta heap loaded:
 ```
 
 Navigate to the `temp-planning-certification` folder in the jEdit UI.
+
+# Building the executable checker
+Install MLton. See: http://www.mlton.org/Installation
+
+Install GNU make. See: https://www.gnu.org/software/make/#download
+
+Get MLunta. 

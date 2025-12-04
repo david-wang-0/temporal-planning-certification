@@ -1,9 +1,6 @@
-[submodule "ML/parcom"]
-	path = ML/parcom
-	url = https://github.com/standardml/parcom.git
-[submodule "ML/lib/cmlib"]
-	path = ML/lib/cmlib
-	url = https://github.com/standardml/cmlib.git
 [submodule "lib/temporal-pddl-semantics"]
 	path = lib/temporal-pddl-semantics
 	url = git@github.com:david-wang-0/temporal-pddl-semantics.git
+[submodule "ML/lib/mlunta"]
+	path = ML/lib/mlunta
+	url = git@github.com:david-wang-0/mlunta.git
