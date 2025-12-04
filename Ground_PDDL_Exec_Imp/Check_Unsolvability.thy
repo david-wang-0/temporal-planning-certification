@@ -1250,9 +1250,9 @@ do {
 
 export_code
   check_and_cert_pddl_problem_no_return
-  in Eval module_name Certifier file_prefix Check_Unsolvability
+  in SML module_name Certifier file_prefix Check_Unsolvability
 (* To do:
-  - Change the parser for PDDL. (ML)
+  - Change the parser for PDDL. (ML)`
   - Extend the theory of the temporal validator to express facts about ground domains. (Isabelle)
   - Prove abstract temporal planning locale equivalent to temporal validator locale. (Isabelle)
     - Should be done after updating the abstract temporal planning locale.

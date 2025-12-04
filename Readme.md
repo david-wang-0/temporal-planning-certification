@@ -53,3 +53,8 @@ Install MLton. See: http://www.mlton.org/Installation
 Install GNU make. See: https://www.gnu.org/software/make/#download
 
 Get MLunta. 
+
+Export the generated SML code:
+```
+isabelle build -e PDDL_TP_Reduction 
+```

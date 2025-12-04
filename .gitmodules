@@ -4,3 +4,9 @@
 [submodule "ML/lib/mlunta"]
 	path = ML/lib/mlunta
 	url = git@github.com:david-wang-0/mlunta.git
+[submodule "ML/lib/cmlib"]
+	path = ML/lib/cmlib
+	url = https://github.com/standardml/cmlib.git
+[submodule "ML/lib/parcom"]
+	path = ML/lib/parcom
+	url = https://github.com/standardml/parcom.git
