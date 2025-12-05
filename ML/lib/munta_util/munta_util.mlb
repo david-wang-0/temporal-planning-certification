@@ -1,28 +1,12 @@
 $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/basis/mlton.mlb
-$(SML_LIB)/basis/sml-nj.mlb
 
 sequential.sml
 
-local
-    Unsynchronized.sml
-
-    Writeln.sml
-
-    basics.ML
-
-    ann "nonexhaustiveMatch ignore" in
-      library.ML
-    end
-in
-    structure Timing
-    structure Tracing
-end
-
-
+Unsynchronized.sml
+Writeln.sml
 basics.ML
+
 ann "nonexhaustiveMatch ignore" in
     library.ML
 end
-Unsynchronized.sml
-Util.sml

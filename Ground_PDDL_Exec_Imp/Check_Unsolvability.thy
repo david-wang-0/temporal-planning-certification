@@ -494,8 +494,6 @@ derive (eq) ceq bexp act acconstraint exp
 derive compare act acconstraint
 derive (compare) ccompare act acconstraint
 
-derive (collect) set_impl bexp exp
-
 derive (rbt) set_impl act acconstraint
 
 derive (no) ccompare exp bexp
@@ -1248,9 +1246,58 @@ do {
 " for num_split
 
 
-export_code
+find_consts name: "div_mod"
+
+thm parse_convert_check_def
+
+(* I don't know why this is needed. Term.Type is exported by default, but not here.
+Munta uses this and it fixes something. *)
+
+find_theorems name: "list_of_set_def"
+
+code_printing
+  type_constructor Typerep.typerep \<rightharpoonup> (Eval)
+  | constant Typerep.Typerep \<rightharpoonup> (Eval)
+
+term list_of_set
+term sorted_list_of_set
+
+text \<open>Replacing the generated code for @{term list_of_set} with a compatible implementation
+in ML\<close>
+
+fun rbt_to_list where
+  "rbt_to_list rbt.Empty = []"
+| "rbt_to_list (Branch c l e x r) = e#(rbt_to_list l)@(rbt_to_list r)"
+
+code_printing
+  constant list_of_set' \<rightharpoonup> (SML)
+
+code_printing
+  constant list_of_set' \<rightharpoonup> (SML) "listofsetreplacethiswhilecompiling"
+
+find_theorems name: PredAtm
+
+(* Ask what is going on with Typerep and Integer *)
+export_code              
   check_and_cert_pddl_problem_no_return
-  in SML module_name Certifier file_prefix Check_Unsolvability
+  rbt_to_list
+  Result Error
+  nat_of_integer integer_of_nat int_of_integer integer_of_int DBMEntry.Le DBMEntry.Lt DBMEntry.INF
+  Impl1 Impl2 Impl3 Buechi Reachable_Set Buechi_Set 
+  formula.EX formula.EG formula.AX formula.AG formula.Leadsto
+  sexp.true sexp.not sexp.and sexp.or sexp.imply sexp.eq sexp.le sexp.lt sexp.lt sexp.ge sexp.gt sexp.loc
+  bexp.true bexp.not bexp.and bexp.or bexp.imply bexp.eq bexp.le bexp.lt bexp.ge bexp.gt
+  exp.const exp.var exp.if_then_else exp.binop exp.unop 
+  acconstraint.LT acconstraint.LE acconstraint.EQ acconstraint.GT acconstraint.GE
+  act.In act.Out act.Sil
+  Inl Inr Rat.Fract Rat.of_int rat_of_digits_pair
+  predAtm eqAtm predicate Pred Func Either Var Obj PredDecl FuncDecl BigAnd BigOr
+  formula.Not formula.Bot Effect No_Const Time_Const Func_Const duration_op.LEQ duration_op.EQ duration_op.GEQ
+  Simple_Action_Schema Durative_Action_Schema At_Start At_End Over_All
+  map_atom Domain Problem Simple_Plan_Action Durative_Plan_Action
+  term.CONST term.VAR (* I want to export the entire type, but I can only export the constructor because term is already an isabelle keyword. *)
+  String.explode String.implode
+  in Eval module_name Converter file_prefix Check_Unsolvability
 (* To do:
   - Change the parser for PDDL. (ML)`
   - Extend the theory of the temporal validator to express facts about ground domains. (Isabelle)

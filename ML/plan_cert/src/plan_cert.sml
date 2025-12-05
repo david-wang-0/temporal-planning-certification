@@ -33,10 +33,10 @@ fun mode_from_str s =
     in 
         if n > 4 then
             raise Fail "Implementation needs to be in the range 0 to 4"
-        else if n = 0 then Model_Checker.Debug
-        else if n = 1 then Model_Checker.Impl1
-        else if n = 2 then Model_Checker.Impl2
-        else if n = 3 then Model_Checker.Impl3
+        else if n = 0 then Converter.Debug
+        else if n = 1 then Converter.Impl1
+        else if n = 2 then Converter.Impl2
+        else if n = 3 then Converter.Impl3
         else raise Fail "Büchi model checking not supported"
     end
 fun extra_from_str "lu" = SOME LU |
@@ -101,10 +101,10 @@ val log_certification = Log.log "Certification Level"
 val log_num_threads = Log.log "Number of Threads"
 fun log_extra Local = Log.log "Extrapolation" "local ceilings"
   | log_extra LU    = Log.log "Extrapolation" "local lu-ceilings"
-fun log_mode Model_Checker.Debug = Log.log "Mode" "Debug"
-  | log_mode Model_Checker.Impl1 = Log.log "Mode" "Implementation 1"
-  | log_mode Model_Checker.Impl2 = Log.log "Mode" "Implementation 2"
-  | log_mode Model_Checker.Impl3 = Log.log "Mode" "Implementation 3"
+fun log_mode Converter.Debug = Log.log "Mode" "Debug"
+  | log_mode Converter.Impl1 = Log.log "Mode" "Implementation 1"
+  | log_mode Converter.Impl2 = Log.log "Mode" "Implementation 2"
+  | log_mode Converter.Impl3 = Log.log "Mode" "Implementation 3"
 fun log_show_cert true = Log.log "Show Certificate" "true"
   | log_show_cert false = Log.log "Show Certificate" "false"
 
@@ -141,7 +141,7 @@ fun check_and_cert_network extra renaming cert compression certification num_thr
 fun check_and_cert_problem extra domain problem renaming cert compression certification num_threads mode show_cert = 
     let
         val _ = log_config (extra, domain, problem, renaming, cert, compression, certification, num_threads, mode, show_cert)
-        val parsedProb = PddlParser.get_prob domain problem;
+        val parsed_prob = PddlParser.get_prob domain problem;
         
         val certifier = 
             NetworkConversion.convert_network
@@ -149,9 +149,9 @@ fun check_and_cert_problem extra domain problem renaming cert compression certif
             #> Either.mapR CertificateConversion.convert_certificate
             #> Either.either (fn err => NONE) (fn res => SOME res);
             
-        val show_cert = (case mode of Model_Checker.Debug => true | _ => show_cert);
-        val f = (fn a => fn b => fn c => fn d => fn e => fn x => Either.succeed ()); (* XXX: Isabelle export*)
-    in f parsedProb mode num_threads false certifier show_cert 
+        val show_cert = (case mode of Converter.Debug => true | _ => show_cert);
+        val num_threads = num_threads |> Int.fromString |> the |> Converter.nat_of_integer;
+    in Converter.check_and_cert_pddl_problem_no_return parsed_prob mode num_threads certifier show_cert 
     end
 
 (* 
@@ -196,6 +196,5 @@ fun main () =
     flags (CommandLine.arguments ())
     |> Benchmark.time_it check
     |> Benchmark.add_time (apfst (Log.time "Total Time: ") #> snd)
-    handle Exn.ERROR msg => Either.fail (println msg)
 
 val _ = main ()

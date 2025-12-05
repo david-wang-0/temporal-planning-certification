@@ -17,7 +17,7 @@ struct
 
   open ParserCombinators
   open CharParser
-  open TEMPORAL_PDDL_Checker_Exported
+  open Converter
 
   infixr 4 << >>
   infixr 3 &&
@@ -95,7 +95,7 @@ struct
   datatype PDDL_TERM = OBJ_CONS_TERM of PDDL_OBJ_CONS
                        | VAR_TERM of PDDL_VAR
 
-  type 'a PDDL_ATOM = 'a TEMPORAL_PDDL_Checker_Exported.atom; (*string * ('a list) *)
+  type 'a PDDL_ATOM = 'a Converter.atom; (*string * ('a list) *)
 
   datatype 'a PDDL_PROP =
     Prop_atom of  'a PDDL_ATOM
@@ -206,7 +206,7 @@ struct
               || pddl_var wth (fn v => VAR_TERM v) (* || function_term *)) ?? "term"
 
   fun atomic_formula t = (in_paren(predicate && repeat t)
-                             wth (fn (pred, tlist) => Prop_atom (PredAtm ((Pred (explode (pddl_pred_name pred))), tlist))))
+                             wth (fn (pred, tlist) => Prop_atom (PredAtm ((Pred  (pddl_pred_name pred)), tlist))))
                          || in_paren((pddl_reserved "=") && t && t)
                                wth (fn (eq, (t1, t2)) => Prop_atom (EqAtm (t1, t2))) ?? "Atomic formula"
 

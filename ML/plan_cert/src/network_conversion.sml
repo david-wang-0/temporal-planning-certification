@@ -48,112 +48,112 @@ struct
     *)
 
     (* unsafe *)
-    fun is_plus f = (f (Model_Checker.Int_of_integer 2) (Model_Checker.Int_of_integer 5)) 
-        |> Model_Checker.integer_of_int |> (fn x => x = (7))
+    fun is_plus f = (f (Converter.Int_of_integer 2) (Converter.Int_of_integer 5)) 
+        |> Converter.integer_of_int |> (fn x => x = (7))
 
-    fun is_minus f = (f (Model_Checker.Int_of_integer 1) (Model_Checker.Int_of_integer 2)) 
-        |> Model_Checker.integer_of_int |> (fn x => x = ~1)
+    fun is_minus f = (f (Converter.Int_of_integer 1) (Converter.Int_of_integer 2)) 
+        |> Converter.integer_of_int |> (fn x => x = ~1)
     exception Unsupported of string
     
     (* These are not clocks. These are variables *)
-    fun convert_exp_left (guard_exp: (string, inta) Model_Checker.exp): string Difference.clock_pair =
+    fun convert_exp_left (guard_exp: (string, inta) Converter.exp): string Difference.clock_pair =
         (case guard_exp of
-            Model_Checker.Var x => Difference.Single x |
-            Model_Checker.Binop (f, Model_Checker.Var x, Model_Checker.Var y) =>
+            Converter.Var x => Difference.Single x |
+            Converter.Binop (f, Converter.Var x, Converter.Var y) =>
                 (case is_minus f of 
                     true => Difference.Diff (x, y) |
                     _ => raise Unsupported "Not a valid variable (difference) constraint. Ill-defined LHS. Should be minus.") |
             _ => raise Unsupported "Not a valid variable (difference) constraint. Ill-defined LHS. Should be x - y or x."
         ) (* The datatypes that are parsed by MLunta do not explicitly mark variables as different to clocks.*)
 
-    fun convert_exp_right (guard_exp: (string, inta) Model_Checker.exp): int =
+    fun convert_exp_right (guard_exp: (string, inta) Converter.exp): int =
         (case guard_exp of
-            Model_Checker.Const x => Model_Checker.integer_of_int x |
+            Converter.Const x => Converter.integer_of_int x |
             _ => Exn.error "RHS of comparison must be constant."
         )
 
-    fun convert_comparison (comp: (string, inta) Model_Checker.bexp): (string, int) guard =
+    fun convert_comparison (comp: (string, inta) Converter.bexp): (string, int) guard =
         Guard.Constr ((case comp of
-            Model_Checker.Eq  x => (Constraint.Eq, x) |
-            Model_Checker.Lea x => (Constraint.Le, x) |
-            Model_Checker.Lta x => (Constraint.Lt, x) |
-            Model_Checker.Ge x  => (Constraint.Ge, x) |
-            Model_Checker.Gt x  => (Constraint.Gt, x) |
+            Converter.Eqa x => (Constraint.Eq, x) |
+            Converter.Lea x => (Constraint.Le, x) |
+            Converter.Ltb x => (Constraint.Lt, x) |
+            Converter.Ge x  => (Constraint.Ge, x) |
+            Converter.Gta x  => (Constraint.Gt, x) |
             _ => raise Unsupported "Invalid expression in guard or constraint of edge. Not a comparison."
         ) |> (fn (f, (l, r)) => f (convert_exp_left l, convert_exp_right r)))
 
-    fun convert_guard (vc: string) (guard: (string, inta) Model_Checker.bexp): (string, int) guard = 
+    fun convert_guard (vc: string) (guard: (string, inta) Converter.bexp): (string, int) guard = 
     let 
         val invert_guard = invert_guard vc;
         fun convert_guard' guard =
             (case guard of 
-                Model_Checker.True => Guard.True |
-                Model_Checker.Not x => invert_guard (convert_guard' x) |
-                Model_Checker.And (x, y) => Guard.And (convert_guard' x, convert_guard' y) |
-                Model_Checker.Or (x, y) => Guard.Or (convert_guard' x, convert_guard' y) |
-                Model_Checker.Imply (x, y) => 
+                Converter.True => Guard.True |
+                Converter.Nota x => invert_guard (convert_guard' x) |
+                Converter.Anda (x, y) => Guard.And (convert_guard' x, convert_guard' y) |
+                Converter.Ora (x, y) => Guard.Or (convert_guard' x, convert_guard' y) |
+                Converter.Imply (x, y) => 
                     let val x' = convert_guard' x;
                         val y' = convert_guard' y
                     in Guard.Or (invert_guard x', Guard.And (x', y'))
                     end |
-                Model_Checker.Eq x  => convert_comparison (Model_Checker.Eq x) |
-                Model_Checker.Lea x => convert_comparison (Model_Checker.Lea x) |
-                Model_Checker.Lta x => convert_comparison (Model_Checker.Lta x) |
-                Model_Checker.Ge x  => convert_comparison (Model_Checker.Ge x) |
-                Model_Checker.Gt x  => convert_comparison (Model_Checker.Gt x)
+                Converter.Eqa x  => convert_comparison (Converter.Eqa x) |
+                Converter.Lea x => convert_comparison (Converter.Lea x) |
+                Converter.Ltb x => convert_comparison (Converter.Ltb x) |
+                Converter.Ge x  => convert_comparison (Converter.Ge x) |
+                Converter.Gta x  => convert_comparison (Converter.Gta x)
             )
     in convert_guard' guard
     end
 
-    fun convert_guard_constraint (constr: (string, inta) Model_Checker.acconstraint): (string diff, int) constraint =
-        let fun convert_pair (x, y) = (Difference.Single x, Model_Checker.integer_of_int y)
+    fun convert_guard_constraint (constr: (string, inta) Converter.acconstraint): (string diff, int) constraint =
+        let fun convert_pair (x, y) = (Difference.Single x, Converter.integer_of_int y)
         in (case constr of 
-            Model_Checker.LT x => (Constraint.Lt (convert_pair x)) |
-            Model_Checker.LE x => (Constraint.Le (convert_pair x)) |
-            Model_Checker.EQ x => (Constraint.Eq (convert_pair x)) |
-            Model_Checker.GE x => (Constraint.Ge (convert_pair x)) |
-            Model_Checker.GT x => (Constraint.Gt (convert_pair x))
+            Converter.LTa x => (Constraint.Lt (convert_pair x)) |
+            Converter.LEa x => (Constraint.Le (convert_pair x)) |
+            Converter.EQ x => (Constraint.Eq (convert_pair x)) |
+            Converter.GEa x => (Constraint.Ge (convert_pair x)) |
+            Converter.GTa x => (Constraint.Gt (convert_pair x))
         ) 
         end
 
-    fun convert_guard_constraints (cs: (string, inta) Model_Checker.acconstraint list): (string, int) guard =
+    fun convert_guard_constraints (cs: (string, inta) Converter.acconstraint list): (string, int) guard =
         cs
         |> map convert_guard_constraint
         |> map Guard.Constr
         |> List.foldl Guard.And Guard.True
 
     
-    fun convert_invariant_constraint (constr: (string, inta) Model_Checker.acconstraint): (string, int) constraint =
-        let fun convert_pair (x, y) = (x, Model_Checker.integer_of_int y)
+    fun convert_invariant_constraint (constr: (string, inta) Converter.acconstraint): (string, int) constraint =
+        let fun convert_pair (x, y) = (x, Converter.integer_of_int y)
         in (case constr of 
-            Model_Checker.LT x => (Constraint.Lt (convert_pair x)) |
-            Model_Checker.LE x => (Constraint.Le (convert_pair x)) |
-            Model_Checker.EQ x => (Constraint.Eq (convert_pair x)) |
-            Model_Checker.GE x => (Constraint.Ge (convert_pair x)) |
-            Model_Checker.GT x => (Constraint.Gt (convert_pair x))
+            Converter.LTa x => (Constraint.Lt (convert_pair x)) |
+            Converter.LEa x => (Constraint.Le (convert_pair x)) |
+            Converter.EQ x => (Constraint.Eq (convert_pair x)) |
+            Converter.GEa x => (Constraint.Ge (convert_pair x)) |
+            Converter.GTa x => (Constraint.Gt (convert_pair x))
         ) 
         end
 
-    fun convert_invariant_constraints (cs: (string, inta) Model_Checker.acconstraint list): (string, int) invariant =
+    fun convert_invariant_constraints (cs: (string, inta) Converter.acconstraint list): (string, int) invariant =
         cs
         |> map convert_invariant_constraint
         |> map Invariant.Constr
         |> List.foldl Invariant.And Invariant.True
 
 
-    fun convert_action (act: string Model_Checker.act): string action =
+    fun convert_action (act: string Converter.act): string action =
         (case act of
-            Model_Checker.In x  => In x |
-            Model_Checker.Out x => Out x |
-            Model_Checker.Sil x => Internal x
+            Converter.In x  => In x |
+            Converter.Out x => Out x |
+            Converter.Sil x => Internal x
         )
 
-    fun convert_update (upd: string * (string, inta) Model_Checker.exp): string update =
+    fun convert_update (upd: string * (string, inta) Converter.exp): string update =
         (case upd of
-            (x, Model_Checker.Const c) => Reset (x, Model_Checker.integer_of_int c) |
-            (x, Model_Checker.Binop (f, Model_Checker.Var v, Model_Checker.Const c)) =>
+            (x, Converter.Const c) => Reset (x, Converter.integer_of_int c) |
+            (x, Converter.Binop (f, Converter.Var v, Converter.Const c)) =>
                 let 
-                    val c = Model_Checker.integer_of_int c;
+                    val c = Converter.integer_of_int c;
                     val offset = (case (is_minus f, is_plus f) of
                             (true, false) => ~c |
                             (false, true) => c |
@@ -169,7 +169,7 @@ struct
             _ => raise Unsupported "Invalid update. RHS not neither constant nor relative (v op c)."
         )
 
-    fun convert_updates (upds: (string * (string, inta) Model_Checker.exp) list): (string update list) =
+    fun convert_updates (upds: (string * (string, inta) Converter.exp) list): (string update list) =
         map convert_update upds
 
     val convert_resets = 
@@ -178,7 +178,7 @@ struct
     (* Note; naming collisions are handled by MLunta *)
     fun convert_edge (vc: string) (edge: NetworkConversionTypes.isa_edge): ParseBexpTypes.edge =
         let 
-            val (out_loc, guard, constr, action, updates, resets, in_loc) = edge;
+            val (out_loc, (guard, (constr, (action, (updates, (resets, in_loc)))))) = edge;
             val guard = convert_guard vc guard;
             val constr = convert_guard_constraints constr;
             val guard = Guard.And(guard, constr);
@@ -187,11 +187,11 @@ struct
             val resets = convert_resets resets;
             val upds = upds @ resets
         in {
-            source = Model_Checker.integer_of_nat out_loc,
+            source = Converter.integer_of_nat out_loc,
             guard = guard,
             label = act,
             update = upds,
-            target = Model_Checker.integer_of_nat in_loc
+            target = Converter.integer_of_nat in_loc
         }
         end
 
@@ -199,15 +199,15 @@ struct
 
     fun convert_node 
         (name_asmt: nat -> string)
-        (inv_asmt: nat -> (string, inta) Model_Checker.acconstraint list) 
+        (inv_asmt: nat -> (string, inta) Converter.acconstraint list) 
         (node_id: nat) 
         = {
-            id = Model_Checker.integer_of_nat node_id,
+            id = Converter.integer_of_nat node_id,
             name = name_asmt node_id,
             invariant = inv_asmt node_id |> convert_invariant_constraints
         }
 
-    fun edge_nodes (out_loc, guard, constr, action, updates, resets, in_loc) =
+    fun edge_nodes (out_loc, (guard, (constr, (action, (updates, (resets, in_loc)))))) =
         [out_loc, in_loc]
     
     fun all_edge_nodes edges =
@@ -222,23 +222,23 @@ struct
         (vc: string) (name_asmt: nat -> string) (initial: nat)
         (auto: NetworkConversionTypes.isa_automaton): ParseBexpTypes.automaton =
         let
-            val (committed, urgent, edges, invs) = auto;
+            val (committed, (urgent, (edges, invs))) = auto;
             val inv_asmt = ListUtils.pair_list_to_fun invs (List.nil);
             val nodes = all_edge_nodes edges @ all_inv_nodes invs @ committed @ urgent
-                |> ListMergeSort.uniqueSort (fn (x, y) => Int.compare (Model_Checker.integer_of_nat x, Model_Checker.integer_of_nat y))
+                |> ListMergeSort.uniqueSort (fn (x, y) => Int.compare (Converter.integer_of_nat x, Converter.integer_of_nat y))
                 |> map (convert_node name_asmt inv_asmt)
             val edges = map (convert_edge vc) edges;
         in {
-            committed = map Model_Checker.integer_of_nat committed,
-            urgent = map Model_Checker.integer_of_nat urgent,
-            initial = Model_Checker.integer_of_nat initial,
+            committed = map Converter.integer_of_nat committed,
+            urgent = map Converter.integer_of_nat urgent,
+            initial = Converter.integer_of_nat initial,
             edges = edges,
             nodes = nodes
         }
         end
 
     (* Arbitrary variable to ensure it is always possible to create an unsatisfiable guard. *)
-    val arbitrary_var = ("var12345", Model_Checker.Int_of_integer 0, Model_Checker.Int_of_integer 0)
+    val arbitrary_var = ("var12345", (Converter.Int_of_integer 0, Converter.Int_of_integer 0))
 
     fun add_arbitrary_var xs = arbitrary_var::xs
 
@@ -246,11 +246,11 @@ struct
         (if (length xs) = 0 then add_arbitrary_var xs else xs)
         |> (fn xs => (hd xs, xs))
 
-    fun make_var (v, l, u): var =
+    fun make_var (v, (l, u)): var =
         { 
             name = v,
-            lower = Model_Checker.integer_of_int l,
-            upper = Model_Checker.integer_of_int u
+            lower = Converter.integer_of_int l,
+            upper = Converter.integer_of_int u
         }
 
     fun convert_sexp 
@@ -259,17 +259,17 @@ struct
             (exp: isa_state_exp): (string, int) Formula.bexp =
         let 
             fun conv exp = (case exp of
-                Model_Checker.Truea => Formula.True |
-                Model_Checker.Nota x => Formula.Not (conv x) |
-                Model_Checker.Anda (x, y) => Formula.And (conv x, conv y) |
-                Model_Checker.Ora (x, y) => Formula.Or (conv x, conv y) |
-                Model_Checker.Implya (x, y) => Formula.Impl (conv x, conv y) |
-                Model_Checker.Eqa (x, y) => Formula.Pred (Constraint.Eq (Difference.Single x, Model_Checker.integer_of_int y)) |
-                Model_Checker.Leb (x, y) => Formula.Pred (Constraint.Le (Difference.Single x, Model_Checker.integer_of_int y)) |
-                Model_Checker.Ltb (x, y) => Formula.Pred (Constraint.Lt (Difference.Single x, Model_Checker.integer_of_int y)) |
-                Model_Checker.Gea (x, y) => Formula.Pred (Constraint.Ge (Difference.Single x, Model_Checker.integer_of_int y)) |
-                Model_Checker.Gta (x, y) => Formula.Pred (Constraint.Gt (Difference.Single x, Model_Checker.integer_of_int y)) |
-                Model_Checker.Loc (auto_num, loc_num) => Formula.Loc (auto_num_to_name auto_num, auto_and_loc_nums_to_name auto_num loc_num))
+                Converter.Truea => Formula.True |
+                Converter.Notb x => Formula.Not (conv x) |
+                Converter.Andb (x, y) => Formula.And (conv x, conv y) |
+                Converter.Orb (x, y) => Formula.Or (conv x, conv y) |
+                Converter.Implya (x, y) => Formula.Impl (conv x, conv y) |
+                Converter.Eqb (x, y) => Formula.Pred (Constraint.Eq (Difference.Single x, Converter.integer_of_int y)) |
+                Converter.Leb (x, y) => Formula.Pred (Constraint.Le (Difference.Single x, Converter.integer_of_int y)) |
+                Converter.Ltc (x, y) => Formula.Pred (Constraint.Lt (Difference.Single x, Converter.integer_of_int y)) |
+                Converter.Gea (x, y) => Formula.Pred (Constraint.Ge (Difference.Single x, Converter.integer_of_int y)) |
+                Converter.Gtb (x, y) => Formula.Pred (Constraint.Gt (Difference.Single x, Converter.integer_of_int y)) |
+                Converter.Loc (auto_num, loc_num) => Formula.Loc (auto_num_to_name auto_num, auto_and_loc_nums_to_name auto_num loc_num))
         in conv exp
         end
 
@@ -279,11 +279,11 @@ struct
             (form: isa_formula): (string, int) formula =
         let val f = convert_sexp auto_num_to_name auto_and_loc_nums_to_name
         in (case form of
-            Model_Checker.EX x => Formula.Ex (f x) |
-            Model_Checker.AX x => Formula.Ax (f x) |
-            Model_Checker.EG x => Formula.Eg (f x) |
-            Model_Checker.AG x => Formula.Ag (f x) |
-            Model_Checker.Leadsto (x, y) => Formula.Leadsto (f x, f y)
+            Converter.EX x => Formula.Ex (f x) |
+            Converter.AX x => Formula.Ax (f x) |
+            Converter.EG x => Formula.Eg (f x) |
+            Converter.AG x => Formula.Ag (f x) |
+            Converter.Leadsto (x, y) => Formula.Leadsto (f x, f y)
         )
         end
 
@@ -291,26 +291,26 @@ struct
             (clocks, 
                 (auto_names, 
                     (node_ids_to_names, 
-                    auto_names_to_index, 
-                    broadcast, 
-                    automata,
-                    vars_and_bounds,
-                    formula,
-                    init_locs,
-                    init_vars))) : clocks_name_network): ParseBexpTypes.network = 
+                        (auto_names_to_index, 
+                            (broadcast, 
+                                (automata,
+                                    (vars_and_bounds,
+                                        (formula,
+                                            (init_locs,
+                                            init_vars))))))))) : clocks_name_network): ParseBexpTypes.network = 
         let 
-            val ((v, _, _), vars_and_bounds) = get_arbitrary_var vars_and_bounds;
+            val ((v, (_, _)), vars_and_bounds) = get_arbitrary_var vars_and_bounds;
             val vars = map make_var vars_and_bounds;
-            val indexed_auto_names = ListUtils.sort_by_index auto_names (auto_names_to_index #> Model_Checker.integer_of_nat);
+            val indexed_auto_names = ListUtils.sort_by_index auto_names (auto_names_to_index #> Converter.integer_of_nat);
 
             val automata =
                 (ListPair.zip (init_locs, automata))
                 |> ListUtils.zip_with_index
-                |> List.map ((fn ((l, a), i) => (node_ids_to_names (Model_Checker.nat_of_integer i), l, a))
+                |> List.map ((fn ((l, a), i) => (node_ids_to_names (Converter.nat_of_integer i), l, a))
                         #> (fn (n, l, a) => convert_automaton v n l a))
                 |> (fn xs => ListPair.zip (indexed_auto_names, xs)); (* Needs to preserve order, since indexes are used in renamings. *)
 
-            val auto_num_to_name = (fn n => List.nth (indexed_auto_names, Model_Checker.integer_of_nat n))
+            val auto_num_to_name = (fn n => List.nth (indexed_auto_names, Converter.integer_of_nat n))
             val formula = convert_formula auto_num_to_name node_ids_to_names formula
         in {
             automata = automata,

@@ -1,0 +1,35 @@
+$(SML_LIB)/basis/basis.mlb
+$(SML_LIB)/basis/mlton.mlb
+
+../imports/cmlib.mlb
+
+local
+    ../../../lib/parcom/src/parse.sig
+    ../../../lib/parcom/src/parse.sml
+
+    ../../../lib/parcom/src/charparse.sig
+    ../../../lib/parcom/src/charparse.sml
+
+    ../../../lib/parcom/src/tokparse.sig
+    ../../../lib/parcom/src/tokparse.sml
+    ../../../lib/parcom/src/langparse.sml
+
+in
+
+  signature PARSER_COMBINATORS
+  signature CHAR_PARSER
+  signature MINI_LANGUAGE_DEF
+  signature LANGUAGE_DEF
+  signature TOKEN_PARSER
+
+  structure ParserCombinators
+  structure CharParser
+  structure BasicParser
+
+
+  functor   TokenParser
+  functor   SimpleStyle
+  functor   JavaStyle
+  functor   MLStyle
+
+end

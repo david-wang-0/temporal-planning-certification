@@ -58,3 +58,12 @@ Export the generated SML code:
 ```
 isabelle build -e PDDL_TP_Reduction 
 ```
+
+CMlib needs to be in version 2.3.0
+```
+cd ML/lib/cmlib
+```
+
+```
+git checkout 7e58f90cc854788de66c623f7da9f7d4940eef21
+```

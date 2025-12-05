@@ -77,24 +77,13 @@ fun test_bit x n =
 end; (* struct Uint32 *)
 
 
-structure Logging : sig
-  val set_level : int -> unit
-  val trace : int -> (unit -> string) -> unit
-  val get_trace: unit -> (int * string) list
+structure Integer: sig
+  val div_mod: int -> int -> int * int
 end = struct
-  val level = Unsynchronized.ref 0;
-  val messages : (int * string) list ref = Unsynchronized.ref [];
-  fun set_level i = level := i;
-  fun get_trace () = !messages;
-  fun trace i f =
-    if i > !level
-    then ()
-    else
-      let
-        val s = f ();
-        val _ = messages := (i, s) :: !messages;
-      in () end;
+  fun div_mod i j = (i div j, i mod j)
 end
+
+
 
 
 
@@ -354,19 +343,93 @@ end;
 
 
 
-structure Certifier : sig
-  type int
+structure Converter : sig
+  datatype inta = Int_of_integer of int
+  val integer_of_int : inta -> int
+  type num
   type nat
-  type 'a act
-  type ('a, 'b) bexp
-  type ('a, 'b) exp
-  type ('a, 'b) acconstraint
-  type 'a result
-  type ast_problem
+  val integer_of_nat : nat -> int
+  val nat_of_integer : int -> nat
+  type char
+  type rat
+  type color
+  type ('a, 'b) rbt
+  datatype 'a dBMEntry = Le of 'a | Lt of 'a | INF
+  datatype 'a act = In of 'a | Out of 'a | Sil of 'a
+  val explode : string -> char list
+  datatype 'a formula = Atom of 'a | Bot | Not of 'a formula |
+    And of 'a formula * 'a formula | Or of 'a formula * 'a formula |
+    Imp of 'a formula * 'a formula
+  datatype ('a, 'b) bexp = True | Nota of ('a, 'b) bexp |
+    Anda of ('a, 'b) bexp * ('a, 'b) bexp | Ora of ('a, 'b) bexp * ('a, 'b) bexp
+    | Imply of ('a, 'b) bexp * ('a, 'b) bexp |
+    Eqa of ('a, 'b) exp * ('a, 'b) exp | Lea of ('a, 'b) exp * ('a, 'b) exp |
+    Ltb of ('a, 'b) exp * ('a, 'b) exp | Ge of ('a, 'b) exp * ('a, 'b) exp |
+    Gta of ('a, 'b) exp * ('a, 'b) exp
+  and ('a, 'b) exp = Const of 'b | Var of 'a |
+    If_then_else of ('a, 'b) bexp * ('a, 'b) exp * ('a, 'b) exp |
+    Binop of ('b -> 'b -> 'b) * ('a, 'b) exp * ('a, 'b) exp |
+    Unop of ('b -> 'b) * ('a, 'b) exp
+  datatype ('a, 'b) acconstraint = LTa of 'a * 'b | LEa of 'a * 'b |
+    EQ of 'a * 'b | GTa of 'a * 'b | GEa of 'a * 'b
+  datatype predicate = Pred of string
+  datatype 'a atom = PredAtm of predicate * 'a list | EqAtm of 'a * 'a
+  datatype func = Func of string
+  datatype variable = Vara of string
+  datatype object = Obj of string | FuncEnt of func * object list |
+    TimeEnt of rat
+  datatype term = VAR of variable | CONST of object
+  datatype typea = Either of string list
+  datatype 'a ast_effect = Effect of 'a atom formula list * 'a atom formula list
+  datatype temporal_annotation = At_Start | Over_All | At_End
+  datatype duration_op = EQa | LEQ | GEQ
+  datatype 'a duration_constraint = No_Const | Time_Const of duration_op * rat |
+    Func_Const of duration_op * func * 'a list
+  datatype ast_action_schema =
+    Simple_Action_Schema of
+      string * (variable * typea) list * term atom formula * term ast_effect
+    | Durative_Action_Schema of
+        string * (variable * typea) list * term duration_constraint list *
+          (temporal_annotation * term atom formula) list *
+          (temporal_annotation * term ast_effect) list
+  datatype ('a, 'b) sum = Inl of 'a | Inr of 'b
+  datatype 'a result = Result of 'a | Error of string list
+  datatype predicate_decl = PredDecl of predicate * typea list
+  datatype function_decl = FuncDecl of func * typea list
+  datatype ast_domain =
+    Domain of
+      (string * string) list * predicate_decl list * function_decl list *
+        (object * typea) list * ast_action_schema list
+  datatype ast_problem =
+    Problem of
+      ast_domain * (object * typea) list * object atom formula list *
+        object atom formula
+  datatype plan_action = Simple_Plan_Action of string * object list |
+    Durative_Plan_Action of string * object list * rat
   type resulta
-  type mode
-  type ('a, 'b, 'c, 'd) formulaa
-  type 'a state_space
+  datatype ('a, 'b, 'c, 'd) sexp = Truea | Notb of ('a, 'b, 'c, 'd) sexp |
+    Andb of ('a, 'b, 'c, 'd) sexp * ('a, 'b, 'c, 'd) sexp |
+    Orb of ('a, 'b, 'c, 'd) sexp * ('a, 'b, 'c, 'd) sexp |
+    Implya of ('a, 'b, 'c, 'd) sexp * ('a, 'b, 'c, 'd) sexp | Eqb of 'c * 'd |
+    Leb of 'c * 'd | Ltc of 'c * 'd | Gea of 'c * 'd | Gtb of 'c * 'd |
+    Loc of 'a * 'b
+  datatype mode = Impl1 | Impl2 | Impl3 | Buechi | Debug
+  datatype ('a, 'b, 'c, 'd) formulaa = EX of ('a, 'b, 'c, 'd) sexp |
+    EG of ('a, 'b, 'c, 'd) sexp | AX of ('a, 'b, 'c, 'd) sexp |
+    AG of ('a, 'b, 'c, 'd) sexp |
+    Leadsto of ('a, 'b, 'c, 'd) sexp * ('a, 'b, 'c, 'd) sexp
+  datatype 'a state_space =
+    Reachable_Set of (('a list * inta list) * (inta dBMEntry list) list) list |
+    Buechi_Set of (('a list * inta list) * (inta dBMEntry list * nat) list) list
+  val fract : inta -> inta -> rat
+  val of_int : inta -> rat
+  val bigOr : 'a formula list -> 'a formula
+  val implode : char list -> string
+  val bigAnd : 'a formula list -> 'a formula
+  val rbt_to_list : ('a, 'b) rbt -> 'a list
+  val map_atom : ('a -> 'b) -> 'a atom -> 'b atom
+  val predicate : 'a atom -> predicate
+  val rat_of_digits_pair : nat list * nat list -> rat
   val check_and_cert_pddl_problem_no_return :
     ast_problem ->
       mode ->
@@ -379,35 +442,35 @@ structure Certifier : sig
                      ((nat list *
                         (nat list *
                           ((nat *
-                             ((string, int) bexp *
-                               ((string, int) acconstraint list *
+                             ((string, inta) bexp *
+                               ((string, inta) acconstraint list *
                                  (string act *
-                                   ((string * (string, int) exp) list *
+                                   ((string * (string, inta) exp) list *
                                      (string list * nat)))))) list *
                             (nat *
-                              (string, int) acconstraint list) list))) list *
-                       ((string * (int * int)) list *
-                         ((nat, nat, string, int) formulaa *
-                           (nat list * (string * int) list)))))))) ->
+                              (string, inta) acconstraint list) list))) list *
+                       ((string * (inta * inta)) list *
+                         ((nat, nat, string, inta) formulaa *
+                           (nat list * (string * inta) list)))))))) ->
             (((string -> nat) *
                ((string -> nat) *
                  ((nat -> nat -> nat) *
                    ((nat -> string) *
                      ((nat -> string) * (nat -> nat -> nat)))))) *
-              int state_space) option) ->
+              inta state_space) option) ->
             bool -> (unit -> unit)
 end = struct
 
-datatype int = Int_of_integer of Int.int;
+datatype inta = Int_of_integer of int;
 
 fun integer_of_int (Int_of_integer k) = k;
 
-fun equal_inta k l = (((integer_of_int k) : Int.int) = (integer_of_int l));
+fun equal_inta k l = integer_of_int k = integer_of_int l;
 
 type 'a equal = {equal : 'a -> 'a -> bool};
 val equal = #equal : 'a equal -> 'a -> 'a -> bool;
 
-val equal_int = {equal = equal_inta} : int equal;
+val equal_int = {equal = equal_inta} : inta equal;
 
 datatype typerepa = Typerep of string * typerepa list;
 
@@ -424,57 +487,48 @@ type 'a heap = {countable_heap : 'a countable, typerep_heap : 'a typerep};
 val countable_heap = #countable_heap : 'a heap -> 'a countable;
 val typerep_heap = #typerep_heap : 'a heap -> 'a typerep;
 
-val countable_int = {} : int countable;
+val countable_int = {} : inta countable;
 
-val typerep_int = {typerep = typerep_inta} : int typerep;
+val typerep_int = {typerep = typerep_inta} : inta typerep;
 
 val heap_int = {countable_heap = countable_int, typerep_heap = typerep_int} :
-  int heap;
+  inta heap;
 
-fun uminus_inta k = Int_of_integer (Int.~ (integer_of_int k));
+fun uminus_inta k = Int_of_integer (~ (integer_of_int k));
 
-val zero_inta : int = Int_of_integer (0 : Int.int);
+val zero_inta : inta = Int_of_integer (0 : Int.int);
 
 fun apsnd f (x, y) = (x, f y);
 
 datatype num = One | Bit0 of num | Bit1 of num;
 
 fun divmod_integer k l =
-  (if ((k : Int.int) = (0 : Int.int))
-    then ((0 : Int.int), (0 : Int.int))
-    else (if Int.< ((0 : Int.int), l)
-           then (if Int.< ((0 : Int.int), k)
-                  then Int.divMod (Int.abs k, Int.abs l)
+  (if k = (0 : Int.int) then ((0 : Int.int), (0 : Int.int))
+    else (if (0 : Int.int) < l
+           then (if (0 : Int.int) < k then Integer.div_mod (abs k) (abs l)
                   else let
-                         val (r, s) =
-                           Int.divMod (Int.abs k, Int.abs l);
+                         val (r, s) = Integer.div_mod (abs k) (abs l);
                        in
-                         (if ((s : Int.int) = (0 : Int.int))
-                           then (Int.~ r, (0 : Int.int))
-                           else (Int.- (Int.~ r, (1 : Int.int)),
-                                  Int.- (l, s)))
+                         (if s = (0 : Int.int) then (~ r, (0 : Int.int))
+                           else (~ r - (1 : Int.int), l - s))
                        end)
-           else (if ((l : Int.int) = (0 : Int.int))
-                  then ((0 : Int.int), k)
-                  else apsnd Int.~
-                         (if Int.< (k, (0 : Int.int))
-                           then Int.divMod (Int.abs k, Int.abs l)
+           else (if l = (0 : Int.int) then ((0 : Int.int), k)
+                  else apsnd (fn a => ~ a)
+                         (if k < (0 : Int.int)
+                           then Integer.div_mod (abs k) (abs l)
                            else let
-                                  val (r, s) =
-                                    Int.divMod (Int.abs k, Int.abs l);
+                                  val (r, s) = Integer.div_mod (abs k) (abs l);
                                 in
-                                  (if ((s : Int.int) = (0 : Int.int))
-                                    then (Int.~ r, (0 : Int.int))
-                                    else (Int.- (Int.~
-              r, (1 : Int.int)),
-   Int.- (Int.~ l, s)))
+                                  (if s = (0 : Int.int)
+                                    then (~ r, (0 : Int.int))
+                                    else (~ r - (1 : Int.int), ~ l - s))
                                 end))));
 
 fun snd (x1, x2) = x2;
 
 fun modulo_integer k l = snd (divmod_integer k l);
 
-datatype nat = Nat of Int.int;
+datatype nat = Nat of int;
 
 fun integer_of_nat (Nat x) = x;
 
@@ -486,7 +540,7 @@ fun divide_integer k l = fst (divmod_integer k l);
 
 fun divide_nat m n = Nat (divide_integer (integer_of_nat m) (integer_of_nat n));
 
-fun equal_nata m n = (((integer_of_nat m) : Int.int) = (integer_of_nat n));
+fun equal_nata m n = integer_of_nat m = integer_of_nat n;
 
 type 'a ord = {less_eq : 'a -> 'a -> bool, less : 'a -> 'a -> bool};
 val less_eq = #less_eq : 'a ord -> 'a -> 'a -> bool;
@@ -495,9 +549,8 @@ val less = #less : 'a ord -> 'a -> 'a -> bool;
 fun max A_ a b = (if less_eq A_ a b then b else a);
 
 val ord_integer =
-  {less_eq = (fn a => fn b => Int.<= (a, b)),
-    less = (fn a => fn b => Int.< (a, b))}
-  : Int.int ord;
+  {less_eq = (fn a => fn b => a <= b), less = (fn a => fn b => a < b)} :
+  int ord;
 
 fun nat_of_integer k = Nat (max ord_integer (0 : Int.int) k);
 
@@ -536,7 +589,7 @@ fun string_of_digit n =
                     else [Chara (true, false, false, true, true, true, false,
                                   false)])))))))));
 
-fun less_nat m n = Int.< (integer_of_nat m, integer_of_nat n);
+fun less_nat m n = integer_of_nat m < integer_of_nat n;
 
 fun shows_string x = (fn a => x @ a);
 
@@ -548,7 +601,7 @@ fun showsp_nat p n =
              (string_of_digit
                (modulo_nat n (nat_of_integer (10 : Int.int)))));
 
-fun less_int k l = Int.< (integer_of_int k, integer_of_int l);
+fun less_int k l = integer_of_int k < integer_of_int l;
 
 fun nat x = (nat_of_integer o integer_of_int) x;
 
@@ -591,37 +644,48 @@ val shows_prec = #shows_prec : 'a show -> nat -> 'a -> char list -> char list;
 val shows_list = #shows_list : 'a show -> 'a list -> char list -> char list;
 
 val show_int = {shows_prec = shows_prec_int, shows_list = shows_list_int} :
-  int show;
+  inta show;
 
-val one_inta : int = Int_of_integer (1 : Int.int);
+val one_inta : inta = Int_of_integer (1 : Int.int);
 
 type 'a one = {one : 'a};
 val one = #one : 'a one -> 'a;
 
-val one_int = {one = one_inta} : int one;
+val one_int = {one = one_inta} : inta one;
 
-fun plus_inta k l =
-  Int_of_integer (Int.+ (integer_of_int k, integer_of_int l));
+fun plus_inta k l = Int_of_integer (integer_of_int k + integer_of_int l);
 
 type 'a plus = {plus : 'a -> 'a -> 'a};
 val plus = #plus : 'a plus -> 'a -> 'a -> 'a;
 
-val plus_int = {plus = plus_inta} : int plus;
+val plus_int = {plus = plus_inta} : inta plus;
 
 type 'a zero = {zero : 'a};
 val zero = #zero : 'a zero -> 'a;
 
-val zero_int = {zero = zero_inta} : int zero;
+val zero_int = {zero = zero_inta} : inta zero;
 
-fun minus_inta k l =
-  Int_of_integer (Int.- (integer_of_int k, integer_of_int l));
+fun times_inta k l = Int_of_integer (integer_of_int k * integer_of_int l);
+
+type 'a times = {times : 'a -> 'a -> 'a};
+val times = #times : 'a times -> 'a -> 'a -> 'a;
+
+type 'a power = {one_power : 'a one, times_power : 'a times};
+val one_power = #one_power : 'a power -> 'a one;
+val times_power = #times_power : 'a power -> 'a times;
+
+val times_int = {times = times_inta} : inta times;
+
+val power_int = {one_power = one_int, times_power = times_int} : inta power;
+
+fun minus_inta k l = Int_of_integer (integer_of_int k - integer_of_int l);
 
 type 'a minus = {minusa : 'a -> 'a -> 'a};
 val minusa = #minusa : 'a minus -> 'a -> 'a -> 'a;
 
-val minus_int = {minusa = minus_inta} : int minus;
+val minus_int = {minusa = minus_inta} : inta minus;
 
-fun less_eq_int k l = Int.<= (integer_of_int k, integer_of_int l);
+fun less_eq_int k l = integer_of_int k <= integer_of_int l;
 
 fun min_int x y = (if less_eq_int x y then x else y);
 
@@ -630,21 +694,21 @@ fun inf_inta x = min_int x;
 type 'a inf = {inf : 'a -> 'a -> 'a};
 val inf = #inf : 'a inf -> 'a -> 'a -> 'a;
 
-val inf_int = {inf = inf_inta} : int inf;
+val inf_int = {inf = inf_inta} : inta inf;
 
-val ord_int = {less_eq = less_eq_int, less = less_int} : int ord;
+val ord_int = {less_eq = less_eq_int, less = less_int} : inta ord;
 
 fun sup_inta x = max ord_int x;
 
 type 'a sup = {sup : 'a -> 'a -> 'a};
 val sup = #sup : 'a sup -> 'a -> 'a -> 'a;
 
-val sup_int = {sup = sup_inta} : int sup;
+val sup_int = {sup = sup_inta} : inta sup;
 
 type 'a uminus = {uminus : 'a -> 'a};
 val uminus = #uminus : 'a uminus -> 'a -> 'a;
 
-val uminus_int = {uminus = uminus_inta} : int uminus;
+val uminus_int = {uminus = uminus_inta} : inta uminus;
 
 datatype ordera = Eq | Lta | Gt;
 
@@ -663,18 +727,18 @@ fun comparator_of (A1_, A2_) x y =
   (if less ((ord_preorder o preorder_order o order_linorder) A2_) x y then Lta
     else (if eq A1_ x y then Eq else Gt));
 
-val preorder_int = {ord_preorder = ord_int} : int preorder;
+val preorder_int = {ord_preorder = ord_int} : inta preorder;
 
-val order_int = {preorder_order = preorder_int} : int order;
+val order_int = {preorder_order = preorder_int} : inta order;
 
-val linorder_int = {order_linorder = order_int} : int linorder;
+val linorder_int = {order_linorder = order_int} : inta linorder;
 
 fun compare_inta x = comparator_of (equal_int, linorder_int) x;
 
 type 'a compare = {compare : 'a -> 'a -> ordera};
 val compare = #compare : 'a compare -> 'a -> 'a -> ordera;
 
-val compare_int = {compare = compare_inta} : int compare;
+val compare_int = {compare = compare_inta} : inta compare;
 
 type 'a semigroup_add = {plus_semigroup_add : 'a plus};
 val plus_semigroup_add = #plus_semigroup_add : 'a semigroup_add -> 'a plus;
@@ -701,21 +765,21 @@ val monoid_add_group_add = #monoid_add_group_add :
   'a group_add -> 'a monoid_add;
 val uminus_group_add = #uminus_group_add : 'a group_add -> 'a uminus;
 
-val semigroup_add_int = {plus_semigroup_add = plus_int} : int semigroup_add;
+val semigroup_add_int = {plus_semigroup_add = plus_int} : inta semigroup_add;
 
 val cancel_semigroup_add_int =
   {semigroup_add_cancel_semigroup_add = semigroup_add_int} :
-  int cancel_semigroup_add;
+  inta cancel_semigroup_add;
 
 val monoid_add_int =
   {semigroup_add_monoid_add = semigroup_add_int, zero_monoid_add = zero_int} :
-  int monoid_add;
+  inta monoid_add;
 
 val group_add_int =
   {cancel_semigroup_add_group_add = cancel_semigroup_add_int,
     minus_group_add = minus_int, monoid_add_group_add = monoid_add_int,
     uminus_group_add = uminus_int}
-  : int group_add;
+  : inta group_add;
 
 type 'a semilattice_sup =
   {sup_semilattice_sup : 'a sup, order_semilattice_sup : 'a order};
@@ -739,23 +803,23 @@ val semilattice_sup_lattice = #semilattice_sup_lattice :
 
 val semilattice_sup_int =
   {sup_semilattice_sup = sup_int, order_semilattice_sup = order_int} :
-  int semilattice_sup;
+  inta semilattice_sup;
 
 val semilattice_inf_int =
   {inf_semilattice_inf = inf_int, order_semilattice_inf = order_int} :
-  int semilattice_inf;
+  inta semilattice_inf;
 
 val lattice_int =
   {semilattice_inf_lattice = semilattice_inf_int,
     semilattice_sup_lattice = semilattice_sup_int}
-  : int lattice;
+  : inta lattice;
 
-val ceq_inta : (int -> int -> bool) option = SOME equal_inta;
+val ceq_inta : (inta -> inta -> bool) option = SOME equal_inta;
 
 type 'a ceq = {ceq : ('a -> 'a -> bool) option};
 val ceq = #ceq : 'a ceq -> ('a -> 'a -> bool) option;
 
-val ceq_int = {ceq = ceq_inta} : int ceq;
+val ceq_int = {ceq = ceq_inta} : inta ceq;
 
 fun def_hashmap_size_int x = (fn _ => nat_of_integer (16 : Int.int)) x;
 
@@ -770,19 +834,19 @@ fun hashcode_int i = uint32_of_int i;
 
 val hashable_int =
   {hashcode = hashcode_int, def_hashmap_size = def_hashmap_size_int} :
-  int hashable;
+  inta hashable;
 
 datatype ('a, 'b) phantom = Phantom of 'b;
 
 datatype set_impla = Set_Choose | Set_Collect | Set_DList | Set_RBT |
   Set_Monada;
 
-val set_impl_inta : (int, set_impla) phantom = Phantom Set_RBT;
+val set_impl_inta : (inta, set_impla) phantom = Phantom Set_RBT;
 
 type 'a set_impl = {set_impl : ('a, set_impla) phantom};
 val set_impl = #set_impl : 'a set_impl -> ('a, set_impla) phantom;
 
-val set_impl_int = {set_impl = set_impl_inta} : int set_impl;
+val set_impl_int = {set_impl = set_impl_inta} : inta set_impl;
 
 type 'a ab_semigroup_add = {semigroup_add_ab_semigroup_add : 'a semigroup_add};
 val semigroup_add_ab_semigroup_add = #semigroup_add_ab_semigroup_add :
@@ -828,31 +892,31 @@ val group_add_ab_group_add = #group_add_ab_group_add :
   'a ab_group_add -> 'a group_add;
 
 val ab_semigroup_add_int = {semigroup_add_ab_semigroup_add = semigroup_add_int}
-  : int ab_semigroup_add;
+  : inta ab_semigroup_add;
 
 val cancel_ab_semigroup_add_int =
   {ab_semigroup_add_cancel_ab_semigroup_add = ab_semigroup_add_int,
     cancel_semigroup_add_cancel_ab_semigroup_add = cancel_semigroup_add_int,
     minus_cancel_ab_semigroup_add = minus_int}
-  : int cancel_ab_semigroup_add;
+  : inta cancel_ab_semigroup_add;
 
 val comm_monoid_add_int =
   {ab_semigroup_add_comm_monoid_add = ab_semigroup_add_int,
     monoid_add_comm_monoid_add = monoid_add_int}
-  : int comm_monoid_add;
+  : inta comm_monoid_add;
 
 val cancel_comm_monoid_add_int =
   {cancel_ab_semigroup_add_cancel_comm_monoid_add = cancel_ab_semigroup_add_int,
     comm_monoid_add_cancel_comm_monoid_add = comm_monoid_add_int}
-  : int cancel_comm_monoid_add;
+  : inta cancel_comm_monoid_add;
 
 val ab_group_add_int =
   {cancel_comm_monoid_add_ab_group_add = cancel_comm_monoid_add_int,
     group_add_ab_group_add = group_add_int}
-  : int ab_group_add;
+  : inta ab_group_add;
 
 val cEnum_int :
-  (int list * (((int -> bool) -> bool) * ((int -> bool) -> bool))) option
+  (inta list * (((inta -> bool) -> bool) * ((inta -> bool) -> bool))) option
   = NONE;
 
 type 'a cenum =
@@ -862,21 +926,21 @@ val cEnum = #cEnum :
   'a cenum ->
     ('a list * ((('a -> bool) -> bool) * (('a -> bool) -> bool))) option;
 
-val cenum_int = {cEnum = cEnum_int} : int cenum;
+val cenum_int = {cEnum = cEnum_int} : inta cenum;
 
-val finite_UNIV_inta : (int, bool) phantom = Phantom false;
+val finite_UNIV_inta : (inta, bool) phantom = Phantom false;
 
 type 'a finite_UNIV = {finite_UNIV : ('a, bool) phantom};
 val finite_UNIV = #finite_UNIV : 'a finite_UNIV -> ('a, bool) phantom;
 
-val finite_UNIV_int = {finite_UNIV = finite_UNIV_inta} : int finite_UNIV;
+val finite_UNIV_int = {finite_UNIV = finite_UNIV_inta} : inta finite_UNIV;
 
-val ccompare_inta : (int -> int -> ordera) option = SOME compare_inta;
+val ccompare_inta : (inta -> inta -> ordera) option = SOME compare_inta;
 
 type 'a ccompare = {ccompare : ('a -> 'a -> ordera) option};
 val ccompare = #ccompare : 'a ccompare -> ('a -> 'a -> ordera) option;
 
-val ccompare_int = {ccompare = ccompare_inta} : int ccompare;
+val ccompare_int = {ccompare = ccompare_inta} : inta ccompare;
 
 type 'a ordered_ab_semigroup_add =
   {ab_semigroup_add_ordered_ab_semigroup_add : 'a ab_semigroup_add,
@@ -984,36 +1048,36 @@ val ordered_ab_semigroup_monoid_add_imp_le_ordered_ab_group_add =
 val ordered_ab_semigroup_add_int =
   {ab_semigroup_add_ordered_ab_semigroup_add = ab_semigroup_add_int,
     order_ordered_ab_semigroup_add = order_int}
-  : int ordered_ab_semigroup_add;
+  : inta ordered_ab_semigroup_add;
 
 val strict_ordered_ab_semigroup_add_int =
   {ordered_ab_semigroup_add_strict_ordered_ab_semigroup_add =
      ordered_ab_semigroup_add_int}
-  : int strict_ordered_ab_semigroup_add;
+  : inta strict_ordered_ab_semigroup_add;
 
 val ordered_cancel_ab_semigroup_add_int =
   {cancel_ab_semigroup_add_ordered_cancel_ab_semigroup_add =
      cancel_ab_semigroup_add_int,
     strict_ordered_ab_semigroup_add_ordered_cancel_ab_semigroup_add =
       strict_ordered_ab_semigroup_add_int}
-  : int ordered_cancel_ab_semigroup_add;
+  : inta ordered_cancel_ab_semigroup_add;
 
 val ordered_ab_semigroup_add_imp_le_int =
   {ordered_cancel_ab_semigroup_add_ordered_ab_semigroup_add_imp_le =
      ordered_cancel_ab_semigroup_add_int}
-  : int ordered_ab_semigroup_add_imp_le;
+  : inta ordered_ab_semigroup_add_imp_le;
 
 val strict_ordered_comm_monoid_add_int =
   {comm_monoid_add_strict_ordered_comm_monoid_add = comm_monoid_add_int,
     strict_ordered_ab_semigroup_add_strict_ordered_comm_monoid_add =
       strict_ordered_ab_semigroup_add_int}
-  : int strict_ordered_comm_monoid_add;
+  : inta strict_ordered_comm_monoid_add;
 
 val ordered_comm_monoid_add_int =
   {comm_monoid_add_ordered_comm_monoid_add = comm_monoid_add_int,
     ordered_ab_semigroup_add_ordered_comm_monoid_add =
       ordered_ab_semigroup_add_int}
-  : int ordered_comm_monoid_add;
+  : inta ordered_comm_monoid_add;
 
 val ordered_cancel_comm_monoid_add_int =
   {ordered_cancel_ab_semigroup_add_ordered_cancel_comm_monoid_add =
@@ -1022,7 +1086,7 @@ val ordered_cancel_comm_monoid_add_int =
       ordered_comm_monoid_add_int,
     strict_ordered_comm_monoid_add_ordered_cancel_comm_monoid_add =
       strict_ordered_comm_monoid_add_int}
-  : int ordered_cancel_comm_monoid_add;
+  : inta ordered_cancel_comm_monoid_add;
 
 val ordered_ab_semigroup_monoid_add_imp_le_int =
   {cancel_comm_monoid_add_ordered_ab_semigroup_monoid_add_imp_le =
@@ -1031,13 +1095,13 @@ val ordered_ab_semigroup_monoid_add_imp_le_int =
       ordered_ab_semigroup_add_imp_le_int,
     ordered_cancel_comm_monoid_add_ordered_ab_semigroup_monoid_add_imp_le =
       ordered_cancel_comm_monoid_add_int}
-  : int ordered_ab_semigroup_monoid_add_imp_le;
+  : inta ordered_ab_semigroup_monoid_add_imp_le;
 
 val ordered_ab_group_add_int =
   {ab_group_add_ordered_ab_group_add = ab_group_add_int,
     ordered_ab_semigroup_monoid_add_imp_le_ordered_ab_group_add =
       ordered_ab_semigroup_monoid_add_imp_le_int}
-  : int ordered_ab_group_add;
+  : inta ordered_ab_group_add;
 
 type 'a linordered_ab_semigroup_add =
   {ordered_ab_semigroup_add_linordered_ab_semigroup_add :
@@ -1100,34 +1164,34 @@ val linordered_ab_semigroup_add_int =
   {ordered_ab_semigroup_add_linordered_ab_semigroup_add =
      ordered_ab_semigroup_add_int,
     linorder_linordered_ab_semigroup_add = linorder_int}
-  : int linordered_ab_semigroup_add;
+  : inta linordered_ab_semigroup_add;
 
 val linordered_cancel_ab_semigroup_add_int =
   {linordered_ab_semigroup_add_linordered_cancel_ab_semigroup_add =
      linordered_ab_semigroup_add_int,
     ordered_ab_semigroup_add_imp_le_linordered_cancel_ab_semigroup_add =
       ordered_ab_semigroup_add_imp_le_int}
-  : int linordered_cancel_ab_semigroup_add;
+  : inta linordered_cancel_ab_semigroup_add;
 
 val linordered_ab_monoid_add_int =
   {linordered_ab_semigroup_add_linordered_ab_monoid_add =
      linordered_ab_semigroup_add_int,
     ordered_comm_monoid_add_linordered_ab_monoid_add =
       ordered_comm_monoid_add_int}
-  : int linordered_ab_monoid_add;
+  : inta linordered_ab_monoid_add;
 
 val linordered_cancel_ab_monoid_add_int =
   {linordered_ab_monoid_add_linordered_cancel_ab_monoid_add =
      linordered_ab_monoid_add_int,
     linordered_cancel_ab_semigroup_add_linordered_cancel_ab_monoid_add =
       linordered_cancel_ab_semigroup_add_int}
-  : int linordered_cancel_ab_monoid_add;
+  : inta linordered_cancel_ab_monoid_add;
 
 val linordered_ab_group_add_int =
   {linordered_cancel_ab_monoid_add_linordered_ab_group_add =
      linordered_cancel_ab_monoid_add_int,
     ordered_ab_group_add_linordered_ab_group_add = ordered_ab_group_add_int}
-  : int linordered_ab_group_add;
+  : inta linordered_ab_group_add;
 
 fun proper_interval_int (SOME x) (SOME y) = less_int one_inta (minus_inta y x)
   | proper_interval_int NONE uv = true
@@ -1146,7 +1210,7 @@ val cproper_interval = #cproper_interval :
 val cproper_interval_int =
   {ccompare_cproper_interval = ccompare_int,
     cproper_interval = cproper_interval_inta}
-  : int cproper_interval;
+  : inta cproper_interval;
 
 val equal_nat = {equal = equal_nata} : nat equal;
 
@@ -1168,13 +1232,13 @@ val show_nat = {shows_prec = shows_prec_nat, shows_list = shows_list_nat} :
 
 val one_nat = {one = one_nata} : nat one;
 
-fun plus_nata m n = Nat (Int.+ (integer_of_nat m, integer_of_nat n));
+fun plus_nata m n = Nat (integer_of_nat m + integer_of_nat n);
 
 val plus_nat = {plus = plus_nata} : nat plus;
 
 val zero_nat = {zero = zero_nata} : nat zero;
 
-fun less_eq_nat m n = Int.<= (integer_of_nat m, integer_of_nat n);
+fun less_eq_nat m n = integer_of_nat m <= integer_of_nat n;
 
 val ord_nat = {less_eq = less_eq_nat, less = less_nat} : nat ord;
 
@@ -1227,8 +1291,7 @@ val ccompare_nata : (nat -> nat -> ordera) option = SOME compare_nata;
 val ccompare_nat = {ccompare = ccompare_nata} : nat ccompare;
 
 fun minus_nat m n =
-  Nat (max ord_integer (0 : Int.int)
-        (Int.- (integer_of_nat m, integer_of_nat n)));
+  Nat (max ord_integer (0 : Int.int) (integer_of_nat m - integer_of_nat n));
 
 fun proper_interval_nat no NONE = true
   | proper_interval_nat NONE (SOME x) = less_nat zero_nata x
@@ -1243,7 +1306,7 @@ val cproper_interval_nat =
 
 fun equal_proda A_ B_ (x1, x2) (y1, y2) = eq A_ x1 y1 andalso eq B_ x2 y2;
 
-datatype rat = Frct of (int * int);
+datatype rat = Frct of (inta * inta);
 
 fun quotient_of (Frct x) = x;
 
@@ -1252,21 +1315,18 @@ fun equal_rata a b =
 
 val equal_rat = {equal = equal_rata} : rat equal;
 
-fun times_int k l =
-  Int_of_integer (Int.* (integer_of_int k, integer_of_int l));
-
 fun less_eq_rat p q = let
                         val (a, c) = quotient_of p;
                         val (b, d) = quotient_of q;
                       in
-                        less_eq_int (times_int a d) (times_int c b)
+                        less_eq_int (times_inta a d) (times_inta c b)
                       end;
 
 fun less_rat p q = let
                      val (a, c) = quotient_of p;
                      val (b, d) = quotient_of q;
                    in
-                     less_int (times_int a d) (times_int c b)
+                     less_int (times_inta a d) (times_inta c b)
                    end;
 
 val ord_rat = {less_eq = less_eq_rat, less = less_rat} : rat ord;
@@ -1663,11 +1723,9 @@ fun divmod_nat m n =
     val l = integer_of_nat n;
   in
     map_prod nat_of_integer nat_of_integer
-      (if ((k : Int.int) = (0 : Int.int))
-        then ((0 : Int.int), (0 : Int.int))
-        else (if ((l : Int.int) = (0 : Int.int))
-               then ((0 : Int.int), k)
-               else Int.divMod (Int.abs k, Int.abs l)))
+      (if k = (0 : Int.int) then ((0 : Int.int), (0 : Int.int))
+        else (if l = (0 : Int.int) then ((0 : Int.int), k)
+               else Integer.div_mod (abs k) (abs l)))
   end;
 
 fun apfst f (x, y) = (f x, y);
@@ -2673,7 +2731,7 @@ fun ceq_lista A_ =
 
 fun ceq_list A_ = {ceq = ceq_lista A_} : ('a list) ceq;
 
-fun times_nat m n = Nat (Int.* (integer_of_nat m, integer_of_nat n));
+fun times_nat m n = Nat (integer_of_nat m * integer_of_nat n);
 
 fun def_hashmap_size_list A_ =
   (fn _ =>
@@ -2941,14 +2999,11 @@ val equal_literal = {equal = (fn a => fn b => ((a : string) = b))} :
   string equal;
 
 fun bit_cut_integer k =
-  (if ((k : Int.int) = (0 : Int.int)) then ((0 : Int.int), false)
+  (if k = (0 : Int.int) then ((0 : Int.int), false)
     else let
-           val (r, s) =
-             Int.divMod (Int.abs k, Int.abs (2 : Int.int));
+           val (r, s) = Integer.div_mod (abs k) (abs (2 : Int.int));
          in
-           ((if Int.< ((0 : Int.int), k) then r
-              else Int.- (Int.~ r, s)),
-             ((s : Int.int) = (1 : Int.int)))
+           ((if (0 : Int.int) < k then r else ~ r - s), s = (1 : Int.int))
          end);
 
 fun char_of_integer k = let
@@ -2981,9 +3036,8 @@ val show_literal =
   string show;
 
 val ord_literal =
-  {less_eq = (fn a => fn b => ((a : string) <= b)),
-    less = (fn a => fn b => ((a : string) < b))}
-  : string ord;
+  {less_eq = (fn a => fn b => a <= b), less = (fn a => fn b => a < b)} :
+  string ord;
 
 val preorder_literal = {ord_preorder = ord_literal} : string preorder;
 
@@ -3272,11 +3326,11 @@ fun cproper_interval_prod A_ B_ =
     cproper_interval = cproper_interval_proda A_ B_}
   : ('a * 'b) cproper_interval;
 
-val one_integera : Int.int = (1 : Int.int);
+val one_integera : int = (1 : Int.int);
 
-val one_integer = {one = one_integera} : Int.int one;
+val one_integer = {one = one_integera} : int one;
 
-val zero_integer = {zero = (0 : Int.int)} : Int.int zero;
+val zero_integer = {zero = (0 : Int.int)} : int zero;
 
 type 'a zero_neq_one = {one_zero_neq_one : 'a one, zero_zero_neq_one : 'a zero};
 val one_zero_neq_one = #one_zero_neq_one : 'a zero_neq_one -> 'a one;
@@ -3284,7 +3338,7 @@ val zero_zero_neq_one = #zero_zero_neq_one : 'a zero_neq_one -> 'a zero;
 
 val zero_neq_one_integer =
   {one_zero_neq_one = one_integer, zero_zero_neq_one = zero_integer} :
-  Int.int zero_neq_one;
+  int zero_neq_one;
 
 datatype ('a, 'b) bexp = True | Nota of ('a, 'b) bexp |
   Anda of ('a, 'b) bexp * ('a, 'b) bexp | Ora of ('a, 'b) bexp * ('a, 'b) bexp |
@@ -3857,17 +3911,20 @@ fun of_bool A_ true = one (one_zero_neq_one A_)
   | of_bool A_ false = zero (zero_zero_neq_one A_);
 
 fun integer_of_char (Chara (b0, b1, b2, b3, b4, b5, b6, b7)) =
-  Int.+ (Int.* (Int.+ (Int.* (Int.+ (Int.* (Int.+ (Int.* (Int.+ (Int.* (Int.+ (Int.* (Int.+ (Int.* (of_bool
-                        zero_neq_one_integer
-                        b7, (2 : Int.int)), of_bool zero_neq_one_integer
-         b6), (2 : Int.int)), of_bool zero_neq_one_integer
-                                   b5), (2 : Int.int)), of_bool
-                     zero_neq_one_integer
-                     b4), (2 : Int.int)), of_bool zero_neq_one_integer
-       b3), (2 : Int.int)), of_bool zero_neq_one_integer
-                                 b2), (2 : Int.int)), of_bool
-                   zero_neq_one_integer
-                   b1), (2 : Int.int)), of_bool zero_neq_one_integer b0);
+  ((((((of_bool zero_neq_one_integer b7 * (2 : Int.int) +
+         of_bool zero_neq_one_integer b6) *
+         (2 : Int.int) +
+        of_bool zero_neq_one_integer b5) *
+        (2 : Int.int) +
+       of_bool zero_neq_one_integer b4) *
+       (2 : Int.int) +
+      of_bool zero_neq_one_integer b3) *
+      (2 : Int.int) +
+     of_bool zero_neq_one_integer b2) *
+     (2 : Int.int) +
+    of_bool zero_neq_one_integer b1) *
+    (2 : Int.int) +
+    of_bool zero_neq_one_integer b0;
 
 fun nat_of_char c = Nat (integer_of_char c);
 
@@ -4122,7 +4179,7 @@ datatype ('a, 'b) sum = Inl of 'a | Inr of 'b;
 datatype ('a, 'b) mapping = Assoc_List_Mapping of ('a, 'b) alist |
   RBT_Mapping of ('a, 'b) mapping_rbt | Mapping of ('a -> 'b option);
 
-datatype time = Time of int;
+datatype time = Time of inta;
 
 datatype ('a, 'b) hashtable = HashTable of (('a * 'b) list) array * nat;
 
@@ -4153,6 +4210,9 @@ datatype ast_problem =
     ast_domain * (object * typea) list * object atom formula list *
       object atom formula;
 
+datatype plan_action = Simple_Plan_Action of string * object list |
+  Durative_Plan_Action of string * object list * rat;
+
 datatype ground_action =
   Ground_Action of
     string * temporal_annotation * object atom formula * object ast_effect;
@@ -4176,8 +4236,8 @@ datatype ('a, 'b, 'c, 'd) formulaa = EX of ('a, 'b, 'c, 'd) sexp |
   Leadsto of ('a, 'b, 'c, 'd) sexp * ('a, 'b, 'c, 'd) sexp;
 
 datatype 'a state_space =
-  Reachable_Set of (('a list * int list) * (int dBMEntry list) list) list |
-  Buechi_Set of (('a list * int list) * (int dBMEntry list * nat) list) list;
+  Reachable_Set of (('a list * inta list) * (inta dBMEntry list) list) list |
+  Buechi_Set of (('a list * inta list) * (inta dBMEntry list * nat) list) list;
 
 fun nth (x :: xs) n =
   (if equal_nata n zero_nata then x else nth xs (minus_nat n one_nata));
@@ -4236,6 +4296,32 @@ fun take n [] = []
   | take n (x :: xs) =
     (if equal_nata n zero_nata then []
       else x :: take (minus_nat n one_nata) xs);
+
+fun divide_int k l =
+  Int_of_integer (divide_integer (integer_of_int k) (integer_of_int l));
+
+fun gcd_integer k l =
+  abs (if l = (0 : Int.int) then k
+        else gcd_integer l (modulo_integer (abs k) (abs l)));
+
+fun gcd_int (Int_of_integer x) (Int_of_integer y) =
+  Int_of_integer (gcd_integer x y);
+
+fun normalize p =
+  (if less_int zero_inta (snd p)
+    then let
+           val a = gcd_int (fst p) (snd p);
+         in
+           (divide_int (fst p) a, divide_int (snd p) a)
+         end
+    else (if equal_inta (snd p) zero_inta then (zero_inta, one_inta)
+           else let
+                  val a = uminus_inta (gcd_int (fst p) (snd p));
+                in
+                  (divide_int (fst p) a, divide_int (snd p) a)
+                end));
+
+fun fract a b = Frct (normalize (a, b));
 
 fun foldb A_ x xc = folda (fn a => fn _ => x a) (impl_ofa A_ xc);
 
@@ -4412,6 +4498,8 @@ fun sub asa n =
 
 fun map_of A_ ((l, v) :: ps) k = (if eq A_ l k then SOME v else map_of A_ ps k)
   | map_of A_ [] k = NONE;
+
+fun of_int a = Frct (a, one_inta);
 
 fun fun_upd A_ f a b = (fn x => (if eq A_ x a then b else f x));
 
@@ -4590,6 +4678,9 @@ fun mapping_empty A_ Mapping_RBT = RBT_Mapping (emptyc A_)
   | mapping_empty A_ Mapping_Choose = mapping_empty_choose A_;
 
 fun emptya (A1_, A2_) = mapping_empty A1_ (of_phantom (mapping_impl A2_));
+
+fun bigOr [] = Bot
+  | bigOr (f :: fs) = Or (f, bigOr fs);
 
 fun replicate n x =
   (if equal_nata n zero_nata then []
@@ -4998,10 +5089,14 @@ fun as_top s = let
 
 fun min A_ a b = (if less_eq A_ a b then a else b);
 
+fun power A_ a n =
+  (if equal_nata n zero_nata then one (one_power A_)
+    else times (times_power A_) a (power A_ a (minus_nat n one_nata)));
+
 fun imp_for_int_innera i u f s =
-  (if Int.<= (u, i) then (fn () => s)
+  (if u <= i then (fn () => s)
     else (fn f_ => fn () => f_ ((f i s) ()) ())
-           (imp_for_int_innera (Int.+ (i, (1 : Int.int))) u f));
+           (imp_for_int_innera (i + (1 : Int.int)) u f));
 
 fun imp_for_inta i u f s =
   imp_for_int_innera (integer_of_nat i) (integer_of_nat u) (f o nat_of_integer)
@@ -5310,16 +5405,14 @@ fun dbm_add_int INF uu = INF
 
 fun fw_upd_impl_integer n a k i j =
   let
-    val na = Int.+ (n, (1 : Int.int));
-    val ia = Int.+ (Int.* (i, na), j);
+    val na = n + (1 : Int.int);
+    val ia = i * na + j;
   in
-    (fn f_ => fn () => f_
-      (((fn () => Array.sub (a, Int.toInt (Int.+ (Int.* (i, na), k)))))
+    (fn f_ => fn () => f_ (((fn () => Array.sub (a, Int.toInt (i * na + k))))
       ()) ())
       (fn y =>
         (fn f_ => fn () => f_
-          (((fn () => Array.sub (a, Int.toInt (Int.+ (Int.* (k, na), j)))))
-          ()) ())
+          (((fn () => Array.sub (a, Int.toInt (k * na + j)))) ()) ())
           (fn z =>
             (fn f_ => fn () => f_ (((fn () => Array.sub (a, Int.toInt ia)))
               ()) ())
@@ -5336,7 +5429,7 @@ fun fw_upd_impl_integer n a k i j =
 fun fwi_impl_int n a k =
   let
     val na = integer_of_nat n;
-    val n_plus_1 = Int.+ (na, (1 : Int.int));
+    val n_plus_1 = na + (1 : Int.int);
   in
     imp_for_int_innera (0 : Int.int) n_plus_1
       (fn i =>
@@ -5637,6 +5730,9 @@ fun constraint_pair (LTa (x, m)) = (x, m)
   | constraint_pair (GEa (x, m)) = (x, m)
   | constraint_pair (GTa (x, m)) = (x, m);
 
+fun rbt_to_list Empty = []
+  | rbt_to_list (Branch (c, l, e, x, r)) = e :: rbt_to_list l @ rbt_to_list r;
+
 fun maxa (A1_, A2_, A3_, A4_) a = set_fold1 (A1_, A2_, A3_) (max_sls A4_) a;
 
 fun print_check s b = writeln (s ^ ": " ^ (if b then "passed" else "failed"));
@@ -5697,6 +5793,17 @@ fun no_stutter A_ [] = true
   | no_stutter A_ [uu] = true
   | no_stutter A_ (a :: b :: l) =
     not (eq A_ a b) andalso no_stutter A_ (b :: l);
+
+fun trim_ld_zs [] = []
+  | trim_ld_zs (d :: ds) =
+    (if equal_nata d zero_nata then trim_ld_zs ds else d :: ds);
+
+fun trim_tr_zsa [] zs = []
+  | trim_tr_zsa (d :: ds) zs =
+    (if equal_nata d zero_nata then trim_tr_zsa ds (zero_nata :: zs)
+      else zs @ d :: trim_tr_zsa ds []);
+
+fun trim_tr_zs ds = trim_tr_zsa ds [];
 
 fun run_map_heap f xs = Par_List.map ((fn a => (fn f => f ()) a) o f) xs;
 
@@ -6039,7 +6146,7 @@ fun mk_renaming A_ str xs =
 fun mk_renaminga (A1_, A2_) xs =
   mk_renaming A1_ (implode o (fn x => shows_prec A2_ zero_nata x [])) xs;
 
-fun list_of_set A_ xs = remdups A_ ((fn Set xs => xs) xs);
+fun list_of_set A_ xs = remdups A_ ((fn (Set_Monad xs) => xs | DList_set (Abs_dlist xs) => xs | RBT_set (Mapping_RBTa r) => rbt_to_list r | _ => raise Fail "Unsupported set implementation") xs);
 
 fun vars_of_bexp (A1_, A2_, A3_) (Nota e) = vars_of_bexp (A1_, A2_, A3_) e
   | vars_of_bexp (A1_, A2_, A3_) (Anda (e1, e2)) =
@@ -6955,12 +7062,12 @@ fun dbm_lt_0 INF = false
   | dbm_lt_0 (Le x) = less_int x zero_inta;
 
 fun imp_for_int_inner i u c f s =
-  (if Int.<= (u, i) then (fn () => s)
+  (if u <= i then (fn () => s)
     else (fn f_ => fn () => f_ ((c s) ()) ())
            (fn ctn =>
              (if ctn
                then (fn f_ => fn () => f_ ((f i s) ()) ())
-                      (imp_for_int_inner (Int.+ (i, (1 : Int.int))) u c f)
+                      (imp_for_int_inner (i + (1 : Int.int)) u c f)
                else (fn () => s))));
 
 fun imp_for_int i u c f s =
@@ -8360,31 +8467,27 @@ fun do_rename_mc C_ E_ F_ G_ f dc broadcast bounds automata k urge l_0 s_0
         (map (conv_urge equal_nat zero_int urge) automata) renum_acts renum_vars
         renum_clocks renum_states;
     val _ =
-      Logging.trace (Int.toInt (integer_of_int (Int_of_integer
-            (4 : Int.int)))) ((fn _ =>
-                                   (fn () => "Automata after renaming")) ());
+      (fn _ => fn s => writeln (s ())) (Int_of_integer
+ (4 : Int.int)) ((fn _ => (fn () => "Automata after renaming")) ());
     val _ =
       map (fn a =>
-            Logging.trace (Int.toInt (integer_of_int (Int_of_integer
-                  (4 : Int.int)))) ((fn _ =>
- (fn () =>
-   (implode
-     (shows_prec_prod (show_list show_nat)
-       (show_prod (show_list show_nat)
-         (show_prod
-           (show_list
-             (show_prod show_nat
-               (show_prod (show_bexp show_nat show_int)
-                 (show_prod (show_list (show_acconstraint show_nat show_int))
-                   (show_prod (show_act show_nat)
-                     (show_prod
-                       (show_list
-                         (show_prod show_nat (show_exp show_nat show_int)))
-                       (show_prod (show_list show_nat) show_nat)))))))
-           (show_list
-             (show_prod show_nat
-               (show_list (show_acconstraint show_nat show_int))))))
-       zero_nata a [])))) ()))
+            (fn _ => fn s => writeln (s ())) (Int_of_integer
+       (4 : Int.int)) ((fn _ =>
+                            (fn () =>
+                              (implode
+                                (shows_prec_prod (show_list show_nat)
+                                  (show_prod (show_list show_nat)
+                                    (show_prod
+                                      (show_list
+(show_prod show_nat
+  (show_prod (show_bexp show_nat show_int)
+    (show_prod (show_list (show_acconstraint show_nat show_int))
+      (show_prod (show_act show_nat)
+        (show_prod (show_list (show_prod show_nat (show_exp show_nat show_int)))
+          (show_prod (show_list show_nat) show_nat)))))))
+                                      (show_list
+(show_prod show_nat (show_list (show_acconstraint show_nat show_int))))))
+                                  zero_nata a [])))) ()))
         automataa;
     val _ = writeln "Renaming formula";
     val formulab =
@@ -13376,6 +13479,12 @@ fun min_ub_opt A_ [] u = u
     min_ub_opt A_ xs
       (if comp_opt_le (linorder_upper_bound A_) x u then x else u);
 
+fun int_of_digits [] acc = acc
+  | int_of_digits (d :: ds) acc =
+    int_of_digits ds
+      (plus_inta (times_inta acc (Int_of_integer (10 : Int.int)))
+        (int_of_nat d));
+
 fun is_predAtom (Atom (PredAtm (uu, uv))) = true
   | is_predAtom (Atom (EqAtm (va, vb))) = false
   | is_predAtom Bot = false
@@ -13397,9 +13506,6 @@ fun is_pos_conj (And (f, g)) = is_pos_conj f andalso is_pos_conj g
 fun to_literals (Atom (PredAtm (x, asa))) = [Atom (PredAtm (x, asa))]
   | to_literals (And (x, y)) = to_literals x @ to_literals y
   | to_literals (Not Bot) = [];
-
-fun divide_int k l =
-  Int_of_integer (divide_integer (integer_of_int k) (integer_of_int l));
 
 fun floor_rat p = let
                     val (a, b) = quotient_of p;
@@ -15533,10 +15639,10 @@ fun main_auto_goal_edge_spec p =
   end;
 
 val main_auto_loop_spec_impl :
-  nat * ((string, int) bexp *
-          ((string, int) acconstraint list *
+  nat * ((string, inta) bexp *
+          ((string, inta) acconstraint list *
             (string act *
-              ((string * (string, int) exp) list * (string list * nat)))))
+              ((string * (string, inta) exp) list * (string list * nat)))))
   = (goal_loc_impl, (True, ([], (Sil "", ([], ([], goal_loc_impl))))));
 
 fun main_auto_spec p =
@@ -15557,7 +15663,7 @@ fun automata_spec p =
           (one_int, plus_int, uminus_int, zero_int) p)
       (actions_spec p);
 
-val formula_spec : (nat, nat, string, int) formulaa =
+val formula_spec : (nat, nat, string, inta) formulaa =
   EX (Loc (zero_nata, goal_loc_impl));
 
 fun clock_names p =
@@ -15598,6 +15704,17 @@ fun make_certified_net problem certifier =
               of NONE => Error ["Certificate could not be generated"]
               | SOME a => Result a)
         (fn (renaming, cert) => Result (network, (renaming, cert))));
+
+fun predicate (PredAtm (x11, x12)) = x11;
+
+fun rat_of_digits_pair (ds_1, ds_2) =
+  let
+    val ds_1a = trim_ld_zs ds_1;
+    val ds_2a = trim_tr_zs ds_2;
+  in
+    fract (int_of_digits (ds_1a @ ds_2a) zero_inta)
+      (power power_int (Int_of_integer (10 : Int.int)) (size_list ds_2a))
+  end;
 
 fun check_and_cert_pddl_problem problem mode num_split certifier show_cert =
   (case make_certified_net problem certifier
@@ -15653,4 +15770,4 @@ fun check_and_cert_pddl_problem_no_return problem mode num_split certifier
     ()) ())
     (fn _ => (fn () => ()));
 
-end; (*struct Certifier*)
+end; (*struct Converter*)

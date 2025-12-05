@@ -1,40 +1,40 @@
 structure NetworkConversionTypes = struct
-    type nat = Model_Checker.nat
-    type inta = Model_Checker.inta
-    type 'a act = 'a Model_Checker.act
+    type nat = Converter.nat
+    type inta = Converter.inta
+    type 'a act = 'a Converter.act
     type int = int
 
 
     type isa_edge = 
-        nat * 
-        (string, inta) Model_Checker.bexp * 
-        (string, inta) Model_Checker.acconstraint list * 
-        string act * 
-        (string * (string, inta) Model_Checker.exp) list * 
-        string list * 
-        nat
+        (nat * 
+            ((string, inta) Converter.bexp * 
+                ((string, inta) Converter.acconstraint list * 
+                    (string act * 
+                        ((string * (string, inta) Converter.exp) list * 
+                            (string list * 
+                            nat))))))
 
     type isa_automaton = 
-        nat list * 
-        nat list * 
-        isa_edge list * 
-        (nat * (string, inta) Model_Checker.acconstraint list) list
+        (nat list * 
+            (nat list * 
+                (isa_edge list * 
+                (nat * (string, inta) Converter.acconstraint list) list)))
 
     type isa_state_exp =
-        (nat, nat, string, inta) Model_Checker.sexp
+        (nat, nat, string, inta) Converter.sexp
 
     type isa_formula = 
-        (nat, nat, string, inta) Model_Checker.formula
+        (nat, nat, string, inta) Converter.formulaa
 
     type isa_network = 
         (nat -> nat -> string) *
-        (string -> nat) *
-        string list *
-        isa_automaton list *
-        (string * inta * inta) list * 
-        isa_formula * 
-        nat list * 
-        (string * inta) list
+            ((string -> nat) *
+                (string list *
+                    (isa_automaton list *
+                        ((string * (inta * inta)) list * 
+                            (isa_formula * 
+                                (nat list * 
+                                (string * inta) list))))))
     
     (* (ids_to_names, process_names_to_index,
      broadcast, automata, bounds, formula, init_locs, init_vars) 

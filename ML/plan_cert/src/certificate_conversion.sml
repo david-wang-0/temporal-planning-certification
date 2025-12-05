@@ -10,16 +10,16 @@ struct
     fun convert_location (loc: Location.key) : (inta list * inta list) =
         loc
         |> (fn (xs, ys) => (ArrayUtils.to_list xs, ArrayUtils.to_list ys))
-        |> (fn (xs, ys) => (List.map Model_Checker.Int_of_integer xs, List.map Model_Checker.Int_of_integer ys))
+        |> (fn (xs, ys) => (List.map Converter.Int_of_integer xs, List.map Converter.Int_of_integer ys))
 
     fun convert_int_rep (rep: IntRep.t): isa_dbm_entry =
         (case rep of 
-            IntRep.LT x => Model_Checker.Lt (Model_Checker.Int_of_integer x) |
-            IntRep.LTE x => Model_Checker.Le (Model_Checker.Int_of_integer x) |
-            IntRep.Inf  => Model_Checker.INF
+            IntRep.LT x => Converter.Lt (Converter.Int_of_integer x) |
+            IntRep.LTE x => Converter.Le (Converter.Int_of_integer x) |
+            IntRep.Inf  => Converter.INF
         )
 
-    fun convert_zone (zone: LnDBMInt.zone) : inta Model_Checker.dBMEntry list list =
+    fun convert_zone (zone: LnDBMInt.zone) : inta Converter.dBMEntry list list =
         zone
         |> LnDBMInt.to_int_rep_list
         |> map (map convert_int_rep)
@@ -33,27 +33,27 @@ struct
                 end
             )
         in PolyPassedSet.fold f [] passed
-          |> Model_Checker.Reachable_Set
+          |> Converter.Reachable_Set
         end
 
     fun convert_renaming ({clock_dict, var_dict, loc_dict, ta_names, ...}
                     : 'a ml_renaming) : isa_renaming =
         let 
-            val var_renaming = IndexDict.inv_function var_dict #> Model_Checker.nat_of_integer
-            val inv_var_renaming = Model_Checker.integer_of_nat #> IndexDict.to_function var_dict
+            val var_renaming = IndexDict.inv_function var_dict #> Converter.nat_of_integer
+            val inv_var_renaming = Converter.integer_of_nat #> IndexDict.to_function var_dict
 
-            val clock_renaming = IndexDict.inv_function clock_dict #> Model_Checker.nat_of_integer
-            val inv_clock_renaming = Model_Checker.integer_of_nat #> IndexDict.to_function clock_dict
+            val clock_renaming = IndexDict.inv_function clock_dict #> Converter.nat_of_integer
+            val inv_clock_renaming = Converter.integer_of_nat #> IndexDict.to_function clock_dict
 
-            val loc_dict' = Model_Checker.integer_of_nat #> IndexDict.to_function loc_dict
+            val loc_dict' = Converter.integer_of_nat #> IndexDict.to_function loc_dict
             val location_renaming = loc_dict'
-                #> (fn f => (Model_Checker.integer_of_nat #> IndexDict.inv_function f #> Model_Checker.nat_of_integer))
+                #> (fn f => (Converter.integer_of_nat #> IndexDict.inv_function f #> Converter.nat_of_integer))
             val inv_location_renaming = loc_dict'
-                #> (fn f => (Model_Checker.integer_of_nat #> IndexDict.to_function f #> Model_Checker.nat_of_integer))
+                #> (fn f => (Converter.integer_of_nat #> IndexDict.to_function f #> Converter.nat_of_integer))
 
 
-        in (var_renaming, clock_renaming, location_renaming,
-            inv_var_renaming, inv_clock_renaming, inv_location_renaming)
+        in (var_renaming, (clock_renaming, (location_renaming,
+            (inv_var_renaming, (inv_clock_renaming, inv_location_renaming)))))
         end
 
     fun convert_certificate ((renaming, passed): 'a ml_cert) : isa_cert =

@@ -10,14 +10,15 @@ open PDDL
   val SMLCharImplode = String.implode;
   val SMLCharExplode = String.explode;
 
-  val stringToIsabelle = IsabelleStringExplode
+  (* val stringToIsabelle = IsabelleStringExplode *)
+  val stringToIsabelle = (fn x => x) (* using native strings *)
   fun stringListToIsabelle ss = (map stringToIsabelle ss)
 
-  fun pddlVarToIsabelle (v:PDDL_VAR) = Var (IsabelleStringExplode (pddl_var_name v))
+  fun pddlVarToIsabelle (v:PDDL_VAR) = Converter.Vara (stringToIsabelle (pddl_var_name v))
 
-  fun intToIsaNat x = nat_of_integer (IntInf.fromInt x)
+  fun intToIsaNat x = Converter.nat_of_integer (Int.fromInt x)
 
-  fun intToIsaInt x = int_of_integer (IntInf.fromInt x)
+  fun intToIsaInt x = Converter.Int_of_integer (Int.fromInt x)
 
   (* TODO: find nicer way to handle floats with a lot of ending 0's. *)
   (*fun trimEndingZeros (cs, zs) = 
@@ -30,31 +31,31 @@ open PDDL
   (* decimal number parsed => String pair = s1 ^ '.' ^ s2 => RAT *)
   (* fun stringPairToIsaRat (s1,s2) =
     case s2 of
-      SOME s2' => TEMPORAL_PDDL_Checker_Exported.fract (intToIsaInt (valOf (Int.fromString (s1 ^ s2')))) (int_of_integer (IntInf.pow (10, (size s2'))))
-    | NONE => TEMPORAL_PDDL_Checker_Exported.of_int (intToIsaInt (valOf (Int.fromString s1))) *)
+      SOME s2' => Converter.fract (intToIsaInt (valOf (Int.fromString (s1 ^ s2')))) (int_of_integer (Int.pow (10, (size s2'))))
+    | NONE => Converter.of_int (intToIsaInt (valOf (Int.fromString s1))) *)
 
   (* decimal number parsed => String pair = s1 ^ '.' ^ s2 => RAT *)
   (*fun stringPairToIsaRat (s1,s2) =
     case s2 of
       SOME s2' => 
         let val s2't = String.implode(trimEndingZeros (String.explode s2',[])) in
-          TEMPORAL_PDDL_Checker_Exported.fract (intToIsaInt (valOf (Int.fromString (s1 ^ s2't)))) (int_of_integer (IntInf.pow (10, (size s2't))))
+          Converter.fract (intToIsaInt (valOf (Int.fromString (s1 ^ s2't)))) (int_of_integer (Int.pow (10, (size s2't))))
         end
-    | NONE => TEMPORAL_PDDL_Checker_Exported.of_int (intToIsaInt (valOf (Int.fromString s1)))*)
+    | NONE => Converter.of_int (intToIsaInt (valOf (Int.fromString s1)))*)
 
   fun charToNat c = intToIsaNat (valOf (Int.fromString (str c)))
 
   fun stringPairToIsaRat (s1,s2) =
     case s2 of
-      SOME s2' => TEMPORAL_PDDL_Checker_Exported.rat_of_digits_pair (map charToNat (String.explode s1), map charToNat (String.explode s2'))
-    | NONE => TEMPORAL_PDDL_Checker_Exported.of_int (intToIsaInt (valOf (Int.fromString s1)))
+      SOME s2' => Converter.rat_of_digits_pair (map charToNat (String.explode s1), map charToNat (String.explode s2'))
+    | NONE => Converter.of_int (intToIsaInt (valOf (Int.fromString s1)))
 
   (*fun ratToIsabelleRat r = case r of 
-    (n, d) => TEMPORAL_PDDL_Checker_Exported.fract n d*)
+    (n, d) => Converter.fract n d*)
 
   fun pddlObjConsToIsabelle (oc:PDDL_OBJ_CONS) = 
     case oc of
-    PDDL_OBJ_CONS n => Obj (stringToIsabelle n)
+    PDDL_OBJ_CONS n => Converter.Obj (stringToIsabelle n)
   | Rat_Ent r => TimeEnt (stringPairToIsaRat r)
   | Func_Ent (f, args) => FuncEnt (Func (stringToIsabelle f), map pddlObjConsToIsabelle args)
 
@@ -185,12 +186,12 @@ open PDDL
     | Time_Const_Def (timeSpec_obt, (d_op, d)) => 
       (case d_op of
         d_op_leq => Time_Const (LEQ, stringPairToIsaRat d) (* (pddlTimeSpecToIsabelle timeSpec, d) *)
-      | d_op_eq => Time_Const (EQ, stringPairToIsaRat d) (* (pddlTimeSpecToIsabelle timeSpec, d) *)
+      | d_op_eq => Time_Const (EQa, stringPairToIsaRat d) (* (pddlTimeSpecToIsabelle timeSpec, d) *)
       | d_op_geq => Time_Const (GEQ, stringPairToIsaRat d)) (* (pddlTimeSpecToIsabelle timeSpec, d) *)
     | Func_Const_Def (timeSpec_obt, (d_op, (f, args))) => 
       (case d_op of
         d_op_leq => Func_Const (LEQ, Func (stringToIsabelle f), map pddlTermToIsabelle args) (* (pddlTimeSpecToIsabelle timeSpec, d) *)
-      | d_op_eq => Func_Const (EQ, Func (stringToIsabelle f), map pddlTermToIsabelle args) (* (pddlTimeSpecToIsabelle timeSpec, d) *)
+      | d_op_eq => Func_Const (EQa, Func (stringToIsabelle f), map pddlTermToIsabelle args) (* (pddlTimeSpecToIsabelle timeSpec, d) *)
       | d_op_geq => Func_Const (GEQ, Func (stringToIsabelle f), map pddlTermToIsabelle args)) (* (pddlTimeSpecToIsabelle timeSpec, d) *)
         
   fun pddlTimedCondToIsabelle ((timeSpec, cond): PDDL_TIME_SPECIFIER * (PDDL_TERM PDDL_PROP)) = 
@@ -218,12 +219,12 @@ open PDDL
   fun pddlActToIsabelle (actName, (args, defBody: PDDL_ACTION_DEF_BODY)) =
     case defBody of
       Simple_Action_Def_Body (pre, eff) => 
-        Simple_Action_Schema(IsabelleStringExplode actName,
+        Simple_Action_Schema(stringToIsabelle actName,
           pddlTypedListVarsTypesToIsabelle args,
           actDefBodyPreToIsabelle pre,
           actDefBodyEffToIsabelle eff)
     | Durative_Action_Def_Body (durConst, (cond, eff)) => 
-        Durative_Action_Schema(IsabelleStringExplode actName,
+        Durative_Action_Schema(stringToIsabelle actName,
           pddlTypedListVarsTypesToIsabelle args,
           map pddlDurConstraintToIsabelle durConst,
           pddlTimedListCondToIsabelle cond,
@@ -309,7 +310,7 @@ fun get_prob dom_file prob_file = let
   val parsedDom = parse_pddl_dom dom_file
   val parsedProb = parse_pddl_prob prob_file
 
-  val isaProb = (TEMPORAL_PDDL_Checker_Exported.Problem
+  val isaProb = (Converter.Problem
                   (let val (p1,p2,p3) = pddlProbToIsabelle parsedProb in
                      (pddlDomToIsabelle parsedDom, p1,p2,p3) end))
 in isaProb
