@@ -8,7 +8,7 @@ val usage = "Usage: $ plan_cert " ^ "\n" ^
             "[-compression <compression level>] " ^ "\n" ^
             "[-certify <certifier version>] " ^ "\n" ^
             "[-num-threads <number of threads>]" ^ "\n" ^
-            "[-show-cert]" ^ "\n"
+            "[-show-cert <1>]" ^ "\n"
 
 (* Very low prio to-do: print the generated network *)
 
@@ -84,7 +84,6 @@ fun flags args =
             case dissect_arguments is_extra args of
                 NONE => (print "ok"; SOME Local) |
                 SOME str => extra_from_str str
-        val _ = print "here"
     in
       (domain, problem, extra, renaming_path, cert_path, compression, certification,
        num_threads, mode, show_cert)
@@ -155,7 +154,7 @@ fun check_and_cert_problem extra domain problem renaming cert compression certif
             
         val show_cert = (case mode of Converter.Debug => true | _ => show_cert);
         val num_threads = num_threads |> Int.fromString |> the |> Converter.nat_of_integer;
-    in Converter.check_and_cert_pddl_problem_no_return parsed_prob mode num_threads certifier show_cert ()
+    in Either.succeed (Converter.check_and_cert_pddl_problem_no_return parsed_prob mode num_threads certifier show_cert ())
     end
 
 (* 
@@ -191,15 +190,12 @@ fun check args =
                                             (the_default "1" num_threads)
                                             mode
                                             show_cert
-      | _ => Exn.error usage
+      | _ => Exn.error usage handle Exn.ERROR msg => Either.fail (println msg)
 
 fun main () =
-    let 
-        val _ = print "here"
-    in 
-        flags (CommandLine.arguments ())
-        |> Benchmark.time_it check
-        |> Benchmark.add_time (apfst (Log.time "Total Time: ") #> snd)
-    end
+    flags (CommandLine.arguments ())
+    |> Benchmark.time_it check
+    |> Benchmark.add_time (apfst (Log.time "Total Time: ") #> snd)
+    
 
 val _ = main ()
