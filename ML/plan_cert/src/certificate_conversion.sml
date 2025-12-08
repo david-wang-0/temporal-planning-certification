@@ -1,43 +1,74 @@
-signature CERTIFICATE_CONVERSION = 
-sig 
-    val convert_certificate: 'a CertificateConversionTypes.ml_cert -> CertificateConversionTypes.isa_cert
+signature CERTIFICATE_CONVERSION =
+sig
+    include CERTIFICATE_CONVERSION_TYPES 
+    val convert_certificate: ml_cert -> isa_cert
 end
 
-structure CertificateConversion : CERTIFICATE_CONVERSION =
+functor CertificateConversion (structure Setup : CHECKING_SETUP) : CERTIFICATE_CONVERSION =
 struct
-    open CertificateConversionTypes
+
+    structure Dbm = Setup.D
+    structure Entry = Dbm.Entry
+    structure Basic = BasicSetup(Dbm)
+    structure Passed = Setup.Passed
+
+    type nat = Converter.nat
+    type inta = Converter.inta
+    type 'a act = 'a Converter.act
+
+    type isa_renaming = 
+        (string -> nat) *
+            ((string -> nat) *
+                ((nat -> nat -> nat) *
+                    ((nat -> string) *
+                        ((nat -> string) *
+                            (nat -> nat -> nat)))))
+
+    type isa_dbm_entry = inta Converter.dBMEntry
+
+    type isa_state_space = inta Converter.state_space
+
+    type isa_cert = isa_renaming * isa_state_space
+
+    type ml_renaming = Dbm.t Network.system
+
+    type ml_state_space = Passed.passed_set
+
+    type ml_cert = ml_renaming * ml_state_space
 
     fun convert_location (loc: Location.key) : (inta list * inta list) =
         loc
         |> (fn (xs, ys) => (ArrayUtils.to_list xs, ArrayUtils.to_list ys))
         |> (fn (xs, ys) => (List.map Converter.Int_of_integer xs, List.map Converter.Int_of_integer ys))
 
-    fun convert_int_rep (rep: IntRep.t): isa_dbm_entry =
-        (case rep of 
+    fun convert_int_rep (rep: Entry.t): isa_dbm_entry =
+        (case Entry.to_int rep of 
             IntRep.LT x => Converter.Lt (Converter.Int_of_integer x) |
             IntRep.LTE x => Converter.Le (Converter.Int_of_integer x) |
             IntRep.Inf  => Converter.INF
         )
 
-    fun convert_zone (zone: LnDBMInt.zone) : inta Converter.dBMEntry list list =
-        zone
-        |> LnDBMInt.to_int_rep_list
-        |> map (map convert_int_rep)
+    fun convert_zone (zone: Dbm.zone) : inta Converter.dBMEntry list list =
+        let 
+            val entry_list = Dbm.to_list zone;
+        in 
+            List.map (List.map convert_int_rep) entry_list
+        end
 
-    fun convert_passed (passed: (Location.key, LnDBMInt.zone) PolyPassedSet.hash_table) : isa_state_space =
+    fun convert_passed (passed: Passed.passed_set) : isa_state_space =
         let 
             val f = (fn (loc, zones, acc) =>
                 let val l = convert_location loc
-                    val states = map (fn z => (l, convert_zone z)) zones
+                    val states = List.map (fn z => (l, convert_zone z)) zones
                 in states@acc
                 end
             )
-        in PolyPassedSet.fold f [] passed
+        in Passed.fold f [] passed
           |> Converter.Reachable_Set
         end
 
     fun convert_renaming ({clock_dict, var_dict, loc_dict, ta_names, ...}
-                    : 'a ml_renaming) : isa_renaming =
+                    : ml_renaming) : isa_renaming =
         let 
             val var_renaming = IndexDict.inv_function var_dict #> Converter.nat_of_integer
             val inv_var_renaming = Converter.integer_of_nat #> IndexDict.to_function var_dict
@@ -56,7 +87,7 @@ struct
             (inv_var_renaming, (inv_clock_renaming, inv_location_renaming)))))
         end
 
-    fun convert_certificate ((renaming, passed): 'a ml_cert) : isa_cert =
+    fun convert_certificate ((renaming, passed): ml_cert) : isa_cert =
         let
             val renaming = convert_renaming renaming
             val state_space = convert_passed passed

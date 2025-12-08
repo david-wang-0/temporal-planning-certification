@@ -14,10 +14,9 @@ val usage = "Usage: $ plan_cert " ^ "\n" ^
 
 fun dissect_arguments p args =
     let
-      fun get' [] = NONE |
-          get' (flag::arg::args) = if p flag then SOME (arg) else
+      fun get' (flag::arg::args) = if p flag then SOME (arg) else
                                    get' args |
-          get' (_::_) = NONE
+          get' (_) = NONE
     in
       get' args
     end
@@ -68,8 +67,9 @@ fun flags args =
                 (fn "-num-threads" => true | "-n" => true | _ => false) args
 
         val show_cert =
-            find_flag
-                (fn "-show-cert" => true | "-S" => true | _ => false) args
+            (case (dissect_arguments (fn "-show-cert" => true | "-S" => true | _ => false) args) of 
+                NONE => false |
+                SOME x => true)
         
 
         val is_mode = (fn "-mode" => true | "-M" => true | _ => false)
@@ -84,6 +84,7 @@ fun flags args =
             case dissect_arguments is_extra args of
                 NONE => (print "ok"; SOME Local) |
                 SOME str => extra_from_str str
+        val _ = print "here"
     in
       (domain, problem, extra, renaming_path, cert_path, compression, certification,
        num_threads, mode, show_cert)
@@ -105,6 +106,7 @@ fun log_mode Converter.Debug = Log.log "Mode" "Debug"
   | log_mode Converter.Impl1 = Log.log "Mode" "Implementation 1"
   | log_mode Converter.Impl2 = Log.log "Mode" "Implementation 2"
   | log_mode Converter.Impl3 = Log.log "Mode" "Implementation 3"
+  | log_mode _ = Log.log "Mode" "Unknown"
 fun log_show_cert true = Log.log "Show Certificate" "true"
   | log_show_cert false = Log.log "Show Certificate" "false"
 
@@ -138,6 +140,8 @@ fun check_and_cert_network extra renaming cert compression certification num_thr
         (Int.fromString certification |> the)
     )
 
+structure CertificateConversion = CertificateConversion(structure Setup = MLuntaAdapter.Setup);
+
 fun check_and_cert_problem extra domain problem renaming cert compression certification num_threads mode show_cert = 
     let
         val _ = log_config (extra, domain, problem, renaming, cert, compression, certification, num_threads, mode, show_cert)
@@ -146,12 +150,12 @@ fun check_and_cert_problem extra domain problem renaming cert compression certif
         val certifier = 
             NetworkConversion.convert_network
             #> (check_and_cert_network extra renaming cert compression certification num_threads)       
-            #> Either.mapR CertificateConversion.convert_certificate
+            #> Either.mapR (CertificateConversion.convert_certificate)
             #> Either.either (fn err => NONE) (fn res => SOME res);
             
         val show_cert = (case mode of Converter.Debug => true | _ => show_cert);
         val num_threads = num_threads |> Int.fromString |> the |> Converter.nat_of_integer;
-    in Converter.check_and_cert_pddl_problem_no_return parsed_prob mode num_threads certifier show_cert 
+    in Converter.check_and_cert_pddl_problem_no_return parsed_prob mode num_threads certifier show_cert ()
     end
 
 (* 
@@ -187,14 +191,15 @@ fun check args =
                                             (the_default "1" num_threads)
                                             mode
                                             show_cert
-      (* | (SOME domain, SOME problem, NONE, NONE, NONE, NONE, NONE, NONE, NONE) => check_network model
-      | (SOME domain, SOME problem, SOME Local, NONE, NONE, NONE, NONE, NONE, NONE) => check_network model
-      | (SOME domain, SOME problem, SOME LU, NONE, NONE, NONE, NONE, NONE, NONE) => check_network_lu model *)
       | _ => Exn.error usage
 
 fun main () =
-    flags (CommandLine.arguments ())
-    |> Benchmark.time_it check
-    |> Benchmark.add_time (apfst (Log.time "Total Time: ") #> snd)
+    let 
+        val _ = print "here"
+    in 
+        flags (CommandLine.arguments ())
+        |> Benchmark.time_it check
+        |> Benchmark.add_time (apfst (Log.time "Total Time: ") #> snd)
+    end
 
 val _ = main ()

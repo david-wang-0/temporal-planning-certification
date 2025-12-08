@@ -1,5 +1,5 @@
-
-structure CertificateConversionTypes = struct
+signature CERTIFICATE_CONVERSION_TYPES = 
+sig
     type nat = Converter.nat
     type inta = Converter.inta
     type 'a act = 'a Converter.act
@@ -10,7 +10,7 @@ structure CertificateConversionTypes = struct
                 ((nat -> nat -> nat) *
                     ((nat -> string) *
                         ((nat -> string) *
-                        (nat -> nat -> nat)))))
+                            (nat -> nat -> nat)))))
 
     type isa_dbm_entry = inta Converter.dBMEntry
 
@@ -18,9 +18,10 @@ structure CertificateConversionTypes = struct
 
     type isa_cert = isa_renaming * isa_state_space
 
-    type 'a ml_renaming = 'a Network.system
+    type ml_renaming
 
-    type ml_state_space = (Location.key, LnDBMInt.zone) PolyPassedSet.hash_table
+    type ml_state_space
 
-    type 'a ml_cert = 'a ml_renaming * ml_state_space
+    type ml_cert = ml_renaming * ml_state_space
+
 end

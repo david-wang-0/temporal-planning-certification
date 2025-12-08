@@ -25,7 +25,7 @@ export_files \<open>ML/Check_Unsolvability.ML\<close>
 
       val _ = 
           exec \<open>Move to ML folder\<close> 
-            "mv -t ML code/Check_Unsolvability.ML" 
+            "mv -t ML code/Check_Unsolvability.ML"
           
 
       val _ = exec \<open>Copy and paste code\<close> ("cp ML/Check_Unsolvability.ML " ^ Path.implode (Path.append (File.absolute_path Path.current) (Path.explode "ML")))

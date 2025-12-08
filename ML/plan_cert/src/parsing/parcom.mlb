@@ -1,7 +1,24 @@
 $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/basis/mlton.mlb
 
-../imports/cmlib.mlb
+
+local 
+  ../imports/cmlib.mlb
+in 
+	signature COORD
+  signature COORDINATED_STREAM
+  signature MONO_STREAMABLE
+	signature POS
+  signature STREAM
+  signature SUM
+
+	structure Coord
+  structure CoordinatedStream
+	structure Pos
+  structure Stream
+  structure SubstringMonoStreamable
+  structure Sum
+end
 
 local
     ../../../lib/parcom/src/parse.sig
