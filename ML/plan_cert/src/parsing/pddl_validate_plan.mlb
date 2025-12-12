@@ -6,7 +6,7 @@ parcom.mlb
 (*pddl.sml*)
 ../../../converter.mlb
 
-../imports/isalib.mlb
+../../imports/isalib.mlb
 
 
 pddl_refactor.sml

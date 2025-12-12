@@ -10,11 +10,12 @@
         :parameters (?ob)
         :duration (= ?duration 1)
         :condition (and 
-            (over all (or (arm-empty)))
-            (at start (and (on-table ?ob) (clear ?ob)))
+            (at start (and (arm-empty) (on-table ?ob) (clear ?ob)))
         )
         :effect (and 
-            (at end (holding ?ob))
+            (at end (and 
+                (holding ?ob)
+            ))
             (at start (and 
                 (not (clear ?ob)) 
                 (not (on-table ?ob))
@@ -40,7 +41,7 @@
         :parameters  (?ob ?underob)
         :duration (= ?duration 1)
         :condition (and 
-            (over all (or (holding ?ob) (holding ?ob)))
+            (over all (holding ?ob))
             (at start (clear ?underob))
         )
         :effect (at end (and 

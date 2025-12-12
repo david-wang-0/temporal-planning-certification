@@ -4,7 +4,7 @@
 *)
 signature NETWORK_CONVERSION = sig
     
-    val convert_network: NetworkConversionTypes.clocks_name_network -> ParseBexpTypes.network
+    val convert_network: bool -> NetworkConversionTypes.clocks_name_network -> ParseBexpTypes.network
 end
 
 structure NetworkConversion : NETWORK_CONVERSION =
@@ -23,7 +23,7 @@ struct
 
 
     (* vc is an arbitrary clock or variable.
-        Adding some arbitrary clock might affect the renaming. Does MLunta use an urgent clock.
+        Adding an arbitrary clock might affect the renaming. Does MLunta use an urgent clock.
         This function is used for guards and not constraints. There is *)
     fun invert_guard (vc: string) (guard: (string, int) guard) : (string, int) guard =
         let
@@ -31,10 +31,7 @@ struct
             val always_false : (string, int) guard = Guard.Constr false_constr
             fun ig guard = (case guard of 
                 Guard.True => always_false |
-                Guard.Constr x => (
-                    if (Guard.Constr x = always_false) 
-                    then Guard.True 
-                    else invert_constraint x) |
+                Guard.Constr x => (invert_constraint x) |
                 Guard.And (x, y) => Guard.Or (ig x, ig y) |
                 Guard.Or (x, y) => Guard.And (ig x, ig y)
             )
@@ -49,7 +46,7 @@ struct
 
     (* unsafe *)
     fun is_plus f = (f (Converter.Int_of_integer 2) (Converter.Int_of_integer 5)) 
-        |> Converter.integer_of_int |> (fn x => x = (7))
+        |> Converter.integer_of_int |> (fn x => x = 7)
 
     fun is_minus f = (f (Converter.Int_of_integer 1) (Converter.Int_of_integer 2)) 
         |> Converter.integer_of_int |> (fn x => x = ~1)
@@ -64,7 +61,7 @@ struct
                     true => Difference.Diff (x, y) |
                     _ => raise Unsupported "Not a valid variable (difference) constraint. Ill-defined LHS. Should be minus.") |
             _ => raise Unsupported "Not a valid variable (difference) constraint. Ill-defined LHS. Should be x - y or x."
-        ) (* The datatypes that are parsed by MLunta do not explicitly mark variables as different to clocks.*)
+        ) (* The datatypes that are parsed by MLunta do not explicitly mark variables as different from clocks.*)
 
     fun convert_exp_right (guard_exp: (string, inta) Converter.exp): int =
         (case guard_exp of
@@ -178,19 +175,19 @@ struct
     (* Note; naming collisions are handled by MLunta *)
     fun convert_edge (vc: string) (edge: NetworkConversionTypes.isa_edge): ParseBexpTypes.edge =
         let 
-            val (out_loc, (guard, (constr, (action, (updates, (resets, in_loc)))))) = edge;
-            val guard = convert_guard vc guard;
-            val constr = convert_guard_constraints constr;
-            val guard = Guard.And(guard, constr);
-            val act = convert_action action;
-            val upds = convert_updates updates;
-            val resets = convert_resets resets;
-            val upds = upds @ resets
+            val (out_loc, (guard, (constr, (action, (updates, (resets, in_loc)))))) = edge
+            val guard = convert_guard vc guard
+            val constr = convert_guard_constraints constr
+
+            val act = convert_action action
+
+            val upds = convert_updates updates
+            val resets = convert_resets resets
         in {
             source = Converter.integer_of_nat out_loc,
-            guard = guard,
+            guard = Guard.And(guard, constr),
             label = act,
-            update = upds,
+            update = upds @ resets,
             target = Converter.integer_of_nat in_loc
         }
         end
@@ -287,8 +284,8 @@ struct
         )
         end
 
-    fun convert_network (
-            (clocks, 
+    fun convert_network show_net 
+            ((clocks, 
                 (auto_names, 
                     (node_ids_to_names, 
                         (auto_names_to_index, 
@@ -307,17 +304,19 @@ struct
                 (ListPair.zip (init_locs, automata))
                 |> ListUtils.zip_with_index
                 |> List.map ((fn ((l, a), i) => (node_ids_to_names (Converter.nat_of_integer i), l, a))
-                        #> (fn (n, l, a) => convert_automaton v n l a))
+                        #> (fn (name_fun, l, a) => convert_automaton v name_fun l a))
                 |> (fn xs => ListPair.zip (indexed_auto_names, xs)); (* Needs to preserve order, since indexes are used in renamings. *)
 
             val auto_num_to_name = (fn n => List.nth (indexed_auto_names, Converter.integer_of_nat n))
             val formula = convert_formula auto_num_to_name node_ids_to_names formula
-        in {
-            automata = automata,
-            clocks = clocks,
-            vars = vars,
-            formula = formula,
-            broadcast_channels = broadcast
-        }
+            val res = {
+                automata = automata,
+                clocks = clocks,
+                vars = vars,
+                formula = formula,
+                broadcast_channels = broadcast
+            }
+            val _ = (if show_net then res |> NetworkToString.to_string |> Log.info else ())
+        in res
         end
 end

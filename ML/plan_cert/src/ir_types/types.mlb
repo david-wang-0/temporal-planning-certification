@@ -1,14 +1,3 @@
-$(SML_LIB)/basis/basis.mlb
-$(SML_LIB)/basis/mlton.mlb
 
-../imports/munta.mlb
-
-../../../lib/mlunta/src/parsing/ir_types/types.mlb
-../../../lib/mlunta/src/util/util.mlb
-../../../lib/mlunta/src/dbm/dbm.mlb
-../../../lib/mlunta/src/product_construction/ir_types/types.mlb
-
-../../../converter.mlb
-
-network_conversion.sml
-certificate_conversion.sml
+network_conversion.mlb
+certificate_conversion.mlb

@@ -5,4 +5,4 @@ $(SML_LIB)/basis/sml-nj.mlb
 isalib.mlb
 mlunta.mlb
 
-../../../lib/munta_util/munta_util.mlb
+../../lib/munta_util/munta_util.mlb

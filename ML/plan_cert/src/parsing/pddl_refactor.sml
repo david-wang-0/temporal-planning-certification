@@ -39,6 +39,7 @@ struct
     val opStart        = fail "Operators not supported" : scanner
     val opLetter       = opStart
     val reservedNames  = [":requirements", ":strips", ":equality", ":typing", ":action-costs", ":negative-preconditions", ":disjunctive-preconditions", ":durative-actions", ":duration-inequalities",
+                          ":fluents",
                           "define", "domain",
                           ":predicates", "either", ":functions",
                           ":types", (*"object",*)
@@ -143,7 +144,7 @@ struct
 
   fun in_paren p = spaces_comm >> lparen >> spaces_comm >> p << spaces_comm << rparen << spaces_comm
 
-  val pddl_name = identifier wth (String.map Char.toLower) ?? "pddl identifier" (*First char should be a letter*)
+  val pddl_name = identifier ?? "pddl identifier" (*First char should be a letter*)
 
   val pddl_obj_cons = pddl_name wth (fn name => PDDL_OBJ_CONS name) ?? "pddl object or constant"
 
@@ -155,7 +156,7 @@ struct
 
   val require_key = (pddl_reserved ":strips" || pddl_reserved ":equality" ||  pddl_reserved ":typing" ||  pddl_reserved ":action-costs"
                       ||  pddl_reserved ":disjunctive-preconditions" ||  pddl_reserved ":negative-preconditions" 
-                      ||  pddl_reserved ":durative-actions" ||  pddl_reserved ":duration-inequalities") ?? "require_key"
+                      ||  pddl_reserved ":durative-actions" ||  pddl_reserved ":duration-inequalities" || pddl_reserved ":fluents") ?? "require_key"
   val require_def = (in_paren(pddl_reserved ":requirements" >> repeat1 require_key)) ?? "require_def"
 
   val primitive_type = (pddl_name wth (fn tp => PDDL_PRIM_TYPE tp)

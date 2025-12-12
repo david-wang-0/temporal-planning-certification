@@ -3,7 +3,7 @@ $(SML_LIB)/basis/mlton.mlb
 
 
 local 
-  ../imports/cmlib.mlb
+  ../../imports/cmlib.mlb
 in 
 	signature COORD
   signature COORDINATED_STREAM

@@ -6,9 +6,9 @@ $(SML_LIB)/basis/mlton.mlb
 
 parsing/pddl_validate_plan.mlb
 
-ir_types/types.mlb
+network_conversion/network_conversion.mlb
+certificate_conversion/certificate_conversion.mlb
 
-network_conversion.sml
-certificate_conversion.sml
 mlunta_adapter.sml
 plan_cert.sml
+Mlton_Main.sml

@@ -1,3 +1,14 @@
 tp_cert
 out/*
-Check_Unsolvability.ML
+Check_Unsolvability*.ML
+output.txt
+comple_sxml.err
+plan_cert.ast
+plan_cert.core-ml
+plan_cert.ssa
+plan_cert.ssa2
+plan_cert.ssa_pre
+plan_cert.sxml
+plan_cert.xml
+*.err
+safe_out/

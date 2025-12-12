@@ -865,15 +865,14 @@ definition "auto_names_to_index =
 
 definition "auto_loc_ids_to_names (n::nat) (m::nat) = (
   if (n = 0) then (case m of
+      0 \<Rightarrow> (STR ''init'')
+    | Suc 0 \<Rightarrow> (STR ''planning'')
+    | Suc (Suc 0) \<Rightarrow> (STR ''goal'')
+  ) else (case m of
       0 \<Rightarrow> (STR ''off'')
     | Suc 0 \<Rightarrow> (STR ''starting'')
     | Suc (Suc 0) \<Rightarrow> (STR ''running'')
     | Suc (Suc (Suc 0)) \<Rightarrow> (STR ''ending'')
-  ) 
-  else (case m of
-      0 \<Rightarrow> (STR ''init'')
-    | Suc 0 \<Rightarrow> (STR ''planning'')
-    | Suc (Suc 0) \<Rightarrow> (STR ''goal'')
   )
 )
 "
@@ -1465,9 +1464,6 @@ lemma check_and_make_network_and_plan:
   using check_ground_problem_return_iff
   using ground_ast_problem.model_checking_problem_refine 
   unfolding ground_ast_problem_defs.init_cfg'_def
-  find_theorems name: "a\<^sub>0"
   by force
 
-export_code check_and_make_network
-  in Eval module_name Certifier
 end

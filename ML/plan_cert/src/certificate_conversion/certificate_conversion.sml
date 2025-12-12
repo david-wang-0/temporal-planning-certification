@@ -2,11 +2,13 @@ signature CERTIFICATE_CONVERSION =
 sig
     include CERTIFICATE_CONVERSION_TYPES 
     val convert_certificate: ml_cert -> isa_cert
+    
+    structure Dbm : DBM
 end
 
-functor CertificateConversion (structure Setup : CHECKING_SETUP) : CERTIFICATE_CONVERSION =
+functor CertificateConversion (Setup : CHECKING_SETUP) : CERTIFICATE_CONVERSION =
 struct
-
+    
     structure Dbm = Setup.D
     structure Entry = Dbm.Entry
     structure Basic = BasicSetup(Dbm)
@@ -41,8 +43,8 @@ struct
         |> (fn (xs, ys) => (ArrayUtils.to_list xs, ArrayUtils.to_list ys))
         |> (fn (xs, ys) => (List.map Converter.Int_of_integer xs, List.map Converter.Int_of_integer ys))
 
-    fun convert_int_rep (rep: Entry.t): isa_dbm_entry =
-        (case Entry.to_int rep of 
+    fun convert_int_rep (rep: IntRep.t): isa_dbm_entry =
+        (case rep of 
             IntRep.LT x => Converter.Lt (Converter.Int_of_integer x) |
             IntRep.LTE x => Converter.Le (Converter.Int_of_integer x) |
             IntRep.Inf  => Converter.INF
@@ -50,9 +52,9 @@ struct
 
     fun convert_zone (zone: Dbm.zone) : inta Converter.dBMEntry list list =
         let 
-            val entry_list = Dbm.to_list zone;
+            val int_rep_list = Dbm.to_int_rep_list zone;
         in 
-            List.map (List.map convert_int_rep) entry_list
+            List.map (List.map convert_int_rep) int_rep_list
         end
 
     fun convert_passed (passed: Passed.passed_set) : isa_state_space =

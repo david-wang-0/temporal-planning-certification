@@ -75,7 +75,7 @@ fun flags args =
         val is_mode = (fn "-mode" => true | "-M" => true | _ => false)
         val mode = 
             (case dissect_arguments is_mode args of
-                NONE => (print "ok"; "3") |
+                NONE => (print "ok"; "1") |
                 SOME str => str)
             |> mode_from_str
 
@@ -139,41 +139,24 @@ fun check_and_cert_network extra renaming cert compression certification num_thr
         (Int.fromString certification |> the)
     )
 
-structure CertificateConversion = CertificateConversion(structure Setup = MLuntaAdapter.Setup);
+structure CertificateConversion = CertificateConversion(MLuntaAdapter.Setup)
 
 fun check_and_cert_problem extra domain problem renaming cert compression certification num_threads mode show_cert = 
     let
         val _ = log_config (extra, domain, problem, renaming, cert, compression, certification, num_threads, mode, show_cert)
-        val parsed_prob = PddlParser.get_prob domain problem;
+        val parsed_prob = PddlParser.get_prob domain problem
         
         val certifier = 
-            NetworkConversion.convert_network
+            NetworkConversion.convert_network show_cert
             #> (check_and_cert_network extra renaming cert compression certification num_threads)       
             #> Either.mapR (CertificateConversion.convert_certificate)
-            #> Either.either (fn err => NONE) (fn res => SOME res);
+            #> Either.either (fn err => NONE) (fn res => SOME res)
             
-        val show_cert = (case mode of Converter.Debug => true | _ => show_cert);
-        val num_threads = num_threads |> Int.fromString |> the |> Converter.nat_of_integer;
-    in Either.succeed (Converter.check_and_cert_pddl_problem_no_return parsed_prob mode num_threads certifier show_cert ())
+        val show_cert = (case mode of Converter.Debug => true | _ => show_cert)
+        val num_threads = num_threads |> Int.fromString |> the |> Converter.nat_of_integer
+        val res = Converter.check_and_cert_pddl_problem_no_return parsed_prob mode num_threads certifier show_cert ()
+    in res
     end
-
-(* 
-(* Useful for testing *)
-fun check_problem domain problem = (
-    log_config1 (Local, domain, problem);
-    let
-        val parsedDom = parse_pddl_dom dom_file;
-        val parsedProb = parse_pddl_prob prob_file;
-    in ()
-);
-
-fun check_problem_lu extra domain problem  = (
-    log_config1 (LU, domain, problem);
-    let
-        val parsedDom = parse_pddl_dom dom_file;
-        val parsedProb = parse_pddl_prob prob_file;
-    in ()
-); *)
 
 
 fun check args =
@@ -190,12 +173,10 @@ fun check args =
                                             (the_default "1" num_threads)
                                             mode
                                             show_cert
-      | _ => Exn.error usage handle Exn.ERROR msg => Either.fail (println msg)
+      | _ => Exn.error usage handle Exn.ERROR msg => (println msg)
 
 fun main () =
     flags (CommandLine.arguments ())
     |> Benchmark.time_it check
     |> Benchmark.add_time (apfst (Log.time "Total Time: ") #> snd)
-    
-
-val _ = main ()
+    handle Fail s => println s
