@@ -50,6 +50,9 @@ fun flags args =
         val problem =
             dissect_arguments
                 (fn "-problem" => true | "-p" => true | _ => false) args
+        val network =
+            dissect_arguments
+                (fn "-network" => true | "-m" => true | _ => false) args
         val renaming_path =
             dissect_arguments
                 (fn "-renaming" => true | "-r" => true | _ => false) args
@@ -85,7 +88,7 @@ fun flags args =
                 NONE => (print "ok"; SOME Local) |
                 SOME str => extra_from_str str
     in
-      (domain, problem, extra, renaming_path, cert_path, compression, certification,
+      (domain, problem, network, renaming_path, cert_path, extra, compression, certification,
        num_threads, mode, show_cert)
     end
 
@@ -96,6 +99,7 @@ val log_renaming_file = Log.log "Renaming File"
 val log_certificate_file = Log.log "Certificate File"
 val log_problem_file = Log.log "Problem File"
 val log_domain_file = Log.log "Domain File"
+val log_network_file = Log.log "Network File"
 val log_compression = Log.log "Compression Level"
 val log_certification = Log.log "Certification Level"
 val log_num_threads = Log.log "Number of Threads"
@@ -109,11 +113,12 @@ fun log_mode Converter.Debug = Log.log "Mode" "Debug"
 fun log_show_cert true = Log.log "Show Certificate" "true"
   | log_show_cert false = Log.log "Show Certificate" "false"
 
-fun log_config (extra, domain, problem, renaming, cert, compression, certification, num_threads, mode, show_cert) =
+fun log_config (domain, problem, network, renaming, cert, extra, compression, certification, num_threads, mode, show_cert) =
     (
       log_extra extra;
       log_domain_file domain;
       log_problem_file problem;
+      log_network_file network;
       log_renaming_file renaming;
       log_certificate_file cert;
       log_compression compression;
@@ -141,13 +146,13 @@ fun check_and_cert_network extra renaming cert compression certification num_thr
 
 structure CertificateConversion = CertificateConversion(MLuntaAdapter.Setup)
 
-fun check_and_cert_problem extra domain problem renaming cert compression certification num_threads mode show_cert = 
+fun check_and_cert_problem domain problem network renaming cert extra compression certification num_threads mode show_cert = 
     let
-        val _ = log_config (extra, domain, problem, renaming, cert, compression, certification, num_threads, mode, show_cert)
+        val _ = log_config (domain, problem, network, renaming, cert, extra, compression, certification, num_threads, mode, show_cert)
         val parsed_prob = PddlParser.get_prob domain problem
         
         val certifier = 
-            NetworkConversion.convert_network show_cert
+            NetworkConversion.convert_network show_cert network
             #> (check_and_cert_network extra renaming cert compression certification num_threads)       
             #> Either.mapR (CertificateConversion.convert_certificate)
             #> Either.either (fn err => NONE) (fn res => SOME res)
@@ -161,13 +166,14 @@ fun check_and_cert_problem extra domain problem renaming cert compression certif
 
 fun check args =
     case args of
-        (SOME domain, SOME problem, SOME extra, SOME renaming, SOME cert, compression,
+        (SOME domain, SOME problem, SOME network, SOME renaming, SOME cert, SOME extra, compression,
          certification, num_threads, mode, show_cert) => check_and_cert_problem
-                                            extra
                                             domain
                                             problem
+                                            network
                                             renaming
                                             cert
+                                            extra
                                             (the_default "0" compression)
                                             (the_default "0" certification)
                                             (the_default "1" num_threads)

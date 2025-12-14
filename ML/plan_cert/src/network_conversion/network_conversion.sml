@@ -4,7 +4,7 @@
 *)
 signature NETWORK_CONVERSION = sig
     
-    val convert_network: bool -> NetworkConversionTypes.clocks_name_network -> ParseBexpTypes.network
+    val convert_network: bool -> string -> NetworkConversionTypes.clocks_name_network -> ParseBexpTypes.network
 end
 
 structure NetworkConversion : NETWORK_CONVERSION =
@@ -284,7 +284,14 @@ struct
         )
         end
 
-    fun convert_network show_net 
+    fun save_network show_net net_file net =
+    let
+        val net_str = net |> NetworkToString.to_string
+        val _ = if show_net then Log.info net_str else () 
+    in TextIOUtil.save_data net_file net_str
+    end
+
+    fun convert_network show_net net_file
             ((clocks, 
                 (auto_names, 
                     (node_ids_to_names, 
@@ -316,7 +323,7 @@ struct
                 formula = formula,
                 broadcast_channels = broadcast
             }
-            val _ = (if show_net then res |> NetworkToString.to_string |> Log.info else ())
+            val _ = save_network show_net net_file res
         in res
         end
 end

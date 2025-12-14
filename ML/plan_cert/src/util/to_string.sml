@@ -7,6 +7,8 @@ end
 functor ListToString (
     structure Ty : TO_STRING
     val sep : string
+    val start_delim : string
+    val end_delim : string
 ) : TO_STRING = struct
     type t = Ty.t list
 
@@ -26,8 +28,8 @@ functor ListToString (
         xs
         |> map (Ty.to_string)
         |> intersperse sep
-        |> foldl (fn (x, y) => x ^ y) ""
-        |> (fn xs => "[" ^ xs ^ "]")
+        |> foldr (fn (x, y) => x ^ y) ""
+        |> (fn xs => start_delim ^ xs ^ end_delim)
 end
 
 structure StringToString : TO_STRING = 

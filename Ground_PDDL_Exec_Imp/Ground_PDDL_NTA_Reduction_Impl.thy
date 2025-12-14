@@ -693,7 +693,7 @@ definition "start_edge_spec' a =
 (let start_snap = AtStart a; guard = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec' start_snap) @ map (\<lambda>x. acconstraint.GE x 0) (int_clocks_spec' start_snap);
   not_locked_check = map ((var_is 0 \<circ>\<circ> prop_to_lock_impl) predicate.name) (filter (\<lambda>p. p \<notin> set (imp_defs.rat_impl.add_imp_list start_snap)) (imp_defs.rat_impl.del_imp_list start_snap)); 
   pre_check = map ((var_is 1 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.pre_imp_list start_snap);
-  var_check = bexp_and_all (not_locked_check @ pre_check); 
+  var_check = bexp_and_all (var_is 1 planning_lock_impl # not_locked_check @ pre_check); 
   add_upds = map ((set_var 1 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.add_imp_list start_snap); 
   del_upds = map ((set_var 0 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.del_imp_list start_snap);
   upds = (inc_var 1 acts_active_impl) # del_upds @ add_upds; 
@@ -702,7 +702,7 @@ definition "start_edge_spec' a =
 
 definition "edge_2_spec' a =
 (let 
-  check_invs = bexp_and_all (map ((var_is 1 \<circ>\<circ> prop_to_var_impl) predicate.name) (over_all_spec a));
+  check_invs = bexp_and_all (var_is 1 planning_lock_impl # map ((var_is 1 \<circ>\<circ> prop_to_var_impl) predicate.name) (over_all_spec a));
   upds = map ((inc_var 1 \<circ>\<circ> prop_to_lock_impl) predicate.name) (over_all_spec a)
 in (starting_loc_impl, check_invs, [], Sil STR '''', upds, [], running_loc_impl))"
 
@@ -713,7 +713,7 @@ definition "edge_3_spec' a =
   guard = l_dur_spec_impl a @ u_dur_spec_impl a @ int_clocks;
   upds = map ((inc_var (- 1) \<circ>\<circ> prop_to_lock_impl) predicate.name) (over_all_spec a); 
   resets = [act_to_end_clock_impl ast_action_schema.name a]
-in (running_loc_impl, bexp.true, guard, Sil STR '''', upds, resets, ending_loc_impl))"
+in (running_loc_impl, var_is 1 planning_lock_impl, guard, Sil STR '''', upds, resets, ending_loc_impl))"
 
 definition "end_edge_spec' a =
 (let 
@@ -722,7 +722,7 @@ definition "end_edge_spec' a =
   end_snap = AtEnd a; 
   not_locked_check = map ((var_is 0 \<circ>\<circ> prop_to_lock_impl) predicate.name) (filter (\<lambda>p. p \<notin> set (imp_defs.rat_impl.add_imp_list end_snap)) (imp_defs.rat_impl.del_imp_list end_snap));
   pre_check = map ((var_is 1 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.pre_imp_list end_snap); 
-  check = bexp_and_all (not_locked_check @ pre_check);
+  check = bexp_and_all (var_is 1 planning_lock_impl # not_locked_check @ pre_check);
   add_upds = map ((set_var 1 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.add_imp_list end_snap); 
   del_upds = map ((set_var 0 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.del_imp_list end_snap);
   upds = inc_var (- 1) acts_active_impl # del_upds @ add_upds
@@ -736,7 +736,7 @@ definition "instant_trans_edge_spec' a =
   int_clocks = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec' end_snap) @ map (\<lambda>x. acconstraint.GE x 0) (int_clocks_spec' end_snap); 
   guard = l_dur_spec_impl a @ u_dur_spec_impl a @ int_clocks;
  resets = [act_to_end_clock_impl ast_action_schema.name a]
-in (starting_loc_impl, bexp.true, guard, Sil STR '''', [], resets, ending_loc_impl))"
+in (starting_loc_impl, var_is 1 planning_lock_impl, guard, Sil STR '''', [], resets, ending_loc_impl))"
 
 
 definition "action_to_automaton_spec' a =
@@ -1164,6 +1164,8 @@ lemma start_edge_spec_refine:
   shows "abstr_model_checking.reduction_ref_impl.start_edge_spec a = start_edge_spec' a" 
   unfolding start_edge_spec'_def
   unfolding abstr_model_checking.reduction_ref_impl.start_edge_spec_def
+  unfolding abstr_model_checking.reduction_ref_impl.pl_is_1_def
+  unfolding planning_lock_refine
   unfolding is_prop_lock_ab_refine
   unfolding is_prop_ab_refine
   unfolding set_prop_ab_refine
@@ -1178,6 +1180,8 @@ lemma edge_2_spec_refine:
   assumes "a \<in> set actions_spec"
   shows "abstr_model_checking.reduction_ref_impl.edge_2_spec a = edge_2_spec' a" 
   unfolding abstr_model_checking.reduction_ref_impl.edge_2_spec_def 
+  unfolding abstr_model_checking.reduction_ref_impl.pl_is_1_def
+  unfolding planning_lock_refine
   unfolding is_prop_ab_refine
   unfolding inc_prop_lock_ab_refine
   unfolding starting_loc_refine running_loc_refine
@@ -1189,6 +1193,8 @@ lemma edge_3_spec_refine:
   assumes "a \<in> set actions_spec"
   shows "abstr_model_checking.reduction_ref_impl.edge_3_spec a = edge_3_spec' a" 
   unfolding abstr_model_checking.reduction_ref_impl.edge_3_spec_def
+  unfolding abstr_model_checking.reduction_ref_impl.pl_is_1_def
+  unfolding planning_lock_refine
   unfolding edge_3_spec'_def
   unfolding running_loc_refine
   unfolding ending_loc_refine
@@ -1203,6 +1209,8 @@ lemma end_edge_spec_refine:
   assumes "a \<in> set actions_spec"
   shows "abstr_model_checking.reduction_ref_impl.end_edge_spec a = end_edge_spec' a"
   unfolding abstr_model_checking.reduction_ref_impl.end_edge_spec_def
+  unfolding abstr_model_checking.reduction_ref_impl.pl_is_1_def
+  unfolding planning_lock_refine
   unfolding ending_loc_refine off_loc_refine
   unfolding is_prop_ab_refine
   unfolding is_prop_lock_ab_refine
@@ -1217,6 +1225,8 @@ lemma instant_trans_edge_spec_refine:
   assumes "a \<in> set actions_spec"
   shows "abstr_model_checking.reduction_ref_impl.instant_trans_edge_spec a = instant_trans_edge_spec' a" 
   unfolding abstr_model_checking.reduction_ref_impl.instant_trans_edge_spec_def
+  unfolding abstr_model_checking.reduction_ref_impl.pl_is_1_def
+  unfolding planning_lock_refine
   unfolding instant_trans_edge_spec'_def
   unfolding starting_loc_refine ending_loc_refine
   unfolding l_dur_spec_refine u_dur_spec_refine

@@ -7,6 +7,11 @@ clean:
 build_certifier: create_dirs
 	mlton -inline 700 -default-type int64 -default-ann 'allowExtendedTextConsts true' -output out/plan_cert plan_cert/src/plan_cert.mlb
 
+build_certifier_profile: create_dirs
+	mlton -profile time -inline 700 -default-type int64 -default-ann 'allowExtendedTextConsts true' -output out/plan_cert plan_cert/src/plan_cert.mlb
+
+
+
 build_certifier_verbose: create_dirs
 	mlton -verbose 2 -inline 700 -default-type int64 -default-ann 'allowExtendedTextConsts true' -output out/plan_cert plan_cert/src/plan_cert.mlb
 

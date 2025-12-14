@@ -3369,6 +3369,13 @@ lemma check_bexp_all_append:
     by auto
   done
 
+lemma check_bexp_Cons:
+  assumes "check_bexp s b True"
+      and "check_bexp s c True"
+    shows "check_bexp s (bexp.and b c) True"
+  apply (subst check_bexp_simps)
+  using assms by simp
+
 
 lemma l_dur_spec_sat_if: 
   assumes "planning_sem.satisfies_duration_bounds act r"
@@ -5582,6 +5589,12 @@ lemma sum_list_pos_if_ex_pos: "\<exists>x \<in> set xs. 0 < x \<Longrightarrow> 
   unfolding sum_list.eq_foldr apply (induction xs) apply simp
   by fastforce
 
+lemma v_pl_cond_sat: 
+  assumes "Lv_conds L v"
+  shows "check_bexp v pl_is_1 True"
+  unfolding pl_is_1_def
+  unfolding check_bexp_simps is_val_simps
+  using assms unfolding Lv_conds_def by simp
 
 lemma end_starts_possible:
   assumes "graph_impl.steps xs \<and> happening_pre_end_starts i (last xs)"
@@ -5902,7 +5915,7 @@ proof -
             apply (subst conv_committed, simp)
             apply (subst no_committed)
             by (auto simp: length_automata_spec)
-          subgoal by rule
+          subgoal by (force intro: end_start_pre_dests end_start_invs_dests  happening_invs_dests Lv_conds_dests v_pl_cond_sat)
           subgoal apply (intro guard_append)
             using eij_in_act eij_ending
             apply (auto intro: ending_actions_sat_dur_const_specs dest!: end_start_pre_dests(1)  end_start_invs_dests(1)  happening_invs_dests(2) simp: is_ending_index_def)[2]
@@ -6379,7 +6392,8 @@ proof -
       subgoal apply (intro disjI2 strip)
         apply (subst conv_committed, simp)
         using no_committed length_automata_spec by auto
-      subgoal 
+      subgoal apply (rule check_bexp_Cons) 
+        apply (force intro: v_pl_cond_sat instant_ending_cond_dests instant_action_invs_dests happening_invs_dests)
         apply (intro check_bexp_all_append v_ending_lock_conds_sat v_ending_pre_conds_sat)
         using instant_ending_cond_dests(1,2) instant_action_invs_dests(2) by fast+ 
       subgoal by simp
@@ -6513,7 +6527,7 @@ proof -
       subgoal apply (intro disjI2 strip)
         apply (subst conv_committed, simp)
         using no_committed length_automata_spec by auto
-                apply rule
+      subgoal by (force intro: v_pl_cond_sat instant_ending_cond_dests instant_action_invs_dests happening_invs_dests)
       subgoal apply (intro guard_append)
         subgoal 
           apply (rule l_dur_spec_sat_if)
@@ -6668,7 +6682,9 @@ proof -
       subgoal apply (intro disjI2 strip)
         apply (subst conv_committed, simp)
         using no_committed length_automata_spec by auto
-      subgoal apply (rule check_bexp_all_append)
+      subgoal apply (rule check_bexp_Cons)
+        apply (force intro: v_pl_cond_sat instant_pre_dests instant_action_invs_dests happening_invs_dests)
+        apply (rule check_bexp_all_append)
         subgoal apply (drule instant_pre_dests(1)) by (auto intro: v_pre_conds_sat v_lock_conds_sat dest: instant_action_invs_dests)
         subgoal by (auto intro: v_pre_conds_sat v_lock_conds_sat dest: instant_pre_dests)
         done
@@ -7228,7 +7244,9 @@ proof -
           apply (subst conv_committed, simp)
           apply (subst no_committed, simp)
           by auto
-        subgoal by (auto intro: check_bexp_all_append v_pre_conds_sat v_lock_conds_sat start_start_pre_dests start_start_invs_dests)
+        subgoal apply (rule check_bexp_Cons)
+           apply (force intro: v_pl_cond_sat start_start_pre_dests start_start_invs_dests happening_invs_dests)
+          by (auto intro: check_bexp_all_append v_pre_conds_sat v_lock_conds_sat start_start_pre_dests start_start_invs_dests)
         subgoal using mutex_conds_sat by auto
         subgoal using conv_invs no_invs by auto
         subgoal by (auto intro: start_start_pre_dests sij_starting_index sij_ran)
@@ -7636,7 +7654,9 @@ proof -
                      apply (simp add: end_edge_spec_def)
                     apply (simp add: eij_ran nth_auto_trans)
         subgoal by (intro disjI2 strip) ((subst conv_committed no_committed | simp)+)
-        subgoal by (auto intro: check_bexp_all_append v_pre_conds_sat v_lock_conds_sat end_end_pre_dests end_end_invs_dests)
+        subgoal  apply (rule check_bexp_Cons)
+           apply (force intro: v_pl_cond_sat end_end_pre_dests end_end_invs_dests happening_invs_dests)
+          by (auto intro: check_bexp_all_append v_pre_conds_sat v_lock_conds_sat end_end_pre_dests end_end_invs_dests)
         subgoal by simp
         subgoal using conv_invs no_invs by force
         subgoal using eij_ran eij_ending_index by (auto intro: end_end_pre_dests)
@@ -8045,7 +8065,9 @@ proof -
                     apply (simp add: sij_ran nth_auto_trans)
         subgoal apply (intro disjI2 strip)
           by (subst conv_committed no_committed | simp)+
-        subgoal using v_pre_sat by simp
+        subgoal apply (rule check_bexp_Cons)
+           apply (force intro: v_pl_cond_sat start_end_pre_dests start_end_invs_dests happening_invs_dests)
+          using v_pre_sat by simp
         subgoal by simp
         subgoal using conv_invs no_invs by auto
         subgoal using start_end_pre_dests sij_starting_index sij_ran by auto

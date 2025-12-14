@@ -10,3 +10,6 @@
 [submodule "ML/lib/parcom"]
 	path = ML/lib/parcom
 	url = https://github.com/standardml/parcom.git
+[submodule "examples/pddl-instances"]
+	path = examples/pddl-instances
+	url = git@github.com:david-wang-0/pddl-instances.git

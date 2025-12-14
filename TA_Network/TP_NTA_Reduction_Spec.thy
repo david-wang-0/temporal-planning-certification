@@ -111,7 +111,6 @@ abbreviation "inc_var n v \<equiv> (v, exp.binop (+) (exp.var v) (exp.const n))"
 abbreviation "set_var n v \<equiv> (v, exp.const n)"
 
 
-
 definition is_prop_ab::"
    int \<Rightarrow> 'proposition
 \<Rightarrow> (String.literal, int) bexp" where
@@ -141,6 +140,9 @@ definition inc_prop_lock_ab::"
   int \<Rightarrow> 'proposition
 \<Rightarrow> String.literal \<times> (String.literal, int) exp" where
 "inc_prop_lock_ab n \<equiv> inc_var n o prop_to_lock"
+
+definition 
+"pl_is_1 = var_is (1::int) planning_lock"
   
 
 subsection \<open>Automata for individual actions\<close>
@@ -172,7 +174,7 @@ let
   
   not_locked_check = map (is_prop_lock_ab 0) (filter (\<lambda>p. p \<notin> set (adds start_snap)) (dels start_snap));
   pre_check = map (is_prop_ab 1) (pre start_snap);
-  var_check = bexp_and_all (not_locked_check @ pre_check );
+  var_check = bexp_and_all (pl_is_1 # not_locked_check @ pre_check );
   
   add_upds = map (set_prop_ab 1) (adds start_snap);
   del_upds = map (set_prop_ab 0) (dels start_snap);
@@ -184,7 +186,7 @@ in (off_loc, var_check, guard, Sil (STR ''''), upds, resets, starting_loc)"
 definition edge_2_spec::"'action \<Rightarrow> nat \<times> (String.literal, int) Simple_Expressions.bexp \<times> (String.literal, int) acconstraint list \<times> String.literal act \<times> (String.literal \<times> (String.literal, int) exp) list \<times> String.literal list \<times> nat" where
 "edge_2_spec a \<equiv> 
 let 
-  check_invs = bexp_and_all (map (is_prop_ab 1) (over_all a));
+  check_invs = (bexp_and_all (pl_is_1 # map (is_prop_ab 1) (over_all a)));
   upds = map (inc_prop_lock_ab 1) (over_all a)
 in
   (starting_loc, check_invs, [], Sil (STR ''''), upds, [], running_loc)
@@ -217,7 +219,7 @@ let
   
   resets = [act_to_end_clock a]
 in 
-  (running_loc, bexp.true, guard, Sil (STR ''''), upds , resets, ending_loc)
+  (running_loc, pl_is_1, guard, Sil (STR ''''), upds , resets, ending_loc)
 "
 
 (* Checking that no interfering snap-action is starting is done using the clock constraints. 
@@ -242,7 +244,7 @@ let
 
   resets = [act_to_end_clock a]
 in 
-  (starting_loc, bexp.true, guard, Sil (STR ''''), [], resets, ending_loc)
+  (starting_loc, pl_is_1, guard, Sil (STR ''''), [], resets, ending_loc)
 "
 
 (* The not-locked check should only apply to those deletions which are not immediately overwritten by additions *)
@@ -256,7 +258,7 @@ let
 
   not_locked_check = map (is_prop_lock_ab 0) (filter (\<lambda>p. p \<notin> set (adds end_snap)) (dels end_snap));
   pre_check = map (is_prop_ab 1) (pre end_snap);
-  check = bexp_and_all (not_locked_check @ pre_check);
+  check = bexp_and_all (pl_is_1 # not_locked_check @ pre_check);
   
   add_upds = map (set_prop_ab 1) (adds end_snap);
   del_upds = map (set_prop_ab 0) (dels end_snap);
