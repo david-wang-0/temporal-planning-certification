@@ -43,3 +43,13 @@ struct
     type t = Int.int
     fun to_string i = Int.toString i
 end
+
+structure IntToStringSign : TO_STRING =
+struct
+    type t = Int.int
+    fun to_string i = 
+        (case String.explode (Int.toString i) of
+            #"~"::s => #"-"::s |
+            s => s) |> String.implode
+end
+

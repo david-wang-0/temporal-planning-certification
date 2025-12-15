@@ -1,6 +1,7 @@
 val usage = "Usage: $ plan_cert " ^ "\n" ^
             "-domain <pddl domain file> " ^ "\n" ^
             "-problem <pddl problem file> " ^ "\n" ^
+            "-model <model (output) path> " ^ "\n" ^
             "-certificate <certificate (output) path> " ^ "\n" ^
             "-renaming <renaming (output) path> " ^ "\n" ^
             "-mode <0 | 1 | 2 | 3> (where 0 is debug and 1 - 3 are implementations) " ^ "\n" ^
@@ -52,7 +53,7 @@ fun flags args =
                 (fn "-problem" => true | "-p" => true | _ => false) args
         val network =
             dissect_arguments
-                (fn "-network" => true | "-m" => true | _ => false) args
+                (fn "-model" => true | "-m" => true | _ => false) args
         val renaming_path =
             dissect_arguments
                 (fn "-renaming" => true | "-r" => true | _ => false) args

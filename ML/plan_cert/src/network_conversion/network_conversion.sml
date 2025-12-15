@@ -119,6 +119,20 @@ struct
         |> map Guard.Constr
         |> List.foldl Guard.And Guard.True
 
+    fun simplify_guard (g: ('a, 'b) guard) : ('a, 'b) guard = case g of 
+        Guard.True => Guard.True |
+        Guard.Constr c => Guard.Constr c |
+        Guard.And (a, b) => (case (simplify_guard a, simplify_guard b) of
+            (Guard.True, b) => b |
+            (a, Guard.True) => a |
+            (a, b) => Guard.And (a, b)
+        ) |
+        Guard.Or (a, b) => (case (simplify_guard a, simplify_guard b) of
+            (Guard.True, b) => Guard.True |
+            (a, Guard.True) => Guard.True |
+            (a, b) => Guard.Or (a, b)
+        )
+
     
     fun convert_invariant_constraint (constr: (string, inta) Converter.acconstraint): (string, int) constraint =
         let fun convert_pair (x, y) = (x, Converter.integer_of_int y)
@@ -136,6 +150,15 @@ struct
         |> map convert_invariant_constraint
         |> map Invariant.Constr
         |> List.foldl Invariant.And Invariant.True
+
+    fun simplify_invariant (inv : ('a, 'b) invariant) = case inv of
+        Invariant.True => Invariant.True |
+        Invariant.Constr c => Invariant.Constr c |
+        Invariant.And (a, b) => (case (simplify_invariant a, simplify_invariant b) of
+            (Invariant.True, b) => b |
+            (a, Invariant.True) => a |
+            (a, b) => Invariant.And (a, b)
+        )
 
 
     fun convert_action (act: string Converter.act): string action =
@@ -185,7 +208,7 @@ struct
             val resets = convert_resets resets
         in {
             source = Converter.integer_of_nat out_loc,
-            guard = Guard.And(guard, constr),
+            guard = simplify_guard (Guard.And (guard, constr)),
             label = act,
             update = upds @ resets,
             target = Converter.integer_of_nat in_loc
@@ -201,7 +224,7 @@ struct
         = {
             id = Converter.integer_of_nat node_id,
             name = name_asmt node_id,
-            invariant = inv_asmt node_id |> convert_invariant_constraints
+            invariant = inv_asmt node_id |> convert_invariant_constraints |> simplify_invariant
         }
 
     fun edge_nodes (out_loc, (guard, (constr, (action, (updates, (resets, in_loc)))))) =
