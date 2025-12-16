@@ -1,0 +1,873 @@
+{
+    "automata": [
+        {
+            "name": "main",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "init",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "planning",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "goal",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                0,
+                2
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 1,
+                    "guard": "planning_lock = 0",
+                    "label": "",
+                    "update": "planning_lock := 1, var_clear_a := 1, var_clear_b := 1, var_ontable_a := 1, var_ontable_b := 1, var_handempty := 1"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1 && var_on_a_b = 1 && var_on_b_a = 1",
+                    "label": "",
+                    "update": "planning_lock := 2"
+                },
+                {
+                    "source": 2,
+                    "target": 2,
+                    "guard": "",
+                    "label": "",
+                    "update": ""
+                }
+            ]
+        },
+        {
+            "name": "act__pick-up_a_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 1,
+                    "guard": "planning_lock = 1 && lock_clear_a = 0 && lock_ontable_a = 0 && lock_handempty = 0 && var_clear_a = 1 && var_ontable_a = 1 && var_handempty = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_b_b_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__stack_a_a_ >= 0 && start__put-down_b_ >= 0 && start__put-down_a_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_b_b_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__stack_a_a_ > 0 && start__put-down_b_ > 0 && start__put-down_a_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_clear_a := 0, var_ontable_a := 0, var_handempty := 0, var_holding_a := 1, start__pick-up_a_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__pick-up_a_ <= 0 && start__pick-up_a_ >= 0",
+                    "label": "",
+                    "update": "end__pick-up_a_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__pick-up_a_ <= 0 && start__pick-up_a_ >= 0",
+                    "label": "",
+                    "update": "end__pick-up_a_ := 0"
+                }
+            ]
+        },
+        {
+            "name": "act__pick-up_b_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 1,
+                    "guard": "planning_lock = 1 && lock_clear_b = 0 && lock_ontable_b = 0 && lock_handempty = 0 && var_clear_b = 1 && var_ontable_b = 1 && var_handempty = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_b_b_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__stack_a_a_ >= 0 && start__put-down_b_ >= 0 && start__put-down_a_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_b_b_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__stack_a_a_ > 0 && start__put-down_b_ > 0 && start__put-down_a_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_clear_b := 0, var_ontable_b := 0, var_handempty := 0, var_holding_b := 1, start__pick-up_b_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__pick-up_b_ <= 0 && start__pick-up_b_ >= 0",
+                    "label": "",
+                    "update": "end__pick-up_b_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__pick-up_b_ <= 0 && start__pick-up_b_ >= 0",
+                    "label": "",
+                    "update": "end__pick-up_b_ := 0"
+                }
+            ]
+        },
+        {
+            "name": "act__put-down_a_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 0,
+                    "guard": "planning_lock = 1 && lock_holding_a = 0 && var_holding_a = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__stack_a_a_ >= 0 && start__put-down_a_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__stack_a_a_ > 0 && start__put-down_a_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_holding_a := 0, var_clear_a := 1, var_ontable_a := 1, var_handempty := 1, start__put-down_a_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__put-down_a_ <= 0 && start__put-down_a_ >= 0",
+                    "label": "",
+                    "update": "end__put-down_a_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__put-down_a_ <= 0 && start__put-down_a_ >= 0",
+                    "label": "",
+                    "update": "end__put-down_a_ := 0"
+                }
+            ]
+        },
+        {
+            "name": "act__put-down_b_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 0,
+                    "guard": "planning_lock = 1 && lock_holding_b = 0 && var_holding_b = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_b_b_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__put-down_b_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_b_b_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__put-down_b_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_holding_b := 0, var_clear_b := 1, var_ontable_b := 1, var_handempty := 1, start__put-down_b_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__put-down_b_ <= 0 && start__put-down_b_ >= 0",
+                    "label": "",
+                    "update": "end__put-down_b_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__put-down_b_ <= 0 && start__put-down_b_ >= 0",
+                    "label": "",
+                    "update": "end__put-down_b_ := 0"
+                }
+            ]
+        },
+        {
+            "name": "act__stack_a_a_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 1,
+                    "guard": "planning_lock = 1 && lock_holding_a = 0 && var_holding_a = 1 && var_clear_a = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__stack_a_a_ >= 0 && start__put-down_a_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__stack_a_a_ > 0 && start__put-down_a_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_clear_a := 0, var_holding_a := 0, var_clear_a := 1, var_handempty := 1, var_on_a_a := 1, start__stack_a_a_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__stack_a_a_ <= 0 && start__stack_a_a_ >= 0",
+                    "label": "",
+                    "update": "end__stack_a_a_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__stack_a_a_ <= 0 && start__stack_a_a_ >= 0",
+                    "label": "",
+                    "update": "end__stack_a_a_ := 0"
+                }
+            ]
+        },
+        {
+            "name": "act__stack_b_a_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 0,
+                    "guard": "planning_lock = 1 && lock_clear_a = 0 && lock_holding_b = 0 && var_holding_b = 1 && var_clear_a = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_b_b_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__stack_a_a_ >= 0 && start__put-down_b_ >= 0 && start__put-down_a_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_b_b_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__stack_a_a_ > 0 && start__put-down_b_ > 0 && start__put-down_a_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_clear_a := 0, var_holding_b := 0, var_clear_b := 1, var_handempty := 1, var_on_b_a := 1, start__stack_b_a_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__stack_b_a_ <= 0 && start__stack_b_a_ >= 0",
+                    "label": "",
+                    "update": "end__stack_b_a_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__stack_b_a_ <= 0 && start__stack_b_a_ >= 0",
+                    "label": "",
+                    "update": "end__stack_b_a_ := 0"
+                }
+            ]
+        },
+        {
+            "name": "act__stack_a_b_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 0,
+                    "guard": "planning_lock = 1 && lock_clear_b = 0 && lock_holding_a = 0 && var_holding_a = 1 && var_clear_b = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_b_b_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__stack_a_a_ >= 0 && start__put-down_b_ >= 0 && start__put-down_a_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_b_b_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__stack_a_a_ > 0 && start__put-down_b_ > 0 && start__put-down_a_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_clear_b := 0, var_holding_a := 0, var_clear_a := 1, var_handempty := 1, var_on_a_b := 1, start__stack_a_b_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__stack_a_b_ <= 0 && start__stack_a_b_ >= 0",
+                    "label": "",
+                    "update": "end__stack_a_b_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__stack_a_b_ <= 0 && start__stack_a_b_ >= 0",
+                    "label": "",
+                    "update": "end__stack_a_b_ := 0"
+                }
+            ]
+        },
+        {
+            "name": "act__stack_b_b_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 1,
+                    "guard": "planning_lock = 1 && lock_holding_b = 0 && var_holding_b = 1 && var_clear_b = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_b_b_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__put-down_b_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_b_b_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__put-down_b_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_clear_b := 0, var_holding_b := 0, var_clear_b := 1, var_handempty := 1, var_on_b_b := 1, start__stack_b_b_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__stack_b_b_ <= 0 && start__stack_b_b_ >= 0",
+                    "label": "",
+                    "update": "end__stack_b_b_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__stack_b_b_ <= 0 && start__stack_b_b_ >= 0",
+                    "label": "",
+                    "update": "end__stack_b_b_ := 0"
+                }
+            ]
+        },
+        {
+            "name": "act__unstack_a_a_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 0,
+                    "guard": "planning_lock = 1 && lock_handempty = 0 && lock_on_a_a = 0 && var_on_a_a = 1 && var_clear_a = 1 && var_handempty = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_b_b_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__stack_a_a_ >= 0 && start__put-down_b_ >= 0 && start__put-down_a_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_b_b_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__stack_a_a_ > 0 && start__put-down_b_ > 0 && start__put-down_a_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_clear_a := 0, var_handempty := 0, var_on_a_a := 0, var_clear_a := 1, var_holding_a := 1, start__unstack_a_a_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__unstack_a_a_ <= 0 && start__unstack_a_a_ >= 0",
+                    "label": "",
+                    "update": "end__unstack_a_a_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__unstack_a_a_ <= 0 && start__unstack_a_a_ >= 0",
+                    "label": "",
+                    "update": "end__unstack_a_a_ := 0"
+                }
+            ]
+        },
+        {
+            "name": "act__unstack_b_a_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 0,
+                    "guard": "planning_lock = 1 && lock_clear_b = 0 && lock_handempty = 0 && lock_on_b_a = 0 && var_on_b_a = 1 && var_clear_b = 1 && var_handempty = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_b_b_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__stack_a_a_ >= 0 && start__put-down_b_ >= 0 && start__put-down_a_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_b_b_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__stack_a_a_ > 0 && start__put-down_b_ > 0 && start__put-down_a_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_clear_b := 0, var_handempty := 0, var_on_b_a := 0, var_clear_a := 1, var_holding_b := 1, start__unstack_b_a_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__unstack_b_a_ <= 0 && start__unstack_b_a_ >= 0",
+                    "label": "",
+                    "update": "end__unstack_b_a_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__unstack_b_a_ <= 0 && start__unstack_b_a_ >= 0",
+                    "label": "",
+                    "update": "end__unstack_b_a_ := 0"
+                }
+            ]
+        },
+        {
+            "name": "act__unstack_a_b_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 0,
+                    "guard": "planning_lock = 1 && lock_clear_a = 0 && lock_handempty = 0 && lock_on_a_b = 0 && var_on_a_b = 1 && var_clear_a = 1 && var_handempty = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_b_b_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__stack_a_a_ >= 0 && start__put-down_b_ >= 0 && start__put-down_a_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_b_b_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__stack_a_a_ > 0 && start__put-down_b_ > 0 && start__put-down_a_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_clear_a := 0, var_handempty := 0, var_on_a_b := 0, var_clear_b := 1, var_holding_a := 1, start__unstack_a_b_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__unstack_a_b_ <= 0 && start__unstack_a_b_ >= 0",
+                    "label": "",
+                    "update": "end__unstack_a_b_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__unstack_a_b_ <= 0 && start__unstack_a_b_ >= 0",
+                    "label": "",
+                    "update": "end__unstack_a_b_ := 0"
+                }
+            ]
+        },
+        {
+            "name": "act__unstack_b_b_",
+            "nodes": [
+                {
+                    "id": 0,
+                    "name": "off",
+                    "invariant": ""
+                },
+                {
+                    "id": 1,
+                    "name": "starting",
+                    "invariant": ""
+                },
+                {
+                    "id": 2,
+                    "name": "running",
+                    "invariant": ""
+                },
+                {
+                    "id": 3,
+                    "name": "ending",
+                    "invariant": ""
+                }
+            ],
+            "committed": [],
+            "urgent": [
+                1,
+                3
+            ],
+            "initial": 0,
+            "edges": [
+                {
+                    "source": 0,
+                    "target": 0,
+                    "guard": "planning_lock = 1 && lock_handempty = 0 && lock_on_b_b = 0 && var_on_b_b = 1 && var_clear_b = 1 && var_handempty = 1 && start__unstack_b_b_ >= 0 && start__unstack_a_b_ >= 0 && start__unstack_b_a_ >= 0 && start__unstack_a_a_ >= 0 && start__stack_b_b_ >= 0 && start__stack_a_b_ >= 0 && start__stack_b_a_ >= 0 && start__stack_a_a_ >= 0 && start__put-down_b_ >= 0 && start__put-down_a_ >= 0 && start__pick-up_b_ >= 0 && start__pick-up_a_ >= 0 && start__unstack_b_b_ > 0 && start__unstack_a_b_ > 0 && start__unstack_b_a_ > 0 && start__unstack_a_a_ > 0 && start__stack_b_b_ > 0 && start__stack_a_b_ > 0 && start__stack_b_a_ > 0 && start__stack_a_a_ > 0 && start__put-down_b_ > 0 && start__put-down_a_ > 0 && start__pick-up_b_ > 0 && start__pick-up_a_ > 0",
+                    "label": "",
+                    "update": "var_clear_b := 0, var_handempty := 0, var_on_b_b := 0, var_clear_b := 1, var_holding_b := 1, start__unstack_b_b_ := 0"
+                },
+                {
+                    "source": 1,
+                    "target": 2,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 2,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__unstack_b_b_ <= 0 && start__unstack_b_b_ >= 0",
+                    "label": "",
+                    "update": "end__unstack_b_b_ := 0"
+                },
+                {
+                    "source": 3,
+                    "target": 0,
+                    "guard": "planning_lock = 1",
+                    "label": "",
+                    "update": ""
+                },
+                {
+                    "source": 1,
+                    "target": 3,
+                    "guard": "planning_lock = 1 && start__unstack_b_b_ <= 0 && start__unstack_b_b_ >= 0",
+                    "label": "",
+                    "update": "end__unstack_b_b_ := 0"
+                }
+            ]
+        }
+    ],
+    "clocks": "start__pick-up_a_, start__pick-up_b_, start__put-down_a_, start__put-down_b_, start__stack_a_a_, start__stack_b_a_, start__stack_a_b_, start__stack_b_b_, start__unstack_a_a_, start__unstack_b_a_, start__unstack_a_b_, start__unstack_b_b_, end__pick-up_a_, end__pick-up_b_, end__put-down_a_, end__put-down_b_, end__stack_a_a_, end__stack_b_a_, end__stack_a_b_, end__stack_b_b_, end__unstack_a_a_, end__unstack_b_a_, end__unstack_a_b_, end__unstack_b_b_",
+    "vars": "planning_lock[0:2], lock_clear_a[0:12], lock_clear_b[0:12], lock_ontable_a[0:12], lock_ontable_b[0:12], lock_handempty[0:12], lock_holding_a[0:12], lock_holding_b[0:12], lock_on_a_a[0:12], lock_on_b_a[0:12], lock_on_a_b[0:12], lock_on_b_b[0:12], var_clear_a[0:1], var_clear_b[0:1], var_ontable_a[0:1], var_ontable_b[0:1], var_handempty[0:1], var_holding_a[0:1], var_holding_b[0:1], var_on_a_a[0:1], var_on_b_a[0:1], var_on_a_b[0:1], var_on_b_b[0:1]",
+    "formula": "E<> (main.goal && act__pick-up_a_.off && act__pick-up_b_.off && act__put-down_a_.off && act__put-down_b_.off && act__stack_a_a_.off && act__stack_b_a_.off && act__stack_a_b_.off && act__stack_b_b_.off && act__unstack_a_a_.off && act__unstack_b_a_.off && act__unstack_a_b_.off && act__unstack_b_b_.off)",
+    "broadcast": []
+}

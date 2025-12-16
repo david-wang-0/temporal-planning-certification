@@ -13,6 +13,7 @@
        (person-on-floor p0 f1) 
        (person-on-floor p1 f2) 
        (person-on-floor p2 f3) 
-       (person-on-floor p3 f4) 
-       (person-on-floor p4 f4)))
+       (person-on-floor p3 f4))
+
+)
 )
