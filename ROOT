@@ -31,6 +31,6 @@ session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp =
     Check_Unsolvability
     Unsolvability_Code_Compile
   export_files (in "../") [1]
-    "PDDL_TP_Reduction.Unsolvability_Code_Compile:*"
+    "PDDL_TP_Reduction.Unsolvability_Code_Compile:ML/Check_Unsolvability.ML"
     
 
