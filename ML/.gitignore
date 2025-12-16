@@ -1,6 +1,5 @@
 tp_cert
 out/*
-Check_Unsolvability*.ML
 output.txt
 comple_sxml.err
 plan_cert.ast
@@ -12,3 +11,4 @@ plan_cert.sxml
 plan_cert.xml
 *.err
 safe_out/
+Check_Unsolvability.ML

@@ -1,69 +1,92 @@
 # How to use
 
-## Install Mercurial
-Find instructions here: https://www.mercurial-scm.org/install
+## Install GNU make
 
-## Install isabelle 2025
+Find instructions here: https://www.gnu.org/software/make/#download
+
+## Obtain the dependencies
+
+```
+git pull --recurse-submodules
+```
+
+```
+git submodule update --recursive
+```
+
+## Checking Isabelle Proofs and Exporting Code
+
+### Install Isabelle 2025
+
 More instructions here: https://isabelle.in.tum.de/installation.html
 
-## Add the Isabelle AFP
-A working revision can be obtained from the mercurial repository:
+### Add the Isabelle AFP for Isabelle 2025
+
+Download instructions can be found here: https://www.isa-afp.org/download/
+
+Once a local copy is obtained, add the theories as Isabelle component
 ```
-hg clone --updaterev 9723ff25870aad1d692fcc4dab82ce1bfb97c2b0 https://foss.heptapod.net/isa-afp/afp-2025  
+isabelle components -u afp-2025/thys
 ```
 
-```
-<isabelle> components -u afp-2025/thys
-```
-Where `<isabelle>` is the Isabelle command
-
-## Add the code for the formalisation
+### Add Temporal Planning Semantics as Isabelle component
 
 ```
-<isabelle> components -u temp-planning-certification
+isabelle components -u lib/temporal-pddl-semantics
 ```
 
-## Buliding and Navigating
+### Make Isabelle recognise the project's dependencies
 
-To build/check the project:
+Add the root directory of this project as Isabelle Component
+```
+isabelle components -u .
+```
+
+### Using Isabelle to check the formal proof and export code
+
+To build and check the formal proof and export code:
 
 ```
-<isabelle> build -b TP_NTA_Reduction
+isabelle build -e PDDL_TP_Reduction
 ```
 
-### To look at the contents
+### Navigating the contents of the files
+
 Build the Munta component:
 
 ```
-<isabelle> build -b Munta_Model_Checker
+isabelle build -b Munta_Certificate_Checker
 ```
 This avoids a long startup time.
 
-Start Isabelle/jEdit with the Munta heap loaded:
+Start Isabelle/jEdit in this directory with the Munta component loaded:
 
 ```
-<isabelle> jedit -l Munta_Model_Checker
+isabelle jedit -d . -l Munta_Certificate_Checker
 ```
 
-Navigate to the `temp-planning-certification` folder in the jEdit UI.
+Navigate to this directory in the jEdit UI.
 
-# Building the executable checker
+## Building the executable checker
+
+### Install MLton
+
 Install MLton. See: http://www.mlton.org/Installation
 
-Install GNU make. See: https://www.gnu.org/software/make/#download
+### Make Isabelle export code
 
-Get MLunta. 
+Follow the above steps to make Isabelle export code.
 
-Export the generated SML code:
-```
-isabelle build -e PDDL_TP_Reduction 
-```
+### Build the Certifier
 
-CMlib needs to be in version 2.3.0
-```
-cd ML/lib/cmlib
-```
+Navigate to the `ML` folder:
 
 ```
-git checkout 7e58f90cc854788de66c623f7da9f7d4940eef21
+cd ML
+```
+
+Build the Certifier:
+
+```
+make build_certifier
 ```

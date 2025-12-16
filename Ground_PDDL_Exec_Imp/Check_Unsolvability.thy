@@ -1259,7 +1259,7 @@ find_theorems name: "list_of_set_def"
 code_printing
   type_constructor Typerep.typerep \<rightharpoonup> (Eval)
   | constant Typerep.Typerep \<rightharpoonup> (Eval)
-
+ 
 term list_of_set
 term sorted_list_of_set
 
@@ -1276,85 +1276,8 @@ code_printing
 code_printing
   constant list_of_set' \<rightharpoonup> (SML) "listofsetreplacethiswhilecompiling"
 
-find_theorems name: PredAtm
 
-thm dbm_subset'_impl'_int_code
-
-thm imp_for_int_def
-
-find_theorems name: "imp_for"
-
-term imp_for
-
-find_theorems name: Simple "?x = 0"
-
-find_theorems "(5::int)"
-
-thm check_diag_impl'_int_code
-
-find_theorems "dbm_subset'_impl'_int"
-
-find_theorems name: Netwo "(?x + 1) * (?x + 1)"
-
-find_theorems start_timer
-
-find_theorems array_freeze
-
-find_theorems unreachability_checker3
-
-find_theorems name: Networ amtx_copy
-
-find_theorems run_heap
-
-find_theorems name: "parse*check"
-
-find_theorems convert_state_space
-
-term convert_state_space
-
-find_theorems name: Net array_unfreeze
-
-find_theorems name: Net "(case ?x of Nil \<Rightarrow> ?y | (Cons y ys) \<Rightarrow> ?f y ys)"
-
-(* definition normalize_dbm :: "nat \<Rightarrow> int DBMEntry list \<Rightarrow> int DBMEntry list" where
-  "normalize_dbm m xs = do {
-    dbm \<leftarrow> Array.of_list xs;
-    dbm \<leftarrow> fw_impl_int m dbm;
-    Array.freeze dbm
-  } |> run_heap
-  "
-
-definition insert_every_nth :: "nat \<Rightarrow> 'a \<Rightarrow> 'a list \<Rightarrow> 'a list" where
-  "insert_every_nth n a xs \<equiv>
-    fold (\<lambda>x (i, xs). if i = n then (1, a # x # xs) else (i + 1, x # xs)) xs (1, []) |> snd |> rev"
-
-definition convert_dbm where
-  "convert_dbm urge m dbm =
-    take m dbm @ Le 0 #
-    insert_every_nth m DBMEntry.INF (drop m dbm)
-    @ (if urge then Le 0 else DBMEntry.INF) # replicate (m - 1) DBMEntry.INF @ [Le 0]
-  |> normalize_dbm m"
-
-fun convert_state_space :: "_ \<Rightarrow> _ \<Rightarrow> int state_space \<Rightarrow> nat state_space" where
-  "convert_state_space m is_urgent (Reachable_Set xs) = Reachable_Set (
-    map (\<lambda>((locs, vars), dbms).
-      ((map nat locs, vars), map (convert_dbm (is_urgent (locs, vars)) m) dbms))
-    xs)"
-| "convert_state_space m is_urgent (Buechi_Set xs) = Buechi_Set (
-    map (\<lambda>((locs, vars), dbms).
-      ((map nat locs, vars), map (\<lambda>(dbm, i). (convert_dbm (is_urgent (locs, vars)) m dbm, i)) dbms))
-    xs)" *)
-find_theorems amtx_copy
-
-find_theorems abstr_repair_impl
-
-find_theorems convert_dbm 
-thm convert_dbm_def
-term convert_dbm
-
-lemma [code]: "certificate_checker3 = undefined"
-  sorry
-
+declare certificate_checker3_def[code del]
 
 (* Ask what is going on with Typerep and Integer *)
 export_code              
@@ -1375,7 +1298,7 @@ export_code
   Simple_Action_Schema Durative_Action_Schema At_Start At_End Over_All
   map_atom Domain Problem Simple_Plan_Action Durative_Plan_Action
   term.CONST term.VAR (* I want to export the entire type, but I can only export the constructor because term is already an isabelle keyword. *)
-  String.explode String.implode
+  String.explode String.implode 
   in Eval module_name Converter file_prefix Check_Unsolvability
 (* To do:
   - Change the parser for PDDL. (ML)`

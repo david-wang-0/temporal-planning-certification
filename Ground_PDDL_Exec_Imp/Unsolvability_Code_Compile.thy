@@ -2,141 +2,32 @@ theory Unsolvability_Code_Compile
   imports Check_Unsolvability
 begin
 
-\<comment> \<open>Produces commands for generating a certificate for a single benchmark with \mlunta, e.g.
-\<^verbatim>\<open>mluntac-poly -certificate PM_all_5.cert -renaming PM_all_5.renaming -model PM_all_5.muntax\<close>
-checking it with \munta, and checking the result:
-\<^verbatim>\<open>./check_benchmark.sh
-  muntac -certificate PM_all_5.cert -renaming PM_all_5.renaming -model PM_all_5.muntax\<close>
-\<close>
-ML \<open>
-fun mk_cert mlunta_path name =
-  let
-    val benchmark = name ^ ".muntax"
-    val gen_certificate = implode_space [
-      mlunta_path,
-      "-certificate", name ^ ".cert",
-      "-renaming", name ^ ".renaming",
-      "-model", benchmark
-    ]
-  in
-    gen_certificate
-  end
-
-val it1 = mk_cert "mluntac-poly" "PM_all_5"
-
-fun check_cert muntac_path name =
-  let
-    val benchmark = name ^ ".muntax"
-  in
-    implode_space [
-      "./check_benchmark.sh",
-      muntac_path,
-      "-certificate", name ^ ".cert",
-      "-renaming", name ^ ".renaming",
-      "-model", benchmark
-    ]
-  end
-
-val it2 = check_cert "muntac" "PM_all_5"
-
-val mlunta_dir_proper = Path.append (Path.current |> File.absolute_path) (Path.explode "mlunta")
-
-val mlunta_dir = Path.explode "mlunta" |> File.absolute_path
-
-val library_path =
-  Path.append mlunta_dir (Path.explode "src/isalib/library.sml") |> Path.implode
-val basics_path =
-  Path.append mlunta_dir (Path.explode "src/isalib/basics.sml") |> Path.implode
-
-val mlunta_certificate_path = "mlunta/src/serialization/mlunta_certificate"
-\<close>
-
+text \<open>Just replaces the int type.\<close>
 compile_generated_files "code/Check_Unsolvability.ML" (in Check_Unsolvability)
-  external_files
-    \<open>Unsynchronized.sml\<close>
-    \<open>Writeln.sml\<close>
-    \<open>Util.sml\<close>
-    \<open>Muntac.sml\<close>
-    \<open>Mlton_Main.sml\<close>
-    \<open>sequential.sml\<close>
-    \<open>muntac.mlb\<close>
-    (in "$AFP/Munta_Certificate_Checker/ML")
-  export_files \<open>cert_check\<close> (exe)
-    and \<open>idk.txt\<close>
+export_files \<open>ML/Check_Unsolvability.ML\<close>
   where \<open>fn dir =>
     let
       val exec = Generated_Files.execute dir
 
-      val _ = exec \<open>Copy MLunta\<close> ("cp -r '" ^  Path.implode mlunta_dir ^ "' .")
-      val _ = exec \<open>Compile MLunta\<close> ("cd " ^ Path.implode mlunta_dir ^ " && make build_checker && cd ..")
+      
+      val _ =
+          exec \<open>Replace int type\<close>
+            "sed -i -e 's/IntInf/Int/g' code/Check_Unsolvability.ML" 
 
       val _ =
-        exec \<open>Copy Isabelle library files\<close>
-          ("cp '" ^ library_path ^ "' library.ML && cp '" ^ basics_path ^ "' basics.ML")
-
+          exec \<open>Replace list_of_set'\<close>
+            "sed -i -e 's/listofsetreplacethiswhilecompiling/(fn (Set_Monad xs) => xs | DList_set (Abs_dlist xs) => xs | RBT_set (Mapping_RBTa r) => rbt_to_list r | _ => raise Fail \"Unsupported set implementation\")/g' code/Check_Unsolvability.ML" 
+        
       val _ =
-        exec \<open>Preparation\<close>
-          ("mv code/Certificate.ML Certificate.ML")
-      val _ =
-        exec \<open>Replace int type\<close>
-          ("sed -i -e 's/IntInf/Int/g' Certificate.ML")
+          exec \<open>Create ML folder\<close>
+            "mkdir -p ML" 
 
-      val _ =
-        exec \<open>Copy generated ML code\<close>
-          ("cp Certificate.ML " ^ Path.implode code_out_path)
-
-      val _ =
-        exec \<open>set\<close>
-          "set -x"
-      val _ =
-        \<comment> \<open>Efficient settings for ARM64 machines\<close>
-        exec \<open>Compilation\<close>
-          (\<^verbatim>\<open>"$ISABELLE_MLTON" $ISABELLE_MLTON_OPTIONS\<close> ^
-            \<comment> \<open>these additional settings have been copied from the AFP entry \<open>PAC_Checker\<close>\<close>
-            " -const 'MLton.safe false' -verbose 1 -inline 700 -cc-opt -O3 " ^
-            \<comment> \<open>this one does not work on ARM64 though\<close>
-            \<^cancel>\<open>"-codegen native " ^\<close>
-            \<comment> \<open>these used to be the defaults for Munta\<close>
-            "-default-type int64 " ^
-            "-output muntac " ^
-            "-mlb-path-var 'MLUNTA_CERT " ^ mlunta_certificate_path ^ "' " ^
-            "muntac.mlb")
-
-      (* val muntac_path = "./muntac";
-      val muntac_path_dc = "./muntac -dc" \<comment> \<open>For deadlock checking\<close>
-
-      val _ = writeln "Generating certificates."
-
-      val _ = exec \<open>Gen HDDI_02\<close> (mk_cert mlunta_path "HDDI_02")
-      val _ = exec \<open>Gen HDDI_02_broadcast\<close> (mk_cert mlunta_path "HDDI_02_broadcast")
-      val _ = exec \<open>Gen HDDI_08_broadcast\<close> (mk_cert mlunta_path "HDDI_08_broadcast")
-      val _ = exec \<open>Gen hddi_08\<close> (mk_cert mlunta_path "hddi_08")
-      val _ = exec \<open>Gen PM_all_1\<close> (mk_cert mlunta_path "PM_all_1")
-      val _ = exec \<open>Gen PM_all_2\<close> (mk_cert mlunta_path "PM_all_2")
-      val _ = exec \<open>Gen PM_all_3\<close> (mk_cert mlunta_path "PM_all_3")
-      val _ = exec \<open>Gen PM_all_4\<close> (mk_cert mlunta_path "PM_all_4")
-      val _ = exec \<open>Gen PM_all_5\<close> (mk_cert mlunta_path "PM_all_5")
-      val _ = exec \<open>Gen csma_05\<close> (mk_cert mlunta_path "csma_05")
-      val _ = exec \<open>Gen csma_06\<close> (mk_cert mlunta_path "csma_06")
-      val _ = exec \<open>Gen fischer_05\<close> (mk_cert mlunta_path "fischer_05")
-
-      val _ = writeln "Finished generating certificates. Now checking.";
-
-      val _ = exec \<open>Test HDDI_02\<close> (check_cert muntac_path "HDDI_02")
-      val _ = exec \<open>Test HDDI_02_broadcast\<close> (check_cert muntac_path "HDDI_02_broadcast")
-      val _ = exec \<open>Test HDDI_08_broadcast\<close> (check_cert muntac_path "HDDI_08_broadcast")
-      val _ = exec \<open>Test hddi_08\<close> (check_cert muntac_path "hddi_08")
-      val _ = exec \<open>Test PM_all_1\<close> (check_cert muntac_path "PM_all_1")
-      val _ = exec \<open>Test PM_all_2\<close> (check_cert muntac_path "PM_all_2")
-      val _ = exec \<open>Test PM_all_3\<close> (check_cert muntac_path "PM_all_3")
-      val _ = exec \<open>Test csma_05\<close> (check_cert muntac_path "csma_05")
-      val _ = exec \<open>Test csma_06\<close> (check_cert muntac_path "csma_06")
-      val _ = exec \<open>Test fischer_05\<close> (check_cert muntac_path "fischer_05")
-      val _ = exec \<open>Test PM_all_4\<close> (check_cert muntac_path "PM_all_4")
-      val _ = exec \<open>Test PM_all_5\<close> (check_cert muntac_path "PM_all_5")
-
-      val _ = exec \<open>Test deadlock HDDI_02\<close> (check_cert muntac_path_dc "HDDI_02") *)
+      val _ = 
+          exec \<open>Move to ML folder\<close> 
+            "mv -t ML code/Check_Unsolvability.ML" 
+           
     in () end\<close> 
+
 
 
 end
