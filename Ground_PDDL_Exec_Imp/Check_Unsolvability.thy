@@ -1277,7 +1277,7 @@ code_printing
   constant list_of_set' \<rightharpoonup> (SML) "listofsetreplacethiswhilecompiling"
 
 text \<open>Uncomment the next line to avoid error\<close>
-declare certificate_checker3_def[code del] 
+(* declare certificate_checker3_def[code del] *)
 
 (* Ask what is going on with Typerep and Integer *)
 export_code              

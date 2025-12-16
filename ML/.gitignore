@@ -11,4 +11,3 @@ plan_cert.sxml
 plan_cert.xml
 *.err
 safe_out/
-Check_Unsolvability.ML
