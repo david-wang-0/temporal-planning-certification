@@ -7,11 +7,7 @@ Find instructions here: https://www.gnu.org/software/make/#download
 ## Obtain the dependencies
 
 ```
-git pull --recurse-submodules
-```
-
-```
-git submodule update --recursive
+git submodule update --init
 ```
 
 ## Checking Isabelle Proofs and Exporting Code
@@ -47,8 +43,10 @@ isabelle components -u .
 To build and check the formal proof and export code:
 
 ```
-isabelle build -e PDDL_TP_Reduction
+isabelle build -d . -e PDDL_TP_Reduction
 ```
+
+`-d .` is necessary to ensure the code is exported into the right folders.
 
 ### Navigating the contents of the files
 
