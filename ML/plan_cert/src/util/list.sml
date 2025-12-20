@@ -3,6 +3,7 @@ sig
     val zip_with_index : 'a list -> ('a * int) list
     val sort_by_index : 'a list -> ('a -> int) -> 'a list
     val pair_list_to_fun: (''a * 'b) list -> 'b -> ''a -> 'b
+    val intersperse : 'a -> 'a list -> 'a list
 end
 
 
@@ -23,4 +24,14 @@ struct
         |> (the_default default)
     )
 
+    fun intersperse y xs = 
+    let 
+        fun f (xs, acc) = (case xs of
+            [] => List.rev acc |
+            [x] => f ([], x::acc) |
+            (x::xs) => f (xs, y::(x::acc))
+        ) 
+    in
+        f (xs, [])
+    end
 end

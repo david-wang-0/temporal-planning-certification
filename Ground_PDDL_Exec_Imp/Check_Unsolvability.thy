@@ -5,7 +5,6 @@ theory Check_Unsolvability
     Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code
 begin
 
-
 lemma set_foldl_append: "(set (foldl (@) xs ys)) = \<Union>(set ` (insert xs (set ys)))"
   apply (induction ys arbitrary: xs)
   by auto
@@ -653,16 +652,12 @@ definition compute_model::"
       formula, 
       L\<^sub>0, 
       s\<^sub>0) = model;
-    let (var_renaming, clock_renaming, location_renaming,
+    let (renum_vars, renum_clocks, renum_states,
       inv_renum_vars, 
       inv_renum_clocks, 
       inv_renum_states) = renaming;
-    (m, num_states, num_actions, renum_acts, _, renum_clocks, renum_states, _, _, _)
+    (m, num_states, num_actions, renum_acts, _, _, _, _, _, _)
       \<leftarrow> make_renaming broadcast automata bounds;
-    assert (renum_clocks STR ''_urge'' = m) STR ''Computed renaming: _urge is not last clock!'';
-    let renum_vars = var_renaming;
-    let renum_clocks = clock_renaming;
-    let renum_states = location_renaming;
     assert (renum_clocks STR ''_urge'' = m) STR ''Given renaming: _urge is not last clock!'';
     let _ = println (STR ''Renaming'');
     let (broadcast', automata', bounds') = rename_network
@@ -1085,6 +1080,14 @@ instance
 end
 
 
+
+definition check_and_make_network_opt where
+"check_and_make_network_opt problem \<equiv> 
+case check_and_make_network problem of
+  Inl e \<Rightarrow>  (let _ = map println [STR ''Could not make network'', (e () []) |> String.implode]
+  in None)
+| Inr (clocks, names, network) \<Rightarrow> Some (clocks, (names, network))
+"
 (* The certifier takes a list of names clocks and automata, 
   which it would otherwise obtain when parsing *)
 definition make_certified_net where
@@ -1281,8 +1284,10 @@ declare certificate_checker3_def[code del]
 
 (* Ask what is going on with Typerep and Integer *)
 export_code              
-  check_and_cert_pddl_problem_no_return
+  check_and_cert_pddl_problem_no_return check_and_make_network_opt
+  parse_convert_run (* For model checking *)
   rbt_to_list
+  Inl Inr
   Result Error
   nat_of_integer integer_of_nat int_of_integer integer_of_int DBMEntry.Le DBMEntry.Lt DBMEntry.INF
   Impl1 Impl2 Impl3 Buechi Reachable_Set Buechi_Set 

@@ -25,10 +25,53 @@ run_example () {
     ./ML/out/plan_cert -domain $out_domain -problem $out_problem -model $out_model -renaming $out_rnm -certificate $out_cert -extra lu -mode 2 -certify 1
 }
 
-in_dir=$1
-instance_name=$2
-out_dir=$3
+# https://stackoverflow.com/a/14203146
 
-ground_example $in_dir $instance_name $out_dir
+OPTIND=1         # Reset in case getopts has been used previously in the shell.
 
-run_example $out_dir $instance_name
+# Initialize our own variables:
+ground=false
+
+while getopts "h?gp:" opt; do
+  case "$opt" in
+    h|\?)
+      show_help
+      exit 0
+      ;;
+    g|--ground) ground=true
+      ;;
+    p|--pddl-folder) in_dir=$OPTARG
+      ;;
+  esac
+done
+
+shift $((OPTIND-1))
+
+out_dir=$1
+instance=$2
+
+if [ -z ${out_dir+x} ]
+then
+    echo "No folder for ground PDDL and output specified"
+    exit 1
+fi
+
+
+if [ -z ${instance+x} ]
+then
+    echo "No instance specified"
+    exit 1
+fi
+
+if [ "$ground" = true ]
+then
+    if [ -z ${in_dir+x} ]
+    then
+        echo "No folder for PDDL files specified."
+        exit 1
+    else 
+        ground_example $in_dir $instance $out_dir
+    fi
+fi
+
+run_example $out_dir $instance

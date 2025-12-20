@@ -3,7 +3,6 @@ sig
     type t
     val to_string: t -> string
 end
-
 functor ListToString (
     structure Ty : TO_STRING
     val sep : string
@@ -12,22 +11,10 @@ functor ListToString (
 ) : TO_STRING = struct
     type t = Ty.t list
 
-    fun intersperse y xs = 
-    let 
-        fun f (xs, acc) = (case xs of
-            [] => List.rev acc |
-            [x] => f ([], x::acc) |
-            (x::xs) => f (xs, y::(x::acc))
-        ) 
-    in
-        f (xs, [])
-    end
-
-
     fun to_string (xs : t) =
         xs
         |> map (Ty.to_string)
-        |> intersperse sep
+        |> ListUtils.intersperse sep
         |> foldr (fn (x, y) => x ^ y) ""
         |> (fn xs => start_delim ^ xs ^ end_delim)
 end

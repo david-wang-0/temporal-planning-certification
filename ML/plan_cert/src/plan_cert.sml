@@ -1,7 +1,7 @@
 val usage = "Usage: $ plan_cert " ^ "\n" ^
-            "-domain <pddl domain file> " ^ "\n" ^
-            "-problem <pddl problem file> " ^ "\n" ^
-            "-model <model (output) path> " ^ "\n" ^
+            "[-domain <pddl domain file>] " ^ "\n" ^
+            "[-problem <pddl problem file>] " ^ "\n" ^
+            "-model <model (input/output) path> " ^ "\n" ^
             "-certificate <certificate (output) path> " ^ "\n" ^
             "-renaming <renaming (output) path> " ^ "\n" ^
             "-mode <0 | 1 | 2 | 3> (where 0 is debug and 1 - 3 are implementations) " ^ "\n" ^
@@ -129,34 +129,62 @@ fun log_config (domain, problem, network, renaming, cert, extra, compression, ce
       log_show_cert show_cert
     )
 
+fun log_model_checking_config (network, renaming, cert, extra, compression, certification, num_threads) =
+    (
+      log_extra extra;
+      log_network_file network;
+      log_renaming_file renaming;
+      log_certificate_file cert;
+      log_compression compression;
+      log_certification certification;
+      log_num_threads num_threads
+    )
+
+fun log_conversion_config (domain, problem, network) =
+    (
+      log_domain_file domain;
+      log_problem_file problem;
+      log_network_file network
+    )
+
 fun log_config1 (extra, domain, problem) =
     (log_extra extra; log_domain_file domain; log_problem_file problem)
 
+fun opt_from_either (Either.Left _) = NONE |
+    opt_from_either (Either.Right x) = SOME x
+
+val opt_from_nested_either = 
+    opt_from_either
+    #> Option.map opt_from_either
+    #> Option.join
+
 fun check_and_cert_network extra renaming cert compression certification num_threads model =
-    (
-        Par_List.set_num_threads (Int.fromString num_threads |> the);
-        (case extra of
+    let 
+        val _ = Par_List.set_num_threads (Int.fromString num_threads |> the)
+        val res = (case extra of
             Local => MLuntaAdapter.check_and_cert_return |
             LU => MLuntaAdapter.check_and_cert_return_lu)
-        renaming
-        cert
-        model
-        (Int.fromString compression |> the)
-        (Int.fromString certification |> the)
-    )
+            renaming
+            cert
+            model
+            (Int.fromString compression |> the)
+            (Int.fromString certification |> the)
+    in res
+    end
 
 structure CertificateConversion = CertificateConversion(MLuntaAdapter.Setup)
 
-fun check_and_cert_problem domain problem network renaming cert extra compression certification num_threads mode show_cert = 
+
+fun check_and_cert_problem domain problem model renaming cert extra compression certification num_threads mode show_cert = 
     let
-        val _ = log_config (domain, problem, network, renaming, cert, extra, compression, certification, num_threads, mode, show_cert)
+        val _ = log_config (domain, problem, model, renaming, cert, extra, compression, certification, num_threads, mode, show_cert)
         val parsed_prob = PddlParser.get_prob domain problem
         
         val certifier = 
-            NetworkConversion.convert_network show_cert network
-            #> (check_and_cert_network extra renaming cert compression certification num_threads)       
-            #> Either.mapR (CertificateConversion.convert_certificate)
-            #> Either.either (fn err => NONE) (fn res => SOME res)
+            NetworkConversion.convert_network show_cert model
+            #> (check_and_cert_network extra renaming cert compression certification num_threads) 
+            #> opt_from_nested_either
+            #> (Option.map CertificateConversion.convert_certificate)
             
         val show_cert = (case mode of Converter.Debug => true | _ => show_cert)
         val num_threads = num_threads |> Int.fromString |> the |> Converter.nat_of_integer
@@ -164,23 +192,100 @@ fun check_and_cert_problem domain problem network renaming cert extra compressio
     in res
     end
 
+fun show_certificate (renaming, state_space) = 
+    let 
+        val (renum_vars,
+            (renum_clocks,
+              (renum_states,
+                (inv_renum_vars,
+                  (inv_renum_clocks, inv_renum_states))))) = renaming
+        val state_space = case state_space of Converter.Reachable_Set s => s
+        val inv_renum_states = Converter.integer_of_int #> Converter.nat_of_integer #> inv_renum_states
+        val inv_renum_vars = Converter.nat_of_integer #> inv_renum_vars
+        val show_states_and_vars = (fn ((states, vars), i) => 
+            "Entry: " ^ Int.toString i ^ "" ^
+            "\tStates: " ^
+            (states
+            |> map (Converter.integer_of_int #> Int.toString)
+            |> ListUtils.intersperse ", " 
+            |> foldr (op ^) "") ^
+            "\tVars: " ^
+            (vars
+            |> ListUtils.zip_with_index
+            |> map (fn (u, i) => inv_renum_vars i ^ "=" ^ (u |> Converter.integer_of_int |> Int.toString))
+            |> ListUtils.intersperse ", " |> foldr (op ^) "") 
+        )
+    in
+        state_space 
+        |> ListUtils.zip_with_index
+        |> List.map (fn ((sv, d), i) => show_states_and_vars (sv, i))
+        |> ListUtils.intersperse "\n" 
+        |> foldr (op ^) ""
+        |> print
+    end
+
+fun parse_check_and_cert_network model renaming cert extra compression certification num_threads =
+    (
+        log_model_checking_config  (model, renaming, cert, extra, compression, certification, num_threads);
+        Par_List.set_num_threads (Int.fromString num_threads |> the);
+        (case extra of
+            Local => MLuntaAdapter.parse_check_and_cert_return |
+            LU => MLuntaAdapter.parse_check_and_cert_return_lu
+            )
+            renaming
+            cert
+            (read_json model)
+            (Int.fromString compression |> the)
+            (Int.fromString certification |> the)
+        |> opt_from_nested_either
+        |> Option.map (CertificateConversion.convert_certificate)
+        |> Option.map (show_certificate);
+        ()
+    )
+
+fun make_network domain problem model =
+    let
+        val _ = log_conversion_config (domain, problem, model)
+        val parsed_prob = PddlParser.get_prob domain problem 
+        val res = Converter.check_and_make_network_opt parsed_prob 
+            |> Option.map (NetworkConversion.convert_network true model)
+        val _ = res
+    in ()
+    end
+    
 
 fun check args =
     case args of
-        (SOME domain, SOME problem, SOME network, SOME renaming, SOME cert, SOME extra, compression,
-         certification, num_threads, mode, show_cert) => check_and_cert_problem
-                                            domain
-                                            problem
-                                            network
-                                            renaming
-                                            cert
-                                            extra
-                                            (the_default "0" compression)
-                                            (the_default "0" certification)
-                                            (the_default "1" num_threads)
-                                            mode
-                                            show_cert
-      | _ => Exn.error usage handle Exn.ERROR msg => (println msg)
+        (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, SOME extra, compression,
+         certification, num_threads, mode, show_cert) => 
+            check_and_cert_problem
+                domain
+                problem
+                model
+                renaming
+                cert
+                extra
+                (the_default "0" compression)
+                (the_default "0" certification)
+                (the_default "1" num_threads)
+                mode
+                show_cert |
+        (NONE, NONE, SOME model, SOME renaming, SOME cert, SOME extra, compression,
+         certification, num_threads, mode, show_cert) => 
+            parse_check_and_cert_network
+                model
+                renaming
+                cert
+                extra
+                (the_default "0" compression)
+                (the_default "0" certification)
+                (the_default "1" num_threads) |
+        (SOME domain, SOME problem, SOME model, _, _, _, _, _, _, _, _) => 
+            make_network
+                domain
+                problem
+                model |
+      _ => Exn.error usage handle Exn.ERROR msg => (println msg)
 
 fun main () =
     flags (CommandLine.arguments ())

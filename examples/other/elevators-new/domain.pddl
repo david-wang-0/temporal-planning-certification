@@ -16,7 +16,7 @@
 
   (:durative-action enter-elevator
    :parameters (?p - person ?e - elevator ?f - floor)
-   :duration  (= ?duration (dur-enter ?p))
+   :duration  (= ?duration 1)
    :condition (and (over all (and (elevator-on-floor ?e ?f) (stopped ?e)))
                    (at start (person-on-floor ?p ?f))
                    )
@@ -27,7 +27,7 @@
 
   (:durative-action leave-elevator
    :parameters (?p - person ?e - elevator ?f - floor)
-   :duration  (= ?duration (dur-exit ?p))
+   :duration  (= ?duration 1)
    :condition (and (over all (and (elevator-on-floor ?e ?f) (stopped ?e)))
                    (at start (person-in-elevator ?p ?e))
                    )
@@ -39,7 +39,7 @@
 
   (:durative-action move-elevator
    :parameters (?e - elevator ?f ?g - floor)
-   :duration  (= ?duration (travel-dur ?e ?f ?g))
+   :duration  (= ?duration 2)
    :condition (and (at start (elevator-on-floor ?e ?f))
                    )
    :effect    (and (at start (and (not (elevator-on-floor ?e ?f)) (not (stopped ?e))))
