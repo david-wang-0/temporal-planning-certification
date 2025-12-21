@@ -237,7 +237,8 @@ fun parse_check_and_cert_network model renaming cert extra compression certifica
             (read_json model)
             (Int.fromString compression |> the)
             (Int.fromString certification |> the)
-        |> opt_from_nested_either
+        |> opt_from_either
+        |> Option.map (Either.either (fn x => x) (fn x => x))
         |> Option.map (CertificateConversion.convert_certificate)
         |> Option.map (show_certificate);
         ()

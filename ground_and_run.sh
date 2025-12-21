@@ -3,24 +3,36 @@ ground_example () {
     local instance_name=$2
     local out_dir=$3
 
-    local out_domain=$out_dir/$instance_name-domain.pddl
-    local out_problem=$out_dir/$instance_name-problem.pddl
+    local out_domain="$out_dir/$instance_name-domain.pddl"
+    local out_problem="$out_dir/$instance_name-problem.pddl"
 
-    local in_domain=$pddl_dir/domain.pddl
-    local in_problem=$pddl_dir/instances/$instance_name.pddl
+    local in_domain="$pddl_dir/domain.pddl"
+    local in_problem="$pddl_dir/instances/$instance_name.pddl"
     ../grounder --write-pddl $out_domain $out_problem $in_domain $in_problem
+}
+
+convert_to_muntax () {
+    local out_dir=$1
+    local instance_name=$2
+
+    local out_domain="$out_dir/$instance_name-domain.pddl"
+    local out_problem="$out_dir/$instance_name-problem.pddl"
+
+    local out_model="$out_dir/$instance_name.muntax"
+
+    ./ML/out/plan_cert -domain $out_domain -problem $out_problem -model $out_model
 }
 
 run_example () {
     local out_dir=$1
     local instance_name=$2
 
-    local out_domain=$out_dir/$instance_name-domain.pddl
-    local out_problem=$out_dir/$instance_name-problem.pddl
+    local out_domain="$out_dir/$instance_name-domain.pddl"
+    local out_problem="$out_dir/$instance_name-problem.pddl"
 
-    local out_model=$out_dir/$instance_name.muntax
-    local out_cert=$out_dir/$instance_name.cert
-    local out_rnm=$out_dir/$instance_name.rnm
+    local out_model="$out_dir/$instance_name.muntax"
+    local out_cert="$out_dir/$instance_name.cert"
+    local out_rnm="$out_dir/$instance_name.rnm"
 
     ./ML/out/plan_cert -domain $out_domain -problem $out_problem -model $out_model -renaming $out_rnm -certificate $out_cert -extra lu -mode 2 -certify 1
 }
@@ -31,16 +43,19 @@ OPTIND=1         # Reset in case getopts has been used previously in the shell.
 
 # Initialize our own variables:
 ground=false
+run=false
 
-while getopts "h?gp:" opt; do
+while getopts "h?grp:" opt; do
   case "$opt" in
     h|\?)
       show_help
       exit 0
       ;;
-    g|--ground) ground=true
+    g) ground=true
       ;;
-    p|--pddl-folder) in_dir=$OPTARG
+    r) run=true
+      ;;
+    p) in_dir=$OPTARG
       ;;
   esac
 done
@@ -63,7 +78,7 @@ then
     exit 1
 fi
 
-if [ "$ground" = true ]
+if [ $ground = true ]
 then
     if [ -z ${in_dir+x} ]
     then
@@ -74,4 +89,9 @@ then
     fi
 fi
 
-run_example $out_dir $instance
+if [ $run = true ]
+then
+  run_example $out_dir $instance
+else 
+  convert_to_muntax $out_dir $instance
+fi
