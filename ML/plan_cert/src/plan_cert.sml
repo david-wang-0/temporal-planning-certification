@@ -147,6 +147,12 @@ fun log_conversion_config (domain, problem, network) =
       log_network_file network
     )
 
+fun log_renaming_config (network, renaming) =
+    (
+      log_network_file network;
+      log_renaming_file renaming
+    )
+
 fun log_config1 (extra, domain, problem) =
     (log_extra extra; log_domain_file domain; log_problem_file problem)
 
@@ -245,7 +251,7 @@ fun show_certificate (renaming, state_space:CertificateConversion.isa_state_spac
                     ^ "]"
                 )
             in 
-                "DBMs: " ^ show_rows indexed_dbm
+                "DBMs: \n" ^ show_rows indexed_dbm
             end
         )
     in
@@ -253,7 +259,7 @@ fun show_certificate (renaming, state_space:CertificateConversion.isa_state_spac
         |> ListUtils.zip_with_index
         |> List.map (fn ((sv, d), i) => show_states_and_vars (sv, i) ^ "\n" ^ show_dbms d)
         |> ListUtils.intersperse "\n" 
-        |> foldr (op ^) ""
+        |> foldr (op ^) "\n"
         |> print
     end
 
@@ -286,7 +292,13 @@ fun make_network domain problem model =
         val _ = res
     in ()
     end
-    
+
+fun make_renaming model renaming =
+    (
+        log_renaming_config (model, renaming);
+        MLuntaAdapter.parse_rename renaming (read_json model);
+        ()
+    )
 
 fun check args =
     case args of
@@ -319,7 +331,11 @@ fun check args =
                 domain
                 problem
                 model |
-      _ => Exn.error usage handle Exn.ERROR msg => (println msg)
+        (NONE, NONE, SOME model, SOME renaming, _, _, _, _, _, _, _) => 
+            make_renaming
+                model
+                renaming |
+        _ => Exn.error usage handle Exn.ERROR msg => (println msg)
 
 fun main () =
     flags (CommandLine.arguments ())

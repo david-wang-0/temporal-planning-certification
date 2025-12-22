@@ -23,6 +23,16 @@ convert_to_muntax () {
     ./ML/out/plan_cert -domain $out_domain -problem $out_problem -model $out_model
 }
 
+rename () {
+    local out_dir=$1
+    local instance_name=$2
+
+    local out_model="$out_dir/$instance_name.muntax"
+    local out_rnm="$out_dir/$instance_name.rnm"
+
+    ./ML/out/plan_cert -model $out_model -renaming $out_rnm
+}
+
 run_example () {
     local out_dir=$1
     local instance_name=$2
@@ -44,8 +54,9 @@ OPTIND=1         # Reset in case getopts has been used previously in the shell.
 # Initialize our own variables:
 ground=false
 run=false
+rename=false
 
-while getopts "h?grp:" opt; do
+while getopts "h?grRp:" opt; do
   case "$opt" in
     h|\?)
       show_help
@@ -54,6 +65,8 @@ while getopts "h?grp:" opt; do
     g) ground=true
       ;;
     r) run=true
+      ;;
+    R) rename=true
       ;;
     p) in_dir=$OPTARG
       ;;
@@ -92,6 +105,10 @@ fi
 if [ $run = true ]
 then
   run_example $out_dir $instance
-else 
+elif [ $rename = true ]
+then
+  rename $out_dir $instance
+  echo "rename"
+else
   convert_to_muntax $out_dir $instance
 fi

@@ -12,6 +12,11 @@ fun parse_construct_and_check extra_lu net =
     |> Either.mapR (snd #> (` Network.info))
     |> Either.mapR (apsnd (` check_network))
 
+fun parse_construct extra_lu net =
+    net 
+    |> construct extra_lu
+    |> Either.mapR (snd #> (` Network.info))
+
 fun construct' extra_lu net =
     net
     |> Construction.construct extra_lu 
@@ -22,6 +27,7 @@ fun construct_and_check' extra_lu net =
     |> construct' extra_lu
     |> Either.mapR (snd #> (` Network.info))
     |> Either.mapR (apsnd (` check_network))
+
 
 val use_time' =
     Benchmark.add_time (fn (time, res) => Either.mapR (fn succ => (time, succ)) res) 
@@ -104,7 +110,7 @@ fun check_and_cert_return extra_lu renaming_path cert_path net compression certi
             (if compression > 0 then compress' compression (construct' extra_lu net) else id)
             (if certification > 0 then certify' certification (construct' extra_lu net) else id)
             renaming_path
-            cert_path)
+            cert_path) (* It would be cleaner to pass the converted network to the explore function directly... *)
 
 
 val check_and_cert_return_lu = check_and_cert_return true
@@ -117,11 +123,24 @@ fun parse_check_and_cert_return extra_lu renaming_path cert_path json_str compre
         explore
             (if compression > 0 then compress' compression (construct extra_lu json_str) else id)
             (if certification > 0 then certify' certification (construct extra_lu json_str) else id)
-            renaming_path 
+            renaming_path
             cert_path)
 
 
 val parse_check_and_cert_return_lu = parse_check_and_cert_return true
 val parse_check_and_cert_return = parse_check_and_cert_return false
+
+fun save_renaming renaming_path ({renaming, processes, clocks, vars}, _) =
+    let 
+        val rnm_str = JsonP.show renaming
+    in TextIOUtil.save_data renaming_path rnm_str
+    end
+
+fun parse_rename extra_lu renaming_path json_str =
+    json_str
+    |> parse_construct extra_lu
+    |> Either.mapR (save_renaming renaming_path)
+
+val parse_rename = parse_rename true
 
 end
