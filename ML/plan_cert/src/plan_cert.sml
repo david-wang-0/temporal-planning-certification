@@ -192,7 +192,7 @@ fun check_and_cert_problem domain problem model renaming cert extra compression 
     in res
     end
 
-fun show_certificate (renaming, state_space) = 
+fun show_certificate (renaming, state_space:CertificateConversion.isa_state_space) = 
     let 
         val (renum_vars,
             (renum_clocks,
@@ -200,12 +200,18 @@ fun show_certificate (renaming, state_space) =
                 (inv_renum_vars,
                   (inv_renum_clocks, inv_renum_states))))) = renaming
         val state_space = case state_space of Converter.Reachable_Set s => s
-        val inv_renum_states = Converter.integer_of_int #> Converter.nat_of_integer #> inv_renum_states
+        (* val inv_renum_states = (fn i => fn j => 
+            let val res = inv_renum_states (i |> Converter.nat_of_integer) (j |> Converter.integer_of_int |> Converter.nat_of_integer) |> Converter.integer_of_nat |> Int.toString
+            in res end) *)
+        val inv_renum_clocks = Converter.nat_of_integer #> inv_renum_clocks
         val inv_renum_vars = Converter.nat_of_integer #> inv_renum_vars
+
         val show_states_and_vars = (fn ((states, vars), i) => 
             "Entry: " ^ Int.toString i ^ "" ^
             "\tStates: " ^
             (states
+            (* |> ListUtils.zip_with_index
+            |> map (fn (j, i) => inv_renum_states i j) *)
             |> map (Converter.integer_of_int #> Int.toString)
             |> ListUtils.intersperse ", " 
             |> foldr (op ^) "") ^
@@ -215,10 +221,37 @@ fun show_certificate (renaming, state_space) =
             |> map (fn (u, i) => inv_renum_vars i ^ "=" ^ (u |> Converter.integer_of_int |> Int.toString))
             |> ListUtils.intersperse ", " |> foldr (op ^) "") 
         )
+        
+        val show_dbms = (fn dbm =>
+            let 
+                val indexed_dbm = ListUtils.zip_with_index (map ListUtils.zip_with_index dbm)
+                val show_indexed_entry = (fn i => fn (e, j) => (case e of
+                    Converter.INF => "" |
+                    Converter.Le n => (inv_renum_clocks i) ^ " - " ^ (inv_renum_clocks j) ^ " <= " ^ (n |> Converter.integer_of_int |> Int.toString) |
+                    Converter.Lt n => (inv_renum_clocks i) ^ " - " ^ (inv_renum_clocks j) ^ " < " ^ (n |> Converter.integer_of_int |> Int.toString))
+                )
+                val show_indexed_row = (fn (xs, i) =>
+                    map (show_indexed_entry i) xs
+                    |> List.filter (fn x => (x <> ""))
+                    |> ListUtils.intersperse ", "
+                    |> foldr (op ^) ""
+                )
+                val show_rows = (fn dbm =>
+                    "[" ^
+                    (dbm 
+                        |> map show_indexed_row
+                        |> ListUtils.intersperse "],\n ["
+                        |> foldr (op ^) "")
+                    ^ "]"
+                )
+            in 
+                "DBMs: " ^ show_rows indexed_dbm
+            end
+        )
     in
         state_space 
         |> ListUtils.zip_with_index
-        |> List.map (fn ((sv, d), i) => show_states_and_vars (sv, i))
+        |> List.map (fn ((sv, d), i) => show_states_and_vars (sv, i) ^ "\n" ^ show_dbms d)
         |> ListUtils.intersperse "\n" 
         |> foldr (op ^) ""
         |> print
