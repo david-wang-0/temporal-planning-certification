@@ -861,7 +861,11 @@ proof (cases "make_renaming broadcast automata bounds")
     renaming: "renaming = (a, b, c, d, e, f)" by (cases renaming) auto
 
   obtain aa ba ca da ea fa g where
-    x1: "x1 = (aa, ba, ca, da, ea, fa, g)" by (cases x1) auto
+    x1: "x1 = (aa, ba, ca, da, ea, fa, g)"
+    using res1 
+    unfolding make_renaming_def Let_def
+    unfolding bind.simps
+    by (cases x1) auto
 
   obtain renum_states renum_vars x y where
     g: "g = (renum_states, renum_vars, x, y)" by (cases g) auto
@@ -924,124 +928,69 @@ proof (cases "make_renaming broadcast automata bounds")
     qed
   next
     case err2: (Error x2)
-    show ?thesis 
-      unfolding convert_check_def Let_def
-      unfolding compute_model_def Let_def
-      unfolding model prod.case
-      unfolding renaming
-      unfolding prod.case
-      unfolding res1
-      unfolding x1
-      unfolding bind.simps
-      unfolding Error_List_Monad.result.case
-      unfolding g prod.case
-      unfolding err2
-      unfolding Error_List_Monad.result.case 
-      apply (rule return_cons_rule)
-      by simp
+    show ?thesis
+    proof (cases "Error_List_Monad.assert (b STR ''_urge'' = aa) STR ''Given renaming: _urge is not last clock!''")
+      case res3: (Result x1)
+      show ?thesis 
+        unfolding convert_check_def 
+        unfolding Let_def
+        unfolding compute_model_def Let_def
+        unfolding model prod.case
+        unfolding renaming
+        unfolding prod.case
+        unfolding res1
+        unfolding x1
+        unfolding bind.simps
+        unfolding Error_List_Monad.result.case
+        unfolding g prod.case
+        unfolding res3
+        unfolding Error_List_Monad.result.case 
+        unfolding rename prod.case
+        unfolding Error_List_Monad.result.case 
+        unfolding prod.case 
+        unfolding Error_List_Monad.result.case 
+        unfolding bind.simps
+        apply (rule bind_rule)
+         apply (rule certificate_check_okay[OF mode])
+        apply (rule return_cons_rule) subgoal for x
+          by (cases x) auto
+        done
+    next
+      case err3: (Error x2)
+      show ?thesis 
+        unfolding convert_check_def Let_def
+        unfolding compute_model_def Let_def
+        unfolding model prod.case
+        unfolding renaming
+        unfolding prod.case
+        unfolding res1
+        unfolding x1
+        unfolding bind.simps
+        unfolding Error_List_Monad.result.case
+        unfolding g prod.case
+        unfolding err2
+        unfolding Error_List_Monad.result.case 
+        unfolding err3
+        unfolding Error_List_Monad.result.case 
+        apply (rule return_cons_rule)
+        by simp
+    qed
   qed
 next
-  case err3: (Error x2)
+  case err1: (Error x2)
   show ?thesis 
     unfolding convert_check_def Let_def
     unfolding compute_model_def Let_def
     unfolding model prod.case
     apply (induction renaming)
     unfolding prod.case
-    unfolding err3
+    unfolding err1
     unfolding bind.simps
     unfolding Error_List_Monad.result.case
     apply (rule return_cons_rule)
     unfolding Error_List_Monad.result.case
     by auto
-qed
-(* Hoare Logic is tedious in this case
-  unfolding convert_check_def
-proof (rule Error_List_Monad_result_case_rule)
-  fix c
-  assume comp: "compute_model model renaming \<bind>
-         (\<lambda>r. let (broadcast, bounds, automata, urgent_locations, k, L\<^sub>0, s\<^sub>0, formula, m, num_states, num_actions, renum_acts, renum_vars, renum_clocks, renum_states, inv_renum_states, inv_renum_vars,
-                     inv_renum_clocks) = r;
-                   is_urgent = \<lambda>(L, L'). list_ex (\<lambda>(l, urgent). l \<in> set urgent) (zip L (map (map int) urgent_locations)); inv_renum_clocks = \<lambda>i. if i = m then STR ''_urge'' else inv_renum_clocks i; t = now ();
-                   state_space = convert_state_space m is_urgent state_space; t = now () - t; _ = println (STR ''Time for converting state space: '' + time_to_string t); _ = start_timer ();
-                   _ = save_time STR ''Time for converting DBMs in certificate''; _ = println (STR ''Number of discrete states: '' + show_lit (len_of_state_space state_space));
-                   _ = if show_cert
-                       then let _ = print_sep (); _ = println STR ''Certificate''; _ = print_sep (); _ = show_state_space m inv_renum_states inv_renum_vars inv_renum_clocks state_space; _ = print_sep ()
-                            in Heap_Monad.return ()
-                       else Heap_Monad.return ()
-               in Result
-                   (certificate_check mode num_split False state_space broadcast bounds automata k L\<^sub>0 s\<^sub>0 formula m num_states num_actions renum_acts renum_vars renum_clocks renum_states inv_renum_states
-                     inv_renum_vars inv_renum_clocks)) =
-         Result c"
-  show "<emp> Heap_Monad.return c <\<lambda>c. \<up>(\<exists>state_space broadcast bounds automata k L\<^sub>0 s\<^sub>0 formula m num_states num_actions renum_acts renum_vars renum_clocks renum_states (inv_renum_states::nat \<Rightarrow> nat \<Rightarrow> nat)
-                     (inv_renum_vars::nat \<Rightarrow> String.literal) (inv_renum_clocks::nat \<Rightarrow> String.literal). c = certificate_check mode num_split False state_space broadcast bounds automata k L\<^sub>0 s\<^sub>0 formula m num_states num_actions renum_acts renum_vars renum_clocks renum_states inv_renum_states
-                     inv_renum_vars inv_renum_clocks)>"
-  proof (cases "compute_model model renaming")
-    case res1: (Result x1)
-    
-    show ?thesis
-    proof (cases x1)
-      case x1: (fields a1 b1 c1 d1 e1 f1 g1)
-      show ?thesis
-      proof (cases g1)
-        case g1: (fields a2 b2 c2 d2 e2 f2 g2)
-        show ?thesis 
-        proof (cases g2)
-          case g2: (fields a3 b3 c3 d3 e3 f3)
-          have c: "c =  (certificate_check mode num_split False (convert_state_space c2 (\<lambda>(L, L'). list_ex (\<lambda>(l, urgent). l \<in> set urgent) (zip L (map (map int) d1))) state_space) a1 b1 c1 e1 f1 a2 b2 c2 d2 e2 f2 a3 b3 c3 d3 e3
-             (\<lambda>i. if i = c2 then STR ''_urge'' else f3 i))"
-            using comp unfolding res1 x1 g1 g2 bind.simps Let_def Error_List_Monad.result.case prod.case by auto
-          show ?thesis 
-            unfolding c
-            apply (rule return_cons_rule)
-            by fastforce
-        qed
-      qed
-    qed
-  next
-    case err1: (Error x2)
-    show ?thesis using comp unfolding err1 bind.simps Let_def Error_List_Monad.result.case by auto
-  qed
-next
-  fix c
-  show "<\<up> (\<exists>state_space broadcast bounds automata k m num_states num_actions renum_acts renum_vars renum_clocks renum_states inv_renum_states inv_renum_vars inv_renum_clocks.
-                c =
-                certificate_check mode num_split False state_space broadcast bounds automata k L\<^sub>0 s\<^sub>0 formula m num_states num_actions renum_acts renum_vars renum_clocks renum_states inv_renum_states inv_renum_vars
-                 inv_renum_clocks)> let t = now ()
-                                    in c \<bind>
-                                       (\<lambda>check.
-                                           let _ = case check of Renaming_Failed \<Rightarrow> let _ = println STR ''Renaming failed'' in Heap_Monad.return ()
-                                                   | Preconds_Unsat \<Rightarrow> let _ = println STR ''Preconditions were not met'' in Heap_Monad.return ()
-                                                   | Sat \<Rightarrow> let _ = println STR ''Certificate was accepted'' in Heap_Monad.return ()
-                                                   | Unsat \<Rightarrow> let _ = println STR ''Certificate was rejected'' in Heap_Monad.return ();
-                                               t = now () - t; _ = println (STR ''Time for certificate checking: '' + time_to_string t)
-                                           in Heap_Monad.return
-                                               (Result
-                                                 check)) <\<lambda>r. case r of Result Sat \<Rightarrow> \<up> (\<not> Simple_Network_Language_Model_Checking.N broadcast automata bounds,(L\<^sub>0, map_of s\<^sub>0, \<lambda>_. 0) \<Turnstile> formula) | Result _ \<Rightarrow> true
-                                                               | Error e \<Rightarrow> true>\<^sub>t"
-  proof (rule Hoare_Triple.norm_pre_pure_rule2)
-    assume "\<exists>state_space broadcast bounds automata k L\<^sub>0 s\<^sub>0 formula m num_states num_actions renum_acts renum_vars renum_clocks renum_states (inv_renum_states::nat \<Rightarrow> nat \<Rightarrow> nat)
-                     (inv_renum_vars::nat \<Rightarrow> String.literal) (inv_renum_clocks::nat \<Rightarrow> String.literal).
-       c =
-       certificate_check mode num_split False state_space broadcast bounds automata k L\<^sub>0 s\<^sub>0 formula m num_states num_actions renum_acts renum_vars renum_clocks renum_states inv_renum_states inv_renum_vars
-        inv_renum_clocks"
-    then obtain state_space broadcast' bounds' automata' k  m num_states num_actions renum_acts renum_vars renum_clocks and renum_states inv_renum_states::"nat \<Rightarrow> nat \<Rightarrow> nat" and inv_renum_vars::"nat \<Rightarrow> String.literal" and inv_renum_clocks::"nat \<Rightarrow> String.literal" where
-    c: "c =
-       certificate_check mode num_split False state_space broadcast bounds automata k L\<^sub>0 s\<^sub>0 formula m num_states num_actions renum_acts renum_vars renum_clocks renum_states inv_renum_states inv_renum_vars
-        inv_renum_clocks"  by blast
-    show " <emp> let t = now ()
-          in c \<bind>
-             (\<lambda>check.
-                 let _ = case check of Renaming_Failed \<Rightarrow> let _ = println STR ''Renaming failed'' in Heap_Monad.return ()
-                         | Preconds_Unsat \<Rightarrow> let _ = println STR ''Preconditions were not met'' in Heap_Monad.return () | Sat \<Rightarrow> let _ = println STR ''Certificate was accepted'' in Heap_Monad.return ()
-                         | Unsat \<Rightarrow> let _ = println STR ''Certificate was rejected'' in Heap_Monad.return ();
-                     t = now () - t; _ = println (STR ''Time for certificate checking: '' + time_to_string t)
-                 in Heap_Monad.return
-                     (Result check)) <\<lambda>r. case r of Result Sat \<Rightarrow> \<up> (\<not> Simple_Network_Language_Model_Checking.N broadcast automata bounds,(L\<^sub>0, map_of s\<^sub>0, \<lambda>_. 0) \<Turnstile> formula) | Result _ \<Rightarrow> true | Error e \<Rightarrow> true>\<^sub>t"
-      
-  qed
-qed
-*)
+qed 
 
 instantiation predicate::"show"
 begin

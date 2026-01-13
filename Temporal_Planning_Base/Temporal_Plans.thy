@@ -450,7 +450,7 @@ definition invs_at::"('proposition, 'time) invariant_sequence \<Rightarrow> 'tim
 
 subsubsection \<open>Mutual exclusivity\<close>
 
-text \<open>This is the most general formulation of actions not interfering. This considers the tuples in the range 
+text \<open>This is our most general formulation of actions not interfering. This considers the tuples in the range 
 of the plan to be actions. The contents may be the same (duplicate action/self-overlap), unless this is explicitly
 prohibited. Therefore, the mutual exclusivity of actions refers to the index for equivalence of 
 actions. We also need to check the case that the same action has a duration of 0.
