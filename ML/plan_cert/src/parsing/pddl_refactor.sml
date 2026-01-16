@@ -144,6 +144,8 @@ struct
 
   fun in_paren p = spaces_comm >> lparen >> spaces_comm >> p << spaces_comm << rparen << spaces_comm
 
+  fun opt_paren p = (in_paren p) || p
+
   val pddl_name = identifier ?? "pddl identifier" (*First char should be a letter*)
 
   val pddl_obj_cons = pddl_name wth (fn name => PDDL_OBJ_CONS name) ?? "pddl object or constant"
@@ -239,7 +241,7 @@ struct
 
   val effect = (c_effect || (in_paren(pddl_reserved "and" && repeat c_effect )) wth (fn (_, ceff) => (Prop_and ceff))) ?? "effect"
 
-  fun emptyOR x = opt (x || in_paren x)
+  fun emptyOR x = (opt_paren (opt x))
 
   val action_def_body = (opt (pddl_reserved ":precondition" && emptyOR (pre_GD term))
                          && opt (pddl_reserved ":effect" && emptyOR effect)) wth Simple_Action_Def_Body ?? "Action def body"
