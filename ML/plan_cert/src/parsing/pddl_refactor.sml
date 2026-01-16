@@ -239,7 +239,7 @@ struct
 
   val effect = (c_effect || (in_paren(pddl_reserved "and" && repeat c_effect )) wth (fn (_, ceff) => (Prop_and ceff))) ?? "effect"
 
-  fun emptyOR x = opt x
+  fun emptyOR x = opt (x || in_paren x)
 
   val action_def_body = (opt (pddl_reserved ":precondition" && emptyOR (pre_GD term))
                          && opt (pddl_reserved ":effect" && emptyOR effect)) wth Simple_Action_Def_Body ?? "Action def body"
