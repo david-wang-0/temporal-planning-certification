@@ -22,7 +22,7 @@ Download instructions can be found here: https://www.isa-afp.org/download/
 
 Once a local copy is obtained, add the theories as Isabelle component
 ```
-isabelle components -u afp-2025/thys
+isabelle components -u <path-to>/afp-2025/thys
 ```
 
 ### Add Temporal Planning Semantics as Isabelle component
