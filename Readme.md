@@ -93,6 +93,9 @@ make build_certifier
 
 ## Running the encoder
 
+### Install Python 3
+
+Follow the instructions in: https://www.python.org/downloads/
 
 ### Running the verified component
 The checker is in `ML/out`.
