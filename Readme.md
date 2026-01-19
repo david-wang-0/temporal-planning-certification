@@ -1,3 +1,8 @@
+# Note
+
+The Python files are originally from: https://doi.org/10.6084/m9.figshare.12620582
+They have been updated for compatibility with new TChecker versions.
+
 # How to use
 
 ## Obtain the dependencies
@@ -10,11 +15,13 @@ git submodule update --init
 
 ### Install Isabelle 2025
 
-More instructions here: https://isabelle.in.tum.de/installation.html
+More instructions here: https://isabelle.in.tum.de/website-Isabelle2025/index.html
 
 ### Add the Isabelle AFP for Isabelle 2025
 
 Download instructions can be found here: https://www.isa-afp.org/download/
+
+Make sure to use AFP-2025: https://foss.heptapod.net/isa-afp/afp-2025
 
 Once a local copy is obtained, add the theories as Isabelle component
 ```shell
@@ -116,6 +123,8 @@ python -m convert_models.convert <model>.muntax <model>.tck
 ### Install TChecker
 
 Please refer to instructions here: https://github.com/ticktac-project/tchecker
+
+We use commit: [d711ace](https://github.com/ticktac-project/tchecker/commit/d711ace9ff754d8d952f5d491a31591115300c7f)
 
 Once completed, move `tck-reach` from the output directory into this folder.
 
