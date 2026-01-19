@@ -1,0 +1,23 @@
+(define (problem groundproblem) (:domain ground)
+(:init
+ (robot_at_r0_p5)
+ (robot_free_r0)
+ (battery_level_r0_seven)
+ (robot_at_r1_p5)
+ (robot_free_r1)
+ (battery_level_r1_seven)
+ (pallet_at_b0_p5)
+ (pallet_at_b1_p5)
+ (pallet_at_b2_p5)
+ (pallet_at_b3_p5)
+ (position_free_p5)
+)
+(:goal
+(and
+ (treated_b0_t0)
+ (treated_b1_t0)
+ (treated_b2_t0)
+ (treated_b3_t0)
+)
+)
+)
