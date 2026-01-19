@@ -39,7 +39,15 @@ python -m convert_models.convert $muntax $tck
 ./tck-reach -a covreach -C graph -s dfs -o $dot $tck
 ./ML/out/plan_cert -model $muntax -renaming $renaming
  python -m convert_models.convert_certificate -m $muntax $dot $renaming $certificate
-./muntac -m $muntax -r $renaming -c $certificate
 
 
-echo $1 $2 $3 $4 $5 $6 $7
+msg=$(./muntac -m $muntax -r $renaming -c $certificate)
+err=$?
+unsolvable_regex=".*Certificate was accepted.*"
+
+if [[ $msg =~ $unsolvable_regex ]]
+then
+    echo "Problem unsolvable."
+else
+    echo $msg; exit $err
+fi
