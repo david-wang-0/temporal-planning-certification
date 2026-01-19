@@ -1,5 +1,6 @@
 # This Readme
 
+This contains the original source code for our paper: "Formally Verified Certification of Unsolvability of Temporal Planning Problems"
 
 This `README` contains instructions for:
 - Building, inspecting, and checking the Isabelle theories.
@@ -14,6 +15,11 @@ This `README` contains instructions for:
 
 The Python files are originally from: https://doi.org/10.6084/m9.figshare.12620582
 They have been updated for compatibility with new TChecker versions.
+
+We have also taken some code from `mlunta`,
+which can otherwise be found in the Isabelle AFP
+as part of Munta.
+The code is not critical for our correctness proofs.
 
 # How to use
 
