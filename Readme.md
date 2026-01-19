@@ -189,21 +189,21 @@ mv -t . <path-to-afp-2025>/thys/Munta_Certificate_Checker/muntac
 
 ### Running the entire pipeline
 
+The pipeline needs names to be provided for every input and ouput file, namely: 
+- Ground pddl domain
+- Ground pddl problem
+- Muntax network
+- TChecker network
+- TChecker dot certificate
+- Muntac certificate
+- Muntac renaming
+
 ```shell
-./ML/out/plan_cert -domain <ground-domain>.pddl -problem <ground-problem>.pddl -model <network>.muntax
-python -m convert_models.convert <model>.muntax <model>.tck
-./tck-reach -a covreach -C graph -s dfs -o <certificate>.dot <model>.tck
-./ML/out/plan_cert -model <model>.muntax -renaming <model_renaming>.rnm
- python -m convert_models.convert_certificate -m <model>.muntax <certificate>.dot <model_renaming>.rnm <certificate>.cert
-./muntac -m <model>.muntax -r <renaming>.rnm -c <certificate>.cert
+chmod +x run.sh
+./run <domain> <problem> <network> <network> <certificate> <renaming> <certificate>
 ```
 
 Example:
 ```shell
-./ML/out/plan_cert -domain examples/ground/MatchCellar-impossible/instance_03_domain.pddl -problem examples/ground/MatchCellar-impossible/instance_03_problem.pddl -model examples/ground/MatchCellar-impossible/instance_03.muntax
-python -m convert_models.convert examples/ground/MatchCellar-impossible/instance_03.muntax examples/ground/MatchCellar-impossible/instance_03.tck
-./tck-reach -a covreach -C graph -s dfs -o examples/ground/MatchCellar-impossible/instance_03.dot examples/ground/MatchCellar-impossible/instance_03.tck
-./ML/out/plan_cert -model examples/ground/MatchCellar-impossible/instance_03.muntax -renaming examples/ground/MatchCellar-impossible/instance_03.rnm
- python -m convert_models.convert_certificate -m examples/ground/MatchCellar-impossible/instance_03.muntax examples/ground/MatchCellar-impossible/instance_03.dot examples/ground/MatchCellar-impossible/instance_03.rnm examples/ground/MatchCellar-impossible/instance_03.cert
-./muntac -m examples/ground/MatchCellar-impossible/instance_03.muntax -r examples/ground/MatchCellar-impossible/instance_03.rnm -c examples/ground/MatchCellar-impossible/instance_03.cert
+./run.sh examples/ground/MatchCellar-impossible/instance_03_domain.pddl examples/ground/MatchCellar-impossible/instance_03_problem.pddl examples/ground/MatchCellar-impossible/instance_03.muntax examples/ground/MatchCellar-impossible/instance_03.tck examples/ground/MatchCellar-impossible/instance_03.dot examples/ground/MatchCellar-impossible/instance_03.rnm examples/ground/MatchCellar-impossible/instance_03.cert
 ```
