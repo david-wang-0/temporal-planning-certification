@@ -1,0 +1,81 @@
+(define (domain ground)
+(:requirements :strips)
+(:predicates
+ (handfree)
+ (unused_match0)
+ (light_match0)
+ (mended_fuse0)
+ (mended_fuse1)
+ (mended_fuse2)
+)
+
+(:durative-action _light_match_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 5)
+   (<= ?duration 5)
+  )
+ :condition
+  (at start (unused_match0))
+ :effect (and
+  (at start (not (unused_match0)))
+  (at start (light_match0))
+  (at end (not (light_match0)))
+ )
+)
+(:durative-action _mend_fuse_fuse0_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse0))
+ )
+)
+(:durative-action _mend_fuse_fuse1_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse1))
+ )
+)
+(:durative-action _mend_fuse_fuse2_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse2))
+ )
+)
+)

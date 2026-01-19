@@ -148,6 +148,7 @@ mv -t . <path-to-afp-2025>/thys/Munta_Certificate_Checker/muntac
 ```
 
 ### Checking a certificate agains the network and renaming
+
 ```shell
 ./muntac -m <model>.muntax -r <renaming>.rnm -c <certificate>.cert
 ```

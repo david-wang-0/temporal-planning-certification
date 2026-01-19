@@ -1,0 +1,1526 @@
+(define (domain ground)
+(:requirements :strips)
+(:predicates
+ (handfree)
+ (unused_match0)
+ (unused_match1)
+ (unused_match2)
+ (unused_match3)
+ (unused_match4)
+ (unused_match5)
+ (light_match0)
+ (light_match1)
+ (light_match2)
+ (light_match3)
+ (light_match4)
+ (light_match5)
+ (mended_fuse0)
+ (mended_fuse1)
+ (mended_fuse10)
+ (mended_fuse11)
+ (mended_fuse12)
+ (mended_fuse2)
+ (mended_fuse3)
+ (mended_fuse4)
+ (mended_fuse5)
+ (mended_fuse6)
+ (mended_fuse7)
+ (mended_fuse8)
+ (mended_fuse9)
+)
+
+(:durative-action _light_match_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 5)
+   (<= ?duration 5)
+  )
+ :condition
+  (at start (unused_match0))
+ :effect (and
+  (at start (not (unused_match0)))
+  (at start (light_match0))
+  (at end (not (light_match0)))
+ )
+)
+(:durative-action _light_match_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 5)
+   (<= ?duration 5)
+  )
+ :condition
+  (at start (unused_match1))
+ :effect (and
+  (at start (not (unused_match1)))
+  (at start (light_match1))
+  (at end (not (light_match1)))
+ )
+)
+(:durative-action _light_match_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 5)
+   (<= ?duration 5)
+  )
+ :condition
+  (at start (unused_match2))
+ :effect (and
+  (at start (not (unused_match2)))
+  (at start (light_match2))
+  (at end (not (light_match2)))
+ )
+)
+(:durative-action _light_match_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 5)
+   (<= ?duration 5)
+  )
+ :condition
+  (at start (unused_match3))
+ :effect (and
+  (at start (not (unused_match3)))
+  (at start (light_match3))
+  (at end (not (light_match3)))
+ )
+)
+(:durative-action _light_match_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 5)
+   (<= ?duration 5)
+  )
+ :condition
+  (at start (unused_match4))
+ :effect (and
+  (at start (not (unused_match4)))
+  (at start (light_match4))
+  (at end (not (light_match4)))
+ )
+)
+(:durative-action _light_match_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 5)
+   (<= ?duration 5)
+  )
+ :condition
+  (at start (unused_match5))
+ :effect (and
+  (at start (not (unused_match5)))
+  (at start (light_match5))
+  (at end (not (light_match5)))
+ )
+)
+(:durative-action _mend_fuse_fuse0_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse0))
+ )
+)
+(:durative-action _mend_fuse_fuse1_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse1))
+ )
+)
+(:durative-action _mend_fuse_fuse10_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse10))
+ )
+)
+(:durative-action _mend_fuse_fuse11_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse11))
+ )
+)
+(:durative-action _mend_fuse_fuse12_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse12))
+ )
+)
+(:durative-action _mend_fuse_fuse2_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse2))
+ )
+)
+(:durative-action _mend_fuse_fuse3_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse3))
+ )
+)
+(:durative-action _mend_fuse_fuse4_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse4))
+ )
+)
+(:durative-action _mend_fuse_fuse5_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse5))
+ )
+)
+(:durative-action _mend_fuse_fuse6_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse6))
+ )
+)
+(:durative-action _mend_fuse_fuse7_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse7))
+ )
+)
+(:durative-action _mend_fuse_fuse8_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse8))
+ )
+)
+(:durative-action _mend_fuse_fuse9_match0_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match0))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse9))
+ )
+)
+(:durative-action _mend_fuse_fuse0_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse0))
+ )
+)
+(:durative-action _mend_fuse_fuse1_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse1))
+ )
+)
+(:durative-action _mend_fuse_fuse10_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse10))
+ )
+)
+(:durative-action _mend_fuse_fuse11_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse11))
+ )
+)
+(:durative-action _mend_fuse_fuse12_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse12))
+ )
+)
+(:durative-action _mend_fuse_fuse2_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse2))
+ )
+)
+(:durative-action _mend_fuse_fuse3_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse3))
+ )
+)
+(:durative-action _mend_fuse_fuse4_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse4))
+ )
+)
+(:durative-action _mend_fuse_fuse5_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse5))
+ )
+)
+(:durative-action _mend_fuse_fuse6_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse6))
+ )
+)
+(:durative-action _mend_fuse_fuse7_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse7))
+ )
+)
+(:durative-action _mend_fuse_fuse8_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse8))
+ )
+)
+(:durative-action _mend_fuse_fuse9_match1_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match1))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse9))
+ )
+)
+(:durative-action _mend_fuse_fuse0_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse0))
+ )
+)
+(:durative-action _mend_fuse_fuse1_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse1))
+ )
+)
+(:durative-action _mend_fuse_fuse10_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse10))
+ )
+)
+(:durative-action _mend_fuse_fuse11_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse11))
+ )
+)
+(:durative-action _mend_fuse_fuse12_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse12))
+ )
+)
+(:durative-action _mend_fuse_fuse2_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse2))
+ )
+)
+(:durative-action _mend_fuse_fuse3_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse3))
+ )
+)
+(:durative-action _mend_fuse_fuse4_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse4))
+ )
+)
+(:durative-action _mend_fuse_fuse5_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse5))
+ )
+)
+(:durative-action _mend_fuse_fuse6_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse6))
+ )
+)
+(:durative-action _mend_fuse_fuse7_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse7))
+ )
+)
+(:durative-action _mend_fuse_fuse8_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse8))
+ )
+)
+(:durative-action _mend_fuse_fuse9_match2_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match2))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse9))
+ )
+)
+(:durative-action _mend_fuse_fuse0_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse0))
+ )
+)
+(:durative-action _mend_fuse_fuse1_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse1))
+ )
+)
+(:durative-action _mend_fuse_fuse10_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse10))
+ )
+)
+(:durative-action _mend_fuse_fuse11_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse11))
+ )
+)
+(:durative-action _mend_fuse_fuse12_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse12))
+ )
+)
+(:durative-action _mend_fuse_fuse2_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse2))
+ )
+)
+(:durative-action _mend_fuse_fuse3_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse3))
+ )
+)
+(:durative-action _mend_fuse_fuse4_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse4))
+ )
+)
+(:durative-action _mend_fuse_fuse5_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse5))
+ )
+)
+(:durative-action _mend_fuse_fuse6_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse6))
+ )
+)
+(:durative-action _mend_fuse_fuse7_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse7))
+ )
+)
+(:durative-action _mend_fuse_fuse8_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse8))
+ )
+)
+(:durative-action _mend_fuse_fuse9_match3_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match3))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse9))
+ )
+)
+(:durative-action _mend_fuse_fuse0_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse0))
+ )
+)
+(:durative-action _mend_fuse_fuse1_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse1))
+ )
+)
+(:durative-action _mend_fuse_fuse10_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse10))
+ )
+)
+(:durative-action _mend_fuse_fuse11_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse11))
+ )
+)
+(:durative-action _mend_fuse_fuse12_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse12))
+ )
+)
+(:durative-action _mend_fuse_fuse2_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse2))
+ )
+)
+(:durative-action _mend_fuse_fuse3_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse3))
+ )
+)
+(:durative-action _mend_fuse_fuse4_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse4))
+ )
+)
+(:durative-action _mend_fuse_fuse5_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse5))
+ )
+)
+(:durative-action _mend_fuse_fuse6_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse6))
+ )
+)
+(:durative-action _mend_fuse_fuse7_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse7))
+ )
+)
+(:durative-action _mend_fuse_fuse8_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse8))
+ )
+)
+(:durative-action _mend_fuse_fuse9_match4_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match4))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse9))
+ )
+)
+(:durative-action _mend_fuse_fuse0_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse0))
+ )
+)
+(:durative-action _mend_fuse_fuse1_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse1))
+ )
+)
+(:durative-action _mend_fuse_fuse10_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse10))
+ )
+)
+(:durative-action _mend_fuse_fuse11_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse11))
+ )
+)
+(:durative-action _mend_fuse_fuse12_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse12))
+ )
+)
+(:durative-action _mend_fuse_fuse2_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse2))
+ )
+)
+(:durative-action _mend_fuse_fuse3_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse3))
+ )
+)
+(:durative-action _mend_fuse_fuse4_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse4))
+ )
+)
+(:durative-action _mend_fuse_fuse5_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse5))
+ )
+)
+(:durative-action _mend_fuse_fuse6_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse6))
+ )
+)
+(:durative-action _mend_fuse_fuse7_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse7))
+ )
+)
+(:durative-action _mend_fuse_fuse8_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse8))
+ )
+)
+(:durative-action _mend_fuse_fuse9_match5_
+ :parameters ()
+ :duration
+  (and
+   (>= ?duration 2)
+   (<= ?duration 2)
+  )
+ :condition
+  (and
+   (at start (handfree))
+   (over all (light_match5))
+  )
+ :effect (and
+  (at start (not (handfree)))
+  (at end (handfree))
+  (at end (mended_fuse9))
+ )
+)
+)

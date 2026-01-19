@@ -1,7 +1,0 @@
-(define (problem test-prob)
-(:domain test-dom)
-(:objects x - object)
-(:init )
-(:goal (s x))
-(:metric minimize (total-time))
-)
