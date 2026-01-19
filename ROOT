@@ -34,3 +34,6 @@ session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp =
     "PDDL_TP_Reduction.Unsolvability_Code_Compile:ML/Check_Unsolvability.ML"
     
 
+session Index =
+  PDDL_TP_Reduction +
+  theories Index
