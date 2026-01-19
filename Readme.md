@@ -118,7 +118,7 @@ From this directory:
 python -m convert_models.convert <model>.muntax <model>.tck
 ```
 
-## Running TChecker
+## Generating Certificates with TChecker
 
 ### Install TChecker
 
@@ -128,7 +128,7 @@ We use commit: [d711ace](https://github.com/ticktac-project/tchecker/commit/d711
 
 Once completed, move `tck-reach` from the output directory into this folder.
 
-### Run TChecker on a model to ouput a certificate
+### Running TChecker on a model to ouput a certificate
 
 ```shell
 ./tck-reach -a covreach -C graph -s dfs -o <certificate>.dot <model>.tck
