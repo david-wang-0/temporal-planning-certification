@@ -63,10 +63,8 @@ text \<open>encodes_before\<close>
 term tp_nta_reduction_correctness.happening_pre_post_delay
 text \<open>running_at\<close>
 term temp_plan_for_problem_impl.closed_active_count
-text \<open>running_before\<close>
 term temp_plan_for_problem_impl.open_active_count
 text \<open>time_since_at\<close>
 term nta_temp_planning.exec_time'
-text \<open>time_since_before\<close>
 term nta_temp_planning.exec_time
 end
