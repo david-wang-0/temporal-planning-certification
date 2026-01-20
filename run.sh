@@ -1,14 +1,7 @@
 show_help () {
   echo "usage:"
-  echo "run.sh [args] <domain> <problem> <muntax> <tck> <dot> <rnm>  <cert>"
+  echo "run.sh [args] <domain> <problem>"
   echo "-h : help"
-  echo "<domain> : ground pddl domain"
-  echo "<problem> : ground pddl instance"
-  echo "<muntax> : output for muntax model"
-  echo "<tck> : output for tck model"
-  echo "<dot> : output for tchecker's certificate"
-  echo "<rnm> : output for renaming"
-  echo "<cert> : output for Munta's certificate"
 }
 
 # https://stackoverflow.com/a/14203146
