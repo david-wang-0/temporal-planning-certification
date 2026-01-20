@@ -36,8 +36,8 @@ session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp =
     
 
 session PDDL_TP_Reduction_Index =
-  PDDL_TP_Reduction ++ 
-  sessions Munta_Certificate_Checker +
+  PDDL_TP_Reduction + 
+  sessions Munta_Certificate_Checker
   theories Index
   document_files (in "document")
     "root.tex"
