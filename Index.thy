@@ -49,6 +49,8 @@ find_theorems name: "Simple_Network_Language_Model"
 subsection \<open>Theorems\<close>
 text\<open>Theorem 1:\<close>
 thm tp_nta_reduction_correctness.valid_plan_imp_form_holds
+text\<open>Contrapositive for executable certificate checking\<close>
+thm make_certified_net_okay
 text\<open>Lemma 1:\<close>                            
 thm tp_nta_reduction_correctness.plan_steps_possible
 text\<open>Lemma 2:\<close>
