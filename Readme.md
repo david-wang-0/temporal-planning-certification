@@ -2,7 +2,7 @@
 
 This contains the original source code for our paper: "Formally Verified Certification of Unsolvability of Temporal Planning Problems"
 
-The theorems and lemmas from the paper can be found in `Index.thy`.
+The theorems and lemmas from the paper can be found in [Index.thy](Index.thy).
 Follow the instructions in [Checking Isabelle Proofs and Exporting Code](#checking-isabelle-proofs-and-exporting-code) to navigate the project with jEdit.
 
 ## This Readme
@@ -90,7 +90,7 @@ isabelle jedit -d . -l Munta_Certificate_Checker
 
 Navigate to this directory in the jEdit UI.
 
-Open `Index.thy` for some pointers to relevant files.
+Open [Index.thy](Index.thy) for some pointers to relevant files.
 
 ## Building the executable encoder
 

@@ -49,10 +49,24 @@ find_theorems name: "Simple_Network_Language_Model"
 subsection \<open>Theorems\<close>
 text\<open>Theorem 1:\<close>
 thm tp_nta_reduction_correctness.valid_plan_imp_form_holds
-text\<open>Lemma 1:\<close>
+text\<open>Lemma 1:\<close>                            
 thm tp_nta_reduction_correctness.plan_steps_possible
 text\<open>Lemma 2:\<close>
 thm tp_nta_reduction_correctness.initial_step_possible
 text\<open>Lemma 3:\<close>
 thm tp_nta_reduction_correctness.final_step_possible
+
+subsection \<open>Definitions\<close>
+text \<open>encodes_after\<close>
+term tp_nta_reduction_correctness.happening_post
+text \<open>encodes_before\<close>
+term tp_nta_reduction_correctness.happening_pre_post_delay
+text \<open>running_at\<close>
+term temp_plan_for_problem_impl.closed_active_count
+text \<open>running_before\<close>
+term temp_plan_for_problem_impl.open_active_count
+text \<open>time_since_at\<close>
+term nta_temp_planning.exec_time'
+text \<open>time_since_before\<close>
+term nta_temp_planning.exec_time
 end
