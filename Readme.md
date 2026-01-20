@@ -119,11 +119,70 @@ Build the Certifier:
 make build_certifier
 ```
 
-## Running the encoder
+## Running the pipeline
 
 ### Install Python 3
 
 Follow the instructions in: https://www.python.org/downloads/
+
+### Install TChecker
+
+Please refer to instructions here: https://github.com/ticktac-project/tchecker
+
+We use commit: [d711ace](https://github.com/ticktac-project/tchecker/commit/d711ace9ff754d8d952f5d491a31591115300c7f)
+
+Once completed, move `tck-reach` from the output directory into this folder.
+
+### Install Isabelle and the AFP
+
+Follow the steps above to install Isabelle and the AFP.
+
+### Build muntac from the AFP
+
+Build `muntac` from the AFP and move it here (`.`):
+```shell
+isabelle build -e Munta_Certificate_Checker
+mv -t . <path-to-afp-2025>/thys/Munta_Certificate_Checker/muntac
+```
+
+### Running the entire pipeline
+
+The pipeline needs names to be provided for every input and ouput file, namely: 
+- Ground pddl domain
+- Ground pddl problem
+- Muntax network
+- TChecker network
+- TChecker dot certificate
+- Muntac certificate
+- Muntac renaming
+
+```shell
+chmod +x run.sh
+./run <ground-domain>.pddl <ground-problem>.pddl
+```
+
+Example:
+```shell
+./run.sh examples/ground/MatchCellar-impossible/instance_03_domain.pddl examples/ground/MatchCellar-impossible/instance_03_problem.pddl
+```
+
+## Running individual components
+
+### Install Python 3
+
+Follow the instructions in: https://www.python.org/downloads/
+
+### Install TChecker
+
+Follow the steps above.
+
+### Install Isabelle and the AFP
+
+Follow the steps above.
+
+### Build muntac from the AFP
+
+Follow the steps above.
 
 ### Running the verified component
 The checker is in `ML/out`.
@@ -139,34 +198,10 @@ From this directory:
 python -m convert_models.convert <model>.muntax <model>.tck
 ```
 
-## Generating Certificates with TChecker
-
-### Install TChecker
-
-Please refer to instructions here: https://github.com/ticktac-project/tchecker
-
-We use commit: [d711ace](https://github.com/ticktac-project/tchecker/commit/d711ace9ff754d8d952f5d491a31591115300c7f)
-
-Once completed, move `tck-reach` from the output directory into this folder.
-
 ### Running TChecker on a model to ouput a certificate
 
 ```shell
 ./tck-reach -a covreach -C graph -s dfs -o <certificate>.dot <model>.tck
-```
-
-## Converting and checking certificates
-
-### Install Isabelle and the AFP
-
-Follow the steps above to install Isabelle and the AFP.
-
-### Build muntac from the AFP
-
-Build `muntac` from the AFP and move it here (`.`):
-```shell
-isabelle build -e Munta_Certificate_Checker
-mv -t . <path-to-afp-2025>/thys/Munta_Certificate_Checker/muntac
 ```
 
 ### Creating a renaming for the model
@@ -186,24 +221,3 @@ mv -t . <path-to-afp-2025>/thys/Munta_Certificate_Checker/muntac
 ./muntac -m <model>.muntax -r <renaming>.rnm -c <certificate>.cert
 ```
 
-
-### Running the entire pipeline
-
-The pipeline needs names to be provided for every input and ouput file, namely: 
-- Ground pddl domain
-- Ground pddl problem
-- Muntax network
-- TChecker network
-- TChecker dot certificate
-- Muntac certificate
-- Muntac renaming
-
-```shell
-chmod +x run.sh
-./run <domain> <problem> <network> <network> <certificate> <renaming> <certificate>
-```
-
-Example:
-```shell
-./run.sh examples/ground/MatchCellar-impossible/instance_03_domain.pddl examples/ground/MatchCellar-impossible/instance_03_problem.pddl examples/ground/MatchCellar-impossible/instance_03.muntax examples/ground/MatchCellar-impossible/instance_03.tck examples/ground/MatchCellar-impossible/instance_03.dot examples/ground/MatchCellar-impossible/instance_03.rnm examples/ground/MatchCellar-impossible/instance_03.cert
-```

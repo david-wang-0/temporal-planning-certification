@@ -6,6 +6,7 @@ session Temporal_Planning_Base in Temporal_Planning_Base = Munta_Model_Checker +
     Temporal_Plans 
     Sequences
   document_files (in "../document")
+    "root.tex"
     "root.bib"
 
 session TP_NTA_Reduction in TA_Network =
@@ -35,8 +36,9 @@ session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp =
     
 
 session PDDL_TP_Reduction_Index =
-  PDDL_TP_Reduction +
+  PDDL_TP_Reduction ++ 
+  sessions Munta_Certificate_Checker +
   theories Index
   document_files (in "document")
-    "root.bib"
     "root.tex"
+    "root.bib"

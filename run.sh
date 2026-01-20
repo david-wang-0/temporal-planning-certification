@@ -27,11 +27,12 @@ done
 
 domain=$1
 problem=$2
-muntax=$3
-tck=$4
-dot=$5
-renaming=$6
-certificate=$7
+ts=$(date +%s)
+muntax="${problem%.*}_${ts}.muntax"
+tck="${problem%.*}_${ts}.tck"
+dot="${problem%.*}_${ts}.dot"
+renaming="${problem%.*}_${ts}.rnm"
+certificate="${problem%.*}_${ts}.cert"
 
 
 ./ML/out/plan_cert -domain $domain -problem $problem -model $muntax

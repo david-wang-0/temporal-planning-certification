@@ -621,7 +621,7 @@ definition nm_anno_act_seq where
 
 subsubsection \<open>Non-Interference w.r.t the Happening Sequence\<close>
 
-text \<open>This definition comes from the statement in \<^cite>\<open>gigante_decidability_2022\<close>, that every at-start 
+text \<open>This definition comes from the statement in \<^cite>\<open>giganteDecidabilityComplexityActionBased2020\<close>, that every at-start 
 snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
 snap-actions. Moreover, in their definition of a planning problem, the assumption is made that 
 no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at-end(b) and at-start(a) \<noteq> at-end(a).\<close>
