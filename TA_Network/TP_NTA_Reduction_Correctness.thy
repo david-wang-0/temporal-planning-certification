@@ -1,7 +1,7 @@
 theory TP_NTA_Reduction_Correctness
   imports TP_NTA_Reduction_Model_Checking
-          "Temporal_Planning_Base.Sequences"
-          "Temporal_Planning_Base.ListMisc"
+          "Temporal_Planning_Common.Sequences"
+          "Temporal_Planning_Common.ListMisc"
           NTA_Temp_Planning_Sem
 begin
 
@@ -8757,10 +8757,27 @@ proof -
   obtain \<pi>::"(nat, 'action, int) temp_plan" where
     plan: "temp_plan_for_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>" 
     using assms by auto
-  interpret x: tp_nta_reduction_correctness' init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name 
+  interpret x: tp_nta_reduction_correctness' init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name
     using valid_plan_imp_locale_inst plan by blast
   show ?thesis using x.valid_plan_imp_form_holds by auto
 qed
+
+text \<open>**Numeric collapse at the capstone.** The reduction's existence-form capstone applies
+unchanged to an (empty-)numeric problem: a @{const numeric_temp_plan_for_problem_list_impl_int'}
+problem is a @{const temp_plan_for_problem_list_impl_int'} problem (the numeric fixes carry no
+@{theory_text \<open>assumes\<close>}; @{thm [source] numeric_temp_plan_for_problem_list_impl_int'_imp_prop}),
+so plan-existence at the numeric twin discharges @{thm [source] valid_temp_plan_imp_form_holds}'s
+hypothesis. Inside that numeric locale the empty-numeric collapse
+@{thm [source] numeric_temp_plan_for_problem_list_defs.collapse_num_valid_plan} identifies its
+@{term num_valid_plan} with this propositional @{term valid_plan}.\<close>
+lemma numeric_valid_temp_plan_imp_form_holds:
+  assumes "\<exists>\<pi>::(nat, 'action, int) temp_plan.
+    numeric_temp_plan_for_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels
+      init goal \<epsilon> props actions \<pi>"
+  shows "ref_model_checking.net_impl.sem,ref_model_checking.a\<^sub>0 \<Turnstile> reduction_ref_impl.formula_spec"
+  using assms valid_temp_plan_imp_form_holds
+    numeric_temp_plan_for_problem_list_impl_int'_imp_prop
+  by blast
 
 end
 end

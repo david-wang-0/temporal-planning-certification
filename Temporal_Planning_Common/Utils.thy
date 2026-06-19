@@ -1,4 +1,4 @@
-theory Base                
+theory Utils
   imports Main "Containers.Containers"
 begin
 
@@ -223,5 +223,38 @@ lemma takeWhile_all:
   shows "takeWhile (\<lambda>x. x < t) xs = xs"
   using assms by auto
 
+
+subsection \<open>Binary option combinators\<close>
+
+text \<open>Applicative @{term liftA2} (@{text lift2_option}) and a fail-allowing bind variant
+(@{text bind2_option}) for @{typ "_ option"}: both demand their operands be @{term Some};
+@{text bind2_option} additionally lets the combiner itself fail (e.g. division by zero). The
+@{text "= Some"}/@{text "= None"} characterizations are declared @{attribute simp} so callers reason
+logically instead of triggering an @{text option.split} (and @{text prod.split}) explosion.\<close>
+
+fun lift2_option :: "('a \<Rightarrow> 'b \<Rightarrow> 'c) \<Rightarrow> 'a option \<Rightarrow> 'b option \<Rightarrow> 'c option" where
+  "lift2_option f (Some x) (Some y) = Some (f x y)"
+| "lift2_option f _ _ = None"
+
+fun bind2_option :: "('a \<Rightarrow> 'b \<Rightarrow> 'c option) \<Rightarrow> 'a option \<Rightarrow> 'b option \<Rightarrow> 'c option" where
+  "bind2_option f (Some x) (Some y) = f x y"
+| "bind2_option f _ _ = None"
+
+lemma lift2_option_eq_None [simp]:
+  "lift2_option f a b = None \<longleftrightarrow> a = None \<or> b = None"
+  by (cases a; cases b) auto
+
+lemma lift2_option_eq_Some [simp]:
+  "lift2_option f a b = Some c \<longleftrightarrow> (\<exists>x y. a = Some x \<and> b = Some y \<and> c = f x y)"
+  by (cases a; cases b) auto
+
+lemma bind2_option_eq_None [simp]:
+  "bind2_option f a b = None \<longleftrightarrow>
+     a = None \<or> b = None \<or> (\<exists>x y. a = Some x \<and> b = Some y \<and> f x y = None)"
+  by (cases a; cases b) auto
+
+lemma bind2_option_eq_Some [simp]:
+  "bind2_option f a b = Some c \<longleftrightarrow> (\<exists>x y. a = Some x \<and> b = Some y \<and> f x y = Some c)"
+  by (cases a; cases b) auto
 
 end

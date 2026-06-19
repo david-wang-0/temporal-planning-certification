@@ -1,5 +1,5 @@
 theory Temporal_Plans
-  imports Base "Difference_Bound_Matrices.DBM"
+  imports Temporal_Planning_Common.Utils "Difference_Bound_Matrices.DBM"
 begin
 
 datatype ('t) lower_bound =
@@ -10,11 +10,174 @@ datatype ('t) upper_bound =
   LT 't |
   LE 't
 
+section \<open>Abstract numeric syntax\<close>
+text \<open>Numeric expressions and comparisons over opaque ground fluents @{typ 'n} and a rational-like
+value sort @{typ 'r} (intended instance @{typ rat}). These stay PDDL-agnostic: PDDL's
+@{text numeric_expression} is mapped into this type only at the @{text Ground_PDDL} boundary, exactly
+as PDDL atoms become an opaque @{text 'proposition}. Explicit operator constructors (not Munta's
+@{text \<open>binop "'r \<Rightarrow> 'r \<Rightarrow> 'r"\<close>}) so the type code-exports, has decidable equality, and maps 1:1 to
+@{text \<open>binop (+)/(-)/(*)/(div)\<close>}. See @{file \<open>../NUMERIC_PLAN.md\<close>} \<section>A.1.\<close>
+
+datatype ('n, 'r) nexp =
+    NConst 'r                                       \<comment> \<open>a value constant\<close>
+  | NVar   'n                                       \<comment> \<open>read a ground fluent's valuation\<close>
+  | NAdd "('n, 'r) nexp" "('n, 'r) nexp"
+  | NSub "('n, 'r) nexp" "('n, 'r) nexp"
+  | NMul "('n, 'r) nexp" "('n, 'r) nexp"
+  | NDiv "('n, 'r) nexp" "('n, 'r) nexp"            \<comment> \<open>integer-division gap at the Munta boundary\<close>
+
+datatype cmp_op = Ceq | Cle | Cge | Clt | Cgt
+
+datatype ('n, 'r) comp = Comp cmp_op "('n, 'r) nexp" "('n, 'r) nexp"
+
+section \<open>Numeric semantics\<close>
+text \<open>Evaluation of numeric expressions and comparisons against a partial fluent valuation
+@{typ \<open>'n \<rightharpoonup> 'r\<close>}, and application of numeric effects. Partiality is definedness: a read of an
+undefined fluent makes the expression undefined, so any comparison over it fails (fail-closed). Values
+live in a @{class linordered_field} (intended instance @{typ rat}); division is exact field division
+here -- the integer-division/truncation gap lives only at the Munta boundary. See
+@{file \<open>../NUMERIC_PLAN.md\<close>} \<section>A.2.\<close>
+
+text \<open>Fluents read by a numeric expression (its @{term NVar} leaves).\<close>
+fun nexp_fluents :: "('n, 'r) nexp \<Rightarrow> 'n set" where
+  "nexp_fluents (NConst _) = {}"
+| "nexp_fluents (NVar f)   = {f}"
+| "nexp_fluents (NAdd a b) = nexp_fluents a \<union> nexp_fluents b"
+| "nexp_fluents (NSub a b) = nexp_fluents a \<union> nexp_fluents b"
+| "nexp_fluents (NMul a b) = nexp_fluents a \<union> nexp_fluents b"
+| "nexp_fluents (NDiv a b) = nexp_fluents a \<union> nexp_fluents b"
+
+text \<open>Evaluate an expression against a partial valuation; @{term None} on an undefined-fluent read or
+division by zero (fail-closed).\<close>
+fun eval_nexp :: "('n \<rightharpoonup> 'r::linordered_field) \<Rightarrow> ('n, 'r) nexp \<Rightarrow> 'r option" where
+  "eval_nexp v (NConst c) = Some c"
+| "eval_nexp v (NVar f)   = v f"
+| "eval_nexp v (NAdd a b) =
+     lift2_option (+) (eval_nexp v a) (eval_nexp v b)"
+| "eval_nexp v (NSub a b) =
+     lift2_option (-) (eval_nexp v a) (eval_nexp v b)"
+| "eval_nexp v (NMul a b) =
+     lift2_option (\<lambda>x y. x * y) (eval_nexp v a) (eval_nexp v b)"
+| "eval_nexp v (NDiv a b) =
+     bind2_option (\<lambda>x y. if y = 0 then None else Some (x / y)) (eval_nexp v a) (eval_nexp v b)"
+
+text \<open>@{const eval_nexp} depends only on the fluents the expression reads.\<close>
+lemma eval_nexp_cong:
+  assumes "\<And>g. g \<in> nexp_fluents e \<Longrightarrow> v g = v' g"
+  shows "eval_nexp v e = eval_nexp v' e"
+  using assms by (induction e) auto
+
+text \<open>Comparison operators as relations.\<close>
+fun cmp_op_rel :: "cmp_op \<Rightarrow> 'r::linorder \<Rightarrow> 'r \<Rightarrow> bool" where
+  "cmp_op_rel Ceq = (=)"
+| "cmp_op_rel Cle = (\<le>)"
+| "cmp_op_rel Cge = (\<ge>)"
+| "cmp_op_rel Clt = (<)"
+| "cmp_op_rel Cgt = (>)"
+
+text \<open>A single comparison holds against a valuation; fails if either side is undefined (fail-closed).\<close>
+definition sat_comp :: "('n \<rightharpoonup> 'r::linordered_field) \<Rightarrow> ('n, 'r) comp \<Rightarrow> bool" where
+  "sat_comp v c \<longleftrightarrow> (case c of Comp p a b \<Rightarrow>
+     (case (eval_nexp v a, eval_nexp v b) of (Some x, Some y) \<Rightarrow> cmp_op_rel p x y | _ \<Rightarrow> False))"
+
+text \<open>A set of comparisons is read conjunctively (all hold simultaneously).\<close>
+definition sat_comps :: "('n \<rightharpoonup> 'r::linordered_field) \<Rightarrow> ('n, 'r) comp set \<Rightarrow> bool" where
+  "sat_comps v C \<longleftrightarrow> (\<forall>c \<in> C. sat_comp v c)"
+
+lemma sat_compsI: "(\<And>c. c \<in> C \<Longrightarrow> sat_comp v c) \<Longrightarrow> sat_comps v C"
+  unfolding sat_comps_def by blast
+
+lemma sat_compsD: "sat_comps v C \<Longrightarrow> c \<in> C \<Longrightarrow> sat_comp v c"
+  unfolding sat_comps_def by blast
+
+lemma sat_compsE:
+  assumes "sat_comps v C"
+  obtains "\<And>c. c \<in> C \<Longrightarrow> sat_comp v c"
+  using assms unfolding sat_comps_def by blast
+
+text \<open>Fluents read by a comparison (both sides).\<close>
+fun comp_fluents :: "('n, 'r) comp \<Rightarrow> 'n set" where
+  "comp_fluents (Comp _ a b) = nexp_fluents a \<union> nexp_fluents b"
+
+subsection \<open>Numeric effects\<close>
+text \<open>A numeric effect set @{term U} maps each affected fluent to the expression assigned to it. Two
+well-formedness conditions (fail-closed, checked per snap, see \<section>A.2): the left-hand side is
+@{emph \<open>functional\<close>} (no fluent assigned twice), and no effect reads a fluent that the same snap also
+writes (@{emph \<open>no intra-snap read-after-write\<close>}) -- PDDL snap effects are simultaneous, but Munta
+edge updates are sequential, so we reject the case where the two differ.\<close>
+
+definition upds_functional :: "('n \<times> ('n, 'r) nexp) set \<Rightarrow> bool" where
+  "upds_functional U \<longleftrightarrow> (\<forall>(f, e) \<in> U. \<forall>(f', e') \<in> U. f = f' \<longrightarrow> e = e')"
+
+lemma upds_functionalI:
+  assumes "\<And>f e e'. (f, e) \<in> U \<Longrightarrow> (f, e') \<in> U \<Longrightarrow> e = e'"
+  shows "upds_functional U"
+  unfolding upds_functional_def using assms by fastforce
+
+lemma upds_functionalD:
+  assumes "upds_functional U" and "(f, e) \<in> U" and "(f, e') \<in> U"
+  shows "e = e'"
+  using assms unfolding upds_functional_def by fastforce
+
+definition upds_no_self_read :: "('n \<times> ('n, 'r) nexp) set \<Rightarrow> bool" where
+  "upds_no_self_read U \<longleftrightarrow> (\<forall>(f, e) \<in> U. nexp_fluents e \<inter> fst ` U = {})"
+
+definition upds_wf :: "('n \<times> ('n, 'r) nexp) set \<Rightarrow> bool" where
+  "upds_wf U \<longleftrightarrow> upds_functional U \<and> upds_no_self_read U"
+
+lemma upds_wfI:
+  assumes "\<And>f e e'. (f, e) \<in> U \<Longrightarrow> (f, e') \<in> U \<Longrightarrow> e = e'"
+      and "\<And>f e g. (f, e) \<in> U \<Longrightarrow> g \<in> nexp_fluents e \<Longrightarrow> g \<notin> fst ` U"
+    shows "upds_wf U"
+  unfolding upds_wf_def upds_functional_def upds_no_self_read_def
+  using assms by fast
+
+lemma upds_wf_functionalD:
+  assumes "upds_wf U" and "(f, e) \<in> U" and "(f, e') \<in> U"
+  shows "e = e'"
+  using assms unfolding upds_wf_def upds_functional_def by fastforce
+
+lemma upds_wf_no_self_readD:
+  assumes "upds_wf U" and "(f, e) \<in> U" and "g \<in> nexp_fluents e"
+  shows "g \<notin> fst ` U"
+  using assms unfolding upds_wf_def upds_no_self_read_def by fastforce
+
+text \<open>Apply a numeric effect set to the @{emph \<open>pre\<close>}-state @{term v} (all reads are against the
+pre-state -- simultaneous semantics). An assigned fluent whose right-hand side reads an undefined
+fluent becomes undefined (fail-closed). Well-defined on a functional @{term U} via @{const The}.\<close>
+definition apply_upds :: "('n \<times> ('n, 'r) nexp) set \<Rightarrow> ('n \<rightharpoonup> 'r::linordered_field) \<Rightarrow> ('n \<rightharpoonup> 'r)" where
+  "apply_upds U v = (\<lambda>f. if f \<in> fst ` U then eval_nexp v (THE e. (f, e) \<in> U) else v f)"
+
+lemma apply_upds_notin:
+  assumes "f \<notin> fst ` U"
+  shows "apply_upds U v f = v f"
+  using assms unfolding apply_upds_def by simp
+
+lemma apply_upds_in:
+  assumes "upds_functional U" and "(f, e) \<in> U"
+  shows "apply_upds U v f = eval_nexp v e"
+proof -
+  have uniq: "(THE e'. (f, e') \<in> U) = e"
+  proof (rule the_equality)
+    show "(f, e) \<in> U" using assms(2) .
+    show "e' = e" if "(f, e') \<in> U" for e'
+      using assms(1) assms(2) that unfolding upds_functional_def by fastforce
+  qed
+  have "f \<in> fst ` U" using assms(2) by force
+  thus ?thesis unfolding apply_upds_def using uniq by simp
+qed
+
 section \<open>Plan validity\<close>
 text \<open>This and similar notions need to be used in multiple places. I formulate this to a 
 sufficient level of abstraction.\<close>
 
 type_synonym 'p state = "'p set"
+
+text \<open>A numeric state pairs the propositional set with a partial fluent valuation (partiality =
+definedness). The propositional component @{typ \<open>'p set\<close>} is exactly the old @{typ \<open>'p state\<close>}, so it
+remains a projection (@{term fst}) and the existing purely-propositional lemmas carry over unchanged
+(\<section>3 Layer A: keep a propositional projection so existing lemmas degrade gracefully).\<close>
+type_synonym ('p, 'n, 'r) num_state = "'p set \<times> ('n \<rightharpoonup> 'r)"
 
 type_synonym 'p state_sequence = "nat \<Rightarrow> ('p state)"
 
@@ -106,6 +269,288 @@ lemma snaps_disj_onE:
 lemma mutex_snap_action_refl:
   "mutex_snap_action a b = mutex_snap_action b a"
   unfolding mutex_snap_action_def by blast
+
+end
+
+text \<open>Numeric extension of @{locale action_defs}. Additive: it imports every @{locale action_defs}
+parameter and adds the numeric data, so @{locale action_defs} and its existing sublocales are
+untouched. Numeric preconditions/effects attach to snap actions; the @{term over_all} numeric
+invariant @{term n_inv} is per action (cf. @{term over_all}). A comparison/effect @{emph \<open>set\<close>} is
+read conjunctively. See @{file \<open>../NUMERIC_PLAN.md\<close>} \<section>A.2.\<close>
+locale numeric_action_defs =
+  action_defs at_start at_end over_all lower upper pre adds dels
+    for at_start :: "'action  \<Rightarrow> 'snap_action"
+    and at_end   :: "'action  \<Rightarrow> 'snap_action"
+    and over_all :: "'action  \<Rightarrow> 'proposition set"
+    and lower    :: "'action  \<rightharpoonup> 'time lower_bound"
+    and upper    :: "'action  \<rightharpoonup> 'time upper_bound"
+    and pre      :: "'snap_action \<Rightarrow> 'proposition set"
+    and adds     :: "'snap_action \<Rightarrow> 'proposition set"
+    and dels     :: "'snap_action \<Rightarrow> 'proposition set" +
+  fixes n_pre :: "'snap_action \<Rightarrow> ('n, 'r::linordered_field) comp set"
+    and n_inv :: "'action \<Rightarrow> ('n, 'r) comp set"
+    and upds  :: "'snap_action \<Rightarrow> ('n \<times> ('n, 'r) nexp) set"
+begin
+
+text \<open>Numeric data lifted from snap actions to annotated actions (cf. @{const pre_imp}).\<close>
+definition n_pre_imp :: "'action snap_action \<Rightarrow> ('n, 'r) comp set" where
+  "n_pre_imp x = app_snap n_pre x"
+
+definition upds_imp :: "'action snap_action \<Rightarrow> ('n \<times> ('n, 'r) nexp) set" where
+  "upds_imp x = app_snap upds x"
+
+lemma n_pre_imp_simps[simp]:
+  "n_pre_imp (AtStart a) = n_pre (at_start a)"
+  "n_pre_imp (AtEnd a)   = n_pre (at_end a)"
+  unfolding n_pre_imp_def by simp_all
+
+lemma upds_imp_simps[simp]:
+  "upds_imp (AtStart a) = upds (at_start a)"
+  "upds_imp (AtEnd a)   = upds (at_end a)"
+  unfolding upds_imp_def by simp_all
+
+text \<open>Well-formedness of a snap's numeric effects (\<section>A.2): functional lhs + no intra-snap
+read-after-write.\<close>
+definition snap_upds_wf :: "'snap_action \<Rightarrow> bool" where
+  "snap_upds_wf a \<longleftrightarrow> upds_wf (upds a)"
+
+subsection \<open>Numeric conditions and effects at a numeric state\<close>
+text \<open>A snap's numeric precondition holds at a numeric state when all its comparisons hold against the
+state's valuation; an action's @{term over_all} numeric invariant likewise. Numeric-effect
+application updates only the valuation, reading the pre-state (simultaneous semantics).\<close>
+
+definition num_pre_holds :: "'action snap_action \<Rightarrow> ('proposition, 'n, 'r) num_state \<Rightarrow> bool" where
+  "num_pre_holds x s \<longleftrightarrow> sat_comps (snd s) (n_pre_imp x)"
+
+definition num_inv_holds :: "'action \<Rightarrow> ('proposition, 'n, 'r) num_state \<Rightarrow> bool" where
+  "num_inv_holds a s \<longleftrightarrow> sat_comps (snd s) (n_inv a)"
+
+lemma num_pre_holdsI: "(\<And>c. c \<in> n_pre_imp x \<Longrightarrow> sat_comp (snd s) c) \<Longrightarrow> num_pre_holds x s"
+  unfolding num_pre_holds_def by (rule sat_compsI)
+
+lemma num_pre_holdsD: "num_pre_holds x s \<Longrightarrow> c \<in> n_pre_imp x \<Longrightarrow> sat_comp (snd s) c"
+  unfolding num_pre_holds_def by (rule sat_compsD)
+
+definition apply_num_eff ::
+  "'action snap_action \<Rightarrow> ('proposition, 'n, 'r) num_state \<Rightarrow> ('proposition, 'n, 'r) num_state" where
+  "apply_num_eff x s = (fst s, apply_upds (upds_imp x) (snd s))"
+
+lemma apply_num_eff_props[simp]: "fst (apply_num_eff x s) = fst s"
+  unfolding apply_num_eff_def by simp
+
+lemma apply_num_eff_val[simp]: "snd (apply_num_eff x s) = apply_upds (upds_imp x) (snd s)"
+  unfolding apply_num_eff_def by simp
+
+subsection \<open>Numeric interference and simultaneous application\<close>
+text \<open>The fluents a snap writes (lhs of its effects) and reads (its numeric precondition + every
+effect rhs).\<close>
+definition snap_writes :: "'snap_action \<Rightarrow> 'n set" where
+  "snap_writes a = fst ` upds a"
+
+definition snap_reads :: "'snap_action \<Rightarrow> 'n set" where
+  "snap_reads a = (\<Union>c \<in> n_pre a. comp_fluents c) \<union> (\<Union>(f, e) \<in> upds a. nexp_fluents e)"
+
+text \<open>Two snaps numerically interfere when one writes a fluent the other reads or writes (cf.
+@{const mutex_snap_action}). Because all reads are pre-state, a @{emph \<open>simultaneous\<close>} set of snaps is
+well defined only when its snaps pairwise do not interfere -- in particular no two may write a common
+fluent. @{emph \<open>Soundness caveat\<close>}: treating every shared write as interference is stricter than PDDL
+for additive @{text increase}/@{text decrease} effects, which PDDL accumulates; the supported fragment
+(Gigante) never additively co-writes a fluent (e.g. the painter @{text counter} is serialised by its
+@{text \<open>(= item_id counter)\<close>} guard), and the Layer-C checker rejects (fail-closed) any task that could.
+This includes the @{emph \<open>self\<close>}-pair @{term \<open>at_start a\<close>}/@{term \<open>at_end a\<close>} of one action when its
+duration collapses (@{term \<open>d = 0\<close>}/@{term \<open>d < \<epsilon>\<close>}): an action's own start/end effects must not write a
+common fluent (mirrors the propositional self-pair clause in @{term mutex_valid_plan}). See
+@{file \<open>../NUMERIC_PLAN.md\<close>} \<section>A.2.\<close>
+definition num_mutex_snap_action :: "'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" where
+  "num_mutex_snap_action a b \<longleftrightarrow>
+      snap_writes a \<inter> snap_writes b \<noteq> {}
+    \<or> snap_writes a \<inter> snap_reads b \<noteq> {}
+    \<or> snap_writes b \<inter> snap_reads a \<noteq> {}"
+
+lemma num_mutex_snap_action_refl: "num_mutex_snap_action a b = num_mutex_snap_action b a"
+  unfolding num_mutex_snap_action_def by blast
+
+lemma num_mutex_snap_action_empty:
+  assumes "upds = (\<lambda>_. {})"
+  shows "\<not> num_mutex_snap_action a b"
+  using assms unfolding num_mutex_snap_action_def snap_writes_def by simp
+
+text \<open>The numeric effect of a single snap on the valuation: apply its (pre-combined, functional)
+effect set @{term \<open>upds a\<close>}, reading every rhs from the snap's pre-state @{term v}. The \<section>A.3 boundary
+combines same-fluent effects into one assignment per fluent (PDDL @{text combine_additive_numeric_effects}
+/ @{text action_numeric_update_function_simplified}), so @{term \<open>upds a\<close>} is functional by construction.\<close>
+definition snap_num_update :: "'snap_action \<Rightarrow> ('n \<rightharpoonup> 'r) \<Rightarrow> ('n \<rightharpoonup> 'r)" where
+  "snap_num_update a v = apply_upds (upds a) v"
+
+text \<open>Degenerate (no-effect) facts -- used by the migration lemma. Stated here so the locale
+definitions unfold in their home locale.\<close>
+lemma snap_writes_empty: "upds a = {} \<Longrightarrow> snap_writes a = {}"
+  by (simp add: snap_writes_def)
+
+lemma snap_num_update_empty: "upds a = {} \<Longrightarrow> snap_num_update a v = v"
+  by (simp add: snap_num_update_def apply_upds_def)
+
+text \<open>The numeric effect of a @{emph \<open>happening\<close>} (a set of co-occurring snaps, presented as a list) is
+the sequential @{const fold} of the per-snap updates -- each snap reads the @{emph \<open>running\<close>} valuation.
+This mirrors PDDL's happening update @{text action_list_numeric_update_function} (Formal-PDDL-Semantics,
+@{text \<open>Continuous_Planning/Numeric_Update_Functions\<close>}: @{text \<open>fold (o) (map ...) id\<close>}) and the Munta run
+(interleaved zero-delay edges, each update reading the running store). It is @{emph \<open>not\<close>} a set-union of
+effects: co-occurring additive writes of one fluent must @{emph \<open>accumulate\<close>} (@{text \<open>f+ea\<close>} then
+@{text \<open>+eb\<close>}), which a union would wrongly dedup.
+
+Key obligation (next milestone): independence of the list order under non-interference -- the abstract
+analog of PDDL's @{text same_actions_then_happening_numeric_update_function_equal}, via commutativity of
+@{const snap_num_update} for non-@{const num_mutex_snap_action} snaps. Interference itself is discharged by
+the existing clock/\<epsilon>-separation machinery: mutex snaps are forced \<ge>\<epsilon> apart, so they never co-occur in a
+happening -- only commuting (non-interfering) snaps do.\<close>
+definition happening_num_update :: "'snap_action list \<Rightarrow> ('n \<rightharpoonup> 'r) \<Rightarrow> ('n \<rightharpoonup> 'r)" where
+  "happening_num_update = fold snap_num_update"
+
+lemma happening_num_update_Nil: "happening_num_update [] = id"
+  unfolding happening_num_update_def by simp
+
+lemma happening_num_update_Cons:
+  "happening_num_update (a # as) v = happening_num_update as (snap_num_update a v)"
+  unfolding happening_num_update_def by simp
+
+text \<open>Pointwise behaviour of a single snap's numeric update.\<close>
+lemma snap_num_update_writes:
+  assumes "upds_functional (upds a)" and "(f, e) \<in> upds a"
+  shows "snap_num_update a v f = eval_nexp v e"
+  unfolding snap_num_update_def using assms by (rule apply_upds_in)
+
+lemma snap_num_update_unwritten:
+  assumes "f \<notin> snap_writes a"
+  shows "snap_num_update a v f = v f"
+  using assms unfolding snap_num_update_def snap_writes_def by (rule apply_upds_notin)
+
+lemma snap_write_witness:
+  assumes "f \<in> snap_writes a"
+  obtains e where "(f, e) \<in> upds a" and "nexp_fluents e \<subseteq> snap_reads a"
+proof -
+  obtain e where e: "(f, e) \<in> upds a" using assms unfolding snap_writes_def by auto
+  have "nexp_fluents e \<subseteq> snap_reads a" using e unfolding snap_reads_def by fastforce
+  thus thesis using e that by blast
+qed
+
+text \<open>Two non-interfering snaps' numeric updates commute -- the load-bearing fact behind
+order-independence of @{const happening_num_update}. The functional hypotheses hold by construction
+(\<section>A.3 combination); non-interference (@{term \<open>\<not> num_mutex_snap_action a b\<close>}) gives disjoint writes and
+no cross read/write, so each snap's rhs reads the same value whichever snap runs first.\<close>
+lemma snap_num_update_commute:
+  assumes fa: "upds_functional (upds a)" and fb: "upds_functional (upds b)"
+      and nm: "\<not> num_mutex_snap_action a b"
+  shows "snap_num_update a (snap_num_update b v) = snap_num_update b (snap_num_update a v)"
+proof (rule ext)
+  fix f
+  have ww: "snap_writes a \<inter> snap_writes b = {}"
+   and ar: "snap_writes a \<inter> snap_reads b = {}"
+   and br: "snap_writes b \<inter> snap_reads a = {}"
+    using nm unfolding num_mutex_snap_action_def by auto
+  consider (A) "f \<in> snap_writes a" | (B) "f \<in> snap_writes b"
+    | (N) "f \<notin> snap_writes a \<and> f \<notin> snap_writes b" by auto
+  then show "snap_num_update a (snap_num_update b v) f = snap_num_update b (snap_num_update a v) f"
+  proof cases
+    case A
+    hence fnb: "f \<notin> snap_writes b" using ww by blast
+    obtain e where e: "(f, e) \<in> upds a" "nexp_fluents e \<subseteq> snap_reads a"
+      using A by (rule snap_write_witness)
+    have agree: "snap_num_update b v g = v g" if "g \<in> nexp_fluents e" for g
+    proof -
+      have "g \<in> snap_reads a" using e(2) that by blast
+      hence "g \<notin> snap_writes b" using br by blast
+      thus ?thesis by (rule snap_num_update_unwritten)
+    qed
+    have "snap_num_update a (snap_num_update b v) f = eval_nexp (snap_num_update b v) e"
+      using snap_num_update_writes[OF fa e(1)] .
+    also have "\<dots> = eval_nexp v e" using eval_nexp_cong agree by blast
+    also have "\<dots> = snap_num_update a v f" using snap_num_update_writes[OF fa e(1)] by simp
+    also have "\<dots> = snap_num_update b (snap_num_update a v) f"
+      using snap_num_update_unwritten[OF fnb] by simp
+    finally show ?thesis .
+  next
+    case B
+    hence fna: "f \<notin> snap_writes a" using ww by blast
+    obtain e where e: "(f, e) \<in> upds b" "nexp_fluents e \<subseteq> snap_reads b"
+      using B by (rule snap_write_witness)
+    have agree: "snap_num_update a v g = v g" if "g \<in> nexp_fluents e" for g
+    proof -
+      have "g \<in> snap_reads b" using e(2) that by blast
+      hence "g \<notin> snap_writes a" using ar by blast
+      thus ?thesis by (rule snap_num_update_unwritten)
+    qed
+    have "snap_num_update b (snap_num_update a v) f = eval_nexp (snap_num_update a v) e"
+      using snap_num_update_writes[OF fb e(1)] .
+    also have "\<dots> = eval_nexp v e" using eval_nexp_cong agree by blast
+    also have "\<dots> = snap_num_update b v f" using snap_num_update_writes[OF fb e(1)] by simp
+    also have "\<dots> = snap_num_update a (snap_num_update b v) f"
+      using snap_num_update_unwritten[OF fna] by simp
+    finally show ?thesis by simp
+  next
+    case N
+    hence a': "f \<notin> snap_writes a" and b': "f \<notin> snap_writes b" by auto
+    have "snap_num_update a (snap_num_update b v) f = v f"
+      using a' b' by (simp add: snap_num_update_unwritten)
+    moreover have "snap_num_update b (snap_num_update a v) f = v f"
+      using a' b' by (simp add: snap_num_update_unwritten)
+    ultimately show ?thesis by simp
+  qed
+qed
+
+text \<open>Adjacent swap of two non-interfering snaps in a happening leaves the numeric update unchanged --
+the inductive engine for full order-independence of @{const happening_num_update} (lift to arbitrary
+permutations of a pairwise-non-interfering happening is the remaining step).\<close>
+lemma happening_num_update_swap:
+  assumes "upds_functional (upds a)" and "upds_functional (upds b)"
+      and "\<not> num_mutex_snap_action a b"
+  shows "happening_num_update (a # b # as) v = happening_num_update (b # a # as) v"
+  using snap_num_update_commute[OF assms(1,2,3)]
+  by (simp add: happening_num_update_Cons)
+
+text \<open>On a functional, pairwise-non-interfering set of snaps the per-snap updates commute, so
+@{const Finite_Set.fold} of @{const snap_num_update} is **order-independent** -- this is the set-level
+numeric happening update, the abstract analog of PDDL's
+@{text same_actions_then_happening_numeric_update_function_equal}. The two hypotheses hold for a real
+happening: @{term \<open>upds a\<close>} is functional by construction (\<section>A.3 combination), and pairwise
+non-interference is exactly what the clock/\<epsilon>-separation enforces among co-occurring snaps.\<close>
+lemma comp_fun_commute_on_snap_num_update:
+  assumes "\<And>a. a \<in> S \<Longrightarrow> upds_functional (upds a)"
+      and "\<And>a b. a \<in> S \<Longrightarrow> b \<in> S \<Longrightarrow> a \<noteq> b \<Longrightarrow> \<not> num_mutex_snap_action a b"
+    shows "comp_fun_commute_on S snap_num_update"
+proof (unfold_locales)
+  fix x y assume xy: "x \<in> S" "y \<in> S"
+  show "snap_num_update y \<circ> snap_num_update x = snap_num_update x \<circ> snap_num_update y"
+  proof (cases "x = y")
+    case True thus ?thesis by simp
+  next
+    case False
+    have "\<not> num_mutex_snap_action x y" using assms(2)[OF xy False] .
+    thus ?thesis
+      using snap_num_update_commute[OF assms(1)[OF xy(1)] assms(1)[OF xy(2)]]
+      by (simp add: comp_def fun_eq_iff)
+  qed
+qed
+
+definition happening_num_update_set :: "'snap_action set \<Rightarrow> ('n \<rightharpoonup> 'r) \<Rightarrow> ('n \<rightharpoonup> 'r)" where
+  "happening_num_update_set S v = Finite_Set.fold snap_num_update v S"
+
+text \<open>Insertion recursion for the set-level update (under the non-interference precondition), and the
+empty case -- the computational laws @{text valid_state_sequence}'s numeric analog will use.\<close>
+lemma happening_num_update_set_empty[simp]: "happening_num_update_set {} v = v"
+  unfolding happening_num_update_set_def by simp
+
+lemma happening_num_update_set_insert:
+  assumes "finite S" and "a \<notin> S"
+      and "\<And>x. x \<in> insert a S \<Longrightarrow> upds_functional (upds x)"
+      and "\<And>x y. x \<in> insert a S \<Longrightarrow> y \<in> insert a S \<Longrightarrow> x \<noteq> y \<Longrightarrow> \<not> num_mutex_snap_action x y"
+    shows "happening_num_update_set (insert a S) v = happening_num_update_set S (snap_num_update a v)"
+proof -
+  interpret comp_fun_commute_on "insert a S" snap_num_update
+    using comp_fun_commute_on_snap_num_update[OF assms(3,4)] .
+  show ?thesis
+    unfolding happening_num_update_set_def
+    using assms(1,2) by (simp add: fold_insert2 del: fold_insert)
+qed
 
 end
 
@@ -833,68 +1278,343 @@ lemma mutex_trans:
   "mutex_snap_action (at_end a) (at_end b) \<longleftrightarrow> mutex_annotated_action (AtEnd a) (AtEnd b)" 
   unfolding mutex_snap_action_def mutex_annotated_action_def anno_trans[symmetric] by blast+
 
-text \<open>When the domain is injective, there are no duplicate plan actions. This is a weaker condition
-than no self-overlap\<close>
+text \<open>When the domain map is injective there are no duplicate plan actions (weaker than no
+self-overlap). Two transfer lemmas relate the @{const ran}-quantified pairwise condition to the
+@{const dom}-quantified one; @{text inj_mutex_def} is then immediate.\<close>
+lemma ran_pair_imp_dom_pair:
+  assumes inj: "inj_on \<pi> (dom \<pi>)"
+      and ran: "\<And>a ta da b tb db.
+        (a, ta, da) \<in> ran \<pi> \<Longrightarrow> (b, tb, db) \<in> ran \<pi> \<Longrightarrow> (a, ta, da) \<noteq> (b, tb, db)
+          \<Longrightarrow> P a ta da b tb db"
+      and ij: "i \<in> dom \<pi>" "j \<in> dom \<pi>" "i \<noteq> j"
+      and \<pi>ij: "\<pi> i = Some (a, ta, da)" "\<pi> j = Some (b, tb, db)"
+    shows "P a ta da b tb db"
+proof -
+  have "\<pi> i \<noteq> \<pi> j" by (rule inj_on_contraD[OF inj ij(3,1,2)])
+  hence ne: "(a, ta, da) \<noteq> (b, tb, db)" using \<pi>ij by simp
+  have "(a, ta, da) \<in> ran \<pi>" "(b, tb, db) \<in> ran \<pi>" using \<pi>ij by (auto simp: ran_def)
+  thus ?thesis using ran ne by blast
+qed
+
+lemma dom_pair_imp_ran_pair:
+  assumes dom: "\<And>i j.
+        i \<in> dom \<pi> \<Longrightarrow> j \<in> dom \<pi> \<Longrightarrow> i \<noteq> j
+          \<Longrightarrow> \<pi> i = Some (a, ta, da) \<Longrightarrow> \<pi> j = Some (b, tb, db) \<Longrightarrow> P a ta da b tb db"
+      and ran: "(a, ta, da) \<in> ran \<pi>" "(b, tb, db) \<in> ran \<pi>" "(a, ta, da) \<noteq> (b, tb, db)"
+    shows "P a ta da b tb db"
+proof -
+  obtain i where i: "\<pi> i = Some (a, ta, da)" using ran(1) unfolding ran_def by blast
+  obtain j where j: "\<pi> j = Some (b, tb, db)" using ran(2) unfolding ran_def by blast
+  have "i \<noteq> j" using i j ran(3) by auto
+  moreover have "i \<in> dom \<pi>" "j \<in> dom \<pi>" using i j by (auto simp: dom_def)
+  ultimately show ?thesis using dom i j by blast
+qed
+
+text \<open>Intro/elim/dest rules for the two mutex-validity bundles -- each a pairwise condition plus a
+duration-0 self-pair condition -- so callers reason through named facts instead of @{command unfolding}
+the definitions and re-deriving the nested quantifiers.\<close>
+lemma mutex_valid_plan_altI:
+  assumes "\<And>i j a ta da b tb db.
+            i \<in> dom \<pi> \<Longrightarrow> j \<in> dom \<pi> \<Longrightarrow> i \<noteq> j \<Longrightarrow> \<pi> i = Some (a, ta, da) \<Longrightarrow> \<pi> j = Some (b, tb, db)
+              \<Longrightarrow> mutex_sched a ta da b tb db"
+      and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> d = 0 \<or> d < \<epsilon> \<Longrightarrow> \<not> mutex_snap_action (at_start a) (at_end a)"
+    shows "mutex_valid_plan_alt"
+  unfolding mutex_valid_plan_alt_def using assms by fastforce
+
+lemma mutex_valid_plan_altD1:
+  assumes "mutex_valid_plan_alt"
+      and "i \<in> dom \<pi>" "j \<in> dom \<pi>" "i \<noteq> j" "\<pi> i = Some (a, ta, da)" "\<pi> j = Some (b, tb, db)"
+    shows "mutex_sched a ta da b tb db"
+  using assms unfolding mutex_valid_plan_alt_def by blast
+
+lemma mutex_valid_plan_altD2:
+  assumes "mutex_valid_plan_alt" and "(a, t, d) \<in> ran \<pi>" "d = 0 \<or> d < \<epsilon>"
+    shows "\<not> mutex_snap_action (at_start a) (at_end a)"
+  using assms unfolding mutex_valid_plan_alt_def by fastforce
+
+lemma mutex_valid_plan_altE:
+  assumes "mutex_valid_plan_alt"
+  obtains "\<And>i j a ta da b tb db.
+            i \<in> dom \<pi> \<Longrightarrow> j \<in> dom \<pi> \<Longrightarrow> i \<noteq> j \<Longrightarrow> \<pi> i = Some (a, ta, da) \<Longrightarrow> \<pi> j = Some (b, tb, db)
+              \<Longrightarrow> mutex_sched a ta da b tb db"
+      and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> d = 0 \<or> d < \<epsilon> \<Longrightarrow> \<not> mutex_snap_action (at_start a) (at_end a)"
+  using assms by (blast dest: mutex_valid_plan_altD1 mutex_valid_plan_altD2)
+
+lemma mutex_valid_plan_injI:
+  assumes "\<And>a ta da b tb db.
+            (a, ta, da) \<in> ran \<pi> \<Longrightarrow> (b, tb, db) \<in> ran \<pi> \<Longrightarrow> (a, ta, da) \<noteq> (b, tb, db)
+              \<Longrightarrow> mutex_sched a ta da b tb db"
+      and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> d = 0 \<or> d < \<epsilon> \<Longrightarrow> \<not> mutex_snap_action (at_start a) (at_end a)"
+    shows "mutex_valid_plan_inj"
+  unfolding mutex_valid_plan_inj_def using assms by fastforce
+
+lemma mutex_valid_plan_injD1:
+  assumes "mutex_valid_plan_inj"
+      and "(a, ta, da) \<in> ran \<pi>" "(b, tb, db) \<in> ran \<pi>" "(a, ta, da) \<noteq> (b, tb, db)"
+    shows "mutex_sched a ta da b tb db"
+  using assms unfolding mutex_valid_plan_inj_def by blast
+
+lemma mutex_valid_plan_injD2:
+  assumes "mutex_valid_plan_inj" and "(a, t, d) \<in> ran \<pi>" "d = 0 \<or> d < \<epsilon>"
+    shows "\<not> mutex_snap_action (at_start a) (at_end a)"
+  using assms unfolding mutex_valid_plan_inj_def by fastforce
+
+lemma mutex_valid_plan_injE:
+  assumes "mutex_valid_plan_inj"
+  obtains "\<And>a ta da b tb db.
+            (a, ta, da) \<in> ran \<pi> \<Longrightarrow> (b, tb, db) \<in> ran \<pi> \<Longrightarrow> (a, ta, da) \<noteq> (b, tb, db)
+              \<Longrightarrow> mutex_sched a ta da b tb db"
+      and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> d = 0 \<or> d < \<epsilon> \<Longrightarrow> \<not> mutex_snap_action (at_start a) (at_end a)"
+  using assms by (blast dest: mutex_valid_plan_injD1 mutex_valid_plan_injD2)
+
 lemma inj_mutex_def:
   assumes inj: "inj_on \<pi> (dom \<pi>)"
   shows "mutex_valid_plan = mutex_valid_plan_inj"
-proof -
-  { fix i j
-    assume "i \<in> dom \<pi>" "j \<in> dom \<pi>" "i \<noteq> j"
-    hence "\<pi> i \<noteq> \<pi> j" using inj unfolding inj_on_def by blast
-  } note domD = this
-  have ran_dom_P_trans: "i \<in> dom \<pi> \<Longrightarrow> j \<in> dom \<pi> \<Longrightarrow> i \<noteq> j \<Longrightarrow> \<pi> i = Some (a, ta, da) \<Longrightarrow> \<pi> j = Some (b, tb, db) \<Longrightarrow> P a ta da b tb db" 
-    if "\<And>a ta da b tb db. (a, ta, da) \<in> ran \<pi> \<Longrightarrow> (b, tb, db) \<in> ran \<pi> \<Longrightarrow> (a, ta, da) \<noteq> (b, tb, db) \<Longrightarrow> P a ta da b tb db" 
-    for P i j a ta da b tb db
-      apply (drule domD, assumption+)
-      apply (frule subst[where P = "\<lambda>x. x \<noteq> \<pi> j"], assumption)
-      apply (frule subst[where P = "\<lambda>x. Some (a, ta, da) \<noteq> x" and s = "\<pi> j"], assumption)
-      apply (drule ranI[of \<pi>])+
-    using that by blast
-  
-  have "mutex_valid_plan" if "mutex_valid_plan_inj"
-    using ran_dom_P_trans[of mutex_sched] that 
-    unfolding mutex_valid_plan_eq mutex_valid_plan_alt_def mutex_valid_plan_inj_def
-    apply -
-    apply (rule conjI)
-     apply (drule conjunct1)
-    by blast+
-  moreover
-  
-  { fix x y 
-    assume "x \<in> ran \<pi>" "y \<in> ran \<pi>"  
-    moreover
-    assume "x \<noteq> y"
-    ultimately
-    have "\<forall>i j. \<pi> i = Some x \<and> \<pi> j = Some y \<longrightarrow> (i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j)" 
-         "\<forall>i j. i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> \<pi> i = Some x \<and> \<pi> j = Some y \<longrightarrow> i \<noteq> j" by auto
-  } note domI = this
-  have dom_ran_P_trans:  "P a ta da b tb db" 
-      if sg: "\<And>i j. i \<in> dom \<pi> \<Longrightarrow> j \<in> dom \<pi> \<Longrightarrow> i \<noteq> j \<Longrightarrow> \<pi> i = Some (a, ta, da) \<Longrightarrow> \<pi> j = Some (b, tb, db) \<Longrightarrow> P a ta da b tb db" 
-      and as: "(a, ta, da) \<in> ran \<pi>" "(b, tb, db) \<in> ran \<pi>" "(a, ta, da) \<noteq> (b, tb, db)"
-    for P a ta da b tb db
-  proof -
-    from as obtain i j where
-      pi: "\<pi> i = Some (a, ta, da)"
-      "\<pi> j = Some (b, tb, db)"
-      unfolding ran_def by blast
-    with domI as
-    have ij: "i \<noteq> j" "i \<in> dom \<pi>" "j \<in> dom \<pi>" by presburger+
-    with sg pi
-    show ?thesis by blast
+  unfolding mutex_valid_plan_eq
+proof (rule iffI)
+  assume A: "mutex_valid_plan_alt"
+  show "mutex_valid_plan_inj"
+  proof (rule mutex_valid_plan_injI)
+    show "mutex_sched a ta da b tb db"
+      if r: "(a, ta, da) \<in> ran \<pi>" "(b, tb, db) \<in> ran \<pi>" "(a, ta, da) \<noteq> (b, tb, db)"
+      for a ta da b tb db
+    proof (rule dom_pair_imp_ran_pair[OF _ r])
+      fix i j assume "i \<in> dom \<pi>" "j \<in> dom \<pi>" "i \<noteq> j"
+        "\<pi> i = Some (a, ta, da)" "\<pi> j = Some (b, tb, db)"
+      thus "mutex_sched a ta da b tb db" by (rule mutex_valid_plan_altD1[OF A])
+    qed
+  next
+    show "\<not> mutex_snap_action (at_start a) (at_end a)"
+      if "(a, t, d) \<in> ran \<pi>" "d = 0 \<or> d < \<epsilon>" for a t d
+      using that by (rule mutex_valid_plan_altD2[OF A])
   qed
-  
-  have "mutex_valid_plan_inj" if "mutex_valid_plan" using that 
-    unfolding mutex_valid_plan_eq mutex_valid_plan_alt_def mutex_valid_plan_inj_def
-    using dom_ran_P_trans[of _ _ _ _ _ _ mutex_sched] by auto
-  ultimately
-  show ?thesis by blast
+next
+  assume B: "mutex_valid_plan_inj"
+  show "mutex_valid_plan_alt"
+  proof (rule mutex_valid_plan_altI)
+    show "mutex_sched a ta da b tb db"
+      if ij: "i \<in> dom \<pi>" "j \<in> dom \<pi>" "i \<noteq> j" "\<pi> i = Some (a, ta, da)" "\<pi> j = Some (b, tb, db)"
+      for i j a ta da b tb db
+    proof (rule ran_pair_imp_dom_pair[OF inj _ ij])
+      fix a ta da b tb db
+      assume "(a, ta, da) \<in> ran \<pi>" "(b, tb, db) \<in> ran \<pi>" "(a, ta, da) \<noteq> (b, tb, db)"
+      thus "mutex_sched a ta da b tb db" by (rule mutex_valid_plan_injD1[OF B])
+    qed
+  next
+    show "\<not> mutex_snap_action (at_start a) (at_end a)"
+      if "(a, t, d) \<in> ran \<pi>" "d = 0 \<or> d < \<epsilon>" for a t d
+      using that by (rule mutex_valid_plan_injD2[OF B])
+  qed
 qed
 
 lemma invs_at_plan_inv_seq_alt:
   "invs_at plan_inv_seq t = {p. \<exists>a d t'. p \<in> over_all a \<and> (a, t', d) \<in> ran \<pi> \<and> t' < t \<and> t \<le> t' + d}"
   unfolding invs_at_def plan_inv_seq_def by auto
   
+end
+
+
+text \<open>Numeric plan-level locale: the propositional @{locale temp_plan_defs} merged with the numeric
+data of @{locale numeric_action_defs}, sharing the @{locale action_defs} parameters. This is the
+@{emph \<open>parallel\<close>} (additive) numeric hierarchy -- the propositional development is untouched. See
+@{file \<open>../NUMERIC_PLAN.md\<close>} \<section>3 / \<section>7 (P2).\<close>
+locale numeric_temp_plan_defs =
+  temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
+  + numeric_action_defs at_start at_end over_all lower upper pre adds dels n_pre n_inv upds
+  for at_start :: "'action \<Rightarrow> 'snap_action"
+  and at_end   :: "'action \<Rightarrow> 'snap_action"
+  and over_all :: "'action \<Rightarrow> 'proposition set"
+  and lower    :: "'action \<rightharpoonup> ('time::time) lower_bound"
+  and upper    :: "'action \<rightharpoonup> 'time upper_bound"
+  and pre      :: "'snap_action \<Rightarrow> 'proposition set"
+  and adds     :: "'snap_action \<Rightarrow> 'proposition set"
+  and dels     :: "'snap_action \<Rightarrow> 'proposition set"
+  and init     :: "'proposition set"
+  and goal     :: "'proposition set"
+  and \<epsilon>        :: "'time"
+  and \<pi>        :: "('i, 'action, 'time) temp_plan"
+  and n_pre    :: "'snap_action \<Rightarrow> ('n, 'r::linordered_field) comp set"
+  and n_inv    :: "'action \<Rightarrow> ('n, 'r) comp set"
+  and upds     :: "'snap_action \<Rightarrow> ('n \<times> ('n, 'r) nexp) set" +
+  fixes num_init :: "'n \<rightharpoonup> 'r"
+    and num_goal :: "('n, 'r) comp set"
+begin
+
+text \<open>Actions whose @{term over_all} interval is active at @{term t} (cf. @{const plan_inv_seq}).\<close>
+definition active_actions :: "'time \<Rightarrow> 'action set" where
+  "active_actions t = {a |a tt d. (a, tt, d) \<in> ran \<pi> \<and> tt < t \<and> t \<le> tt + d}"
+
+text \<open>Numeric state-sequence validity. The propositional conjuncts are exactly
+@{const valid_state_sequence}'s on the @{term fst} projection; the numeric conjuncts thread the
+valuation through @{const happening_num_update_set}, check each happening snap's numeric precondition
+against the pre-state valuation, and check every active @{term over_all} numeric invariant. With
+@{term \<open>n_pre = (\<lambda>_. {})\<close>} / @{term \<open>n_inv = (\<lambda>_. {})\<close>} / @{term \<open>upds = (\<lambda>_. {})\<close>} the numeric conjuncts
+degenerate (identity update, vacuous checks), recovering the propositional semantics -- the migration
+lemma (next).\<close>
+definition num_valid_state_sequence ::
+  "(nat \<Rightarrow> ('proposition, 'n, 'r) num_state) \<Rightarrow> bool" where
+"num_valid_state_sequence M \<equiv> (
+  let t = time_index; Inv = plan_inv_seq; B = plan_happ_seq in
+    (\<forall>i. i < length htpl \<longrightarrow> (
+      let S = happ_at B (t i); pres = \<Union>(pre ` S); invs = invs_at Inv (t i) in
+        apply_effects S (fst (M i)) = fst (M (Suc i))
+        \<and> invs \<subseteq> fst (M i)
+        \<and> pres \<subseteq> fst (M i)
+        \<and> happening_num_update_set S (snd (M i)) = snd (M (Suc i))
+        \<and> (\<forall>s \<in> S. sat_comps (snd (M i)) (n_pre s))
+        \<and> (\<forall>a \<in> active_actions (t i). sat_comps (snd (M i)) (n_inv a)))))
+"
+
+text \<open>With no numeric effects, a happening's numeric update is the identity -- the degenerate case
+behind the migration lemma.\<close>
+lemma happening_num_update_set_id:
+  assumes upd: "upds = (\<lambda>_. {})" and fin: "finite S"
+  shows "happening_num_update_set S v = v"
+proof -
+  have sw: "snap_writes a = {}" for a
+    by (rule snap_writes_empty) (simp add: upd)
+  have snid: "snap_num_update a w = w" for a w
+    by (rule snap_num_update_empty) (simp add: upd)
+  have ccomm: "comp_fun_commute_on T snap_num_update" for T :: "'snap_action set"
+  proof (rule comp_fun_commute_on_snap_num_update)
+    show "upds_functional (upds a)" if "a \<in> T" for a
+      by (simp add: upd upds_functional_def)
+    show "\<not> num_mutex_snap_action a b" if "a \<in> T" "b \<in> T" "a \<noteq> b" for a b
+      by (simp add: num_mutex_snap_action_def sw)
+  qed
+  show ?thesis
+    using fin unfolding happening_num_update_set_def
+  proof (induction S rule: finite_induct)
+    case empty
+    show ?case by simp
+  next
+    case (insert a S)
+    interpret comp_fun_commute_on "insert a S" snap_num_update by (rule ccomm)
+    have "Finite_Set.fold snap_num_update v (insert a S)
+            = snap_num_update a (Finite_Set.fold snap_num_update v S)"
+      using insert.hyps by simp
+    also have "\<dots> = Finite_Set.fold snap_num_update v S" by (simp add: snid)
+    also have "\<dots> = v" using insert.IH .
+    finally show ?case .
+  qed
+qed
+
+text \<open>**Migration lemma** (the collapse go/no-go). With empty numeric data the numeric state-sequence
+validity is @{emph \<open>definitionally\<close>} the propositional one on the @{term fst} projection, plus a
+constant valuation. So the numeric semantics conservatively generalises the propositional one: every
+propositional plan lifts (pick any constant valuation), and certifying the empty-numeric task is the
+old certification. This is the clean signal that the parallel hierarchy can be collapsed by promotion
++ retirement (NUMERIC_PLAN \<section> "How would you collapse"). Needs finite happenings (true for a finite
+plan).\<close>
+lemma num_valid_state_sequence_empty:
+  assumes upd: "upds = (\<lambda>_. {})" and npre: "n_pre = (\<lambda>_. {})" and ninv: "n_inv = (\<lambda>_. {})"
+      and fin: "\<And>i. i < length htpl \<Longrightarrow> finite (happ_at plan_happ_seq (time_index i))"
+  shows "num_valid_state_sequence M
+           \<longleftrightarrow> valid_state_sequence (\<lambda>i. fst (M i))
+               \<and> (\<forall>i < length htpl. snd (M i) = snd (M (Suc i)))"
+proof -
+  have num: "happening_num_update_set (happ_at plan_happ_seq (time_index i)) (snd (M i)) = snd (M i)"
+    if "i < length htpl" for i
+    by (rule happening_num_update_set_id[OF upd fin[OF that]])
+  show ?thesis
+    unfolding num_valid_state_sequence_def valid_state_sequence_def Let_def
+    by (auto simp: num npre ninv sat_comps_def)
+qed
+
+text \<open>Numeric mutual-exclusivity of a plan: the propositional @{const mutex_valid_plan} @{emph \<open>and\<close>}
+the same \<epsilon>-separation discipline for @{const num_mutex_snap_action} -- numerically interfering snaps
+(write/write or read/write) must also be \<ge>\<epsilon> apart (incl. the @{term \<open>at_start a\<close>}/@{term \<open>at_end a\<close>}
+self-pair when @{term \<open>d = 0\<close>}/@{term \<open>d < \<epsilon>\<close>}). It is exactly this that lets a happening contain only
+commuting snaps (so @{const happening_num_update_set} is order-independent there).\<close>
+definition num_mutex_valid_plan :: bool where
+"num_mutex_valid_plan \<equiv> mutex_valid_plan \<and>
+  (\<forall>i j a ta da b tb db sa sb t u.
+    i \<in> dom \<pi> \<and> j \<in> dom \<pi> \<and> i \<noteq> j
+    \<and> \<pi> i = Some (a, ta, da) \<and> \<pi> j = Some (b, tb, db)
+    \<and> (sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da)
+    \<and> (sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db)
+    \<and> (t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u)
+    \<longrightarrow> \<not> num_mutex_snap_action sa sb)
+  \<and> (\<forall>(a, t, d) \<in> ran \<pi>. d = 0 \<or> d < \<epsilon> \<longrightarrow> \<not> num_mutex_snap_action (at_start a) (at_end a))
+"
+
+text \<open>Migration: with no numeric effects every @{const num_mutex_snap_action} is false, so numeric
+mutex-validity collapses to the propositional one.\<close>
+lemma num_mutex_valid_plan_empty:
+  assumes "upds = (\<lambda>_. {})"
+  shows "num_mutex_valid_plan \<longleftrightarrow> mutex_valid_plan"
+  using num_mutex_snap_action_empty[OF assms]
+  unfolding num_mutex_valid_plan_def by simp
+
+text \<open>Numeric plan validity (cf. @{const valid_plan}): a numeric state sequence valid throughout,
+starting from @{term init} / @{term num_init} and reaching @{term goal} with the numeric goal
+comparisons @{term num_goal} holding at the end, under numeric mutex-validity.\<close>
+definition num_valid_plan :: bool where
+"num_valid_plan \<equiv> \<exists>M.
+    num_valid_state_sequence M
+    \<and> fst (M 0) = init
+    \<and> snd (M 0) = num_init
+    \<and> goal \<subseteq> fst (M (length htpl))
+    \<and> sat_comps (snd (M (length htpl))) num_goal
+    \<and> durations_ge_0
+    \<and> durations_valid
+    \<and> num_mutex_valid_plan
+    \<and> finite_plan"
+
+text \<open>**Migration lemma for plan validity** (the capstone of the migration story). With empty numeric
+data and no numeric goal, numeric plan validity is the propositional one: forward via the two component
+migrations; backward by the constant-valuation witness @{term \<open>M i = (M' i, num_init)\<close>}. (Finite
+happenings -- the @{term finhap} hypothesis -- follow from @{const finite_plan} via
+@{text temp_plan_finite.finite_happ_seq}.)\<close>
+lemma num_valid_plan_empty:
+  assumes upd: "upds = (\<lambda>_. {})" and npre: "n_pre = (\<lambda>_. {})" and ninv: "n_inv = (\<lambda>_. {})"
+      and ngoal: "num_goal = {}"
+      and finhap: "\<And>i. i < length htpl \<Longrightarrow> finite (happ_at plan_happ_seq (time_index i))"
+  shows "num_valid_plan \<longleftrightarrow> valid_plan"
+proof
+  assume "num_valid_plan"
+  then obtain M where
+      M1: "num_valid_state_sequence M" and M2: "fst (M 0) = init"
+  and M4: "goal \<subseteq> fst (M (length htpl))"
+  and M6: "durations_ge_0" and M7: "durations_valid"
+  and M8: "num_mutex_valid_plan" and M9: "finite_plan"
+    unfolding num_valid_plan_def by blast
+  have vss: "valid_state_sequence (\<lambda>i. fst (M i))"
+    using num_valid_state_sequence_empty[OF upd npre ninv finhap] M1 by blast
+  have mut: "mutex_valid_plan"
+    using num_mutex_valid_plan_empty[OF upd] M8 by blast
+  show "valid_plan"
+    unfolding valid_plan_def
+    using vss mut M2 M4 M6 M7 M9 by (intro exI[of _ "\<lambda>i. fst (M i)"]) auto
+next
+  assume "valid_plan"
+  then obtain M' where
+      P1: "valid_state_sequence M'" and P2: "M' 0 = init"
+  and P4: "goal \<subseteq> M' (length htpl)"
+  and P6: "durations_ge_0" and P7: "durations_valid"
+  and P8: "mutex_valid_plan" and P9: "finite_plan"
+    unfolding valid_plan_def by blast
+  define M where "M = (\<lambda>i. (M' i, num_init))"
+  have fstM: "fst (M i) = M' i" for i by (simp add: M_def)
+  have sndM: "snd (M i) = num_init" for i by (simp add: M_def)
+  have nvss: "num_valid_state_sequence M"
+    using num_valid_state_sequence_empty[OF upd npre ninv finhap] P1 by (simp add: fstM sndM)
+  have nmut: "num_mutex_valid_plan" using num_mutex_valid_plan_empty[OF upd] P8 by blast
+  show "num_valid_plan"
+    unfolding num_valid_plan_def
+  proof (intro exI[of _ M] conjI)
+    show "num_valid_state_sequence M" by (rule nvss)
+    show "fst (M 0) = init" using P2 by (simp add: fstM)
+    show "snd (M 0) = num_init" by (simp add: sndM)
+    show "goal \<subseteq> fst (M (length htpl))" using P4 by (simp add: fstM)
+    show "sat_comps (snd (M (length htpl))) num_goal" by (simp add: ngoal sat_comps_def)
+    show "durations_ge_0" by (rule P6)
+    show "durations_valid" by (rule P7)
+    show "num_mutex_valid_plan" by (rule nmut)
+    show "finite_plan" by (rule P9)
+  qed
+qed
+
 end
 
 

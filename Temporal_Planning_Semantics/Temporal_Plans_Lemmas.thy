@@ -1,5 +1,5 @@
-theory Temporal_Plans_Theory
-  imports Temporal_Plans_Instances ListMisc
+theory Temporal_Plans_Lemmas
+  imports Temporal_Plans_Instances Temporal_Planning_Common.ListMisc
 begin
 
 context temp_plan_for_actions_with_unique_snaps_nso_dg0

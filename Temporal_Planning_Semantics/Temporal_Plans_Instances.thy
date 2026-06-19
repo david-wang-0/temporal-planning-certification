@@ -355,6 +355,54 @@ sublocale temp_plan_for_action_defs at_start at_end "set o over_all" lower upper
   by unfold_locales
 end
 
+text \<open>**Numeric collapse twin of @{locale temp_plan_for_problem_list_defs}** (NUMERIC_PLAN.md
+\<section>7, "begin the collapse"). The list-refined plan-for-problem locale, additively carrying the
+numeric data of @{locale numeric_temp_plan_defs} on the @{emph \<open>same\<close>} @{locale temp_plan_defs}
+base (the @{term \<open>set o pre\<close>} / @{term \<open>set o over_all\<close>} projection of line 349). Because the
+numeric locales are @{emph \<open>fixes\<close>}-only (no \<^theory_text>\<open>assumes\<close>), this merge has no proof
+obligations beyond the propositional parent. The @{text collapse_num_valid_plan} lemma then
+exposes the empty-numeric degeneracy @{term \<open>num_valid_plan \<longleftrightarrow> valid_plan\<close>}
+as a fact at the layer the reduction's abstract @{term valid_plan} lives in -- so the existing
+propositional capstone applies unchanged to an empty-numeric problem.\<close>
+locale numeric_temp_plan_for_problem_list_defs =
+  temp_plan_for_problem_list_defs
+    at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>
+  + numeric_temp_plan_defs
+    at_start at_end "set o over_all" lower upper "set o pre" "set o adds" "set o dels"
+    "set init" "set goal" \<epsilon> \<pi> n_pre n_inv upds num_init num_goal
+  for at_start::"'action  \<Rightarrow> 'snap_action"
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition list"
+    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
+    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition list"
+    and adds::    "'snap_action \<Rightarrow> 'proposition list"
+    and dels::    "'snap_action \<Rightarrow> 'proposition list"
+    and init::    "'proposition list"
+    and goal::    "'proposition list"
+    and \<epsilon>::       "'time"
+    and props::   "'proposition list"
+    and actions:: "'action list"
+    and \<pi>::       "('i, 'action, 'time) temp_plan"
+    and n_pre::   "'snap_action \<Rightarrow> ('n, 'r::linordered_field) comp set"
+    and n_inv::   "'action \<Rightarrow> ('n, 'r) comp set"
+    and upds::    "'snap_action \<Rightarrow> ('n \<times> ('n, 'r) nexp) set"
+    and num_init::"'n \<rightharpoonup> 'r"
+    and num_goal::"('n, 'r) comp set"
+begin
+
+text \<open>Empty-numeric collapse: with no numeric effects/conditions and no numeric goal, numeric plan
+validity coincides with the propositional @{term valid_plan} of the shared base. The finite-happenings
+side condition matches @{thm [source] numeric_temp_plan_defs.num_valid_plan_empty}.\<close>
+lemma collapse_num_valid_plan:
+  assumes "upds = (\<lambda>_. {})" and "n_pre = (\<lambda>_. {})" and "n_inv = (\<lambda>_. {})"
+      and "num_goal = {}"
+      and "\<And>i. i < length htpl \<Longrightarrow> finite (happ_at plan_happ_seq (time_index i))"
+  shows "num_valid_plan \<longleftrightarrow> valid_plan"
+  using num_valid_plan_empty[OF assms] .
+
+end
+
 locale temp_plan_for_problem_list_impl = 
   temp_plan_for_problem_list_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi> +
   temp_planning_problem_list_impl at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions 
@@ -673,6 +721,50 @@ sublocale abstr_impl: temp_plan_for_problem_list_impl at_start at_end over_all
 
 end
 
+text \<open>**Numeric collapse twin of @{locale temp_plan_for_problem_list_impl_int}** -- the int/list
+executable layer the reduction's capstone (\<^theory_text>\<open>tp_nta_reduction_correctness\<close> in
+\<^theory_text>\<open>TP_NTA_Reduction_Model_Checking\<close>) is stated on. It additively carries the numeric
+fixes and threads them through the int\<rightarrow>rat refinement: the @{text num_rat_impl} sublocale
+interprets @{locale numeric_temp_plan_for_problem_list_defs} at the same rat-refined propositional
+parameters as the inherited @{text rat_impl} (so @{text num_rat_impl.valid_plan} @{emph \<open>is\<close>}
+@{text rat_impl.valid_plan}, the @{term valid_plan} the capstone reasons about), with the numeric
+data passed through unchanged (the int\<rightarrow>rat refinement touches @{emph \<open>time\<close>} only, not the
+numeric field @{typ 'r}). Discharged by @{method unfold_locales}: the propositional obligation is the
+existing @{text rat_impl} interpretation, the numeric part is @{emph \<open>fixes\<close>}-only. Callers reach
+the empty-numeric collapse via @{text num_rat_impl.collapse_num_valid_plan}.\<close>
+locale numeric_temp_plan_for_problem_list_impl_int =
+  temp_plan_for_problem_list_impl_int
+    at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>
+  for at_start::"'action  \<Rightarrow> 'snap_action"
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition list"
+    and lower::   "'action  \<rightharpoonup> int lower_bound"
+    and upper::   "'action  \<rightharpoonup> int upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition list"
+    and adds::    "'snap_action \<Rightarrow> 'proposition list"
+    and dels::    "'snap_action \<Rightarrow> 'proposition list"
+    and init::    "'proposition list"
+    and goal::    "'proposition list"
+    and \<epsilon>::       "int"
+    and props::   "'proposition list"
+    and actions:: "'action list"
+    and \<pi>::       "('i, 'action, int) temp_plan"
+    and n_pre::   "'snap_action \<Rightarrow> ('n, 'r::linordered_field) comp set"
+    and n_inv::   "'action \<Rightarrow> ('n, 'r) comp set"
+    and upds::    "'snap_action \<Rightarrow> ('n \<times> ('n, 'r) nexp) set"
+    and num_init::"'n \<rightharpoonup> 'r"
+    and num_goal::"('n, 'r) comp set"
+begin
+
+sublocale num_rat_impl: numeric_temp_plan_for_problem_list_defs at_start at_end over_all
+  "(map_option (map_lower_bound rat_of_int)) o lower" "(map_option (map_upper_bound rat_of_int)) o upper"
+  pre adds dels init goal "rat_of_int \<epsilon>" props actions
+  "map_option (map_prod id (map_prod rat_of_int rat_of_int)) o \<pi>"
+  n_pre n_inv upds num_init num_goal
+  by unfold_locales
+
+end
+
 (* An instance of this should be created. *)
 locale temp_plan_for_problem_list_impl_int' =
   temp_plan_for_problem_list_defs_int at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi> +
@@ -713,6 +805,55 @@ sublocale conc_ref_impl: temp_plan_for_problem_list_impl_int AtStart AtEnd rat_i
   by auto
 end
 
+text \<open>**Numeric collapse twin of @{locale temp_plan_for_problem_list_impl_int'}** (the primed
+existence-form capstone @{text valid_temp_plan_imp_form_holds} in
+\<^theory_text>\<open>TP_NTA_Reduction_Correctness\<close> is stated on this). Same shape as the unprimed
+@{locale numeric_temp_plan_for_problem_list_impl_int}: additive numeric fixes + the @{text num_rat_impl}
+refinement sublocale, no obligations.\<close>
+locale numeric_temp_plan_for_problem_list_impl_int' =
+  temp_plan_for_problem_list_impl_int'
+    at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>
+  for at_start::"'action  \<Rightarrow> 'snap_action"
+    and at_end::  "'action  \<Rightarrow> 'snap_action"
+    and over_all::"'action  \<Rightarrow> 'proposition list"
+    and lower::   "'action  \<rightharpoonup> int lower_bound"
+    and upper::   "'action  \<rightharpoonup> int upper_bound"
+    and pre::     "'snap_action \<Rightarrow> 'proposition list"
+    and adds::    "'snap_action \<Rightarrow> 'proposition list"
+    and dels::    "'snap_action \<Rightarrow> 'proposition list"
+    and init::    "'proposition list"
+    and goal::    "'proposition list"
+    and \<epsilon>::       "int"
+    and props::   "'proposition list"
+    and actions:: "'action list"
+    and \<pi>::       "('i, 'action, int) temp_plan"
+    and n_pre::   "'snap_action \<Rightarrow> ('n, 'r::linordered_field) comp set"
+    and n_inv::   "'action \<Rightarrow> ('n, 'r) comp set"
+    and upds::    "'snap_action \<Rightarrow> ('n \<times> ('n, 'r) nexp) set"
+    and num_init::"'n \<rightharpoonup> 'r"
+    and num_goal::"('n, 'r) comp set"
+begin
+
+sublocale num_rat_impl: numeric_temp_plan_for_problem_list_defs at_start at_end over_all
+  "(map_option (map_lower_bound rat_of_int)) o lower" "(map_option (map_upper_bound rat_of_int)) o upper"
+  pre adds dels init goal "rat_of_int \<epsilon>" props actions
+  "map_option (map_prod id (map_prod rat_of_int rat_of_int)) o \<pi>"  n_pre n_inv upds num_init num_goal
+  by unfold_locales
+
+end
+
+text \<open>The numeric twin's locale predicate coincides with its propositional parent's: the numeric
+fixes appear in no \<^theory_text>\<open>assumes\<close>, so they are not part of the locale predicate at all (its
+arity stops at @{term \<pi>}). Hence a @{const numeric_temp_plan_for_problem_list_impl_int'} problem
+@{emph \<open>is\<close>} a @{const temp_plan_for_problem_list_impl_int'} problem -- the bridge that lets the
+existing reduction capstone (@{text valid_temp_plan_imp_form_holds}) consume an (empty-)numeric
+problem unchanged.\<close>
+lemma numeric_temp_plan_for_problem_list_impl_int'_imp_prop:
+  assumes "numeric_temp_plan_for_problem_list_impl_int'
+     at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>"
+  shows "temp_plan_for_problem_list_impl_int'
+     at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>"
+  using assms unfolding numeric_temp_plan_for_problem_list_impl_int'_def by simp
 
 (* 
 locale temp_planning_problem_list_impl_int_ex = temp_planning_problem_list_impl_int'

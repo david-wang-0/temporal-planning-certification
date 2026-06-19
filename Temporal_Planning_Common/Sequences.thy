@@ -1,5 +1,5 @@
 theory Sequences
-  imports Base
+  imports Utils
 begin
 
 definition "seq_apply fs x = map (\<lambda>i. (fold (id) (take i fs) x)) [1..<length fs + 1]"

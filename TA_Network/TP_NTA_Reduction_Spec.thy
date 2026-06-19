@@ -1,6 +1,6 @@
 theory TP_NTA_Reduction_Spec
-  imports Temporal_Planning_Base.Temporal_Plans_Theory
-      Temporal_Planning_Base.Temporal_Plans_Code
+  imports Temporal_Planning_Semantics.Temporal_Plans_Lemmas
+      Temporal_Planning_Semantics.Temporal_Plans_Code
       Munta_Model_Checker.Simple_Network_Language_Export_Code
 
 begin
