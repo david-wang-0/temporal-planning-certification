@@ -1,5 +1,5 @@
 theory TP_NTA_Reduction_Model_Checking
-  imports TP_NTA_Reduction_Spec
+  imports TP_NTA_Reduction_Defs
 begin
 
 locale type_naming =
@@ -18,7 +18,7 @@ lemma b:
 lemmas names_unique = a b
 end
 
-locale tp_nta_reduction_model_checking = tp_nta_reduction_spec
+locale tp_nta_reduction_model_checking = tp_nta_reduction_defs
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name +
   action_names: unique_names act_to_name "set actions" +
   prop_names: unique_names prop_to_name "set props"
@@ -139,16 +139,16 @@ lemma locations_unique:
   by simp+
 
 thm Simple_Network_Rename_Formula.models_iff[no_vars, unfolded Simple_Network_Rename_Start.a\<^sub>0_def]
-term "Simple_Network_Language_Model_Checking.N broadcast_spec automata_spec bounds_spec,Simple_Network_Rename_Start.a\<^sub>0 init_vars_spec init_locs_spec \<Turnstile> formula_spec"
+term "Simple_Network_Language_Model_Checking.N net_broadcast net_automata net_bounds,Simple_Network_Rename_Start.a\<^sub>0 init_vars init_locs \<Turnstile> reach_formula"
 
-definition "a\<^sub>0 = (init_locs_spec, map_of init_vars_spec, (\<lambda>_::String.literal. 0::int))"
+definition "a\<^sub>0 = (init_locs, map_of init_vars, (\<lambda>_::String.literal. 0::int))"
 
-lemma [code]: "a\<^sub>0 = (init_locs_spec, map_of init_vars_spec, (\<lambda>_::String.literal. 0::int))"
+lemma [code]: "a\<^sub>0 = (init_locs, map_of init_vars, (\<lambda>_::String.literal. 0::int))"
   using a\<^sub>0_def by auto
 
-(* definition "net_sem = Simple_Network_Impl.sem automata_spec broadcast_spec bounds_spec" *)
+(* definition "net_sem = Simple_Network_Impl.sem net_automata net_broadcast net_bounds" *)
 text \<open>Locales for theory\<close>
-sublocale net_impl: Simple_Network_Impl automata_spec broadcast_spec bounds_spec .
+sublocale net_impl: Simple_Network_Impl net_automata net_broadcast net_bounds .
 sublocale graph_impl: Graph_Defs "\<lambda>(L, s, u) (L', s', u'). step_u' net_impl.sem L s u L' s' u'" .
 
 find_theorems name: "network_impl123.sem_def"
@@ -158,16 +158,16 @@ find_theorems name: "Simple_Network_Impl*ax"
 
 lemma length_net_impl: "length ((fst o snd) net_impl.sem) = Suc (length actions)" 
   unfolding net_impl.sem_def
-  using length_automata_spec by auto
+  using length_net_automata by auto
 
 schematic_goal sem_alt_def: "net_impl.sem = ?x"
-  unfolding net_impl.sem_def timed_automaton_net_spec_def 
+  unfolding net_impl.sem_def timed_automaton_net_def 
   unfolding Simple_Network_Impl.sem_def  fst_conv snd_conv ..
 end
 
 find_theorems name: "Simple_Network_Impl"
 
-locale tp_nta_reduction_model_checking' = tp_nta_reduction_spec' 
+locale tp_nta_reduction_model_checking' = tp_nta_reduction_defs' 
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name +
   action_names: unique_names act_to_name "set actions" +
   prop_names: unique_names prop_to_name "set props"

@@ -21,8 +21,8 @@ the network still implies unsolvability of the original numeric temporal problem
 
 ## 2. Scoping decision (read first) — what the timed-automata target can represent
 
-The reduction target is Munta `Simple_Network_Language`. From `TA_Network/TP_NTA_Reduction_Spec.thy`
-the network already carries **bounded integer state variables** (`all_vars_spec :: (name × int × int)
+The reduction target is Munta `Simple_Network_Language`. From `TA_Network/TP_NTA_Reduction_Defs.thy`
+the network already carries **bounded integer state variables** (`all_vars :: (name × int × int)
 list`), `(name, int) bexp` guards, `(name, int) exp` assignment updates, and real **clocks** with
 difference constraints (`acconstraint`). Propositions are *currently* encoded as 0/1 int variables.
 
@@ -175,21 +175,21 @@ upper := LE k`; `GEQ k` → `lower := GE k`; `LEQ k` → `upper := LE k`. No new
 `lower_bound`/`upper_bound` reduction is reused; only its source (a numeric expr instead of a literal)
 changes, plus the integer-value requirement at the Munta boundary.
 
-### A.5 Reduction map (`TP_NTA_Reduction_Spec`, Layer B): abstract ⇒ Munta
+### A.5 Reduction map (`TP_NTA_Reduction_Defs`, Layer B): abstract ⇒ Munta
 
 Munta side is `(String.literal, int) bexp/exp` (§2). With `'r = rat` but Munta vars `int`, the boundary
 additionally requires each reachable fluent value to be an **integer in `[lo,hi]`** (fail-closed
 otherwise — spike 2):
 
-- `fluent_to_var :: 'n ⇒ String.literal` (cf. `prop_to_var`); declare `(var, lo, hi)` in `all_vars_spec`.
+- `fluent_to_var :: 'n ⇒ String.literal` (cf. `prop_to_var`); declare `(var, lo, hi)` in `all_vars`.
 - `nexp ⇒ exp`: `NConst c ↦ exp.const ⌊c⌋`, `NVar f ↦ exp.var (fluent_to_var f)`,
   `NAdd/NSub/NMul ↦ binop (+)/(−)/(×)`, `NDiv ↦ binop (div)` — **integer-division semantic gap**: PDDL
   `/` is rational, `div` truncates; only sound when divisions are exact or the fragment excludes `NDiv`
   in effects/conditions (it only occurs in durations, which pre-evaluate to a constant). Flag in the
   checker.
 - `comp ⇒ bexp`: `Comp Ceq ↦ bexp.eq`, `Cle ↦ le`, `Cge ↦ ge`, `Clt ↦ lt`, `Cgt ↦ gt`.
-- `n_pre` (at_start/at_end) → guard appended to `start_edge_spec`/`end_edge_spec` `var_check`.
-- `n_inv` (over_all) → guard replicated on the running-location transitions (`edge_2_spec`/`edge_3_spec`
+- `n_pre` (at_start/at_end) → guard appended to `start_edge`/`end_edge` `var_check`.
+- `n_inv` (over_all) → guard replicated on the running-location transitions (`edge_2`/`edge_3`
   `check_invs`), exactly where the propositional `over_all` `is_prop_ab 1` guards already hang.
 - `upds` → `(fluent_to_var f, nexp⇒exp)` appended **after** the propositional `set_prop_ab/inc_prop_ab`
   updates on the start/end edge, under the §A.2 well-formedness (no intra-snap read-after-write).
@@ -222,7 +222,7 @@ in `Temporal_Plans_Instances`, was built to support):
    guards and reaches the numeric goal. So the run survives in the augmented net.
 
 Net result: `num_valid_plan ⟹` augmented-net goal run, i.e. a numeric capstone
-`numeric_valid_temp_plan_imp_form_holds'` with a numeric `formula_spec`, **without** opening the
+`numeric_valid_temp_plan_imp_form_holds'` with a numeric `reach_formula`, **without** opening the
 bisimulation. The two real costs move to (a) the additive *spec* augmentation (§A.5) arranged so
 numeric vars never gate propositional edges, and (b) static **bounds** (§B) wide enough that the real
 trajectory stays in-bounds (else fail-closed). Remaining `nexp⇒exp` obligations (effect application
@@ -332,7 +332,7 @@ term duration_constraint ⇒ rat lower_bound/upper_bound`, and `lower_spec`/`upp
 via `map_lower_bound floor` / `map_upper_bound floor`
 (`Ground_PDDL_Problem_Defs.thy:163-179,263-267`). The floor is only *exact* because `act_dcs_integers`
 (via `duration_constraint_integer`, requiring `is_integer x`) **rejects** non-integer durations up front.
-`ε :: int` (`TP_NTA_Reduction_Spec.thy:83`). So today majsp `0.1`/`0.03`, painter `15.004` are rejected
+`ε :: int` (`TP_NTA_Reduction_Defs.thy:83`). So today majsp `0.1`/`0.03`, painter `15.004` are rejected
 at `act_dcs_integers`. **Rescaling replaces that rejection with a normalization.**
 
 **The transform** (a Layer-C, `rat ⇒ rat` preprocessing that lands on integers, *before* the `floor`):
@@ -389,17 +389,17 @@ instances (`Temporal_Plans_Instances.thy`, `Temporal_Plans_Theory.thy`).
 
 ### Layer B — NTA reduction (`TA_Network/`)
 
-`TP_NTA_Reduction_Spec.thy` builds one automaton per action plus a main automaton; props become int
+`TP_NTA_Reduction_Defs.thy` builds one automaton per action plus a main automaton; props become int
 vars; clocks track snap timing. Changes:
-- **Variable set**: extend `all_vars_spec` with one bounded int var per numeric fluent
+- **Variable set**: extend `all_vars` with one bounded int var per numeric fluent
   (`fluent_to_var`, alongside `prop_to_var`/`prop_to_lock`), with bounds from the problem's declared
   ranges.
-- **Guards**: numeric `at_start`/`at_end` conditions → `bexp` on `start_edge_spec`/`end_edge_spec`;
+- **Guards**: numeric `at_start`/`at_end` conditions → `bexp` on `start_edge`/`end_edge`;
   `over_all` numeric conditions → guard replicated on the internal/loop transitions of the running
   location (the existing `over_all` propositional handling shows the pattern).
 - **Updates**: numeric effects → `(var, exp)` updates on the start/end edges, appended after the
   propositional `set_prop_ab`/`inc_prop_ab` updates, respecting effect order.
-- **Duration**: generalize `l_dur_spec`/`u_dur_spec` to numeric duration constraints reduced to
+- **Duration**: generalize `l_dur`/`u_dur` to numeric duration constraints reduced to
   integer clock bounds (requires the durations to be integer-valued after grounding — see §5.2).
 - **Correctness — additive tracking, NOT a bisimulation rewrite (see §A.6).** The augmentation is
   arranged so numeric vars only *prune* (never gate propositional edges), so the existing ~456 KB
@@ -466,7 +466,7 @@ inventory, per-stage three-file pattern) — see [GROUNDING_PLAN.md §9](GROUNDI
    the running location's transitions) is the right place to hang numeric invariants, and that the
    no-overlap/mutex argument still closes with numeric state.
 5. **Existing proof tolerates extra net variables (the §A.6 keystone, do FIRST of the Layer-B
-   spikes).** The additive-tracking architecture rests on: enlarging `all_vars_spec` with
+   spikes).** The additive-tracking architecture rests on: enlarging `all_vars` with
    `fluent_to_var` vars, and appending numeric `bexp` guards / `(var,exp)` updates to edges, does
    **not** disturb the existing ~456 KB propositional bisimulation — i.e. propositional reachability
    in the augmented net is exactly the projection of the propositional net's, because numeric vars are
@@ -507,7 +507,7 @@ inventory, per-stage three-file pattern) — see [GROUNDING_PLAN.md §9](GROUNDI
   boundary map (§A.3), the `wf_bounds` static-bound check (§B), and the **time-rescaling** transform +
   plan-bijection lemma (§D, replaces the `act_dcs_integers` rejection).
 - **P4 (Layer B) — additive tracking, reusing the existing bisimulation (§A.6)**: numeric
-  variables/guards/updates in `TP_NTA_Reduction_Spec` arranged so numeric vars only *prune*; then the
+  variables/guards/updates in `TP_NTA_Reduction_Defs` arranged so numeric vars only *prune*; then the
   projection lemma + the single tracking lemma (`mk_upds = happening_num_update`) + bounds (§B) give
   the numeric capstone **without** reworking `TP_NTA_Reduction_Correctness`. Do §5.5 (extra-vars
   tolerance) first — it is the keystone assumption. Much smaller than the old "rewrite the

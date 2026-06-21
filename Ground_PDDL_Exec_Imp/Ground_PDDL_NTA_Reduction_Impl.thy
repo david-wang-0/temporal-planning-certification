@@ -655,26 +655,26 @@ fun upper_spec_impl::"ast_action_schema \<Rightarrow> _" where
 "upper_spec_impl (Simple_Action_Schema n ps pre eff) = Some (upper_bound.LE 0)" | (* could also be None *)
 "upper_spec_impl (Durative_Action_Schema n ps d cond eff) = map_option (map_upper_bound floor) (dc_list_upper d)"
 
-definition "l_dur_spec_impl a \<equiv> (case lower_spec_impl a of 
+definition "l_dur_impl a \<equiv> (case lower_spec_impl a of 
   None \<Rightarrow> [] | Some (lower_bound.GT n) \<Rightarrow> 
     [acconstraint.GT (act_to_start_clock_impl ast_action_schema.name a) n]
 | Some (lower_bound.GE n) \<Rightarrow> 
     [acconstraint.GE (act_to_start_clock_impl ast_action_schema.name a) n])"
 
 
-definition "u_dur_spec_impl a \<equiv> (case upper_spec_impl a of 
+definition "u_dur_impl a \<equiv> (case upper_spec_impl a of 
   None \<Rightarrow> [] | Some (upper_bound.LT n) \<Rightarrow> 
     [acconstraint.LT (act_to_start_clock_impl ast_action_schema.name a) n]
 | Some (upper_bound.LE n) \<Rightarrow> 
     [acconstraint.LE (act_to_start_clock_impl ast_action_schema.name a) n])"
 
-definition main_auto_loop_spec_impl::"(nat \<times>
+definition main_auto_loop_impl::"(nat \<times>
     (String.literal, int) Simple_Expressions.bexp \<times>
     (String.literal, int) acconstraint list \<times>
     String.literal act \<times>
     (String.literal \<times> (String.literal, int) exp) list \<times>
     String.literal list \<times> nat)" where
-"main_auto_loop_spec_impl \<equiv> (goal_loc_impl, bexp.true, [], Sil STR '''', [], [], goal_loc_impl)"
+"main_auto_loop_impl \<equiv> (goal_loc_impl, bexp.true, [], Sil STR '''', [], [], goal_loc_impl)"
 
 
 context ground_ast_problem_defs
@@ -685,12 +685,12 @@ text \<open>We define the code that generates the automata\<close>
 definition "mutex_snap_action' a b = 
   action_defs.mutex_snap_action (\<lambda>a. set (imp_defs.rat_impl.pre_imp_list a)) (\<lambda>a. set (imp_defs.rat_impl.add_imp_list a)) (\<lambda>a. set (imp_defs.rat_impl.del_imp_list a)) a b"
 
-definition "int_clocks_spec' a =
+definition "net_int_clocks' a =
     map (act_to_start_clock_impl ast_action_schema.name) (filter (\<lambda>b. mutex_snap_action' a (AtStart b)) actions_spec) 
   @ map (act_to_end_clock_impl ast_action_schema.name) (filter (\<lambda>aa. mutex_snap_action' a (AtEnd aa)) actions_spec)"
 
-definition "start_edge_spec' a = 
-(let start_snap = AtStart a; guard = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec' start_snap) @ map (\<lambda>x. acconstraint.GE x 0) (int_clocks_spec' start_snap);
+definition "start_edge' a = 
+(let start_snap = AtStart a; guard = map (\<lambda>x. acconstraint.GT x 0) (net_int_clocks' start_snap) @ map (\<lambda>x. acconstraint.GE x 0) (net_int_clocks' start_snap);
   not_locked_check = map ((var_is 0 \<circ>\<circ> prop_to_lock_impl) predicate.name) (filter (\<lambda>p. p \<notin> set (imp_defs.rat_impl.add_imp_list start_snap)) (imp_defs.rat_impl.del_imp_list start_snap)); 
   pre_check = map ((var_is 1 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.pre_imp_list start_snap);
   var_check = bexp_and_all (var_is 1 planning_lock_impl # not_locked_check @ pre_check); 
@@ -700,22 +700,22 @@ definition "start_edge_spec' a =
   resets = [act_to_start_clock_impl ast_action_schema.name a]
  in (off_loc_impl, var_check, guard, Sil STR '''', upds, resets, starting_loc_impl))"
 
-definition "edge_2_spec' a =
+definition "edge_2' a =
 (let 
   check_invs = bexp_and_all (var_is 1 planning_lock_impl # map ((var_is 1 \<circ>\<circ> prop_to_var_impl) predicate.name) (over_all_spec a));
   upds = map ((inc_var 1 \<circ>\<circ> prop_to_lock_impl) predicate.name) (over_all_spec a)
 in (starting_loc_impl, check_invs, [], Sil STR '''', upds, [], running_loc_impl))"
 
-definition "edge_3_spec' a =
+definition "edge_3' a =
 (let 
   end_snap = AtEnd a; 
-  int_clocks = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec' end_snap) @ map (\<lambda>x. acconstraint.GE x 0) (int_clocks_spec' end_snap); 
-  guard = l_dur_spec_impl a @ u_dur_spec_impl a @ int_clocks;
+  int_clocks = map (\<lambda>x. acconstraint.GT x 0) (net_int_clocks' end_snap) @ map (\<lambda>x. acconstraint.GE x 0) (net_int_clocks' end_snap); 
+  guard = l_dur_impl a @ u_dur_impl a @ int_clocks;
   upds = map ((inc_var (- 1) \<circ>\<circ> prop_to_lock_impl) predicate.name) (over_all_spec a); 
   resets = [act_to_end_clock_impl ast_action_schema.name a]
 in (running_loc_impl, var_is 1 planning_lock_impl, guard, Sil STR '''', upds, resets, ending_loc_impl))"
 
-definition "end_edge_spec' a =
+definition "end_edge' a =
 (let 
   end_instant = ending_loc_impl; 
   off = off_loc_impl; 
@@ -729,20 +729,20 @@ definition "end_edge_spec' a =
 in (end_instant, check, [], Sil STR '''', upds, [], off))"
 
 
-definition "instant_trans_edge_spec' a =
+definition "instant_trans_edge' a =
 (let 
   end_snap = AtEnd a; 
   start_snap = AtStart a; 
-  int_clocks = map (\<lambda>x. acconstraint.GT x 0) (int_clocks_spec' end_snap) @ map (\<lambda>x. acconstraint.GE x 0) (int_clocks_spec' end_snap); 
-  guard = l_dur_spec_impl a @ u_dur_spec_impl a @ int_clocks;
+  int_clocks = map (\<lambda>x. acconstraint.GT x 0) (net_int_clocks' end_snap) @ map (\<lambda>x. acconstraint.GE x 0) (net_int_clocks' end_snap); 
+  guard = l_dur_impl a @ u_dur_impl a @ int_clocks;
  resets = [act_to_end_clock_impl ast_action_schema.name a]
 in (starting_loc_impl, var_is 1 planning_lock_impl, guard, Sil STR '''', [], resets, ending_loc_impl))"
 
 
-definition "action_to_automaton_spec' a =
+definition "action_to_automaton' a =
 (let committed_locs = []; 
   urgent_locs = [starting_loc_impl, ending_loc_impl]; 
-  edges = [start_edge_spec' a, edge_2_spec' a, edge_3_spec' a, end_edge_spec' a, instant_trans_edge_spec' a];
+  edges = [start_edge' a, edge_2' a, edge_3' a, end_edge' a, instant_trans_edge' a];
   invs = []
 in (committed_locs, urgent_locs, edges, invs))"
 
@@ -750,7 +750,7 @@ text \<open>We do the same for the main automaton\<close>
 
 definition "init_spec' = (map to_predicate (filter is_predAtom (init P)))"
 
-definition "main_auto_init_edge_spec' \<equiv>
+definition "main_auto_init_edge' \<equiv>
 (let can_start = var_is 0 planning_lock_impl;
   permit_planning = set_var 1 planning_lock_impl; 
   set_active = set_var 0 acts_active_impl;
@@ -759,12 +759,12 @@ definition "main_auto_init_edge_spec' \<equiv>
 in (init_loc_impl, can_start, [], Sil STR '''', upds, [], planning_loc_impl))
 "
 
-definition main_auto_goal_edge_spec'::"nat \<times>
+definition main_auto_goal_edge'::"nat \<times>
    (String.literal, int) Simple_Expressions.bexp \<times>
    (String.literal, int) acconstraint list \<times>
    String.literal act \<times>
    (String.literal \<times> (String.literal, int) exp) list \<times> String.literal list \<times> nat" where
-"main_auto_goal_edge_spec' \<equiv>
+"main_auto_goal_edge' \<equiv>
 (let 
   can_end = [var_is 1 planning_lock_impl, var_is 0 acts_active_impl]; 
   goal_sat = map ((var_is 1 \<circ>\<circ> prop_to_var_impl) predicate.name) goal_spec;
@@ -773,7 +773,7 @@ definition main_auto_goal_edge_spec'::"nat \<times>
 in (planning_loc_impl, cond, [], Sil STR '''', [lock_plan], [], goal_loc_impl))
 "
 
-definition main_auto_spec'::"nat list \<times>
+definition main_auto'::"nat list \<times>
    nat list \<times>
    (nat \<times>
     (String.literal, int) Simple_Expressions.bexp \<times>
@@ -782,26 +782,26 @@ definition main_auto_spec'::"nat list \<times>
     (String.literal \<times> (String.literal, int) exp) list \<times>
     String.literal list \<times> nat) list \<times>
    (nat \<times> (String.literal, int) acconstraint list) list" where
-"main_auto_spec' \<equiv>
+"main_auto' \<equiv>
 (let committed_locs = []; 
   urgent_locs = [init_loc_impl, goal_loc_impl]; 
-  edges = [main_auto_init_edge_spec', main_auto_goal_edge_spec', main_auto_loop_spec_impl]; 
+  edges = [main_auto_init_edge', main_auto_goal_edge', main_auto_loop_impl]; 
   invs = [] 
 in (committed_locs, urgent_locs, edges, invs))"
 
-definition "automata_spec' = main_auto_spec' # map action_to_automaton_spec' actions_spec"
+definition "net_automata' = main_auto' # map action_to_automaton' actions_spec"
 
 
 text \<open>Next, the broadcast channels\<close>
-definition "broadcast_spec' = ([]::String.literal list)"
+definition "net_broadcast' = ([]::String.literal list)"
 
 text \<open>We provide concrete definitions for variables\<close>
 
-definition "inv_vars_spec' invs = (
+definition "inv_vars' invs = (
 let i = set invs
 in prop_to_lock_impl predicate.name ` i \<union> prop_to_var_impl predicate.name ` i)"
 
-definition "snap_vars_spec' snap = (
+definition "snap_vars' snap = (
 let pre_vars = map (prop_to_var_impl predicate.name) (imp_defs.rat_impl.pre_imp_list snap); 
     add_vars = map (prop_to_var_impl predicate.name) (imp_defs.rat_impl.add_imp_list snap);
     del_vars = map (prop_to_lock_impl predicate.name) (filter (\<lambda>p. p \<notin> set (imp_defs.rat_impl.add_imp_list snap)) (imp_defs.rat_impl.del_imp_list snap)) @ map (prop_to_var_impl predicate.name) (imp_defs.rat_impl.del_imp_list snap)
@@ -809,15 +809,15 @@ in set (pre_vars @ add_vars @ del_vars)
 )"
 
 
-definition "action_vars_spec' a = (
-let inv_vars = inv_vars_spec' (over_all_spec a);
-    start_vars = snap_vars_spec' (AtStart a);
-    end_vars = snap_vars_spec' (AtEnd a)
+definition "action_vars' a = (
+let inv_vars = inv_vars' (over_all_spec a);
+    start_vars = snap_vars' (AtStart a);
+    end_vars = snap_vars' (AtEnd a)
 in inv_vars \<union> start_vars \<union> end_vars
 )"
 
-definition "bounds_spec' = (
-let action_vars = \<Union> (action_vars_spec' ` set actions_spec); 
+definition "net_bounds' = (
+let action_vars = \<Union> (action_vars' ` set actions_spec); 
     init_vars = prop_to_var_impl predicate.name ` set init_spec'; 
     goal_vars = prop_to_var_impl predicate.name ` set goal_spec; 
     vars_occ = action_vars \<union> init_vars \<union> goal_vars; 
@@ -832,20 +832,20 @@ let action_vars = \<Union> (action_vars_spec' ` set actions_spec);
 
 text \<open>Then, we provide the initial configuration\<close>
 
-definition "init_locs_spec' =
+definition "init_locs' =
 init_loc_impl # map (\<lambda>x. off_loc_impl) actions_spec"
 
-definition "init_vars_spec' =
-map (map_prod id fst) bounds_spec'"
+definition "init_vars' =
+map (map_prod id fst) net_bounds'"
 
 definition "init_cfg' =
-  (init_locs_spec', map_of init_vars_spec', \<lambda>x::String.literal. 0::real)"
+  (init_locs', map_of init_vars', \<lambda>x::String.literal. 0::real)"
 
 text \<open>Finally, the formula\<close>
-definition formula_spec'::
+definition reach_formula'::
   "(nat, nat, String.literal, int) Simple_Network_Language_Model_Checking.formula" 
   where
-"formula_spec' = Simple_Network_Language_Model_Checking.formula.EX (sexp.loc 0 goal_loc_impl)"
+"reach_formula' = Simple_Network_Language_Model_Checking.formula.EX (sexp.loc 0 goal_loc_impl)"
 
 text \<open>
 We need to provide the model checker with the names of locations, clocks and automata.
@@ -900,27 +900,27 @@ lemmas ground_ast_problem_code =
   ground_ast_problem_defs.at_end_spec.simps
   ground_ast_problem_defs.actions_spec_def
   ground_ast_problem_defs.mutex_snap_action'_def
-  ground_ast_problem_defs.int_clocks_spec'_def
-  ground_ast_problem_defs.start_edge_spec'_def
-  ground_ast_problem_defs.edge_2_spec'_def
-  ground_ast_problem_defs.edge_3_spec'_def
-  ground_ast_problem_defs.end_edge_spec'_def
-  ground_ast_problem_defs.instant_trans_edge_spec'_def
-  ground_ast_problem_defs.action_to_automaton_spec'_def
+  ground_ast_problem_defs.net_int_clocks'_def
+  ground_ast_problem_defs.start_edge'_def
+  ground_ast_problem_defs.edge_2'_def
+  ground_ast_problem_defs.edge_3'_def
+  ground_ast_problem_defs.end_edge'_def
+  ground_ast_problem_defs.instant_trans_edge'_def
+  ground_ast_problem_defs.action_to_automaton'_def
   ground_ast_problem_defs.init_spec'_def
-  ground_ast_problem_defs.main_auto_init_edge_spec'_def
-  ground_ast_problem_defs.main_auto_goal_edge_spec'_def
-  ground_ast_problem_defs.main_auto_spec'_def
-  ground_ast_problem_defs.automata_spec'_def
-  ground_ast_problem_defs.broadcast_spec'_def
-  ground_ast_problem_defs.inv_vars_spec'_def
-  ground_ast_problem_defs.snap_vars_spec'_def
-  ground_ast_problem_defs.action_vars_spec'_def
-  ground_ast_problem_defs.bounds_spec'_def
-  ground_ast_problem_defs.init_locs_spec'_def
-  ground_ast_problem_defs.init_vars_spec'_def
+  ground_ast_problem_defs.main_auto_init_edge'_def
+  ground_ast_problem_defs.main_auto_goal_edge'_def
+  ground_ast_problem_defs.main_auto'_def
+  ground_ast_problem_defs.net_automata'_def
+  ground_ast_problem_defs.net_broadcast'_def
+  ground_ast_problem_defs.inv_vars'_def
+  ground_ast_problem_defs.snap_vars'_def
+  ground_ast_problem_defs.action_vars'_def
+  ground_ast_problem_defs.net_bounds'_def
+  ground_ast_problem_defs.init_locs'_def
+  ground_ast_problem_defs.init_vars'_def
   ground_ast_problem_defs.init_cfg'_def
-  ground_ast_problem_defs.formula_spec'_def
+  ground_ast_problem_defs.reach_formula'_def
   ground_ast_problem_defs.auto_names_def
   ground_ast_problem_defs.auto_names_to_index_def
   ground_ast_problem_defs.auto_loc_ids_to_names_def
@@ -937,7 +937,7 @@ subsection \<open>Refinement to monadic code\<close>
 
 text \<open>Some constants need executable copies\<close>
 
-(* tp_nta_reduction_spec.planning_loc, tp_nta_reduction_spec.set_prop_ab, tp_nta_reduction_spec.acts_active, tp_nta_reduction_spec.init_loc *)
+(* tp_nta_reduction_defs.planning_loc, tp_nta_reduction_defs.set_prop_ab, tp_nta_reduction_defs.acts_active, tp_nta_reduction_defs.init_loc *)
 
 lemma prop_to_var_refine: 
   "abstr_model_checking.reduction_ref_impl.prop_to_var \<equiv> prop_to_var_impl predicate.name"
@@ -1070,22 +1070,22 @@ lemma upper_spec_refine:
     by simp+
   done
 
-schematic_goal l_dur_spec_refine:
-  "abstr_model_checking.reduction_ref_impl.l_dur_spec = l_dur_spec_impl"
+schematic_goal l_dur_refine:
+  "abstr_model_checking.reduction_ref_impl.l_dur = l_dur_impl"
   apply (intro ext)
-  unfolding abstr_model_checking.reduction_ref_impl.l_dur_spec_def
+  unfolding abstr_model_checking.reduction_ref_impl.l_dur_def
   unfolding lower_spec_refine
   unfolding act_to_start_clock_refine
-  unfolding l_dur_spec_impl_def
+  unfolding l_dur_impl_def
   ..
 
-schematic_goal u_dur_spec_refine:
-  "abstr_model_checking.reduction_ref_impl.u_dur_spec = u_dur_spec_impl"
+schematic_goal u_dur_refine:
+  "abstr_model_checking.reduction_ref_impl.u_dur = u_dur_impl"
   apply (intro ext)
-  unfolding abstr_model_checking.reduction_ref_impl.u_dur_spec_def
+  unfolding abstr_model_checking.reduction_ref_impl.u_dur_def
   unfolding upper_spec_refine
   unfolding act_to_start_clock_refine
-  unfolding u_dur_spec_impl_def
+  unfolding u_dur_impl_def
   ..
 
 
@@ -1135,35 +1135,35 @@ lemma mutex_snap_action_refine:
   apply (subst action_defs.mutex_snap_action_def[symmetric])
   by simp
 
-lemma int_clocks_spec_refine:
+lemma net_int_clocks_refine:
   assumes "a \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
-  shows "abstr_model_checking.reduction_ref_impl.int_clocks_spec a = int_clocks_spec' a"
+  shows "abstr_model_checking.reduction_ref_impl.net_int_clocks a = net_int_clocks' a"
 proof -
-  have 1: "filter (\<lambda>aa. abstr_model_checking.reduction_ref_impl.mutex_effects_spec a (AtStart aa)) actions_spec =
+  have 1: "filter (\<lambda>aa. abstr_model_checking.reduction_ref_impl.mutex_effects a (AtStart aa)) actions_spec =
     filter (\<lambda>b. mutex_snap_action' a (AtStart b)) actions_spec"
     apply (rule filter_eq_conv)
     using mutex_snap_action_refine[OF assms]
     by simp
   
-  have 2: "filter (\<lambda>aa. abstr_model_checking.reduction_ref_impl.mutex_effects_spec a (AtEnd aa)) actions_spec =
+  have 2: "filter (\<lambda>aa. abstr_model_checking.reduction_ref_impl.mutex_effects a (AtEnd aa)) actions_spec =
     filter (\<lambda>aa. mutex_snap_action' a (AtEnd aa)) actions_spec"
     apply (rule filter_eq_conv)
     using mutex_snap_action_refine[OF assms]
     by simp
   
   show ?thesis
-    unfolding abstr_model_checking.reduction_ref_impl.int_clocks_spec_def Let_def
-    unfolding 1 2 int_clocks_spec'_def
+    unfolding abstr_model_checking.reduction_ref_impl.net_int_clocks_def Let_def
+    unfolding 1 2 net_int_clocks'_def
     unfolding act_to_start_clock_refine
     unfolding act_to_end_clock_refine
     by blast
 qed
 
-lemma start_edge_spec_refine:
+lemma start_edge_refine:
   assumes "a \<in> set actions_spec"
-  shows "abstr_model_checking.reduction_ref_impl.start_edge_spec a = start_edge_spec' a" 
-  unfolding start_edge_spec'_def
-  unfolding abstr_model_checking.reduction_ref_impl.start_edge_spec_def
+  shows "abstr_model_checking.reduction_ref_impl.start_edge a = start_edge' a" 
+  unfolding start_edge'_def
+  unfolding abstr_model_checking.reduction_ref_impl.start_edge_def
   unfolding abstr_model_checking.reduction_ref_impl.pl_is_1_def
   unfolding planning_lock_refine
   unfolding is_prop_lock_ab_refine
@@ -1172,43 +1172,43 @@ lemma start_edge_spec_refine:
   unfolding acts_active_refine
   unfolding off_loc_refine starting_loc_refine
   unfolding act_to_start_clock_refine
-  using int_clocks_spec_refine assms pre_imp_restr_equiv_pre_imp
+  using net_int_clocks_refine assms pre_imp_restr_equiv_pre_imp
   by simp
 
 
-lemma edge_2_spec_refine:
+lemma edge_2_refine:
   assumes "a \<in> set actions_spec"
-  shows "abstr_model_checking.reduction_ref_impl.edge_2_spec a = edge_2_spec' a" 
-  unfolding abstr_model_checking.reduction_ref_impl.edge_2_spec_def 
+  shows "abstr_model_checking.reduction_ref_impl.edge_2 a = edge_2' a" 
+  unfolding abstr_model_checking.reduction_ref_impl.edge_2_def 
   unfolding abstr_model_checking.reduction_ref_impl.pl_is_1_def
   unfolding planning_lock_refine
   unfolding is_prop_ab_refine
   unfolding inc_prop_lock_ab_refine
   unfolding starting_loc_refine running_loc_refine
-  unfolding edge_2_spec'_def
+  unfolding edge_2'_def
   using over_all_restr_equiv_over_all assms
   by simp
 
-lemma edge_3_spec_refine:
+lemma edge_3_refine:
   assumes "a \<in> set actions_spec"
-  shows "abstr_model_checking.reduction_ref_impl.edge_3_spec a = edge_3_spec' a" 
-  unfolding abstr_model_checking.reduction_ref_impl.edge_3_spec_def
+  shows "abstr_model_checking.reduction_ref_impl.edge_3 a = edge_3' a" 
+  unfolding abstr_model_checking.reduction_ref_impl.edge_3_def
   unfolding abstr_model_checking.reduction_ref_impl.pl_is_1_def
   unfolding planning_lock_refine
-  unfolding edge_3_spec'_def
+  unfolding edge_3'_def
   unfolding running_loc_refine
   unfolding ending_loc_refine
   unfolding act_to_end_clock_refine
   unfolding inc_prop_lock_ab_refine
-  unfolding l_dur_spec_refine u_dur_spec_refine
-  using int_clocks_spec_refine assms over_all_restr_equiv_over_all
+  unfolding l_dur_refine u_dur_refine
+  using net_int_clocks_refine assms over_all_restr_equiv_over_all
   by simp
 
 
-lemma end_edge_spec_refine:
+lemma end_edge_refine:
   assumes "a \<in> set actions_spec"
-  shows "abstr_model_checking.reduction_ref_impl.end_edge_spec a = end_edge_spec' a"
-  unfolding abstr_model_checking.reduction_ref_impl.end_edge_spec_def
+  shows "abstr_model_checking.reduction_ref_impl.end_edge a = end_edge' a"
+  unfolding abstr_model_checking.reduction_ref_impl.end_edge_def
   unfolding abstr_model_checking.reduction_ref_impl.pl_is_1_def
   unfolding planning_lock_refine
   unfolding ending_loc_refine off_loc_refine
@@ -1216,32 +1216,32 @@ lemma end_edge_spec_refine:
   unfolding is_prop_lock_ab_refine
   unfolding set_prop_ab_refine
   unfolding acts_active_refine
-  unfolding end_edge_spec'_def
+  unfolding end_edge'_def
   using pre_imp_restr_equiv_pre_imp assms
   by auto
 
 
-lemma instant_trans_edge_spec_refine:
+lemma instant_trans_edge_refine:
   assumes "a \<in> set actions_spec"
-  shows "abstr_model_checking.reduction_ref_impl.instant_trans_edge_spec a = instant_trans_edge_spec' a" 
-  unfolding abstr_model_checking.reduction_ref_impl.instant_trans_edge_spec_def
+  shows "abstr_model_checking.reduction_ref_impl.instant_trans_edge a = instant_trans_edge' a" 
+  unfolding abstr_model_checking.reduction_ref_impl.instant_trans_edge_def
   unfolding abstr_model_checking.reduction_ref_impl.pl_is_1_def
   unfolding planning_lock_refine
-  unfolding instant_trans_edge_spec'_def
+  unfolding instant_trans_edge'_def
   unfolding starting_loc_refine ending_loc_refine
-  unfolding l_dur_spec_refine u_dur_spec_refine
+  unfolding l_dur_refine u_dur_refine
   unfolding act_to_end_clock_refine
-  using int_clocks_spec_refine assms
+  using net_int_clocks_refine assms
   by simp
 
 
-lemma action_to_automaton_spec_refine:
+lemma action_to_automaton_refine:
   assumes "a \<in> set actions_spec"
-  shows "abstr_model_checking.reduction_ref_impl.action_to_automaton_spec a = action_to_automaton_spec' a"
-  unfolding abstr_model_checking.reduction_ref_impl.action_to_automaton_spec_def
-  unfolding action_to_automaton_spec'_def
+  shows "abstr_model_checking.reduction_ref_impl.action_to_automaton a = action_to_automaton' a"
+  unfolding abstr_model_checking.reduction_ref_impl.action_to_automaton_def
+  unfolding action_to_automaton'_def
   unfolding starting_loc_refine ending_loc_refine
-  using start_edge_spec_refine edge_2_spec_refine edge_3_spec_refine end_edge_spec_refine instant_trans_edge_spec_refine assms
+  using start_edge_refine edge_2_refine edge_3_refine end_edge_refine instant_trans_edge_refine assms
   by simp
 
 
@@ -1267,10 +1267,10 @@ lemma filter_props_goal:
   using goal_in_props filter_id_conv by fast
 
   
-lemma main_auto_init_edge_spec_refine:
-  "abstr_model_checking.reduction_ref_impl.main_auto_init_edge_spec = main_auto_init_edge_spec'"
-  unfolding abstr_model_checking.reduction_ref_impl.main_auto_init_edge_spec_def
-  unfolding main_auto_init_edge_spec'_def
+lemma main_auto_init_edge_refine:
+  "abstr_model_checking.reduction_ref_impl.main_auto_init_edge = main_auto_init_edge'"
+  unfolding abstr_model_checking.reduction_ref_impl.main_auto_init_edge_def
+  unfolding main_auto_init_edge'_def
   unfolding filter_props_init planning_lock_refine
   unfolding planning_loc_refine
   unfolding init_loc_refine
@@ -1278,10 +1278,10 @@ lemma main_auto_init_edge_spec_refine:
   unfolding set_prop_ab_refine
   ..
 
-lemma main_auto_goal_edge_spec_refine:
-  "abstr_model_checking.reduction_ref_impl.main_auto_goal_edge_spec = main_auto_goal_edge_spec'"
-  unfolding abstr_model_checking.reduction_ref_impl.main_auto_goal_edge_spec_def
-  unfolding main_auto_goal_edge_spec'_def
+lemma main_auto_goal_edge_refine:
+  "abstr_model_checking.reduction_ref_impl.main_auto_goal_edge = main_auto_goal_edge'"
+  unfolding abstr_model_checking.reduction_ref_impl.main_auto_goal_edge_def
+  unfolding main_auto_goal_edge'_def
   unfolding filter_props_goal
   unfolding planning_loc_refine
   unfolding goal_loc_refine
@@ -1290,92 +1290,92 @@ lemma main_auto_goal_edge_spec_refine:
   unfolding is_prop_ab_refine
   ..
 
-lemma main_auto_loop_spec_refine:
-  "abstr_model_checking.reduction_ref_impl.main_auto_loop_spec = main_auto_loop_spec_impl"
-  unfolding abstr_model_checking.reduction_ref_impl.main_auto_loop_spec_def
-  unfolding main_auto_loop_spec_impl_def
+lemma main_auto_loop_refine:
+  "abstr_model_checking.reduction_ref_impl.main_auto_loop = main_auto_loop_impl"
+  unfolding abstr_model_checking.reduction_ref_impl.main_auto_loop_def
+  unfolding main_auto_loop_impl_def
   unfolding goal_loc_refine ..
 
-lemma main_auto_spec_refine:
-  "abstr_model_checking.reduction_ref_impl.main_auto_spec = main_auto_spec'"
-  unfolding abstr_model_checking.reduction_ref_impl.main_auto_spec_def
-  unfolding main_auto_spec'_def
-  unfolding main_auto_init_edge_spec_refine main_auto_goal_edge_spec_refine
-  unfolding main_auto_loop_spec_refine
+lemma main_auto_refine:
+  "abstr_model_checking.reduction_ref_impl.main_auto = main_auto'"
+  unfolding abstr_model_checking.reduction_ref_impl.main_auto_def
+  unfolding main_auto'_def
+  unfolding main_auto_init_edge_refine main_auto_goal_edge_refine
+  unfolding main_auto_loop_refine
   unfolding init_loc_refine goal_loc_refine
   ..
 
 
 text \<open>Finally we can provide another definition of the entire network\<close>
 
-lemma automata_spec_refine:
-  shows "abstr_model_checking.reduction_ref_impl.automata_spec = automata_spec'"
-  unfolding abstr_model_checking.reduction_ref_impl.timed_automaton_net_spec_def
-  unfolding automata_spec'_def
-  using action_to_automaton_spec_refine main_auto_spec_refine by simp
+lemma net_automata_refine:
+  shows "abstr_model_checking.reduction_ref_impl.net_automata = net_automata'"
+  unfolding abstr_model_checking.reduction_ref_impl.timed_automaton_net_def
+  unfolding net_automata'_def
+  using action_to_automaton_refine main_auto_refine by simp
 
 text \<open>Next, we need to refine the set of broadcast channels (there are none)\<close>
 
 
-lemma broadcast_spec_refine:
-  "abstr_model_checking.reduction_ref_impl.broadcast_spec = broadcast_spec'"
-  unfolding abstr_model_checking.reduction_ref_impl.broadcast_spec_def
-  unfolding broadcast_spec'_def by simp
+lemma net_broadcast_refine:
+  "abstr_model_checking.reduction_ref_impl.net_broadcast = net_broadcast'"
+  unfolding abstr_model_checking.reduction_ref_impl.net_broadcast_def
+  unfolding net_broadcast'_def by simp
 
 
 text \<open>Then, we refine the variable bounds\<close>
 
-lemma inv_vars_spec_refine:
-  "abstr_model_checking.reduction_ref_impl.inv_vars_spec invs = inv_vars_spec' invs"
-  unfolding abstr_model_checking.reduction_ref_impl.inv_vars_spec_def
+lemma inv_vars_refine:
+  "abstr_model_checking.reduction_ref_impl.inv_vars invs = inv_vars' invs"
+  unfolding abstr_model_checking.reduction_ref_impl.inv_vars_def
   unfolding prop_to_lock_refine prop_to_var_refine
-  unfolding inv_vars_spec'_def by auto
+  unfolding inv_vars'_def by auto
 
-lemma snap_vars_spec_refine:
+lemma snap_vars_refine:
   assumes "snap \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
-  shows "abstr_model_checking.reduction_ref_impl.snap_vars_spec snap = snap_vars_spec' snap"
-  unfolding abstr_model_checking.reduction_ref_impl.snap_vars_spec_def
+  shows "abstr_model_checking.reduction_ref_impl.snap_vars snap = snap_vars' snap"
+  unfolding abstr_model_checking.reduction_ref_impl.snap_vars_def
   unfolding pre_imp_restr_equiv_pre_imp[OF assms]
   unfolding prop_to_var_refine prop_to_lock_refine
-  unfolding snap_vars_spec'_def 
+  unfolding snap_vars'_def 
   by presburger
 
-lemma action_vars_spec_refine:
+lemma action_vars_refine:
   assumes "a \<in> set actions_spec"
-  shows "abstr_model_checking.reduction_ref_impl.action_vars_spec a = action_vars_spec' a "
-  unfolding abstr_model_checking.reduction_ref_impl.action_vars_spec_def
-  unfolding inv_vars_spec_refine
-  using assms snap_vars_spec_refine over_all_restr_equiv_over_all
-  unfolding action_vars_spec'_def 
+  shows "abstr_model_checking.reduction_ref_impl.action_vars a = action_vars' a "
+  unfolding abstr_model_checking.reduction_ref_impl.action_vars_def
+  unfolding inv_vars_refine
+  using assms snap_vars_refine over_all_restr_equiv_over_all
+  unfolding action_vars'_def 
   by auto
 
 
-lemma bounds_spec_refine:
-  "abstr_model_checking.reduction_ref_impl.bounds_spec = bounds_spec'"
-  unfolding abstr_model_checking.reduction_ref_impl.all_vars_spec_def
+lemma net_bounds_refine:
+  "abstr_model_checking.reduction_ref_impl.net_bounds = net_bounds'"
+  unfolding abstr_model_checking.reduction_ref_impl.all_vars_def
   unfolding filter_props_init filter_props_goal
   unfolding prop_to_lock_refine
   unfolding prop_to_var_refine
   unfolding acts_active_refine
   unfolding planning_lock_refine
   unfolding fold_union' set_map
-  unfolding bounds_spec'_def
-  using action_vars_spec_refine
+  unfolding net_bounds'_def
+  using action_vars_refine
   by auto
 
 
 text \<open>Refinining the initial configuration and formula\<close>
-lemma init_locs_spec_refine:
-  "abstr_model_checking.reduction_ref_impl.init_locs_spec = init_locs_spec'"
-  unfolding abstr_model_checking.reduction_ref_impl.init_locs_spec_def
+lemma init_locs_refine:
+  "abstr_model_checking.reduction_ref_impl.init_locs = init_locs'"
+  unfolding abstr_model_checking.reduction_ref_impl.init_locs_def
   unfolding init_loc_refine off_loc_refine
-  unfolding init_locs_spec'_def by blast
+  unfolding init_locs'_def by blast
 
-lemma init_vars_spec_refine:
-  "abstr_model_checking.reduction_ref_impl.init_vars_spec = init_vars_spec'"
-  unfolding abstr_model_checking.reduction_ref_impl.init_vars_spec_def
-  unfolding bounds_spec_refine
-  unfolding init_vars_spec'_def
+lemma init_vars_refine:
+  "abstr_model_checking.reduction_ref_impl.init_vars = init_vars'"
+  unfolding abstr_model_checking.reduction_ref_impl.init_vars_def
+  unfolding net_bounds_refine
+  unfolding init_vars'_def
   by blast
 
 lemma init_cfg_refine:
@@ -1383,28 +1383,28 @@ lemma init_cfg_refine:
    = init_cfg'"
   unfolding abstr_model_checking.ref_model_checking.a\<^sub>0_def
   unfolding prod.case
-  unfolding init_locs_spec_refine
-  unfolding init_vars_spec_refine
+  unfolding init_locs_refine
+  unfolding init_vars_refine
   unfolding init_cfg'_def 
   by simp
 
 lemma formula_refine:
-  "abstr_model_checking.reduction_ref_impl.formula_spec = formula_spec'"
-  unfolding abstr_model_checking.reduction_ref_impl.formula_spec_def
+  "abstr_model_checking.reduction_ref_impl.reach_formula = reach_formula'"
+  unfolding abstr_model_checking.reduction_ref_impl.reach_formula_def
   unfolding goal_loc_refine
-  unfolding formula_spec'_def
+  unfolding reach_formula'_def
   by blast
 
 text \<open>Combining all of this, we get to the alternative model checking problem\<close>
 
 lemma model_checking_problem_refine: 
-  "\<not> Simple_Network_Impl.sem automata_spec' broadcast_spec' bounds_spec', init_cfg' \<Turnstile> formula_spec'
+  "\<not> Simple_Network_Impl.sem net_automata' net_broadcast' net_bounds', init_cfg' \<Turnstile> reach_formula'
 \<Longrightarrow> \<nexists>tp. valid_ground_plan P tp"
   using form_not_sat_imp_no_valid_ground_plan
   unfolding abstr_model_checking.ref_model_checking.net_impl.sem_def 
-  unfolding automata_spec_refine
-  unfolding broadcast_spec_refine
-  unfolding bounds_spec_refine
+  unfolding net_automata_refine
+  unfolding net_broadcast_refine
+  unfolding net_bounds_refine
   unfolding init_cfg_refine
   unfolding formula_refine
   unfolding Simple_Network_Impl.sem_def
@@ -1413,11 +1413,11 @@ lemma model_checking_problem_refine:
 
 end
 
-value "ground_ast_problem_defs.automata_spec' example_problem"
-value "ground_ast_problem_defs.broadcast_spec'"
-value "ground_ast_problem_defs.bounds_spec' example_problem"
+value "ground_ast_problem_defs.net_automata' example_problem"
+value "ground_ast_problem_defs.net_broadcast'"
+value "ground_ast_problem_defs.net_bounds' example_problem"
 value "ground_ast_problem_defs.init_cfg' example_problem"
-value "ground_ast_problem_defs.formula_spec'"
+value "ground_ast_problem_defs.reach_formula'"
 
 value "ground_ast_problem_defs.auto_names"
 value "ground_ast_problem_defs.auto_names_to_index"
@@ -1425,12 +1425,12 @@ value "ground_ast_problem_defs.auto_loc_ids_to_names"
 value "ground_ast_problem_defs.clock_names example_problem"
 
 definition "make_network_impl P \<equiv> do {
-  let automata = ground_ast_problem_defs.automata_spec' P;
-  let broadcast = ground_ast_problem_defs.broadcast_spec';
-  let bounds = ground_ast_problem_defs.bounds_spec' P;
-  let init_locs = ground_ast_problem_defs.init_locs_spec' P;
-  let init_vars = ground_ast_problem_defs.init_vars_spec' P;
-  let formula = ground_ast_problem_defs.formula_spec';
+  let automata = ground_ast_problem_defs.net_automata' P;
+  let broadcast = ground_ast_problem_defs.net_broadcast';
+  let bounds = ground_ast_problem_defs.net_bounds' P;
+  let init_locs = ground_ast_problem_defs.init_locs' P;
+  let init_vars = ground_ast_problem_defs.init_vars' P;
+  let formula = ground_ast_problem_defs.reach_formula';
   let clock_names = ground_ast_problem_defs.clock_names P;
   let auto_names = ground_ast_problem_defs.auto_names P;
 
@@ -1450,12 +1450,12 @@ lemma make_network_impl_return_iff[return_iff]:
     ground_ast_problem_defs.auto_names P,
     ground_ast_problem_defs.auto_loc_ids_to_names, 
     ground_ast_problem_defs.auto_names_to_index P,
-    ground_ast_problem_defs.broadcast_spec', 
-    ground_ast_problem_defs.automata_spec' P, 
-    ground_ast_problem_defs.bounds_spec' P, 
-    ground_ast_problem_defs.formula_spec', 
-    ground_ast_problem_defs.init_locs_spec' P , 
-    ground_ast_problem_defs.init_vars_spec' P)" 
+    ground_ast_problem_defs.net_broadcast', 
+    ground_ast_problem_defs.net_automata' P, 
+    ground_ast_problem_defs.net_bounds' P, 
+    ground_ast_problem_defs.reach_formula', 
+    ground_ast_problem_defs.init_locs' P , 
+    ground_ast_problem_defs.init_vars' P)" 
     unfolding make_network_impl_def ground_ast_problem_defs.init_cfg'_def
     by (auto simp: check_ground_problem_return_iff return_iff)
 

@@ -542,12 +542,6 @@ sublocale restr_to_props_valid: temp_plan_for_problem_list_impl AtStart AtEnd ov
 
 end
 
-(* global_interpretation temp_planning_problem_list_defs "fst" "fst o snd" "snd o snd"
-  "\<lambda>x. Some (lower_bound.GE 0)" "\<lambda>x. Some (upper_bound.LE 2)" fst "fst o snd" "snd o snd"
-   "[STR ''a'', STR ''b'']" "[c]" "1" "[STR ''a'', STR ''b'', STR ''c'']" 
-   "[(([STR ''a''],[],[STR ''b'']), ([],[],[]), [STR ''a'']), (([STR ''a''],[],[STR ''b'']), ([],[],[]), [STR ''a''])]"
-  sorry *)
-
 subsection \<open>Integers as time\<close>
 text \<open>Munta uses integers as inputs for clock constraints. Integers can be obtained from rationals by
 multiplying by a constant.\<close>

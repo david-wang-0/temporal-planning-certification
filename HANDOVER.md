@@ -5,7 +5,156 @@ environment/gotchas, and the ordered next-steps list. Design docs:
 [ARCHITECTURE_pipeline.md](ARCHITECTURE_pipeline.md),
 [ARCHITECTURE_grounding.md](ARCHITECTURE_grounding.md); plans:
 [GROUNDING_PLAN.md](GROUNDING_PLAN.md), [NUMERIC_PLAN.md](NUMERIC_PLAN.md). The ROOT files are
-authoritative. Last updated 2026-06-19.
+authoritative. Last updated 2026-06-21.
+
+## Session handover — 2026-06-21
+
+### Refactor pass — 2026-06-21 (structural cleanup, all PIDE-verified green)
+
+Three refactors landed to make the (former) 456 KB correctness file tractable for the remaining numeric
+work:
+
+1. **`plan_steps_possible` case 3 -> structured Isar** (in `TP_NTA_Reduction_Correctness`). The
+   post->pre invariant-transfer case now surfaces each invariant conjunct as a named `have` (`c2`..`c8`)
+   from `happening_post_dests` via its transfer lemma, threading the index bounds `ib1`/`ib2` (the
+   conditional transfer lemmas + the index-guarded `prop_state` defs need them), assembled through
+   `happening_pre_pre_delayI`. **Cases 5 and 6 (init->pre0, post->goal) are now converted too** (same
+   pattern; case 5 extracts the init conjuncts via `init_planning_state_props'E`, case 6 via
+   `happening_post_dests`), so **`plan_steps_possible` is now fully structured Isar** -- the next-step-5
+   "convert the ones you touch to Isar first" prep for the numeric `num_plan_steps_possible` mirror is
+   DONE. (The codebase now has **zero `rule_tac`**: the one `rule_tac exI` a subagent left in case 6's
+   `c5` was restructured to `rule exI[of _ w]` with the facts chained inside the `show`, per the new
+   `isabelle.md` rule "prefer the modern method over its `*_tac` variant".)
+
+2. **Split `TP_NTA_Reduction_Correctness.thy` (8792 lines) -> 5 theories** along section seams, each
+   re-opening `context tp_nta_reduction_correctness`: `..._Prelims` (defs + the nested per-index context),
+   `..._Edges`, `..._Happenings`, `..._Steps` (the five per-edge `*_possible` lemmas), and
+   `TP_NTA_Reduction_Correctness` (`happening_steps_possible` + `plan_steps_possible` + capstone + tail
+   contexts, ~600 lines -- kept the name, so downstream imports are untouched). Gotcha fixed: a local
+   `interpretation steps_seq` does NOT persist across context re-openings -> converted to a persistent
+   **`sublocale steps_seq`** (in `..._Happenings`), the correct form anyway.
+
+3. **`_Spec` -> `_Defs` rename + dropped `_spec` on net-construction constants.** Theory
+   `TP_NTA_Reduction_Spec` -> `TP_NTA_Reduction_Defs`; locales `tp_nta_reduction_spec`/`'`/`numeric_...`
+   -> `..._defs`. The 40 net-construction `*_spec` constants dropped the suffix (`all_vars_spec`->`all_vars`,
+   the edges, etc.), **except the Munta-name colliders**, renamed descriptively:
+   `automata_spec`->`net_automata`, `broadcast_spec`->`net_broadcast`, `bounds_spec`->`net_bounds`,
+   `int_clocks_spec`->`net_int_clocks`, `num_bounds_spec`->`num_net_bounds`, `formula_spec`->`reach_formula`
+   (plus the primed executable `'` versions). The **grounding-layer problem-data `_spec` family**
+   (`actions_spec`, `at_start_spec`, `pre_spec`, `goal_spec`, ... defined in `Ground_PDDL_Problem_Defs`,
+   e.g. `actions_spec == actions D`) was **kept `_spec`** -- different layer, and dropping collides with
+   the PDDL accessors (`actions D`, `pre`, ...). Verified green: TA_Network (Defs 114, final correctness
+   619) + Ground_PDDL (Impl 1019, Check_Unsolvability 742, NTA_Reduction_Correctness 25).
+   `Unsolvability_Code_Compile` (final codegen) is unchanged by the rename (codegen is by-reference) and
+   was not re-run. **Spec-cleanup follow-up (also green):** the `\<`-anchored rename initially missed
+   mid-token compound lemma names -- `map_of_bounds_spec_*` / `map_of_all_vars_spec_exact` /
+   `dom_map_of_bounds_spec_exact` were renamed to `map_of_net_bounds_*` / `map_of_all_vars_exact` /
+   `dom_map_of_net_bounds_exact`. The grounding-layer problem-data `_spec` family
+   (`actions_spec == actions D`, `at_start_spec`, `pre_spec`, ... in `Ground_PDDL_Problem_Defs`) is
+   **kept** -- a suitable use of "spec" (the PDDL problem is a specification) and bare names would
+   collide with the accessors (`actions D`, `pre`, ...).
+
+NB: the numeric-status notes below predate this rename, so they still cite the old `*_spec` names
+(`all_vars_spec`, `bounds_spec`, `formula_spec`, ...); read them through the mapping above.
+
+### Numeric reduction status (pre-rename names)
+
+Started **Layer B (numeric NTA reduction)** on the abstract reduction layer, **ahead of P0** (decided
+with the user: do the P0-independent reduction core now, enforce the grounder-match at the *contract*
+level — NUMERIC_PLAN §A.6). **The entire numeric reduction is now defined and well-formed** — the
+projection lemma + keystone (PASS) + §A.3 match (items 1–3 below), the full numeric net (P4), and the
+wf locale (P5), all green. The one piece left is the numeric **correctness capstone + lifting**
+(**Task 6**); its concrete plan + first step is at the end of this note (**Next (Task 6 …)**).
+
+1. **Projection lemma — green.** `Temporal_Plans.thy` (locale `numeric_temp_plan_defs`):
+   `num_valid_plan_imp_valid_plan` (§A.6 step 1) + helpers `num_valid_state_sequence_imp_valid`,
+   `num_mutex_valid_plan_imp_mutex`. The projection `num_valid_plan ⟹ valid_plan` is **unconditional**
+   (the propositional conjuncts of `num_valid_state_sequence` are literally `valid_state_sequence` on
+   `fst ∘ M`; `num_mutex_valid_plan = mutex_valid_plan ∧ …`). File fully processed, 0 errors. This is
+   the lemma the numeric capstone reuses.
+
+2. **Keystone (§5.5) — static PASS, risk localized** ([[layer-b-keystone-localized]]). Extra bounded
+   int vars in `all_vars_spec`/`bounds_spec` do **not** disturb the core bisimulation —
+   `happening_pre/post`, `goal_state_conds`, `init_planning_state_props'` are all guarded
+   (`∀p. p ∈ set props ∧ prop_to_var p ∈ dom (map_of bounds_spec) ⟶ …`). Only touch-points: the
+   `undef_vars` clause in `init_state_props` (`TP_NTA_Reduction_Correctness.thy:3645/3652`) /
+   `init_planning_state_props` (3661/3671) + dests, and the exact-set schematics `set_init_vars_exact`
+   (5355) / `dom_map_of_bounds_spec_exact` (5363). Confirms §A.6 "few lemmas, not a 456 KB rewrite."
+
+3. **§A.3 boundary map confirmed** vs Formal-PDDL-Semantics ([[numeric-boundary-map-confirmed]]).
+   `numeric_expression`/comparison atoms/`numeric_effect`/`duration_constraint` map 1:1 to the abstract
+   `nexp`/`comp`/`upds`; `action_numeric_update_function_simplified` gives one assignment per fluent
+   (⇒ `upds_functional` by construction). **Grounder-match flag:** `wf_numeric_expression` accepts
+   transcendentals, so our Layer-C boundary must reject them via `is_globally_safe` (fail-closed).
+
+**P4 — Layer-B spec augmentation DONE (the full numeric NTA-reduction net is constructed and green in `TP_NTA_Reduction_Spec.thy`):**
+- `nexp ⇒ exp` / `comp ⇒ bexp` encoders (`nexp_to_exp`/`comp_to_bexp`, theory-level, parameterised by
+  `fluent_to_var` + a value-to-int map `const_to_int`; `NMul`→`times`, `NDiv`→`div` = documented
+  integer-division gap).
+- locale **`numeric_tp_nta_reduction_spec`** = `tp_nta_reduction_spec` + LIST-based numeric data
+  (`n_pre`/`n_inv`/`upds`/`num_goal` as lists like propositional `pre`/`adds`; the set view is derived
+  via `set ∘` at correctness, mirroring `set_impl.pre`) + `num_init` + `nfluents` + `fluent_to_var` +
+  `fluent_lo`/`fluent_hi` + `const_to_int`. Merge unifies by name (numeric fields sidestep the
+  list-vs-set split) — verified.
+- `num_fluent_vars_spec` (one bounded int var per fluent) + `num_all_vars_spec = all_vars_spec @
+  num_fluent_vars_spec` (the §A.5 var-set augmentation, reusing the propositional `all_vars_spec`).
+- **guards** `num_pre_guard`/`num_inv_guard`/`num_goal_guard` (`bexp_and_all` of `comp_to_bexp` over
+  `n_pre`/`n_inv`/`num_goal`); **updates** `num_upd` (`(fluent_to_var f, nexp_to_exp … e)` from `upds`)
+  and `num_init_upd`; a generic `augment_edge` conjoins a numeric guard and appends numeric updates,
+  keeping locations/clocks/resets.
+- **edges + net** (all reuse the propositional defs): `num_start_edge_spec`/`num_end_edge_spec` (n_pre +
+  upds on the snaps), `num_edge_2_spec` (n_inv on running-entry), `num_main_auto_init/goal_edge_spec`
+  (num_init / num_goal) → `num_action_to_automaton_spec` → `num_main_auto_spec` →
+  **`num_timed_automaton_net_spec`**, plus `num_bounds_spec`/`num_init_vars_spec`. The numeric net's
+  propositional projection IS the propositional net by construction (`augment_edge` only conjoins/appends).
+
+**Architecture (in [[layer-b-keystone-localized]]):** separate additive net; propositional projection =
+the propositional net; 456 KB proof untouched; numeric capstone = projection (done) + existing capstone
++ lifting lemma.
+
+**Naming decision — DONE (2026-06-21, see Refactor pass at top; executed as `_Defs`, not `_Def`).**
+Original deferred plan: `_Spec` is a misnomer (file header: "Abstract definition of
+reduction"). Rename `TP_NTA_Reduction_Spec`/`tp_nta_reduction_spec*` → `_Def`, and DROP the `*_spec`
+const suffixes (NOT `*_def` — collides with Isabelle's `X_def` unfolding lemmas), as ONE
+`isabelle-refactor` pass over spec + the 456 KB correctness file, AFTER the numeric build (kept `_spec`
+meanwhile for consistency).
+
+**P5 — wf locale DONE (green in `TP_NTA_Reduction_Spec.thy`):** `numeric_tp_nta_reduction` =
+`numeric_tp_nta_reduction_spec` + 7 grounder-match `assumes` — `upds_functional`, `upds_no_cross_read`
+(the corrected `∩ (writes − {f})` form), `fluent_bounds_valid`, `fluent_to_var_inj`, and
+`fluent_vars_fresh` (the keystone disjointness of fluent var names from the propositional ones) — plus
+theory-level predicates `upds_functional_list`/`upds_no_cross_read_list` and the dest rule
+`upds_no_cross_read_listD`. (Deferred to correctness: the §B `INV` bounded-values meta-theorem and
+definedness-as-rejection.)
+
+**Next (Task 6 — numeric capstone + lifting; the remaining major effort). Recon complete:**
+- Capstone lives in `context tp_nta_reduction_model_checking'` (`TP_NTA_Reduction_Correctness.thy:8773`,
+  beside the empty-case `numeric_valid_temp_plan_imp_form_holds`, which is `by blast` via
+  `numeric_temp_plan_for_problem_list_impl_int'_imp_prop` + the propositional capstone).
+- Propositional capstone `valid_plan_imp_form_holds` (8685, **already structured Isar**) builds the run
+  `plan_steps @- goal_run (last plan_steps)` and rests on `all_steps_possible` (8614) =
+  **`plan_steps_possible`** (8383 — the bisimulation core, the heavy apply-script) ∧
+  `goal_state_conds (last plan_steps)`. Net = `Simple_Network_Impl automata_spec broadcast_spec
+  bounds_spec`, `a0 = (init_locs_spec, map_of init_vars_spec, λ_. 0)`.
+- **Lifting approach:** numeric net edges are `augment_edge`'d propositional edges (same
+  src/tgt/clocks/resets; guard conjoined, updates appended), so a propositional transition lifts to a
+  numeric one IFF the numeric guard holds and the numeric updates stay in bounds. So
+  `num_plan_steps_possible` = `plan_steps_possible`'s structure + (a) **tracking**: along plan_steps the
+  numeric vars equal the abstract valuation `snd (M i)` (Munta `mk_upds` = abstract
+  `happening_num_update_set`); (b) numeric guards hold (from `num_valid_state_sequence`'s `sat_comps
+  n_pre/n_inv` + `num_goal`); (c) bounds (§B `INV`). Then mirror `valid_plan_imp_form_holds` on
+  `Simple_Network_Impl num_timed_automaton_net_spec [] num_all_vars_spec`. `num_valid_plan` from
+  `numeric_temp_plan_for_problem_list_impl_int'` instantiated with `set ∘` of the list data.
+- **Methodology (per the user, 2026-06-21):** the intermediate states of `plan_steps_possible` are the
+  per-step `happening_pre`/`happening_post` invariants relating each config to the abstract state.
+  *Before* extending it, **note those states and refactor `plan_steps_possible` into structured Isar**
+  (consult the states, surface them as named `have`s) so the numeric tracking threads in cleanly —
+  rather than through a brittle apply-chain. This is HANDOVER next-step 5 ("convert the ones you touch
+  to Isar first"); `plan_steps_possible` is the first to convert.
+
+Also pending: the deferred `_Spec`→`_Def` rename, and extending the `text`-block comment cleanup (done in
+`TP_NTA_Reduction_Spec.thy`) to the other reduction files. jEdit up on `Temporal_Planning_Base` (pid in
+`/tmp/jedit-launch.pid`).
 
 ## Session handover — 2026-06-19
 
@@ -218,7 +367,7 @@ problem is **unsolvable**. Two workstreams are now in flight (planned, not yet b
 | `Temporal_Planning_Base` | `Temporal_Planning_Base/` (no local theories) | `Munta_Certificate_Checker` + `List-Index` + `Temporal_AI_Planning_Languages_Semantics` | **externals-only heap** (Munta + cert checker + List-Index + temporal PDDL semantics); build once, load in jEdit as the stable dev heap. P0 swaps the semantics import here | green |
 | `Temporal_Planning_Common` | `Temporal_Planning_Common/` | `Temporal_Planning_Base` | `Utils`, `ListMisc`, `Sequences` — generic utility theories (lists, options, `is_integer` rationals, sorted lemmas, sequences) | green |
 | `Temporal_Planning_Semantics` | `Temporal_Planning_Semantics/` | `Temporal_Planning_Common` | `Temporal_Plans`, `Temporal_Plans_{Instances,Lemmas,Code}` (latter three via closure) — abstract snap/happening semantics; `temp_planning_problem`, `temp_plan_defs` | green |
-| `TP_NTA_Reduction` | `TA_Network/` | `Temporal_Planning_Semantics` | `NTA_Temp_Planning_Sem`, `TP_NTA_Reduction_{Spec,Model_Checking,Correctness}` (`tp_nta_reduction_correctness`, Thm 1 `valid_plan_imp_form_holds`) | green |
+| `TP_NTA_Reduction` | `TA_Network/` | `Temporal_Planning_Semantics` | `NTA_Temp_Planning_Sem`, `TP_NTA_Reduction_Defs`, `TP_NTA_Reduction_Model_Checking`, `TP_NTA_Reduction_Correctness_{Prelims,Edges,Happenings,Steps}`, `TP_NTA_Reduction_Correctness` (`tp_nta_reduction_correctness`, Thm 1 `valid_plan_imp_form_holds`) | green |
 | `PDDL_TP_Reduction` | `Ground_PDDL_Exec_Imp/` | `TP_NTA_Reduction` | `Ground_PDDL_{Problem,Plan}_{Defs,Reduction}`, `Ground_PDDL_Problem_Code`, `Ground_PDDL_NTA_Reduction_{Correctness,Impl}`, `Check_Unsolvability`, `Unsolvability_Code_Compile`; exports `ML/Check_Unsolvability.ML` | green; numeric-free, positive-precondition |
 | `PDDL_TP_Reduction_Index` | `.` | `PDDL_TP_Reduction` | `Index` (paper theorem/locale map) | green |
 
@@ -235,12 +384,11 @@ whole pipeline.
 
 ## `sorry` inventory
 
-- **`Temporal_Planning_Semantics/Temporal_Plans_Instances.thy` — 1 `sorry`.** Flagged by the author as
-  **not a real `sorry`** (do not prioritize). Note it *is* in the build: `TP_NTA_Reduction` imports
-  `Temporal_Planning_Semantics.Temporal_Plans_Instances` (and `…_Lemmas`/`…_Code`), which pull these in
-  via closure even though they are not listed in the `Temporal_Planning_Semantics` session `theories`.
-- No other `sorry` in `Ground_PDDL_Exec_Imp/` or `TA_Network/`. (The stale `*.thy~` editor backups have
-  been deleted.)
+- **None — 0 real `sorry`s in the build** (`grep -rn sorry` across `Temporal_Planning_Semantics/`,
+  `Temporal_Planning_Common/`, `TA_Network/`, and `Ground_PDDL_Exec_Imp/` returns no matches). The one
+  `sorry` token previously listed here sat inside a dead `(* … *)` comment block — an abandoned example
+  `global_interpretation` in `Temporal_Plans_Instances.thy`, never kernel-processed — and was deleted
+  2026-06-21. The stale `*.thy~` editor backups were removed earlier.
 
 ## Environment / gotchas
 

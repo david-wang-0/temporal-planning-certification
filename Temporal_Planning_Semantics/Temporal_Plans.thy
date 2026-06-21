@@ -1615,6 +1615,42 @@ next
   qed
 qed
 
+text \<open>General projection (NUMERIC_PLAN A.6 step 1), the non-empty generalisation of
+\<open>num_valid_plan_empty\<close>: numeric conditions only add constraints, so the propositional projection
+\<open>\<lambda>i. fst (M i)\<close> of a numerically valid plan is propositionally valid -- unconditionally (no
+empty-numeric hypotheses). It feeds the numeric capstone: project to \<open>valid_plan\<close>, reuse the
+existing reduction's goal-reaching run, then track the numerics on top.\<close>
+lemma num_valid_state_sequence_imp_valid:
+  assumes "num_valid_state_sequence M"
+  shows "valid_state_sequence (\<lambda>i. fst (M i))"
+  using assms unfolding num_valid_state_sequence_def valid_state_sequence_def Let_def by blast
+
+lemma num_mutex_valid_plan_imp_mutex:
+  assumes "num_mutex_valid_plan"
+  shows "mutex_valid_plan"
+  using assms unfolding num_mutex_valid_plan_def by simp
+
+lemma num_valid_plan_imp_valid_plan:
+  assumes "num_valid_plan"
+  shows "valid_plan"
+proof -
+  obtain M where
+      M1: "num_valid_state_sequence M"
+  and M2: "fst (M 0) = init"
+  and M4: "goal \<subseteq> fst (M (length htpl))"
+  and M6: "durations_ge_0"
+  and M7: "durations_valid"
+  and M8: "num_mutex_valid_plan"
+  and M9: "finite_plan"
+    using assms unfolding num_valid_plan_def by blast
+  have vss: "valid_state_sequence (\<lambda>i. fst (M i))"
+    using num_valid_state_sequence_imp_valid M1 by blast
+  have mut: "mutex_valid_plan"
+    using num_mutex_valid_plan_imp_mutex M8 by blast
+  show "valid_plan"
+    unfolding valid_plan_def
+    using vss mut M2 M4 M6 M7 M9 by (intro exI[of _ "\<lambda>i. fst (M i)"]) auto
+qed
 end
 
 

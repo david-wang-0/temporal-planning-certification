@@ -29,8 +29,12 @@ session Temporal_Planning_Semantics in Temporal_Planning_Semantics = Temporal_Pl
 session TP_NTA_Reduction in TA_Network = Temporal_Planning_Semantics +
   theories
     NTA_Temp_Planning_Sem
-    TP_NTA_Reduction_Spec
+    TP_NTA_Reduction_Defs
     TP_NTA_Reduction_Model_Checking
+    TP_NTA_Reduction_Correctness_Prelims
+    TP_NTA_Reduction_Correctness_Edges
+    TP_NTA_Reduction_Correctness_Happenings
+    TP_NTA_Reduction_Correctness_Steps
     TP_NTA_Reduction_Correctness
 
 session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp = TP_NTA_Reduction +
