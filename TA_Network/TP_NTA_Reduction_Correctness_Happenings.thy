@@ -75,8 +75,7 @@ let
 
   clock_state =  (c = (\<lambda>_. 0))
 in 
-  Lv_conds L v 
-\<and> active
+  active
 \<and> locs 
 \<and> true_props 
 \<and> false_props 
@@ -97,8 +96,7 @@ let
   start_time = (\<forall>i < length actions. c (act_to_start_clock (actions ! i)) = 0);
   end_time = (\<forall>i < length actions. c (act_to_end_clock (actions ! i)) = 0)
 in 
-  Lv_conds L v 
-\<and> acts_active
+  acts_active
 \<and> locs
 \<and> prop_state
 \<and> lock_state
@@ -118,8 +116,7 @@ let
   lock_state = (\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some 0)
 
 in 
-  Lv_conds L v 
-\<and> acts_active
+  acts_active
 \<and> locs
 \<and> prop_state 
 \<and> lock_state"
@@ -162,8 +159,7 @@ let
 
   start_time = (\<forall>i < length actions. act_clock_pre_happ c act_to_start_clock (actions ! i) t);
   end_time = (\<forall>i < length actions. act_clock_pre_happ c act_to_end_clock (actions ! i) t)
-in Lv_conds L v
-  \<and> prop_state \<and> lock_state 
+in prop_state \<and> lock_state 
   \<and> active
   \<and> active_locs \<and> inactive_locs
   \<and> start_time \<and> end_time"
@@ -192,8 +188,7 @@ let
 
   start_time = (\<forall>i < length actions. act_clock_post_happ c act_to_start_clock (actions ! i) t);
   end_time = (\<forall>i < length actions. act_clock_post_happ c act_to_end_clock (actions ! i) t)
-in Lv_conds L v
-  \<and> prop_state \<and> lock_state 
+in prop_state \<and> lock_state 
   \<and> active
   \<and> active_locs \<and> inactive_locs
   \<and> start_time \<and> end_time"
@@ -202,7 +197,7 @@ in Lv_conds L v
 definition "happening_invs n Lvc \<equiv>
 let 
   t = planning_sem.time_index n;
-  (L, v, c) = Lvc;
+  (L, v :: String.literal \<Rightarrow> int option, c) = Lvc;
 
   ending_start_time = (\<forall>i < length actions. is_ending_index t i \<longrightarrow> act_clock_pre_happ c act_to_start_clock (actions ! i) t);
   starting_end_time = (\<forall>i < length actions. is_starting_index t i \<longrightarrow>  act_clock_pre_happ c act_to_end_clock (actions ! i) t);
@@ -212,8 +207,7 @@ let
 
   other_inactive_loc = (\<forall>i < length actions. is_not_happening_index t i \<longrightarrow> planning_sem.closed_active_count t (actions ! i) = 0 \<longrightarrow> L ! Suc i = (off_loc));
   other_active_loc = (\<forall>i < length actions. is_not_happening_index t i \<longrightarrow> planning_sem.closed_active_count t (actions ! i) = 1  \<longrightarrow> L ! Suc i = (running_loc))
-in Lv_conds L v
-  \<and> ending_start_time
+in ending_start_time
   \<and> starting_end_time
   \<and> other_start_time \<and> other_end_time
   \<and> other_inactive_loc \<and> other_active_loc"
@@ -708,7 +702,7 @@ lemma init_state_propsI:
 
 lemma init_planning_state_propsE:
   assumes "init_planning_state_props x"
-      and "\<And>L v c. x = (L, v, c) \<Longrightarrow> Lv_conds L v \<Longrightarrow> v acts_active = Some 0
+      and "\<And>L v c. x = (L, v, c) \<Longrightarrow> v acts_active = Some 0
       \<Longrightarrow> L = planning_loc # map (\<lambda> x. off_loc) actions \<Longrightarrow> (\<forall>p\<in>set init. v (prop_to_var p) = Some 1) 
       \<Longrightarrow> (\<forall>x\<in>set (map fst net_bounds) - ({planning_lock, acts_active} \<union> prop_to_var ` set init). v x = Some 0) 
       \<Longrightarrow> (\<forall>x. x \<notin> set (map fst net_bounds) \<longrightarrow> v x = None) \<Longrightarrow> c = (\<lambda>_. 0) \<Longrightarrow> thesis"
@@ -718,8 +712,7 @@ lemma init_planning_state_propsE:
 lemma init_planning_state_props_dests:
   assumes "init_planning_state_props x"
       and "x = (L, v, c)" 
-    shows "Lv_conds L v" 
-    "v acts_active = Some 0" 
+    shows "v acts_active = Some 0" 
     "L = planning_loc # map (\<lambda> x. off_loc) actions"
     "\<And>p. p\<in>set init \<Longrightarrow> v (prop_to_var p) = Some 1" 
     "\<And>x. x \<in> set (map fst net_bounds) \<Longrightarrow> x \<notin> {planning_lock, acts_active} \<Longrightarrow> x \<notin> prop_to_var ` set init \<Longrightarrow> v x = Some 0" 
@@ -728,7 +721,6 @@ lemma init_planning_state_props_dests:
 
 lemma init_planning_state_propsI:
   assumes "x = (L, v, c)" 
-    "Lv_conds L v" 
     "v acts_active = Some 0" 
     "L = planning_loc # map (\<lambda> x. off_loc) actions"
     "\<And>p. p \<in> set init \<Longrightarrow> v (prop_to_var p) = Some 1" 
@@ -742,7 +734,6 @@ lemma init_planning_state_propsI:
 lemma init_planning_state_props'E:
   assumes "init_planning_state_props' x"
       and "\<And>L v c. x = (L, v, c) 
-      \<Longrightarrow> Lv_conds L v 
       \<Longrightarrow> v acts_active = Some 0
       \<Longrightarrow> L = planning_loc # map (\<lambda> x. off_loc) actions 
       \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state (set init) p)) 
@@ -754,7 +745,6 @@ lemma init_planning_state_props'E:
 
 lemma init_planning_state_props'I:
   assumes "x = (L, v, c)" 
-    "Lv_conds L v" 
     "v acts_active = Some 0 " 
     "L = planning_loc # map (\<lambda> x. off_loc) actions " 
     "(\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state (set init) p))" 
@@ -767,7 +757,7 @@ lemma init_planning_state_props'I:
 
 lemma goal_trans_preE:
   assumes "goal_trans_pre x"
-      and "\<And>L v c. x = (L, v, c) \<Longrightarrow> Lv_conds L v \<Longrightarrow> v acts_active = Some 0 \<Longrightarrow> L = planning_loc # map (\<lambda> x. off_loc) actions 
+      and "\<And>L v c. x = (L, v, c) \<Longrightarrow> v acts_active = Some 0 \<Longrightarrow> L = planning_loc # map (\<lambda> x. off_loc) actions 
       \<Longrightarrow> \<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state S p)) 
     \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some 0) \<Longrightarrow> thesis"
     shows thesis 
@@ -775,7 +765,6 @@ lemma goal_trans_preE:
 
 lemma goal_trans_preI:
   assumes "x = (L, v, c)"  
-    "Lv_conds L v" 
     "v acts_active = Some 0" 
     "L = planning_loc # map (\<lambda> x. off_loc) actions" 
     "\<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state S p))" 
@@ -841,7 +830,6 @@ lemma Lv_condsI:
 
 lemma happening_pre_pre_delayI:
   assumes "x = (L, v, c)"
-    "Lv_conds L v"
     "(\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ n p))"
     "(\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index n) p)))"
     "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index n)))"
@@ -856,7 +844,6 @@ lemma happening_pre_pre_delayI:
 lemma happening_pre_pre_delayE: 
   assumes "happening_pre_pre_delay n x"
   and "\<And>L v c. x = (L, v, c) 
-    \<Longrightarrow> Lv_conds L v
     \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ n p))
     \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index n) p)))
     \<Longrightarrow> v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index n)))
@@ -876,8 +863,7 @@ shows thesis using assms(1)
 lemma happening_pre_pre_delay_dests: 
   assumes "happening_pre_pre_delay n x"
           "x = (L, v, c)"
-  shows  "Lv_conds L v"
-    "(\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ n p))"
+  shows  "(\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ n p))"
     "(\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index n) p)))"
     "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index n)))"
     "(\<forall>i<length actions. planning_sem.open_active_count (planning_sem.time_index n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = off_loc)"
@@ -889,8 +875,7 @@ lemma happening_pre_pre_delay_dests:
 lemma happening_pre_post_delay_dests:
   assumes "happening_pre_post_delay n x"
       "x = (L, v, c)"
-    shows "Lv_conds L v"
-    "(\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ n p))"
+    shows "(\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ n p))"
     "(\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index n) p)))"
     "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index n)))"
     "(\<forall>i<length actions. planning_sem.open_active_count (planning_sem.time_index n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = off_loc)"
@@ -902,7 +887,6 @@ lemma happening_pre_post_delay_dests:
 
 lemma happening_pre_post_delayI:
   assumes "x = (L, v, c)"
-    "Lv_conds L v"
     "(\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ n p))"
     "(\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index n) p)))"
     "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index n)))"
@@ -915,8 +899,7 @@ lemma happening_pre_post_delayI:
 
 lemma happening_postI:
   assumes "x = (L, v, c)"
-  and "Lv_conds L v"
-    "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of net_bounds) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ t p)"
+  and "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of net_bounds) \<Longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ t p)"
     "\<And>p. p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of net_bounds) \<Longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index t) p))"
     "v acts_active = Some (int (planning_sem.active_after (planning_sem.time_index t)))"
     "\<And>i. i < length actions \<Longrightarrow> planning_sem.closed_active_count (planning_sem.time_index t) (actions ! i) = 0 \<Longrightarrow> L ! Suc i = off_loc"
@@ -931,7 +914,6 @@ lemma happening_postI:
 lemma happening_postE:
   assumes "happening_post n x"
     and "\<And>L v c. x = (L, v, c)
-      \<Longrightarrow> Lv_conds L v
       \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ n p))
       \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index n) p)))
       \<Longrightarrow> v acts_active = Some (int (planning_sem.active_after (planning_sem.time_index n)))
@@ -953,8 +935,7 @@ lemma happening_postE:
 lemma happening_post_dests:
   assumes "happening_post n x"
     and "x = (L, v, c)"
-  shows "Lv_conds L v"
-      "(\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ n p))"
+  shows "(\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_after_happ n p))"
       "(\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_after (planning_sem.time_index n) p)))"
       "v acts_active = Some (int (planning_sem.active_after (planning_sem.time_index n)))"
       "(\<forall>i<length actions. planning_sem.closed_active_count (planning_sem.time_index n) (actions ! i) = 0 \<longrightarrow> L ! Suc i = off_loc)"
@@ -1019,7 +1000,6 @@ lemma end_start_invsI:
 lemma happening_invsE:
   assumes "happening_invs n x"
     "\<And>L v c. x = (L, v, c) \<Longrightarrow>
-     Lv_conds L v \<Longrightarrow>
      (\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> act_clock_pre_happ c act_to_start_clock (actions ! i) (planning_sem.time_index n)) \<Longrightarrow>
      (\<forall>i<length actions. is_starting_index (planning_sem.time_index n) i \<longrightarrow> act_clock_pre_happ c act_to_end_clock (actions ! i) (planning_sem.time_index n)) \<Longrightarrow>
      (\<forall>i<length actions. is_not_happening_index (planning_sem.time_index n) i \<longrightarrow> act_clock_pre_happ c act_to_start_clock (actions ! i) (planning_sem.time_index n)) \<Longrightarrow>
@@ -1032,8 +1012,7 @@ lemma happening_invsE:
 
 lemma happening_invs_dests:
   assumes "happening_invs n (L, v, c)"
-  shows "Lv_conds L v"
-    "i < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index n) i \<Longrightarrow> act_clock_pre_happ c act_to_start_clock (actions ! i) (planning_sem.time_index n)"
+  shows "i < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index n) i \<Longrightarrow> act_clock_pre_happ c act_to_start_clock (actions ! i) (planning_sem.time_index n)"
     "i < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index n) i \<Longrightarrow> act_clock_pre_happ c act_to_end_clock (actions ! i) (planning_sem.time_index n)"
     "i < length actions \<Longrightarrow> is_not_happening_index (planning_sem.time_index n) i \<Longrightarrow> act_clock_pre_happ c act_to_start_clock (actions ! i) (planning_sem.time_index n)"
     "i < length actions \<Longrightarrow> is_not_happening_index (planning_sem.time_index n) i \<Longrightarrow> act_clock_pre_happ c act_to_end_clock (actions ! i) (planning_sem.time_index n)"
@@ -1044,7 +1023,6 @@ lemma happening_invs_dests:
 
 lemma happening_invsI:
   assumes "x = (L, v, c)"
-    "Lv_conds L v"
     "\<And>i. i < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index n) i \<Longrightarrow> act_clock_pre_happ c act_to_start_clock (actions ! i) (planning_sem.time_index n)"
     "\<And>i. i < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index n) i \<Longrightarrow> act_clock_pre_happ c act_to_end_clock (actions ! i) (planning_sem.time_index n)"
     "\<And>i. i < length actions \<Longrightarrow> is_not_happening_index (planning_sem.time_index n) i \<Longrightarrow> act_clock_pre_happ c act_to_start_clock (actions ! i) (planning_sem.time_index n)"
@@ -1332,7 +1310,6 @@ lemma Lv_conds_maintained:
 
 lemma happening_invs_maintained:
   assumes "happening_invs n (L, v, c)"
-      and Lc: "Lv_conds L v \<Longrightarrow> Lv_conds L' v'"
       and clock: 
           "\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_start_clock (actions ! i))  = c (act_to_start_clock (actions ! i))"
           "\<forall>i<length actions. is_starting_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_end_clock (actions ! i))  = c (act_to_end_clock (actions ! i))"
@@ -1343,8 +1320,6 @@ lemma happening_invs_maintained:
   apply (insert assms(1))
   apply (rule happening_invsI)
          apply (rule HOL.refl)
-        apply (drule happening_invs_dests(1))
-  using Lc apply simp
   using happening_invs_dests
   unfolding act_clock_pre_happ_def
   using clock apply (presburger, presburger, presburger, presburger)
