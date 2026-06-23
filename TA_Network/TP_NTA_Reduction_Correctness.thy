@@ -1821,6 +1821,36 @@ next
   thus ?case using ins step by (simp add: comp_def)
 qed
 
+text \<open>The set-level happening update equals the list-level fold over any @{emph \<open>distinct\<close>}
+enumeration of the happening, under the functional + pairwise-non-interference side conditions:
+@{const Finite_Set.fold} collapses to a @{const fold} on a distinct list whose snaps pairwise commute.
+This is the bridge that lets the run-order fold of the numeric edge updates (a list) be identified with
+@{const num_plan.num_rat_impl.happening_num_update_set} (the order-independent set update that
+@{const num_plan.num_rat_impl.num_valid_state_sequence} pins to @{term \<open>snd (M (Suc i))\<close>}).\<close>
+lemma happening_num_update_set_eq_fold_list:
+  assumes "distinct xs"
+      and "\<And>a. a \<in> set xs \<Longrightarrow> upds_functional ((set \<circ> upds) a)"
+      and "\<And>a b. a \<in> set xs \<Longrightarrow> b \<in> set xs \<Longrightarrow> a \<noteq> b \<Longrightarrow> \<not> num_plan.num_rat_impl.num_mutex_snap_action a b"
+    shows "num_plan.num_rat_impl.happening_num_update_set (set xs) w = num_plan.num_rat_impl.happening_num_update xs w"
+  using assms
+proof (induction xs arbitrary: w)
+  case Nil
+  show ?case
+    by (simp add: num_plan.num_rat_impl.happening_num_update_set_empty[unfolded comp_def]
+                  num_plan.num_rat_impl.happening_num_update_Nil[unfolded comp_def])
+next
+  case (Cons x xs)
+  have "num_plan.num_rat_impl.happening_num_update_set (insert x (set xs)) w
+          = num_plan.num_rat_impl.happening_num_update_set (set xs) (num_plan.num_rat_impl.snap_num_update x w)"
+    by (rule num_plan.num_rat_impl.happening_num_update_set_insert)
+       (use Cons.prems in \<open>auto simp: comp_def\<close>)
+  also have "\<dots> = num_plan.num_rat_impl.happening_num_update xs (num_plan.num_rat_impl.snap_num_update x w)"
+    using Cons.IH Cons.prems by (auto simp: comp_def)
+  also have "\<dots> = num_plan.num_rat_impl.happening_num_update (x # xs) w"
+    by (simp add: num_plan.num_rat_impl.happening_num_update_Cons)
+  finally show ?case by (simp add: comp_def)
+qed
+
 text \<open>Guard invariance under a partial happening update by non-interfering snaps -- the heart of the
 intra-happening numeric content. If a guard set @{term C} reads only fluents of @{term s} (its read
 fluents lie in @{term \<open>snap_reads s\<close>}) and every snap in the co-occurring happening @{term S} does
