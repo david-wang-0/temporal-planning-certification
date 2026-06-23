@@ -1,6 +1,8 @@
 # Plan: Numeric Conditions and Effects in the Temporal Reduction
 
-Status: draft (2026-06-18). Companion: [GROUNDING_PLAN.md](GROUNDING_PLAN.md) — the two interlock
+Status: design draft (2026-06-18); Layers A & B in active green implementation (see §7 P2/P4 and
+[HANDOVER.md](HANDOVER.md) for live per-lemma state, last 2026-06-22). Companion:
+[GROUNDING_PLAN.md](GROUNDING_PLAN.md) — the two interlock
 (see §6). This is the large refactor: extend the temporal planning **semantics**, the abstract
 **plan model**, and the **NTA reduction** (+ correctness proofs) with numeric state, numeric
 conditions, and numeric effects.
@@ -500,8 +502,9 @@ inventory, per-stage three-file pattern) — see [GROUNDING_PLAN.md §9](GROUNDI
 - **P2 (Layer A)**: extend `Temporal_Plans` state + snap numerics + happening semantics; re-prove the
   locale hierarchy. Largest *model* change. **DONE (2026-06-19)** incl. the abstract→reduction
   "collapse" twins in `Temporal_Plans_Instances` and the empty-numeric capstone
-  `numeric_valid_temp_plan_imp_form_holds` (green). Remaining Layer-A piece: the general projection
-  `num_valid_plan ⟹ valid_plan` (§A.6 step 1) — needed by P4.
+  `numeric_valid_temp_plan_imp_form_holds` (green). The §A.6-step-1 general projection
+  `num_valid_plan ⟹ valid_plan` (`num_valid_plan_imp_valid_plan` in `Temporal_Plans.thy`) is also
+  **DONE (green)** — Layer A is complete.
 - **P3 (Layer C)**: extend `Ground_PDDL_Problem_Defs` to numeric ground tasks + `check_ground_problem`
   (no proofs yet beyond well-formedness) — gives the grounder its output contract early. Includes the
   boundary map (§A.3), the `wf_bounds` static-bound check (§B), and the **time-rescaling** transform +
@@ -512,6 +515,20 @@ inventory, per-stage three-file pattern) — see [GROUNDING_PLAN.md §9](GROUNDI
   the numeric capstone **without** reworking `TP_NTA_Reduction_Correctness`. Do §5.5 (extra-vars
   tolerance) first — it is the keystone assumption. Much smaller than the old "rewrite the
   bisimulation" plan.
+  **IN PROGRESS (green throughout; live detail in [HANDOVER.md](HANDOVER.md), 2026-06-22).** §5.5
+  extra-vars tolerance confirmed (the keystone); the full numeric net + grounder-match wf locale
+  (`numeric_tp_nta_reduction`) built in `TP_NTA_Reduction_Defs`; and in
+  `TP_NTA_Reduction_Correctness` the **forward direction only** (per the user — the reduction is *not*
+  a bisimulation; only `valid_plan ⟹ form_holds` is proved/needed) the whole per-step toolkit is DONE:
+  the tracking relation `num_tracks` + integer-encoding faithfulness, the `num_*` invariant twins, the
+  numeric net step infrastructure, the keystone generic per-step lift `num_step_int_lift` + inversion
+  `prop_int_step_invert` + per-edge `num_data_*_edge` dischargers, the guard-invariance lemma
+  `sat_comps_happening_num_update_set`, and the delay/structure primitives (`num_steps_delay_replace`,
+  `num_sem_alt_def`, `num_no_urgent`). **Remaining:** the run-lifting *sequencing* (induct over the
+  propositional `graph_impl.steps`, apply the per-step bricks, thread tracking) →
+  `num_happening_steps_possible` → `num_plan_steps_possible` → upgrade the capstone
+  `numeric_valid_temp_plan_imp_form_holds`; plus the §B `INV` bounds + §A.3 discreteness, currently
+  threaded as hypotheses, to be discharged at Layer C.
 - **P5**: re-close `Ground_PDDL_NTA_Reduction_Correctness`; regenerate code export
   (`Unsolvability_Code_Export`), update `run.sh`/Python harness, validate on a numeric instance
   (`Formal-PDDL-Semantics/examples/counters`, `expedition`, `transport`).
