@@ -2082,6 +2082,80 @@ proof -
   qed
 qed
 
+text \<open>Bridge: the rat-level @{text rat_impl} interpretation (the ancestor that
+@{const num_plan.num_rat_impl.num_valid_state_sequence} unfolds into) and the propositional
+@{text planning_sem} interpretation are instantiated with the SAME plan -- @{text rat_impl}'s plan
+@{term \<open>map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ> \<pi>\<close>} is exactly @{const \<pi>_sem} --
+so all plan-derived constants (@{const planning_sem.htps}/@{const planning_sem.htpl}/
+@{const planning_sem.time_index}/@{const planning_sem.plan_happ_seq}) coincide across the two. This lets
+the @{const num_plan.num_rat_impl.num_valid_state_sequence} fold-conjunct (stated over @{text rat_impl}'s
+happening) feed the @{text planning_sem}-keyed S-property exports.\<close>
+lemma rat_impl_plan_happ_seq_eq: "rat_impl.plan_happ_seq = planning_sem.plan_happ_seq"
+  unfolding rat_impl.plan_happ_seq_def planning_sem.plan_happ_seq_def \<pi>_sem_def by simp
+
+lemma rat_impl_htps_eq: "rat_impl.htps = planning_sem.htps"
+  unfolding rat_impl.htps_def planning_sem.htps_def \<pi>_sem_def by simp
+
+lemma rat_impl_htpl_eq: "rat_impl.htpl = planning_sem.htpl"
+  by (simp add: rat_impl.htpl_def planning_sem.htpl_def rat_impl_htps_eq)
+
+lemma rat_impl_time_index_eq: "rat_impl.time_index = planning_sem.time_index"
+  by (simp add: rat_impl.time_index_def planning_sem.time_index_def rat_impl_htpl_eq)
+
+lemma rat_impl_happ_at_eq:
+  "planning_sem.happ_at rat_impl.plan_happ_seq (rat_impl.time_index i)
+     = planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+  by (simp add: rat_impl_plan_happ_seq_eq rat_impl_time_index_eq)
+
+text \<open>Item 3 (the heart of Part 1): the run-order list fold of the numeric snap updates over ANY distinct
+enumeration @{term xs} of the @{term i}-th happening equals the abstract after-valuation
+@{term \<open>snd (M (Suc i))\<close>}. The happening's snaps pairwise commute
+(@{thm [source] happening_num_noninterfere}), so FACT-2 (@{thm [source] happening_num_update_set_eq_fold_list})
+collapses the order-dependent list fold to the order-independent set update
+@{const num_plan.num_rat_impl.happening_num_update_set}, which
+@{const num_plan.num_rat_impl.num_valid_state_sequence} pins to @{term \<open>snd (M (Suc i))\<close>} (after the
+@{thm [source] rat_impl_happ_at_eq} namespace bridge).\<close>
+lemma run_order_fold_eq_happening_num_update_set:
+  assumes i: "i < length planning_sem.htpl"
+      and vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and dist: "distinct xs"
+      and setxs: "set xs = planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+    shows "num_plan.num_rat_impl.happening_num_update xs (snd (M i)) = snd (M (Suc i))"
+proof -
+  let ?S = "planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+  have fold_eq: "num_plan.num_rat_impl.happening_num_update_set (set xs) (snd (M i))
+                   = num_plan.num_rat_impl.happening_num_update xs (snd (M i))"
+  proof (rule happening_num_update_set_eq_fold_list[OF dist])
+    show "upds_functional ((set \<circ> upds) a)" if "a \<in> set xs" for a
+    proof -
+      have "a \<in> ?S" using that setxs by simp
+      thus ?thesis by (rule happening_upds_functional)
+    qed
+  next
+    show "\<not> num_plan.num_rat_impl.num_mutex_snap_action a b"
+      if "a \<in> set xs" "b \<in> set xs" "a \<noteq> b" for a b
+    proof -
+      have "a \<in> ?S" and "b \<in> ?S" using that setxs by simp_all
+      thus ?thesis using that(3) by (rule happening_num_noninterfere)
+    qed
+  qed
+  have iH: "i < length rat_impl.htpl" using i by (simp add: rat_impl_htpl_eq)
+  have vss_i: "num_plan.num_rat_impl.happening_num_update_set ?S (snd (M i)) = snd (M (Suc i))"
+  proof -
+    have "num_plan.num_rat_impl.happening_num_update_set
+            (planning_sem.happ_at rat_impl.plan_happ_seq (rat_impl.time_index i)) (snd (M i))
+          = snd (M (Suc i))"
+      using vss iH unfolding num_plan.num_rat_impl.num_valid_state_sequence_def Let_def by blast
+    thus ?thesis by (simp add: rat_impl_happ_at_eq)
+  qed
+  have "num_plan.num_rat_impl.happening_num_update xs (snd (M i))
+          = num_plan.num_rat_impl.happening_num_update_set (set xs) (snd (M i))"
+    by (rule fold_eq[symmetric])
+  also have "\<dots> = num_plan.num_rat_impl.happening_num_update_set ?S (snd (M i))"
+    by (simp only: setxs)
+  also have "\<dots> = snd (M (Suc i))" by (rule vss_i)
+  finally show ?thesis .
+qed
 
 text \<open>Guard invariance under a partial happening update by non-interfering snaps -- the heart of the
 intra-happening numeric content. If a guard set @{term C} reads only fluents of @{term s} (its read

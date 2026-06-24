@@ -7,6 +7,53 @@ environment/gotchas, and the ordered next-steps list. Design docs:
 [GROUNDING_PLAN.md](GROUNDING_PLAN.md), [NUMERIC_PLAN.md](NUMERIC_PLAN.md). The ROOT files are
 authoritative. Last updated 2026-06-24.
 
+## Session handover — 2026-06-24 (cont.2: run-lift step-1 — Part-1 items 1, 2 & 3 ALL green; built the `rat_impl`↔`planning_sem` happening-set bridge (5 lemmas) and proved item 3, the fold-connection heart)
+
+**Two new green bricks, committed `1d9dbb4`:** `num_Lv_conds_maintained` (Correctness.thy:1223 — numeric mirror
+of `Lv_conds_maintained`, supplies the new `num_LvP (last …)` obligation) and `happ_at_index_decomp`
+(Correctness.thy:1935 — FACT-1, happening-as-index-union, stated for arbitrary `t`).
+
+**ACCURATE run-lift inventory (prior docs under-counted what was already done).** Part 1 **items 1 & 2 DONE**:
+FACT-2 `happening_num_update_set_eq_fold_list` (:1902), FACT-1 `happ_at_index_decomp` (:1935), and the
+S-property exports `happening_finite` (:1965) / `happening_upds_functional` (:1980) / `num_mutex_valid_plan`
+(:2015) / `happening_num_noninterfere` (:2028) — all green. Also present + green:
+`sat_comps_happening_num_update_set`, the delay primitives (`num_steps_replace_Cons_hd`,
+`num_steps_delay_replace`), `num_no_urgent` (fixed this session), `length_num_net_impl`, the projection infra,
+`num_Lv_conds_imp_Lv_conds`/`num_LvP_imp_LvP`, **and now item 3 + its bridge (this session)**.
+**GENUINELY REMAINING:** Part 1 **item 4** `num_upd_guard_discharge`; Part 2 (sequence_rules sublocale
+`num_steps_seq` + numeric `delay_and_apply` + the 5 group lemmas); Part 3 (the sorry assembly,
+`num_happening_steps_possible`, now ~:2589).
+
+**Item 3 DONE + the `rat_impl`↔`planning_sem` bridge BUILT (green; Correctness.thy ~:2085-2158).** The
+blocker was a namespace gap: `num_plan.num_rat_impl.num_valid_state_sequence`'s fold conjunct resolves its
+happening to `planning_sem.happ_at  rat_impl.plan_happ_seq (rat_impl.time_index i)` (the `num_rat_impl`
+ancestor `rat_impl` = `temp_plan_for_problem_list_defs`), while FACT-1/the exports use `planning_sem.*`
+(`nta_temp_planning` on `π_sem`). `happ_at` is shared (abbreviation); only `plan_happ_seq`/`htps`/`htpl`/
+`time_index` differed. RESOLUTION — both interpretations are instantiated with the SAME plan: `rat_impl`'s
+plan (Instances:684) is literally `\<pi>_sem`'s definition (`map_option (map_prod id (map_prod rat_of_int
+rat_of_int)) \<circ> \<pi>`, Prelims:8). So `rat_impl.plan_happ_seq`/`htps`/`htpl`/`time_index` all `=` the
+`planning_sem.*` ones, by unfolding the shared base defs (`Temporal_Plans.thy:869-883`) + `\<pi>_sem_def`.
+Five bridge lemmas: `rat_impl_plan_happ_seq_eq` (`unfolding …plan_happ_seq_def \<pi>_sem_def by simp` — NB
+`rule refl` does NOT close it, the two desugar slightly differently, use `simp`), `rat_impl_htps_eq` (same
+shape), `rat_impl_htpl_eq`/`rat_impl_time_index_eq` (`simp add:` the prior + the `_def`s), and
+`rat_impl_happ_at_eq` (`simp add: rat_impl_plan_happ_seq_eq rat_impl_time_index_eq`). NO pre-existing bridge
+existed (searched: no `rewrites`, no cross-interpretation equality lemma).
+
+`run_order_fold_eq_happening_num_update_set` (item 3) then states: for ANY `distinct xs` with
+`set xs = planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)`,
+`num_plan.num_rat_impl.happening_num_update xs (snd (M i)) = snd (M (Suc i))`. Proof = FACT-2
+(`happening_num_update_set_eq_fold_list[OF distinct]`, side-goals from `happening_upds_functional` /
+`happening_num_noninterfere` keyed on `set xs = S`) collapses the list fold to the set update; then
+`num_valid_state_sequence` (instantiate `\<forall>` at `i` via `rat_impl_htpl_eq` to get `i < length
+rat_impl.htpl`, `unfolding …num_valid_state_sequence_def Let_def by blast`, then `rat_impl_happ_at_eq`) pins
+the set update to `snd (M (Suc i))`. Calculational `also`/`finally` chain to finish. This works for any
+distinct enumeration (the run-order list in Part 2 is one such), so Part 2 just needs `set <run snaps> = S`
++ `distinct`.
+
+**Constraints found this session:** the I/R REPL is unavailable on the `Temporal_Planning_Base` heap (no `iq`
+import; `repl_connect` fails) — develop via `write_file`+diagnostics, or add `iq.iq` to a buffer to enable it.
+`SendMessage` (warm-agent continuation) is also unavailable, so any delegated isabelle-prover agent starts cold.
+
 ## Session handover — 2026-06-24 (cont.: stuck-call check + try0 DONE — `Correctness.thy` now GENUINELY green at 34.4s; found & fixed a CACHED FALSE-GREEN (diverging `fastforce`) in `num_no_urgent`; refactor Phases B–D + both fixes COMMITTED)
 
 **Status: `TP_NTA_Reduction_Correctness.thy` fully_processed + consolidated, 0 err / 1 sorry, 34.4s total (no
