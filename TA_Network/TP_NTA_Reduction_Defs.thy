@@ -495,6 +495,39 @@ definition num_upd :: "'snap_action \<Rightarrow> (String.literal \<times> (Stri
 definition num_init_upd :: "(String.literal \<times> (String.literal, int) exp) list" where
 "num_init_upd = map (\<lambda>f. (fluent_to_var f, exp.const (const_to_int (num_init f)))) nfluents"
 
+text \<open>Faithfulness of the integer encoding on the discrete fragment (NUMERIC_PLAN A.3): a numeric
+expression is @{emph \<open>ok\<close>} at a valuation when every leaf reads a declared, integer-valued fluent or an
+integer constant and every division divides exactly -- the side-condition under which the truncating
+Munta integer arithmetic agrees with the abstract field arithmetic. Hoisted here (into the defs locale,
+above the well-formedness assumptions) so the grounder-match contract can reference it.\<close>
+fun nexp_ok :: "('n \<rightharpoonup> 'r) \<Rightarrow> ('n, 'r) nexp \<Rightarrow> bool" where
+  "nexp_ok w (NConst c) \<longleftrightarrow> c \<in> \<int>"
+| "nexp_ok w (NVar f)   \<longleftrightarrow> f \<in> set nfluents \<and> (\<exists>r. w f = Some r \<and> r \<in> \<int>)"
+| "nexp_ok w (NAdd a b) \<longleftrightarrow> nexp_ok w a \<and> nexp_ok w b"
+| "nexp_ok w (NSub a b) \<longleftrightarrow> nexp_ok w a \<and> nexp_ok w b"
+| "nexp_ok w (NMul a b) \<longleftrightarrow> nexp_ok w a \<and> nexp_ok w b"
+| "nexp_ok w (NDiv a b) \<longleftrightarrow> nexp_ok w a \<and> nexp_ok w b
+     \<and> the (eval_nexp w b) \<noteq> 0
+     \<and> const_to_int (the (eval_nexp w b)) dvd const_to_int (the (eval_nexp w a))"
+
+text \<open>@{term \<open>comp_ok w c\<close>}: both sides of the comparison are faithful numeric expressions.\<close>
+fun comp_ok :: "('n \<rightharpoonup> 'r) \<Rightarrow> ('n, 'r) comp \<Rightarrow> bool" where
+  "comp_ok w (Comp p a b) \<longleftrightarrow> nexp_ok w a \<and> nexp_ok w b"
+
+text \<open>A valuation is @{emph \<open>integer-ok\<close>} when every declared fluent is defined and integer-valued
+(the encoding @{term const_to_int} round-trips on it), and @{emph \<open>in bounds\<close>} when each fluent's
+integer encoding lies within its declared variable range.\<close>
+definition num_val_ok :: "('n \<rightharpoonup> 'r) \<Rightarrow> bool" where
+"num_val_ok w \<longleftrightarrow> (\<forall>f \<in> set nfluents. \<exists>r. w f = Some r \<and> r \<in> \<int>)"
+
+definition fluent_in_bounds :: "('n \<rightharpoonup> 'r) \<Rightarrow> bool" where
+"fluent_in_bounds w \<longleftrightarrow> (\<forall>f \<in> set nfluents. \<exists>r. w f = Some r \<and> r \<in> \<int>
+    \<and> fluent_lo f \<le> const_to_int r \<and> const_to_int r \<le> fluent_hi f)"
+
+text \<open>In-bounds subsumes integer-OK: the bounded valuation is in particular integer-valued.\<close>
+lemma fluent_in_bounds_imp_num_val_ok: "fluent_in_bounds w \<Longrightarrow> num_val_ok w"
+  unfolding fluent_in_bounds_def num_val_ok_def by blast
+
 text \<open>Append a numeric \<open>bexp\<close> guard (conjoined) and numeric \<open>(var, exp)\<close> updates (after the
 propositional ones) to a propositional edge, leaving source/target locations, clock constraints, the
 action label and clock resets untouched -- so the numeric net's propositional projection is the
@@ -607,5 +640,37 @@ locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
       and fluent_bounds_valid:      "\<forall>f \<in> set nfluents. fluent_lo f \<le> fluent_hi f"
       and fluent_to_var_inj:        "inj_on fluent_to_var (set nfluents)"
       and fluent_vars_fresh:        "\<forall>f \<in> set nfluents. fluent_to_var f \<notin> fst ` set all_vars"
+      \<comment> \<open>Integer-encoding faithfulness, the grounder-match contract for the discrete fragment
+         (NUMERIC_PLAN A.3): on any integer-valued (@{const num_val_ok}) valuation every snap's update
+         RHS and pre/over_all comparison is @{const nexp_ok}/@{const comp_ok} (declared integer reads,
+         exact divisions), and the initial valuation is integer-valued. These are static and
+         grounder-checkable. Range-boundedness is a @{emph \<open>reachability\<close>} property (a global closure
+         over all in-range valuations is false for monotone effects), so it is assumed M-scoped -- the
+         certified plan's valuations stay within the declared variable bounds -- as @{text num_seq_in_bounds}
+         in the \<open>numeric_tp_nta_reduction_correctness\<close> locale (where the state sequence is in scope); the
+         intermediate partial-fold stores are then derived in range from the happening endpoints.\<close>
+      and snap_upds_nexp_ok_start:
+            "\<forall>a \<in> set actions. \<forall>w. num_val_ok w \<longrightarrow> (\<forall>(f, e) \<in> set (upds (at_start a)). nexp_ok w e)"
+      and snap_upds_nexp_ok_end:
+            "\<forall>a \<in> set actions. \<forall>w. num_val_ok w \<longrightarrow> (\<forall>(f, e) \<in> set (upds (at_end a)). nexp_ok w e)"
+      and snap_pre_comp_ok_start:
+            "\<forall>a \<in> set actions. \<forall>w. num_val_ok w \<longrightarrow> (\<forall>c \<in> set (n_pre (at_start a)). comp_ok w c)"
+      and snap_pre_comp_ok_end:
+            "\<forall>a \<in> set actions. \<forall>w. num_val_ok w \<longrightarrow> (\<forall>c \<in> set (n_pre (at_end a)). comp_ok w c)"
+      and snap_inv_comp_ok:
+            "\<forall>a \<in> set actions. \<forall>w. num_val_ok w \<longrightarrow> (\<forall>c \<in> set (n_inv a). comp_ok w c)"
+      and num_init_val_ok: "\<forall>f \<in> set nfluents. num_init f \<in> \<int>"
+      \<comment> \<open>Numeric over_all invariants: the supported fragment restricts them to EQUALITIES
+         (@{term n_inv_eq}) whose fluents are never written by any snap (read-only, @{term n_inv_readonly}).
+         Then an over_all comparison's value is constant along every run, hence valuation-independent, so
+         @{const num_edge_2}'s entry check discharges directly from plan validity (the action's over_all
+         holds while it is active, which transfers verbatim to the start instant) -- the numeric mirror of
+         the propositional over_all lock, with "no update changes the value" in its strongest static form.\<close>
+      and n_inv_eq:
+            "\<forall>a \<in> set actions. \<forall>c \<in> set (n_inv a). \<exists>e1 e2. c = Comp Ceq e1 e2"
+      and n_inv_readonly:
+            "\<forall>a \<in> set actions. \<forall>b \<in> set actions.
+               (fst ` set (upds (at_start a)) \<union> fst ` set (upds (at_end a)))
+                 \<inter> (\<Union>c \<in> set (n_inv b). comp_fluents c) = {}"
 
 end

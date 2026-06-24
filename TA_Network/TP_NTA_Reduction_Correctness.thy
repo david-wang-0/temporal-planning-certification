@@ -724,6 +724,20 @@ locale numeric_tp_nta_reduction_correctness =
     and const_to_int :: "'r \<Rightarrow> int" +
   assumes num_valid: "num_plan.num_rat_impl.num_valid_plan"
       and const_to_int_of_int: "const_to_int (Int.of_int m) = m"
+      \<comment> \<open>The range-boundedness reachability invariant (grounder-match contract, complementing the
+         static integrality assumptions in @{locale numeric_tp_nta_reduction}): along any valid numeric
+         state sequence the per-happening valuations stay within the declared fluent variable bounds.
+         A certifier checks this against the candidate plan's finite trace; PDDL supplies no bounds, and a
+         global closure over all in-range valuations would be false for monotone effects. The intermediate
+         partial-fold stores within a happening are derived in range from the @{term i}/@{term \<open>Suc i\<close>}
+         endpoints (each fluent is written at most once, so a partial value is one of the two endpoints).
+         Indexed by @{term \<open>rat_impl.htpl\<close>}, which the later \<open>rat_impl_htpl_eq\<close> equates with
+         @{term \<open>planning_sem.htpl\<close>}.\<close>
+      and num_seq_in_bounds:
+            "\<And>M i. num_plan.num_rat_impl.num_valid_state_sequence M
+               \<Longrightarrow> snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)
+               \<Longrightarrow> i \<le> length rat_impl.htpl
+               \<Longrightarrow> fluent_in_bounds (snd (M i))"
 begin
 
 text \<open>The numeric network's Munta semantics, mirroring the propositional @{text net_impl}/@{text
@@ -819,19 +833,11 @@ proof -
   thus ?thesis by (simp add: Ints_of_int)
 qed
 
-text \<open>@{term \<open>nexp_ok w e\<close>}: the encoder is FAITHFUL on @{term e} at valuation @{term w} -- every leaf
-reads a declared, integer-valued fluent or an integer constant, and every @{term NDiv} divides exactly.
-This is the precise discrete-fragment side-condition under which the truncating Munta integer arithmetic
-agrees with the abstract field arithmetic.\<close>
-fun nexp_ok :: "('n \<rightharpoonup> 'r) \<Rightarrow> ('n, 'r) nexp \<Rightarrow> bool" where
-  "nexp_ok w (NConst c) \<longleftrightarrow> c \<in> \<int>"
-| "nexp_ok w (NVar f)   \<longleftrightarrow> f \<in> set nfluents \<and> (\<exists>r. w f = Some r \<and> r \<in> \<int>)"
-| "nexp_ok w (NAdd a b) \<longleftrightarrow> nexp_ok w a \<and> nexp_ok w b"
-| "nexp_ok w (NSub a b) \<longleftrightarrow> nexp_ok w a \<and> nexp_ok w b"
-| "nexp_ok w (NMul a b) \<longleftrightarrow> nexp_ok w a \<and> nexp_ok w b"
-| "nexp_ok w (NDiv a b) \<longleftrightarrow> nexp_ok w a \<and> nexp_ok w b
-     \<and> the (eval_nexp w b) \<noteq> 0
-     \<and> const_to_int (the (eval_nexp w b)) dvd const_to_int (the (eval_nexp w a))"
+text \<open>The encoder-faithfulness side-conditions @{const nexp_ok} / @{const comp_ok} (every leaf reads a
+declared, integer-valued fluent or an integer constant, and every @{term NDiv} divides exactly -- the
+precise discrete-fragment condition under which the truncating Munta integer arithmetic agrees with the
+abstract field arithmetic) are now defined in the @{locale numeric_tp_nta_reduction_defs} ancestor, so
+the grounder-match well-formedness assumptions can reference them.\<close>
 
 text \<open>The load-bearing correspondence: under a tracking store, a faithful numeric expression evaluates
 abstractly to an integer-valued field element whose integer encoding is exactly what Munta computes for
@@ -918,9 +924,6 @@ lemma const_to_int_lt_iff:
   shows "(const_to_int a < const_to_int b) = (a < b)"
   using assms by (auto elim!: Ints_cases simp: const_to_int_of_int)
 
-text \<open>@{term \<open>comp_ok w c\<close>}: both sides of the comparison are faithful numeric expressions.\<close>
-fun comp_ok :: "('n \<rightharpoonup> 'r) \<Rightarrow> ('n, 'r) comp \<Rightarrow> bool" where
-  "comp_ok w (Comp p a b) \<longleftrightarrow> nexp_ok w a \<and> nexp_ok w b"
 
 text \<open>A satisfied, faithful abstract comparison transfers to the translated Munta guard holding True.\<close>
 lemma check_bexp_comp_to_bexp:
@@ -1228,6 +1231,7 @@ lemma num_Lv_conds_maintained:
     and "Simple_Network_Language.bounded (map_of num_net_bounds) v \<Longrightarrow> Simple_Network_Language.bounded (map_of num_net_bounds) v'"
   shows "num_Lv_conds L' v'"
   using assms unfolding num_Lv_conds_def by simp
+
 definition "num_happening_pre M i Lvc \<equiv>
   (case Lvc of (L, v, c) \<Rightarrow> happening_pre i (L, v |` dom (map_of net_bounds), c)
     \<and> num_tracks v (snd (M i)))"
@@ -2443,6 +2447,497 @@ proof (rule ext)
   qed
 qed
 
+lemma map_of_map_inj_on:
+  assumes "inj_on key (set xs)"
+      and "a \<in> set xs"
+    shows "map_of (map (\<lambda>x. (key x, vl x)) xs) (key a) = Some (vl a)"
+  using assms
+proof (induction xs)
+  case (Cons x xs)
+  show ?case
+  proof (cases "a = x")
+    case True
+    thus ?thesis by simp
+  next
+    case False
+    hence ax: "a \<in> set xs" using Cons.prems(2) by simp
+    have inj_xs: "inj_on key (set xs)" using Cons.prems(1) by (rule inj_on_subset) auto
+    have xmem: "x \<in> set (x # xs)" by simp
+    have "key a \<noteq> key x"
+    proof
+      assume eq: "key a = key x"
+      have "a = x" by (rule inj_onD[OF Cons.prems(1) eq Cons.prems(2) xmem])
+      thus False using False by simp
+    qed
+    thus ?thesis using Cons.IH[OF inj_xs ax] by simp
+  qed
+qed simp
+lemma map_of_num_net_bounds_fluent:
+  assumes "f \<in> set nfluents"
+  shows "map_of num_net_bounds (fluent_to_var f) = Some (fluent_lo f, fluent_hi f)"
+proof -
+  have fresh: "fluent_to_var f \<notin> fst ` set all_vars" using fluent_vars_fresh assms by blast
+  hence notdom: "fluent_to_var f \<notin> dom (map_of all_vars)" by (simp add: dom_map_of_conv_image_fst)
+  have split: "map_of num_net_bounds (fluent_to_var f) = map_of num_fluent_vars (fluent_to_var f)"
+    unfolding num_all_vars_def map_of_append using notdom by (simp add: map_add_dom_app_simps(3))
+  have "map_of num_fluent_vars (fluent_to_var f) = Some (fluent_lo f, fluent_hi f)"
+    unfolding num_fluent_vars_def
+    by (rule map_of_map_inj_on[OF fluent_to_var_inj assms])
+  thus ?thesis using split by simp
+qed
+
+lemma num_tracks_bounded:
+  assumes domeq: "dom vn = dom (map_of num_net_bounds)"
+      and prop_b: "Simple_Network_Language.bounded (map_of net_bounds) (vn |` dom (map_of net_bounds))"
+      and tr: "num_tracks vn w"
+      and inb: "fluent_in_bounds w"
+    shows "Simple_Network_Language.bounded (map_of num_net_bounds) vn"
+  unfolding Simple_Network_Language.bounded_def
+proof (intro conjI)
+  show "dom vn = dom (map_of num_net_bounds)" by (rule domeq)
+next
+  show "\<forall>x \<in> dom vn. fst (the (map_of num_net_bounds x)) \<le> the (vn x)
+          \<and> the (vn x) \<le> snd (the (map_of num_net_bounds x))"
+  proof (intro ballI)
+    fix x assume xdom: "x \<in> dom vn"
+    have "x \<in> dom (map_of net_bounds) \<union> fluent_to_var ` set nfluents"
+      using xdom domeq dom_map_of_num_net_bounds by simp
+    thus "fst (the (map_of num_net_bounds x)) \<le> the (vn x)
+          \<and> the (vn x) \<le> snd (the (map_of num_net_bounds x))"
+    proof
+      assume xp: "x \<in> dom (map_of net_bounds)"
+      have xrp: "x \<in> dom (vn |` dom (map_of net_bounds))" using xdom xp by simp
+      have r: "(vn |` dom (map_of net_bounds)) x = vn x" using xp by (simp add: restrict_in)
+      have b: "map_of num_net_bounds x = map_of net_bounds x" by (rule map_of_num_net_bounds_eq_on_props[OF xp])
+      have "fst (the (map_of net_bounds x)) \<le> the ((vn |` dom (map_of net_bounds)) x)
+            \<and> the ((vn |` dom (map_of net_bounds)) x) \<le> snd (the (map_of net_bounds x))"
+        using prop_b xrp unfolding Simple_Network_Language.bounded_def by blast
+      thus ?thesis unfolding r b by simp
+    next
+      assume "x \<in> fluent_to_var ` set nfluents"
+      then obtain f where f: "f \<in> set nfluents"
+        and xf: "x = fluent_to_var f"
+        by auto
+      have bx: "map_of num_net_bounds x = Some (fluent_lo f, fluent_hi f)"
+        unfolding xf by (rule map_of_num_net_bounds_fluent[OF f])
+      obtain r where wf: "w f = Some r" using num_tracks_definedD[OF tr f] by blast
+      have vx: "vn x = Some (const_to_int r)" unfolding xf by (rule num_tracks_varD[OF tr f wf])
+      have "fluent_lo f \<le> const_to_int r \<and> const_to_int r \<le> fluent_hi f"
+        using inb f wf unfolding fluent_in_bounds_def by force
+      thus ?thesis using bx vx by simp
+    qed
+  qed
+qed
+
+text \<open>The per-happening endpoint facts the run-lift consumes: along the init-anchored valid numeric
+sequence every @{term \<open>snd (M i)\<close>} (for @{term \<open>i \<le> length planning_sem.htpl\<close>}) is in range -- hence
+integer-valued -- by the @{thm [source] num_seq_in_bounds} reachability invariant (re-indexed from
+@{term \<open>rat_impl.htpl\<close>} to @{term \<open>planning_sem.htpl\<close>} via @{thm [source] rat_impl_htpl_eq}).\<close>
+lemma num_seq_fluent_in_bounds:
+  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and m0: "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
+      and i: "i \<le> length planning_sem.htpl"
+    shows "fluent_in_bounds (snd (M i))"
+proof -
+  have "i \<le> length rat_impl.htpl" using i by (simp add: rat_impl_htpl_eq)
+  thus ?thesis by (rule num_seq_in_bounds[OF vss m0])
+qed
+
+lemma num_seq_val_ok:
+  assumes "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
+      and "i \<le> length planning_sem.htpl"
+    shows "num_val_ok (snd (M i))"
+  by (rule fluent_in_bounds_imp_num_val_ok[OF num_seq_fluent_in_bounds[OF assms]])
+
+text \<open>R1 (integrality \<Rightarrow> faithfulness) helpers for the numeric run-lift. First the eval/integrality
+half of @{thm [source] nexp_ok_is_val}, factored out so it stands without the @{const num_tracks}
+premise: an @{const nexp_ok} expression evaluates to a defined, integer-valued result. The arithmetic
+cases close by @{thm [source] Ints_add} / @{thm [source] Ints_diff} / @{thm [source] Ints_mult}; the
+@{term NDiv} case uses @{thm [source] Ints_div_exact} with the @{text \<open>\<noteq> 0\<close>} and @{text dvd}
+side-conditions that @{const nexp_ok} already carries.\<close>
+lemma nexp_ok_eval:
+  assumes "nexp_ok w e"
+  shows "\<exists>r. eval_nexp w e = Some r \<and> r \<in> \<int>"
+  using assms
+proof (induction e)
+  case (NConst c)
+  thus ?case by auto
+next
+  case (NVar f)
+  thus ?case by auto
+next
+  case (NAdd a b)
+  then obtain ra rb where
+      a: "eval_nexp w a = Some ra" "ra \<in> \<int>"
+    and b: "eval_nexp w b = Some rb" "rb \<in> \<int>"
+    by auto
+  thus ?case by (auto simp: Ints_add)
+next
+  case (NSub a b)
+  then obtain ra rb where
+      a: "eval_nexp w a = Some ra" "ra \<in> \<int>"
+    and b: "eval_nexp w b = Some rb" "rb \<in> \<int>"
+    by auto
+  thus ?case by (auto simp: Ints_diff)
+next
+  case (NMul a b)
+  then obtain ra rb where
+      a: "eval_nexp w a = Some ra" "ra \<in> \<int>"
+    and b: "eval_nexp w b = Some rb" "rb \<in> \<int>"
+    by auto
+  thus ?case by (auto simp: Ints_mult)
+next
+  case (NDiv a b)
+  then obtain ra rb where
+      a: "eval_nexp w a = Some ra" "ra \<in> \<int>"
+    and b: "eval_nexp w b = Some rb" "rb \<in> \<int>"
+    by auto
+  have nz: "rb \<noteq> 0" and dvd: "const_to_int rb dvd const_to_int ra"
+    using NDiv.prems a(1) b(1) by auto
+  have ev: "eval_nexp w (NDiv a b) = Some (ra / rb)" using a(1) b(1) nz by simp
+  have iv: "ra / rb \<in> \<int>" by (rule Ints_div_exact[OF a(2) b(2) nz dvd])
+  thus ?case using ev by blast
+qed
+
+text \<open>A single snap update of a start/end snap of a plan action preserves @{const num_val_ok}: every
+declared fluent stays defined and integer-valued. A written fluent gets @{term \<open>eval_nexp w e\<close>} for
+its @{const nexp_ok} right-hand side (the snap's updates are @{const nexp_ok} over any @{const num_val_ok}
+valuation by @{thm [source] snap_upds_nexp_ok_start} / @{thm [source] snap_upds_nexp_ok_end}), integer by
+@{thm [source] nexp_ok_eval}; an unwritten fluent keeps its (integer) pre-value. The functional side
+condition comes from @{thm [source] upds_functional_start} / @{thm [source] upds_functional_end}.\<close>
+lemma snap_num_update_preserves_num_val_ok:
+  assumes a: "a \<in> set actions"
+      and s: "s = at_start a \<or> s = at_end a"
+      and ok: "num_val_ok w"
+    shows "num_val_ok (num_plan.num_rat_impl.snap_num_update s w)"
+proof -
+  have func: "upds_functional ((set \<circ> upds) s)"
+    using a s upds_functional_start upds_functional_end
+    by (auto simp: upds_functional_set upds_functional_list_def)
+  have rhs_ok: "nexp_ok w e" if "(f, e) \<in> set (upds s)" for f e
+    using s a ok snap_upds_nexp_ok_start snap_upds_nexp_ok_end that by fastforce
+  have "\<exists>r. num_plan.num_rat_impl.snap_num_update s w g = Some r \<and> r \<in> \<int>"
+    if g: "g \<in> set nfluents" for g
+  proof (cases "g \<in> fst ` set (upds s)")
+    case True
+    then obtain e where e: "(g, e) \<in> set (upds s)" by auto
+    have "num_plan.num_rat_impl.snap_num_update s w g = eval_nexp w e"
+      using func e by (simp add: num_plan.num_rat_impl.snap_num_update_writes)
+    moreover obtain r where "eval_nexp w e = Some r" and "r \<in> \<int>"
+      using nexp_ok_eval[OF rhs_ok[OF e]] by blast
+    ultimately show ?thesis by simp
+  next
+    case False
+    hence "g \<notin> num_plan.num_rat_impl.snap_writes s"
+      by (simp add: num_plan.num_rat_impl.snap_writes_def)
+    hence "num_plan.num_rat_impl.snap_num_update s w g = w g"
+      by (rule num_plan.num_rat_impl.snap_num_update_unwritten)
+    thus ?thesis using ok g by (auto simp: num_val_ok_def)
+  qed
+  thus ?thesis by (simp add: num_val_ok_def)
+qed
+
+text \<open>Folding a list of start/end snaps (a happening, presented as a list) preserves @{const num_val_ok}:
+each fold step is a single @{const num_plan.num_rat_impl.snap_num_update} of one start/end snap, handled by
+@{thm [source] snap_num_update_preserves_num_val_ok}; induct on the list, generalising the running
+valuation.\<close>
+lemma happening_num_update_preserves_num_val_ok:
+  assumes "num_val_ok w"
+      and "\<And>s. s \<in> set ys \<Longrightarrow> \<exists>a \<in> set actions. s = at_start a \<or> s = at_end a"
+    shows "num_val_ok (num_plan.num_rat_impl.happening_num_update ys w)"
+  using assms
+proof (induction ys arbitrary: w)
+  case Nil
+  thus ?case using Nil.prems(1)
+    by (simp add: num_plan.num_rat_impl.happening_num_update_Nil[unfolded comp_def])
+next
+  case (Cons y ys)
+  obtain a where a: "a \<in> set actions"
+    and ay: "y = at_start a \<or> y = at_end a"
+    using Cons.prems(2) by auto
+  have sok: "num_val_ok (num_plan.num_rat_impl.snap_num_update y w)"
+    by (rule snap_num_update_preserves_num_val_ok[OF a ay Cons.prems(1)])
+  have step: "num_val_ok (num_plan.num_rat_impl.happening_num_update ys
+            (num_plan.num_rat_impl.snap_num_update y w))"
+    by (rule Cons.IH[OF sok]) (use Cons.prems(2) in auto)
+  show ?case
+    by (subst num_plan.num_rat_impl.happening_num_update_Cons) (rule step)
+qed
+
+text \<open>The payload R1 fact: every right-hand side of a snap occurring in happening @{term i} is
+@{const nexp_ok} over any @{const num_val_ok} valuation. By @{thm [source] happ_at_index_decomp} each
+happening snap is @{term \<open>at_start (actions ! j)\<close>} or @{term \<open>at_end (actions ! j)\<close>} for some
+@{term \<open>j < length actions\<close>} (so @{term \<open>actions ! j \<in> set actions\<close>}); the locale assumptions
+@{thm [source] snap_upds_nexp_ok_start} / @{thm [source] snap_upds_nexp_ok_end} then give
+@{const nexp_ok} of each update's right-hand side. Same case-split as
+@{thm [source] happening_upds_functional}.\<close>
+lemma happening_snap_nexp_ok:
+  assumes mem: "s \<in> planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+      and upd: "(f, e) \<in> set (upds s)"
+      and ok: "num_val_ok w"
+    shows "nexp_ok w e"
+proof -
+  have "s \<in> at_start ` { actions ! j | j. j < length actions
+                            \<and> (is_starting_index (planning_sem.time_index i) j
+                               \<or> is_instant_index (planning_sem.time_index i) j) }
+          \<union> at_end ` { actions ! j | j. j < length actions
+                          \<and> (is_ending_index (planning_sem.time_index i) j
+                             \<or> is_instant_index (planning_sem.time_index i) j) }"
+    using mem by (simp only: happ_at_index_decomp)
+  then consider
+      (starting) j where "j < length actions" and "s = at_start (actions ! j)"
+    | (ending) j where "j < length actions" and "s = at_end (actions ! j)"
+    by blast
+  thus ?thesis
+  proof cases
+    case starting
+    hence "actions ! j \<in> set actions" by simp
+    thus ?thesis using snap_upds_nexp_ok_start ok upd starting by fastforce
+  next
+    case ending
+    hence "actions ! j \<in> set actions" by simp
+    thus ?thesis using snap_upds_nexp_ok_end ok upd ending by fastforce
+  qed
+qed
+
+text \<open>A happening fold leaves a fluent untouched if no snap in the list writes it: each fold step is
+a single @{const num_plan.num_rat_impl.snap_num_update} of an unwritten fluent, which is the identity on
+that fluent by @{thm [source] num_plan.num_rat_impl.snap_num_update_unwritten}. Induct on the list,
+generalising the running valuation. (The locale write set @{term \<open>num_plan.num_rat_impl.snap_writes s\<close>}
+unfolds to @{term \<open>fst ` (set \<circ> upds) s\<close>}.)\<close>
+lemma happening_num_update_unwritten:
+  assumes "\<And>s. s \<in> set qs \<Longrightarrow> g \<notin> fst ` (set \<circ> upds) s"
+  shows "num_plan.num_rat_impl.happening_num_update qs v g = v g"
+  using assms
+proof (induction qs arbitrary: v)
+  case Nil
+  show ?case
+    by (simp add: num_plan.num_rat_impl.happening_num_update_Nil[unfolded comp_def])
+next
+  case (Cons q qs)
+  have qw: "g \<notin> num_plan.num_rat_impl.snap_writes q"
+    using Cons.prems[of q] by (simp add: num_plan.num_rat_impl.snap_writes_def)
+  have step: "num_plan.num_rat_impl.happening_num_update qs
+                (num_plan.num_rat_impl.snap_num_update q v) g
+              = num_plan.num_rat_impl.snap_num_update q v g"
+    by (rule Cons.IH) (use Cons.prems in auto)
+  have "num_plan.num_rat_impl.snap_num_update q v g = v g"
+    by (rule num_plan.num_rat_impl.snap_num_update_unwritten[OF qw])
+  thus ?case
+    using step by (subst num_plan.num_rat_impl.happening_num_update_Cons) simp
+qed
+
+text \<open>The running partial snap-fold over a @{emph \<open>prefix\<close>} @{term ys} of the @{term i}-th happening
+stays within the declared fluent bounds. Both endpoints @{term \<open>snd (M i)\<close>} and @{term \<open>snd (M (Suc i))\<close>}
+are in bounds (@{thm [source] num_seq_fluent_in_bounds}), and the full fold over the whole happening
+@{term \<open>ys @ zs\<close>} equals the after-endpoint (@{thm [source] run_order_fold_eq_happening_num_update_set}).
+For a declared fluent @{term g}: if no snap in @{term ys} writes it, the prefix fold leaves it at the
+pre-endpoint value; if some @{term ys}-snap writes it, then -- since two snaps of one happening that
+both write @{term g} would interfere (@{thm [source] happening_num_noninterfere} contradicted via the
+write/write disjunct of @{const num_plan.num_rat_impl.num_mutex_snap_action}) -- no @{term zs}-snap
+writes @{term g}, so the @{term zs}-tail of the full fold leaves it untouched, pinning the prefix value
+to the after-endpoint value. Either way @{term g} lands in its declared bounds.\<close>
+lemma running_prefix_in_bounds:
+  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and m0: "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
+      and i: "i < length planning_sem.htpl"
+      and dist: "distinct (ys @ zs)"
+      and full: "set (ys @ zs) = planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+    shows "fluent_in_bounds (num_plan.num_rat_impl.happening_num_update ys (snd (M i)))"
+proof -
+  let ?w0 = "snd (M i)"
+  let ?wpost = "snd (M (Suc i))"
+  let ?S = "planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+  have b0: "fluent_in_bounds ?w0"
+    using i by (intro num_seq_fluent_in_bounds[OF vss m0]) simp
+  have bpost: "fluent_in_bounds ?wpost"
+    using i by (intro num_seq_fluent_in_bounds[OF vss m0]) simp
+  have full_fold: "num_plan.num_rat_impl.happening_num_update (ys @ zs) ?w0 = ?wpost"
+    by (rule run_order_fold_eq_happening_num_update_set[OF i vss dist full])
+  have fold_app: "num_plan.num_rat_impl.happening_num_update (ys @ zs) v
+                    = num_plan.num_rat_impl.happening_num_update zs
+                        (num_plan.num_rat_impl.happening_num_update ys v)" for v
+    unfolding num_plan.num_rat_impl.happening_num_update_def
+    by (subst fold_append) (rule o_apply)
+  have disj: "set ys \<inter> set zs = {}" using dist by auto
+  have bound_g: "\<exists>r. num_plan.num_rat_impl.happening_num_update ys ?w0 g = Some r \<and> r \<in> \<int>
+                   \<and> fluent_lo g \<le> const_to_int r \<and> const_to_int r \<le> fluent_hi g"
+    if g: "g \<in> set nfluents" for g
+  proof (cases "\<exists>s \<in> set ys. g \<in> fst ` (set \<circ> upds) s")
+    case False
+    hence "num_plan.num_rat_impl.happening_num_update ys ?w0 g = ?w0 g"
+      by (intro happening_num_update_unwritten) blast
+    thus ?thesis using b0 g unfolding fluent_in_bounds_def by simp
+  next
+    case True
+    then obtain s1 where s1: "s1 \<in> set ys" and g1: "g \<in> fst ` (set \<circ> upds) s1" by blast
+    have unwr_zs: "g \<notin> fst ` (set \<circ> upds) s2" if s2: "s2 \<in> set zs" for s2
+    proof
+      assume g2: "g \<in> fst ` (set \<circ> upds) s2"
+      have ne: "s1 \<noteq> s2" using s1 s2 disj by blast
+      have m1: "s1 \<in> ?S" using s1 full by auto
+      have m2: "s2 \<in> ?S" using s2 full by auto
+      have "\<not> num_plan.num_rat_impl.num_mutex_snap_action s1 s2"
+        by (rule happening_num_noninterfere[OF m1 m2 ne])
+      moreover have "num_plan.num_rat_impl.num_mutex_snap_action s1 s2"
+        using g1 g2 unfolding num_plan.num_rat_impl.num_mutex_snap_action_def
+                              num_plan.num_rat_impl.snap_writes_def by blast
+      ultimately show False by simp
+    qed
+    have "num_plan.num_rat_impl.happening_num_update zs
+            (num_plan.num_rat_impl.happening_num_update ys ?w0) g
+          = num_plan.num_rat_impl.happening_num_update ys ?w0 g"
+      by (intro happening_num_update_unwritten) (rule unwr_zs)
+    hence "num_plan.num_rat_impl.happening_num_update ys ?w0 g = ?wpost g"
+      using full_fold by (simp add: fold_app)
+    thus ?thesis using bpost g unfolding fluent_in_bounds_def by simp
+  qed
+  show ?thesis unfolding fluent_in_bounds_def using bound_g by blast
+qed
+
+text \<open>Per-snap numeric precondition satisfaction extracted from numeric-plan validity: along a valid
+numeric state sequence, every snap @{term s} of the @{term i}-th happening has its numeric precondition
+@{term \<open>n_pre s\<close>} satisfied at the pre-happening valuation @{term \<open>snd (M i)\<close>}. This is the precondition
+conjunct of @{thm [source] num_plan.num_rat_impl.num_valid_state_sequence_def} (where @{term \<open>num_plan\<close>}'s
+@{term n_pre} is @{term \<open>set \<circ> n_pre\<close>}, so the comparison set is @{term \<open>set (n_pre s)\<close>}); the happening
+membership is bridged from the @{term rat_impl} form by @{thm [source] rat_impl_happ_at_eq}. Same
+extraction shape as @{thm [source] run_order_fold_eq_happening_num_update_set} /
+@{thm [source] happening_upds_functional}.\<close>
+lemma happening_snap_pre_sat:
+  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and i: "i < length planning_sem.htpl"
+      and s: "s \<in> planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+    shows "sat_comps (snd (M i)) (set (n_pre s))"
+proof -
+  have iH: "i < length rat_impl.htpl" using i by (simp add: rat_impl_htpl_eq)
+  have sH: "s \<in> planning_sem.happ_at rat_impl.plan_happ_seq (rat_impl.time_index i)"
+    using s by (simp add: rat_impl_happ_at_eq)
+  have "\<forall>s \<in> planning_sem.happ_at rat_impl.plan_happ_seq (rat_impl.time_index i).
+          sat_comps (snd (M i)) ((set \<circ> n_pre) s)"
+    using vss iH unfolding num_plan.num_rat_impl.num_valid_state_sequence_def Let_def by blast
+  thus ?thesis using sH by simp
+qed
+
+text \<open>Guard invariance under a @{emph \<open>partial\<close>} (prefix-list) happening fold -- the list-prefix twin of
+@{thm [source] sat_comps_happening_num_update_set}. If @{term s} co-occurs in the @{term i}-th happening,
+@{term ys} is a @{term s}-free subset of that happening, then folding @{term ys}'s numeric updates over
+@{term \<open>snd (M i)\<close>} leaves @{term s}'s numeric precondition satisfaction unchanged: each @{term ys}-snap
+@{term s'} is distinct from @{term s} and co-occurs, so does not numerically interfere
+(@{thm [source] happening_num_noninterfere}), hence misses every fluent @{term s} reads; the precondition's
+read fluents lie in @{term \<open>snap_reads s\<close>} (definitionally), so @{thm [source] happening_num_update_unwritten}
+pins them. @{thm [source] sat_comps_cong} reduces to the per-read-fluent agreement. (The @{term rd}
+read-containment is derived inline from @{thm [source] num_plan.num_rat_impl.snap_reads_def}, so it is not a
+hypothesis.)\<close>
+lemma sat_comps_running_prefix:
+  assumes s: "s \<in> planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+      and ys_sub: "set ys \<subseteq> planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+      and s_notin: "s \<notin> set ys"
+    shows "sat_comps (num_plan.num_rat_impl.happening_num_update ys (snd (M i))) (set (n_pre s))
+             = sat_comps (snd (M i)) (set (n_pre s))"
+proof (rule sat_comps_cong)
+  fix c f assume c: "c \<in> set (n_pre s)" and f: "f \<in> comp_fluents c"
+  have fr: "f \<in> num_plan.num_rat_impl.snap_reads s"
+    using c f unfolding num_plan.num_rat_impl.snap_reads_def by auto
+  have unwr: "f \<notin> fst ` (set \<circ> upds) s'" if s': "s' \<in> set ys" for s'
+  proof -
+    have m': "s' \<in> planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+      using s' ys_sub by blast
+    have ne: "s' \<noteq> s" using s' s_notin by blast
+    have "\<not> num_plan.num_rat_impl.num_mutex_snap_action s' s"
+      by (rule happening_num_noninterfere[OF m' s ne])
+    hence "num_plan.num_rat_impl.snap_writes s' \<inter> num_plan.num_rat_impl.snap_reads s = {}"
+      unfolding num_plan.num_rat_impl.num_mutex_snap_action_def by blast
+    hence "f \<notin> num_plan.num_rat_impl.snap_writes s'" using fr by blast
+    thus ?thesis unfolding num_plan.num_rat_impl.snap_writes_def .
+  qed
+  show "num_plan.num_rat_impl.happening_num_update ys (snd (M i)) f = snd (M i) f"
+    by (rule happening_num_update_unwritten) (rule unwr)
+qed
+
+lemma happening_num_update_inv_unchanged:
+  assumes g: "g \<in> (\<Union>a \<in> set actions. \<Union>c \<in> set (n_inv a). comp_fluents c)"
+      and ys: "\<And>s. s \<in> set ys \<Longrightarrow> \<exists>a \<in> set actions. s = at_start a \<or> s = at_end a"
+    shows "num_plan.num_rat_impl.happening_num_update ys w g = w g"
+proof (rule happening_num_update_unwritten)
+  fix s assume s: "s \<in> set ys"
+  obtain b c where b: "b \<in> set actions" and c: "c \<in> set (n_inv b)" and gc: "g \<in> comp_fluents c"
+    using g by blast
+  have ginv_b: "g \<in> (\<Union>c \<in> set (n_inv b). comp_fluents c)" using c gc by blast
+  obtain a where a: "a \<in> set actions" and sa: "s = at_start a \<or> s = at_end a"
+    using ys[OF s] by blast
+  have "(fst ` set (upds (at_start a)) \<union> fst ` set (upds (at_end a)))
+          \<inter> (\<Union>c \<in> set (n_inv b). comp_fluents c) = {}"
+    using n_inv_readonly a b by blast
+  hence "g \<notin> fst ` set (upds (at_start a))" and "g \<notin> fst ` set (upds (at_end a))"
+    using ginv_b by auto
+  thus "g \<notin> fst ` (set \<circ> upds) s" using sa by (auto simp: comp_def)
+qed
+
+lemma num_seq_inv_const:
+  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and i: "i \<le> length planning_sem.htpl"
+      and g: "g \<in> (\<Union>a \<in> set actions. \<Union>c \<in> set (n_inv a). comp_fluents c)"
+    shows "snd (M i) g = snd (M 0) g"
+  using i
+proof (induction i)
+  case 0
+  show ?case by simp
+next
+  case (Suc i')
+  have i'H: "i' < length planning_sem.htpl" using Suc.prems by simp
+  let ?S = "planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i')"
+  obtain xs where dist: "distinct xs" and setxs: "set xs = ?S"
+    using finite_distinct_list[OF happening_finite] by blast
+  have fold_post: "num_plan.num_rat_impl.happening_num_update xs (snd (M i')) = snd (M (Suc i'))"
+    by (rule run_order_fold_eq_happening_num_update_set[OF i'H vss dist setxs])
+  have ys: "\<exists>a \<in> set actions. s = at_start a \<or> s = at_end a" if s: "s \<in> set xs" for s
+  proof -
+    have "s \<in> at_start ` { actions ! j | j. j < length actions
+              \<and> (is_starting_index (planning_sem.time_index i') j \<or> is_instant_index (planning_sem.time_index i') j) }
+            \<union> at_end ` { actions ! j | j. j < length actions
+              \<and> (is_ending_index (planning_sem.time_index i') j \<or> is_instant_index (planning_sem.time_index i') j) }"
+      using s setxs by (simp only: happ_at_index_decomp)
+    thus ?thesis by (auto simp: set_nthI)
+  qed
+  have "num_plan.num_rat_impl.happening_num_update xs (snd (M i')) g = snd (M i') g"
+    by (rule happening_num_update_inv_unchanged[OF g ys])
+  hence "snd (M (Suc i')) g = snd (M i') g" using fold_post by simp
+  thus ?case using Suc.IH Suc.prems by simp
+qed
+
+lemma active_action_inv_sat:
+  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and i: "i < length planning_sem.htpl"
+      and a: "a \<in> num_plan.num_rat_impl.active_actions (rat_impl.time_index i)"
+    shows "sat_comps (snd (M i)) (set (n_inv a))"
+proof -
+  have iH: "i < length rat_impl.htpl" using i by (simp add: rat_impl_htpl_eq)
+  have "\<forall>a \<in> num_plan.num_rat_impl.active_actions (rat_impl.time_index i).
+          sat_comps (snd (M i)) ((set \<circ> n_inv) a)"
+    using vss iH unfolding num_plan.num_rat_impl.num_valid_state_sequence_def Let_def by blast
+  thus ?thesis using a by simp
+qed
+
+lemma num_inv_guard_sat_at:
+  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and a: "a \<in> set actions"
+      and aact: "a \<in> num_plan.num_rat_impl.active_actions (rat_impl.time_index i')"
+      and i': "i' < length planning_sem.htpl"
+      and wagree: "\<And>g. g \<in> (\<Union>c \<in> set (n_inv a). comp_fluents c) \<Longrightarrow> w g = snd (M i') g"
+    shows "sat_comps w (set (n_inv a))"
+proof -
+  have sat: "sat_comps (snd (M i')) (set (n_inv a))"
+    by (rule active_action_inv_sat[OF vss i' aact])
+  have "sat_comps w (set (n_inv a)) = sat_comps (snd (M i')) (set (n_inv a))"
+  proof (rule sat_comps_cong)
+    fix c f assume c: "c \<in> set (n_inv a)" and f: "f \<in> comp_fluents c"
+    have "f \<in> (\<Union>c \<in> set (n_inv a). comp_fluents c)" using c f by blast
+    thus "w f = snd (M i') f" by (rule wagree)
+  qed
+  thus ?thesis using sat by simp
+qed
+
 text \<open>The bridge to the propositional structural invariant: the projection of a
 @{const num_Lv_conds}-store to the propositional bounds domain satisfies @{const Lv_conds}. The
 boundedness comes from @{thm [source] prop_proj_bounded}; @{const planning_lock} survives the
@@ -2552,9 +3047,838 @@ valuation @{term \<open>snd (M i)\<close>}, there is a numeric run that ends in 
 @{const num_happening_post} (the propositional post-invariant plus tracking of @{term \<open>snd (M (Suc i))\<close>}).
 The run shadows the propositional @{const delay_and_apply} run (same locations and clocks), threading the
 fluent variables through @{thm [source] num_int_step_lift} per internal step.\<close>
+
+text \<open>Every edge of @{const net_automata} carries a @{const Sil} action (all edge definitions ---
+@{const main_auto_init_edge} / @{const main_auto_goal_edge} / @{const main_auto_loop} on the main
+automaton and @{const start_edge} / @{const edge_2} / @{const edge_3} / @{const end_edge} /
+@{const instant_trans_edge} on the action automata --- are @{term \<open>Sil (STR '''')\<close>}), so no @{const In}
+or @{const Out} synchronisation edge exists anywhere in the propositional net.\<close>
+lemma net_automata_no_in:
+  assumes "p < length net_automata"
+  shows "(l, b, g, In aa, f, r, l') \<notin> trans (automaton_of (net_automata ! p))"
+proof (cases p)
+  case 0
+  show ?thesis unfolding 0 main_auto_trans
+    unfolding main_auto_init_edge_def main_auto_goal_edge_def main_auto_loop_def Let_def by simp
+next
+  case (Suc n)
+  have nlt: "n < length actions" using assms unfolding Suc length_net_automata by simp
+  show ?thesis unfolding Suc nth_auto_trans[OF nlt]
+    unfolding start_edge_def edge_2_def edge_3_def end_edge_def instant_trans_edge_def Let_def by simp
+qed
+
+lemma net_automata_no_out:
+  assumes "p < length net_automata"
+  shows "(l, b, g, Out aa, f, r, l') \<notin> trans (automaton_of (net_automata ! p))"
+proof (cases p)
+  case 0
+  show ?thesis unfolding 0 main_auto_trans
+    unfolding main_auto_init_edge_def main_auto_goal_edge_def main_auto_loop_def Let_def by simp
+next
+  case (Suc n)
+  have nlt: "n < length actions" using assms unfolding Suc length_net_automata by simp
+  show ?thesis unfolding Suc nth_auto_trans[OF nlt]
+    unfolding start_edge_def edge_2_def edge_3_def end_edge_def instant_trans_edge_def Let_def by simp
+qed
+
+text \<open>The same on the @{emph \<open>conv\<close>}-elaborated automata that @{const net_impl.sem} actually steps over:
+@{const conv_automaton} only rewrites the clock guard (@{thm [source] conv_trans}), so it preserves the
+@{const In}/@{const Out} action labels and hence introduces no synchronisation edge either.\<close>
+lemma conv_net_no_in:
+  assumes "p < length net_automata"
+  shows "(l, b, g, In aa, f, r, l') \<notin> trans (automaton_of (conv_automaton (net_automata ! p)))"
+proof -
+  have plen: "p < length (map (automaton_of \<circ> conv_automaton) net_automata)" using assms by simp
+  have rw: "automaton_of (conv_automaton (net_automata ! p)) = map (automaton_of \<circ> conv_automaton) net_automata ! p"
+    using assms by (simp add: comp_def)
+  show ?thesis unfolding rw conv_trans[OF plen] using net_automata_no_in[OF assms] by auto
+qed
+
+lemma conv_net_no_out:
+  assumes "p < length net_automata"
+  shows "(l, b, g, Out aa, f, r, l') \<notin> trans (automaton_of (conv_automaton (net_automata ! p)))"
+proof -
+  have plen: "p < length (map (automaton_of \<circ> conv_automaton) net_automata)" using assms by simp
+  have rw: "automaton_of (conv_automaton (net_automata ! p)) = map (automaton_of \<circ> conv_automaton) net_automata ! p"
+    using assms by (simp add: comp_def)
+  show ?thesis unfolding rw conv_trans[OF plen] using net_automata_no_out[OF assms] by auto
+qed
+
+text \<open>A non-@{const Del} step of @{const net_impl.sem} is necessarily an @{const Internal} step: the
+empty broadcast set (@{thm [source] net_broadcast_def}) rules out a @{const Broad} step, and the
+absence of any @{const In}/@{const Out} edge (@{thm [source] conv_net_no_in} /
+@{thm [source] conv_net_no_out}) rules out a @{const Bin} step.\<close>
+lemma prop_non_del_step_internal:
+  assumes step: "net_impl.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow>\<^bsub>a\<^esub> \<langle>L', v', c'\<rangle>"
+      and aD: "a \<noteq> Simple_Network_Language.label.Del"
+      and L_len: "length L = length net_automata"
+  shows "\<exists>aa. a = Internal aa"
+proof (cases a)
+  case Del
+  then show ?thesis using aD by simp
+next
+  case (Internal aa)
+  then show ?thesis by blast
+next
+  case (Bin aa)
+  have F: False
+    apply (rule step_u_elims'(3)[OF step[unfolded Bin net_impl.sem_def]])
+    unfolding TAG_def
+    using L_len by (auto dest: conv_net_no_in)
+  then show ?thesis by simp
+next
+  case (Broad aa)
+  have F: False
+    apply (rule step_u_elims'(4)[OF step[unfolded Broad net_impl.sem_def]])
+    unfolding TAG_def
+    using net_broadcast_def by simp
+  then show ?thesis by simp
+qed
+
+lemma num_step'_lift:
+  assumes step: "net_impl.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow> \<langle>L', v', c'\<rangle>"
+      and L_len: "length L = length net_automata"
+      and bnd: "Simple_Network_Language.bounded (map_of num_net_bounds) vn"
+      and num_data:
+        "\<And>a p l b g f r l'.
+           p < length net_automata \<Longrightarrow>
+           (l, b, g, Sil a, f, r, l') \<in> trans (automaton_of (net_automata ! p)) \<Longrightarrow>
+           L ! p = l \<Longrightarrow> check_bexp v b True \<Longrightarrow> is_upds v f v' \<Longrightarrow>
+           \<exists>bg fu vn'.
+              (l, bg, g, Sil a, fu, r, l') \<in> trans (automaton_of (num_timed_automaton_net ! p))
+              \<and> check_bexp vn bg True
+              \<and> is_upds vn fu vn'
+              \<and> Simple_Network_Language.bounded (map_of num_net_bounds) vn'
+              \<and> v' \<subseteq>\<^sub>m vn' \<and> num_tracks vn' w'"
+  shows "\<exists>vn'. num_net_impl.sem \<turnstile> \<langle>L, vn, c\<rangle> \<rightarrow> \<langle>L', vn', c'\<rangle>
+               \<and> v' \<subseteq>\<^sub>m vn' \<and> num_tracks vn' w' \<and> Simple_Network_Language.bounded (map_of num_net_bounds) vn'"
+proof -
+  obtain Li vi ci a where
+      del: "net_impl.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>Li, vi, ci\<rangle>"
+    and aD: "a \<noteq> Simple_Network_Language.label.Del"
+    and act: "net_impl.sem \<turnstile> \<langle>Li, vi, ci\<rangle> \<rightarrow>\<^bsub>a\<^esub> \<langle>L', v', c'\<rangle>"
+    by (rule step_u'_elims[OF step]) blast
+  obtain broad N B where as: "net_impl.sem = (broad, N, B)" by (cases net_impl.sem) auto
+  obtain t where
+      Lieq: "Li = L"
+    and vieq: "vi = v"
+    and cieq: "ci = c \<oplus> t"
+    apply (cases rule: step_u_elims(1)[OF del])
+    unfolding as unfolding TAG_def by auto
+  have actI: "net_impl.sem \<turnstile> \<langle>L, v, c \<oplus> t\<rangle> \<rightarrow>\<^bsub>a\<^esub> \<langle>L', v', c'\<rangle>"
+    using act unfolding Lieq vieq cieq .
+  obtain aa where aInt: "a = Internal aa"
+    using prop_non_del_step_internal[OF actI aD L_len] by blast
+  have numDel: "num_net_impl.sem \<turnstile> \<langle>L, vn, c\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>L, vn, c \<oplus> t\<rangle>"
+    by (rule num_step_t_lift[OF del[unfolded Lieq vieq cieq] bnd])
+  have nd: "\<exists>bg fu vn'.
+              (l, bg, g, Sil aa, fu, r, l') \<in> trans (automaton_of (num_timed_automaton_net ! p))
+              \<and> check_bexp vn bg True
+              \<and> is_upds vn fu vn'
+              \<and> Simple_Network_Language.bounded (map_of num_net_bounds) vn'
+              \<and> v' \<subseteq>\<^sub>m vn' \<and> num_tracks vn' w'"
+    if "p < length net_automata"
+       "(l, b, g, Sil aa, f, r, l') \<in> trans (automaton_of (net_automata ! p))"
+       "L ! p = l" "check_bexp v b True" "is_upds v f v'"
+    for p l b g f r l'
+    using num_data that by blast
+  have ex: "\<exists>vn'. num_net_impl.sem \<turnstile> \<langle>L, vn, c \<oplus> t\<rangle> \<rightarrow>\<^bsub>Internal aa\<^esub> \<langle>L', vn', c'\<rangle>
+                 \<and> v' \<subseteq>\<^sub>m vn' \<and> num_tracks vn' w' \<and> Simple_Network_Language.bounded (map_of num_net_bounds) vn'"
+    apply (rule num_int_step_lift[OF actI[unfolded aInt] L_len])
+    using nd by blast
+  obtain vn' where
+      numInt: "num_net_impl.sem \<turnstile> \<langle>L, vn, c \<oplus> t\<rangle> \<rightarrow>\<^bsub>Internal aa\<^esub> \<langle>L', vn', c'\<rangle>"
+    and le': "v' \<subseteq>\<^sub>m vn'"
+    and tr': "num_tracks vn' w'"
+    and bnd': "Simple_Network_Language.bounded (map_of num_net_bounds) vn'"
+    using ex by blast
+  have "num_net_impl.sem \<turnstile> \<langle>L, vn, c\<rangle> \<rightarrow> \<langle>L', vn', c'\<rangle>"
+    by (rule step_u'.intros[OF numDel _ numInt]) simp
+  thus ?thesis using le' tr' bnd' by blast
+qed
+
+definition run_order_snaps :: "nat \<Rightarrow> 'snap_action list" where
+"run_order_snaps i \<equiv>
+  (let t = planning_sem.time_index i; acts = [0..<length actions];
+       start_indices = filter (is_starting_index t) acts;
+       end_indices   = filter (is_ending_index t) acts;
+       both          = filter (is_instant_index t) acts
+   in concat (map (\<lambda>n. [at_start (actions!n), at_end (actions!n)]) both)
+      @ map (\<lambda>n. at_start (actions!n)) start_indices
+      @ map (\<lambda>n. at_end (actions!n)) end_indices)"
+
+lemma set_run_order_snaps:
+  "set (run_order_snaps i) = planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+proof -
+  let ?t = "planning_sem.time_index i"
+  have setS: "set (filter (is_starting_index ?t) [0..<length actions])
+                = {j. j < length actions \<and> is_starting_index ?t j}"
+    by (simp add: set_filter)
+  have setE: "set (filter (is_ending_index ?t) [0..<length actions])
+                = {j. j < length actions \<and> is_ending_index ?t j}"
+    by (simp add: set_filter)
+  have setB: "set (filter (is_instant_index ?t) [0..<length actions])
+                = {j. j < length actions \<and> is_instant_index ?t j}"
+    by (simp add: set_filter)
+  show ?thesis
+    unfolding run_order_snaps_def Let_def happ_at_index_decomp
+    apply (simp only: set_append set_concat set_map setS setE setB)
+    by auto
+qed
+
+lemma distinct_run_order_snaps:
+  "distinct (run_order_snaps i)"
+proof -
+  let ?t = "planning_sem.time_index i"
+  define SI where "SI = filter (is_instant_index ?t) [0..<length actions]"
+  define SS where "SS = filter (is_starting_index ?t) [0..<length actions]"
+  define SE where "SE = filter (is_ending_index ?t) [0..<length actions]"
+  \<comment> \<open>Membership in each index list: the index is below @{term \<open>length actions\<close>} and has the case.\<close>
+  have memSI: "n < length actions" "is_instant_index ?t n" if "n \<in> set SI" for n
+    using that unfolding SI_def by auto
+  have memSS: "n < length actions" "is_starting_index ?t n" if "n \<in> set SS" for n
+    using that unfolding SS_def by auto
+  have memSE: "n < length actions" "is_ending_index ?t n" if "n \<in> set SE" for n
+    using that unfolding SE_def by auto
+  \<comment> \<open>Each index list is distinct (a filter of the distinct @{term \<open>[0..<length actions]\<close>}).\<close>
+  have distSI: "distinct SI" unfolding SI_def by simp
+  have distSS: "distinct SS" unfolding SS_def by simp
+  have distSE: "distinct SE" unfolding SE_def by simp
+  \<comment> \<open>The three index-cases are mutually exclusive at a fixed time-point.\<close>
+  have excl_IS: "\<not> is_starting_index ?t n" if "is_instant_index ?t n" for n
+    using that by (simp add: index_case_defs planning_sem.is_instant_action_def
+                              planning_sem.is_starting_action_def)
+  have excl_IE: "\<not> is_ending_index ?t n" if "is_instant_index ?t n" for n
+    using that by (simp add: index_case_defs planning_sem.is_instant_action_def
+                              planning_sem.is_ending_action_def)
+  have excl_SE: "\<not> is_ending_index ?t n" if "is_starting_index ?t n" for n
+    using that by (simp add: index_case_defs planning_sem.is_starting_action_def
+                              planning_sem.is_ending_action_def)
+  \<comment> \<open>Hence the index lists are pairwise disjoint as sets.\<close>
+  have disj_SI_SS: "set SI \<inter> set SS = {}"
+    using memSI(2) memSS(2) excl_IS by blast
+  have disj_SI_SE: "set SI \<inter> set SE = {}"
+    using memSI(2) memSE(2) excl_IE by blast
+  have disj_SS_SE: "set SS \<inter> set SE = {}"
+    using memSS(2) memSE(2) excl_SE by blast
+  \<comment> \<open>Snap-distinctness within and across the index lists.\<close>
+  have ne_se: "at_start (actions ! n) \<noteq> at_end (actions ! m)"
+    if "n < length actions" "m < length actions" for n m
+    using nth_start_end_disj[OF set_nthI[OF that(2)] that(1)] .
+  have ne_es: "at_end (actions ! n) \<noteq> at_start (actions ! m)"
+    if "n < length actions" "m < length actions" for n m
+    using nth_end_start_disj[OF set_nthI[OF that(2)] that(1)] .
+  \<comment> \<open>The three component lists.\<close>
+  let ?A = "concat (map (\<lambda>n. [at_start (actions!n), at_end (actions!n)]) SI)"
+  let ?B = "map (\<lambda>n. at_start (actions!n)) SS"
+  let ?C = "map (\<lambda>n. at_end (actions!n)) SE"
+  \<comment> \<open>@{term ?A} is distinct: distinct outer index list, each 2-element block distinct
+     (start \<noteq> end), and distinct blocks are disjoint (action-injectivity + start/end-disjointness).\<close>
+  have dA: "distinct ?A"
+  proof (rule distinct_concat)
+    have inj_SI: "x = y"
+      if "x \<in> set SI" "y \<in> set SI"
+         "[at_start (actions!x), at_end (actions!x)] = [at_start (actions!y), at_end (actions!y)]"
+      for x y
+      using that nth_starts_unique[OF memSI(1)[OF that(1)] memSI(1)[OF that(2)]] by force
+    show "distinct (map (\<lambda>n. [at_start (actions!n), at_end (actions!n)]) SI)"
+      unfolding distinct_map using distSI by (auto intro!: inj_onI simp: inj_SI)
+  next
+    fix ys
+    assume "ys \<in> set (map (\<lambda>n. [at_start (actions!n), at_end (actions!n)]) SI)"
+    then obtain n where n: "n \<in> set SI" "ys = [at_start (actions!n), at_end (actions!n)]" by auto
+    show "distinct ys" using n ne_se[OF memSI(1)[OF n(1)] memSI(1)[OF n(1)]] by auto
+  next
+    fix ys zs
+    assume "ys \<in> set (map (\<lambda>n. [at_start (actions!n), at_end (actions!n)]) SI)"
+       and "zs \<in> set (map (\<lambda>n. [at_start (actions!n), at_end (actions!n)]) SI)"
+       and yz: "ys \<noteq> zs"
+    then obtain n m where
+        nm: "n \<in> set SI"
+            "m \<in> set SI"
+            "ys = [at_start (actions!n), at_end (actions!n)]"
+            "zs = [at_start (actions!m), at_end (actions!m)]"
+      by auto
+    have "n \<noteq> m" using nm yz by auto
+    hence "actions ! n \<noteq> actions ! m"
+      using nth_actions_unique[OF memSI(1)[OF nm(1)] memSI(1)[OF nm(2)]] by blast
+    thus "set ys \<inter> set zs = {}"
+      using nm memSI(1)[OF nm(1)] memSI(1)[OF nm(2)]
+            nth_starts_unique nth_ends_unique ne_se ne_es by auto
+  qed
+  have dB: "distinct ?B"
+  proof -
+    have "x = y" if "x \<in> set SS" "y \<in> set SS" "at_start (actions!x) = at_start (actions!y)" for x y
+      using that nth_starts_unique[OF memSS(1)[OF that(1)] memSS(1)[OF that(2)]] by force
+    thus ?thesis unfolding distinct_map using distSS by (auto intro!: inj_onI)
+  qed
+  have dC: "distinct ?C"
+  proof -
+    have "x = y" if "x \<in> set SE" "y \<in> set SE" "at_end (actions!x) = at_end (actions!y)" for x y
+      using that nth_ends_unique[OF memSE(1)[OF that(1)] memSE(1)[OF that(2)]] by force
+    thus ?thesis unfolding distinct_map using distSE by (auto intro!: inj_onI)
+  qed
+  \<comment> \<open>@{term ?A} disjoint from @{term ?B}: a @{term at_start} from @{term SI} vs @{term SS}
+     differs by action-injectivity (disjoint index sets); an @{term at_end} vs @{term at_start}
+     by start/end-disjointness.\<close>
+  have dAB: "set ?A \<inter> set ?B = {}"
+  proof -
+    have "x \<noteq> y" if "x \<in> set ?A" "y \<in> set ?B" for x y
+    proof -
+      from that(2) obtain m where m: "m \<in> set SS" "y = at_start (actions!m)" by auto
+      from that(1) obtain n where
+          n: "n \<in> set SI" "x = at_start (actions!n) \<or> x = at_end (actions!n)" by auto
+      have nm: "n \<noteq> m" using n(1) m(1) disj_SI_SS by blast
+      have nlen: "n < length actions" using memSI(1)[OF n(1)] .
+      have mlen: "m < length actions" using memSS(1)[OF m(1)] .
+      show ?thesis using n(2)
+      proof
+        assume "x = at_start (actions!n)"
+        thus ?thesis using m(2) nm nth_starts_unique[OF nlen mlen] by simp
+      next
+        assume "x = at_end (actions!n)"
+        thus ?thesis using m(2) ne_es[OF nlen mlen] by simp
+      qed
+    qed
+    thus ?thesis by blast
+  qed
+  \<comment> \<open>@{term ?A} disjoint from @{term ?C}: an @{term at_start} vs @{term at_end} by start/end-disjointness;
+     an @{term at_end} from @{term SI} vs @{term SE} by action-injectivity (disjoint index sets).\<close>
+  have dAC: "set ?A \<inter> set ?C = {}"
+  proof -
+    have "x \<noteq> y" if "x \<in> set ?A" "y \<in> set ?C" for x y
+    proof -
+      from that(2) obtain m where m: "m \<in> set SE" "y = at_end (actions!m)" by auto
+      from that(1) obtain n where
+          n: "n \<in> set SI" "x = at_start (actions!n) \<or> x = at_end (actions!n)" by auto
+      have nm: "n \<noteq> m" using n(1) m(1) disj_SI_SE by blast
+      have nlen: "n < length actions" using memSI(1)[OF n(1)] .
+      have mlen: "m < length actions" using memSE(1)[OF m(1)] .
+      show ?thesis using n(2)
+      proof
+        assume "x = at_start (actions!n)"
+        thus ?thesis using m(2) ne_se[OF nlen mlen] by simp
+      next
+        assume "x = at_end (actions!n)"
+        thus ?thesis using m(2) nm nth_ends_unique[OF nlen mlen] by simp
+      qed
+    qed
+    thus ?thesis by blast
+  qed
+  \<comment> \<open>@{term ?B} disjoint from @{term ?C}: an @{term at_start} vs @{term at_end}, by start/end-disjointness.\<close>
+  have dBC: "set ?B \<inter> set ?C = {}"
+  proof -
+    have "x \<noteq> y" if "x \<in> set ?B" "y \<in> set ?C" for x y
+    proof -
+      from that(1) obtain n where n: "n \<in> set SS" "x = at_start (actions!n)" by auto
+      from that(2) obtain m where m: "m \<in> set SE" "y = at_end (actions!m)" by auto
+      show ?thesis using n m ne_se[OF memSS(1)[OF n(1)] memSE(1)[OF m(1)]] by auto
+    qed
+    thus ?thesis by blast
+  qed
+  have "distinct (?A @ ?B @ ?C)"
+    using dA dB dC dAB dAC dBC by (simp add: Int_Un_distrib)
+  thus ?thesis
+    unfolding run_order_snaps_def Let_def SI_def SS_def SE_def .
+qed
+
+text \<open>The numeric graph satisfies the @{locale sequence_rules} composition laws (the numeric mirror of
+the propositional \<open>steps_seq\<close> interpretation, proved identically: @{const num_graph_impl.steps} is a
+@{locale Graph_Defs} step relation, so its singleton intro and the \<open>num_steps_extend\<close> splice
+discharge @{text base}/@{text step}). This is the structural combinator the numeric run-lifting
+reuses to walk the @{const delay_and_apply} phase decomposition.\<close>
+lemma num_steps_extend:
+  "num_graph_impl.steps xs
+  \<Longrightarrow> num_graph_impl.steps (last xs # ys)
+  \<Longrightarrow> num_graph_impl.steps (xs @ ys)"
+  by (rule num_graph_impl.steps_append'[where as = xs and bs = "last xs # ys"]) simp+
+
+sublocale num_steps_seq: sequence_rules num_graph_impl.steps
+  apply standard
+  using num_graph_impl.steps.intros(1) num_steps_extend .
+
+subsection \<open>Numeric per-phase run-lift: the \<open>edge_3\<close> (ending-duration) phase\<close>
+
+text \<open>The relational invariant carried by the numeric run-lift: the numeric (combined) store
+@{term vn} EXTENDS the propositional store @{term vp} (so the propositional run's facts transfer
+verbatim by @{thm [source] check_bexp_is_val_mono} / @{thm [source] is_upds_map_le}), it TRACKS the
+abstract numeric valuation @{term w} (@{const num_tracks}), and it is @{const num_net_bounds}-bounded.
+The locations and clocks are shared (both runs fire the same @{const edge_3} edge), so they are not
+part of \<open>REL\<close>; they coincide config-for-config.\<close>
+definition REL where
+"REL vp vn w \<longleftrightarrow> vp \<subseteq>\<^sub>m vn \<and> num_tracks vn w \<and> Simple_Network_Language.bounded (map_of num_net_bounds) vn"
+
+lemma RELI:
+  assumes "vp \<subseteq>\<^sub>m vn"
+    and "num_tracks vn w"
+    and "Simple_Network_Language.bounded (map_of num_net_bounds) vn"
+  shows "REL vp vn w"
+  using assms unfolding REL_def by blast
+
+lemma REL_leD: "REL vp vn w \<Longrightarrow> vp \<subseteq>\<^sub>m vn"
+  and REL_trD: "REL vp vn w \<Longrightarrow> num_tracks vn w"
+  and REL_bndD: "REL vp vn w \<Longrightarrow> Simple_Network_Language.bounded (map_of num_net_bounds) vn"
+  unfolding REL_def by blast+
+
+text \<open>Re-establishing the @{const num_net_bounds} bound on the numeric post-store of a no-fluent-write
+edge: the numeric store @{term vn'} extends the propositional post-store @{term vp'} (so on the
+propositional variables it equals @{term vp'}, which the propositional run keeps
+@{const net_bounds}-bounded), it tracks @{term w} (so the fluent variables are in their fluent bounds
+because @{term w} is @{const fluent_in_bounds}), and these two halves cover @{const num_net_bounds}.\<close>
+lemma REL_bnd_from_proj:
+  assumes le: "vp' \<subseteq>\<^sub>m vn'"
+      and vp'_dom: "dom vp' = dom (map_of net_bounds)"
+      and pbnd: "Simple_Network_Language.bounded (map_of net_bounds) vp'"
+      and tr: "num_tracks vn' w"
+      and fin: "fluent_in_bounds w"
+      and vn'_dom: "dom vn' = dom (map_of num_net_bounds)"
+    shows "Simple_Network_Language.bounded (map_of num_net_bounds) vn'"
+proof (rule num_tracks_bounded[OF vn'_dom _ tr fin])
+  have "(vn' |` dom (map_of net_bounds)) = vp'"
+  proof (rule ext)
+    fix x
+    show "(vn' |` dom (map_of net_bounds)) x = vp' x"
+    proof (cases "x \<in> dom (map_of net_bounds)")
+      case True
+      hence "x \<in> dom vp'" using vp'_dom by simp
+      then obtain y where y: "vp' x = Some y" by auto
+      have "vn' x = Some y" using le y unfolding map_le_def by (metis domI)
+      thus ?thesis using True y by (simp add: restrict_in)
+    next
+      case False
+      hence "x \<notin> dom vp'" using vp'_dom by simp
+      thus ?thesis using False by (simp add: restrict_map_def domIff)
+    qed
+  qed
+  thus "Simple_Network_Language.bounded (map_of net_bounds) (vn' |` dom (map_of net_bounds))"
+    using pbnd by simp
+qed
+
+text \<open>The numeric edge automaton at index @{term \<open>Suc n\<close>} carries @{const edge_3} VERBATIM (third in
+the edge list of @{const num_action_to_automaton}), so the numeric net contains the same
+@{const edge_3} transition as the propositional net.\<close>
+lemma num_nth_auto_edge_3:
+  assumes n: "n < length actions"
+  shows "edge_3 (actions ! n) \<in> trans (automaton_of (num_timed_automaton_net ! Suc n))"
+proof -
+  have "trans (automaton_of (num_timed_automaton_net ! Suc n))
+          = trans (automaton_of (num_action_to_automaton (actions ! n)))"
+    by (simp add: num_timed_automaton_net_def n)
+  thus ?thesis
+    apply (subst (asm) num_action_auto_trans)
+    by simp
+qed
+
+text \<open>The numeric edge automaton at index @{term \<open>Suc n\<close>} carries @{const num_start_edge} (first in the
+edge list of @{const num_action_to_automaton}) and @{const num_end_edge} (fourth), so the numeric net
+contains the AUGMENTED start/end transitions.\<close>
+lemma num_nth_auto_num_start_edge:
+  assumes n: "n < length actions"
+  shows "num_start_edge (actions ! n) \<in> trans (automaton_of (num_timed_automaton_net ! Suc n))"
+proof -
+  have "trans (automaton_of (num_timed_automaton_net ! Suc n))
+          = trans (automaton_of (num_action_to_automaton (actions ! n)))"
+    by (simp add: num_timed_automaton_net_def n)
+  thus ?thesis
+    apply (subst (asm) num_action_auto_trans)
+    by simp
+qed
+
+lemma num_nth_auto_num_end_edge:
+  assumes n: "n < length actions"
+  shows "num_end_edge (actions ! n) \<in> trans (automaton_of (num_timed_automaton_net ! Suc n))"
+proof -
+  have "trans (automaton_of (num_timed_automaton_net ! Suc n))
+          = trans (automaton_of (num_action_to_automaton (actions ! n)))"
+    by (simp add: num_timed_automaton_net_def n)
+  thus ?thesis
+    apply (subst (asm) num_action_auto_trans)
+    by simp
+qed
+
+text \<open>Among the five edges of an action automaton only @{const edge_3} leaves the @{const running_loc}
+location (start: @{const off_loc}, edge_2: @{const starting_loc}, end: @{const ending_loc}, instant:
+@{const starting_loc}). So a propositional internal step from a config whose @{term \<open>Suc n\<close>}-th location
+is @{const running_loc} must have fired @{const edge_3} at automaton @{term \<open>Suc n\<close>}: the source
+location pins the fired edge.\<close>
+lemma prop_edge_3_pinned:
+  assumes p: "p < length net_automata"
+      and E: "(l, b, g, Sil aa, f, r, l') \<in> trans (automaton_of (net_automata ! p))"
+      and Lp: "L ! p = l"
+      and run: "L ! Suc n = running_loc"
+      and n: "n < length actions"
+      and pSuc: "p = Suc n"
+    shows "(l, b, g, Sil aa, f, r, l') = edge_3 (actions ! n)"
+proof -
+  have l_run: "l = running_loc" using Lp run pSuc by simp
+  have "(l, b, g, Sil aa, f, r, l')
+          \<in> set [start_edge (actions ! n), edge_2 (actions ! n), edge_3 (actions ! n),
+                  end_edge (actions ! n), instant_trans_edge (actions ! n)]"
+    using E unfolding pSuc nth_auto_trans[OF n] action_to_automaton_def Let_def by simp
+  thus ?thesis
+    using l_run
+    by (auto simp: start_edge_def edge_2_def edge_3_def end_edge_def instant_trans_edge_def
+                   Let_def locations_unique)
+qed
+
+text \<open>The reusable per-step kernel: lifting ONE propositional @{const edge_3} step (the no-fluent-write
+ending-duration edge) to a numeric @{const num_graph_impl.steps} step, preserving @{const REL}. The
+propositional step is GIVEN (extracted from the propositional happening run); the numeric guard and
+update fire on the extended store @{term vn} by monotonicity, tracking survives because @{const edge_3}
+writes only the propositional @{const prop_to_lock} variables (fresh of the fluent variables), and the
+@{const num_net_bounds} bound is re-established from the propositional post-bound (@{thm [source]
+REL_bnd_from_proj}). The locations and clocks are those of the propositional step.\<close>
+lemma num_edge_3_step_lift:
+  assumes rel: "REL vp vn w"
+      and Llen: "length L = length net_automata"
+      and run: "L ! Suc n = running_loc"
+      and n: "n < length actions"
+      and pstep: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>L', vp', c'\<rangle>"
+      and L'eq: "L' = fst (edge_3_effect n (L, vp, c))"
+      and pbnd': "Simple_Network_Language.bounded (map_of net_bounds) vp'"
+      and fin: "fluent_in_bounds w"
+    shows "\<exists>vn'. num_net_impl.sem \<turnstile> \<langle>L, vn, c\<rangle> \<rightarrow> \<langle>L', vn', c'\<rangle> \<and> REL vp' vn' w"
+proof -
+  have le: "vp \<subseteq>\<^sub>m vn" by (rule REL_leD[OF rel])
+  have tr: "num_tracks vn w" by (rule REL_trD[OF rel])
+  have bnd: "Simple_Network_Language.bounded (map_of num_net_bounds) vn" by (rule REL_bndD[OF rel])
+  have L'_eq: "L' = L[Suc n := ending_loc]"
+    using L'eq by (simp add: edge_3_effect_alt)
+  \<comment> \<open>Split the propositional step into its (vacuous) delay and the internal edge firing.\<close>
+  obtain Li vi ci aa where
+      del: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>Li, vi, ci\<rangle>"
+    and aD: "aa \<noteq> Simple_Network_Language.label.Del"
+    and act: "net_impl.sem \<turnstile> \<langle>Li, vi, ci\<rangle> \<rightarrow>\<^bsub>aa\<^esub> \<langle>L', vp', c'\<rangle>"
+    by (rule step_u'_elims[OF pstep]) blast
+  obtain broad N B where as: "net_impl.sem = (broad, N, B)" by (cases net_impl.sem) auto
+  obtain t where Lieq: "Li = L" and vieq: "vi = vp" and cieq: "ci = c \<oplus> t"
+    apply (cases rule: step_u_elims(1)[OF del])
+    unfolding as unfolding TAG_def by auto
+  have actI: "net_impl.sem \<turnstile> \<langle>L, vp, c \<oplus> t\<rangle> \<rightarrow>\<^bsub>aa\<^esub> \<langle>L', vp', c'\<rangle>"
+    using act unfolding Lieq vieq cieq .
+  obtain a where aInt: "aa = Internal a"
+    using prop_non_del_step_internal[OF actI aD Llen] by blast
+  \<comment> \<open>Invert the internal step to recover the fired edge and pin it to @{const edge_3}.\<close>
+  obtain p l b g f r l' where
+      P: "p < length net_automata"
+    and E: "(l, b, g, Sil a, f, r, l') \<in> trans (automaton_of (net_automata ! p))"
+    and B: "check_bexp vp b True"
+    and G: "(c \<oplus> t) \<turnstile> conv_cc g"
+    and LOC: "L ! p = l"
+    and L'eq2: "L' = L[p := l']"
+    and c'eq: "c' = [r\<rightarrow>0](c \<oplus> t)"
+    and U: "is_upds vp f vp'"
+    by (rule prop_int_step_invert[OF actI[unfolded aInt] Llen])
+  \<comment> \<open>Pin @{term p} to @{term \<open>Suc n\<close>}: the only changed location is @{term \<open>Suc n\<close>}.\<close>
+  have running_ne_ending: "running_loc \<noteq> ending_loc" by (simp add: locations_unique)
+  have Sn_lt: "Suc n < length L" using Llen n by (simp add: length_net_automata)
+  have pSuc: "p = Suc n"
+  proof (rule ccontr)
+    assume "p \<noteq> Suc n"
+    hence "L[p := l'] ! Suc n = L ! Suc n" by simp
+    moreover have "L[Suc n := ending_loc] ! Suc n = ending_loc" using Sn_lt by simp
+    ultimately show False using L'eq2 L'_eq run running_ne_ending by simp
+  qed
+  have edge3: "(l, b, g, Sil a, f, r, l') = edge_3 (actions ! n)"
+    by (rule prop_edge_3_pinned[OF P E LOC run n pSuc])
+  \<comment> \<open>The fired edge's components, read off @{const edge_3}.\<close>
+  note edge_parts = edge3[unfolded edge_3_def Let_def, simplified prod.inject]
+  \<comment> \<open>The numeric edge: @{const edge_3} verbatim, with the same guard and update.\<close>
+  have NE: "(l, b, g, Sil a, f, r, l') \<in> trans (automaton_of (num_timed_automaton_net ! p))"
+    unfolding pSuc edge3 by (rule num_nth_auto_edge_3[OF n])
+  \<comment> \<open>The numeric guard fires on the extended store; the update fires, preserving tracking.\<close>
+  have NB: "check_bexp vn b True" by (rule check_bexp_is_val_mono(1)[OF B le])
+  obtain vn' where
+      NU: "is_upds vn f vn'"
+    and LE: "vp' \<subseteq>\<^sub>m vn'"
+    and OFF: "\<And>x. x \<notin> fst ` set f \<Longrightarrow> vn' x = vn x"
+    using is_upds_map_le[OF U le] by blast
+  \<comment> \<open>@{const edge_3} writes only @{const prop_to_lock} variables, fresh of the fluents, so tracking
+     survives.\<close>
+  have f_eq: "f = map (inc_prop_lock_ab (- 1)) (over_all (actions ! n))"
+    using edge3 by (simp add: edge_3_def Let_def)
+  have fst_f: "fst ` set f = prop_to_lock ` set (over_all (actions ! n))"
+    unfolding f_eq set_map image_image inc_prop_lock_ab_def by (simp add: comp_def)
+  have aMem: "actions ! n \<in> set actions" using n by simp
+  have fresh: "fluent_to_var h \<notin> fst ` set f" if h: "h \<in> set nfluents" for h
+  proof
+    assume "fluent_to_var h \<in> fst ` set f"
+    then obtain p where p: "p \<in> set (over_all (actions ! n))" and ph: "fluent_to_var h = prop_to_lock p"
+      unfolding fst_f by auto
+    have "prop_to_lock p \<in> dom (map_of net_bounds)"
+      using map_of_net_bounds_action_inv[OF aMem] p by auto
+    thus False using ph fluent_var_notin_net_bounds[OF h] by simp
+  qed
+  have TR: "num_tracks vn' w" by (rule num_tracks_pres_unwritten[OF tr NU fresh])
+  \<comment> \<open>Re-establish the @{const num_net_bounds} bound from the propositional post-bound and tracking.\<close>
+  have vp'_dom: "dom vp' = dom (map_of net_bounds)"
+    using pbnd' unfolding Simple_Network_Language.bounded_def by blast
+  have dom_vn: "dom vn = dom (map_of num_net_bounds)"
+    using bnd unfolding Simple_Network_Language.bounded_def by blast
+  have fset_sub: "fst ` set f \<subseteq> dom vn"
+  proof
+    fix x assume "x \<in> fst ` set f"
+    then obtain p where p: "p \<in> set (over_all (actions ! n))" and xp: "x = prop_to_lock p"
+      unfolding fst_f by auto
+    have "prop_to_lock p \<in> dom (map_of net_bounds)"
+      using map_of_net_bounds_action_inv[OF aMem] p by auto
+    thus "x \<in> dom vn" using xp dom_vn dom_map_of_num_net_bounds by auto
+  qed
+  have vn'_dom: "dom vn' = dom (map_of num_net_bounds)"
+  proof -
+    have "dom vn' = dom vn"
+    proof (rule set_eqI)
+      fix x
+      show "x \<in> dom vn' \<longleftrightarrow> x \<in> dom vn"
+      proof (cases "x \<in> fst ` set f")
+        case True
+        have "x \<in> dom vn" using True fset_sub by blast
+        moreover have "x \<in> dom vn'"
+          using NU True
+        proof (induction f arbitrary: vn)
+          case (Cons fe f)
+          obtain y e where fe: "fe = (y, e)" by (cases fe)
+          obtain v1 where v1: "is_upd vn (y, e) v1" and rest: "is_upds v1 f vn'"
+            using Cons.prems(1) fe by (auto simp: is_upds_Cons_iff)
+          obtain kk where v1_eq: "v1 = vn(y \<mapsto> kk)" using v1 by (auto simp: is_upd_def)
+          show ?case
+          proof (cases "x \<in> fst ` set f")
+            case True
+            show ?thesis using Cons.IH[OF rest True] .
+          next
+            case False
+            hence xy: "x = y" using Cons.prems(2) fe by auto
+            have "vn' x = v1 x" using is_upds_unchanged[OF rest] False by blast
+            also have "\<dots> = Some kk" using v1_eq xy by simp
+            finally show ?thesis by blast
+          qed
+        qed simp
+        ultimately show ?thesis by blast
+      next
+        case False
+        thus ?thesis using OFF[OF False] by (auto simp: domIff)
+      qed
+    qed
+    thus ?thesis using dom_vn by simp
+  qed
+  have BND: "Simple_Network_Language.bounded (map_of num_net_bounds) vn'"
+    by (rule REL_bnd_from_proj[OF LE vp'_dom pbnd' TR fin vn'_dom])
+  \<comment> \<open>Assemble the numeric step: vacuous delay + the lifted internal edge.\<close>
+  have numDel: "num_net_impl.sem \<turnstile> \<langle>L, vn, c\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>L, vn, c \<oplus> t\<rangle>"
+    by (rule num_step_t_lift[OF del[unfolded Lieq vieq cieq] bnd])
+  have plen_num: "p < length num_timed_automaton_net"
+    using P by (simp add: timed_automaton_net_def num_timed_automaton_net_def)
+  have Llen_num: "length L = length num_timed_automaton_net"
+    using Llen by (simp add: timed_automaton_net_def num_timed_automaton_net_def)
+  have numInt: "num_net_impl.sem \<turnstile> \<langle>L, vn, c \<oplus> t\<rangle> \<rightarrow>\<^bsub>Internal a\<^esub> \<langle>L[p := l'], vn', [r\<rightarrow>0](c \<oplus> t)\<rangle>"
+    by (rule num_step_int_lift[OF plen_num NE NB G LOC Llen_num NU BND])
+  have "num_net_impl.sem \<turnstile> \<langle>L, vn, c\<rangle> \<rightarrow> \<langle>L', vn', c'\<rangle>"
+    unfolding L'eq2 c'eq
+    by (rule step_u'.intros[OF numDel _ numInt]) simp
+  thus ?thesis using LE TR BND by (auto intro: RELI)
+qed
+
+text \<open>The configuration-level relation between a propositional config and a numeric config: same
+locations, same clocks, and the stores related by @{const REL}.\<close>
+definition RELC where
+"RELC cp cn w \<longleftrightarrow> (case cp of (Lp, vp, cup) \<Rightarrow> case cn of (Ln, vn, cun) \<Rightarrow>
+   Lp = Ln \<and> cup = cun \<and> REL vp vn w)"
+
+lemma RELCI:
+  assumes "REL vp vn w"
+  shows "RELC (L, vp, c) (L, vn, c) w"
+  using assms unfolding RELC_def by simp
+
+lemma RELC_locD: "RELC (Lp, vp, cup) (Ln, vn, cun) w \<Longrightarrow> Lp = Ln"
+  and RELC_clkD: "RELC (Lp, vp, cup) (Ln, vn, cun) w \<Longrightarrow> cup = cun"
+  and RELC_relD: "RELC (Lp, vp, cup) (Ln, vn, cun) w \<Longrightarrow> REL vp vn w"
+  unfolding RELC_def by auto
+
+text \<open>The relational lift predicate carried by the numeric run-lift's structural combinator. As a
+predicate on the PROPOSITIONAL config-list @{term ps}, @{term \<open>RLP w ps\<close>} says: WHEN @{term ps} is a
+propositional run, then for EVERY numeric start config @{const RELC}-related to its head there is a
+numeric run of the same length whose last config is @{const RELC}-related to @{term \<open>last ps\<close>}. The
+universal quantification over the numeric start is what makes the combinator's @{text step} splice
+compose: the first sub-run's @{const RELC}-related endpoint is fed as the second sub-run's start.\<close>
+definition RLP where
+"RLP w ps \<longleftrightarrow> ps \<noteq> [] \<and> (graph_impl.steps ps \<longrightarrow>
+   (\<forall>cn. RELC (hd ps) cn w \<longrightarrow>
+      (\<exists>nss. num_graph_impl.steps (cn # nss)
+             \<and> length nss = length ps - 1
+             \<and> RELC (last ps) (last (cn # nss)) w)))"
+
+lemma RLP_base: "RLP w [x]"
+  unfolding RLP_def
+proof (intro conjI impI allI)
+  show "[x] \<noteq> []" by simp
+next
+  fix cn assume "RELC (hd [x]) cn w"
+  hence "RELC (last [x]) (last (cn # [])) w" by simp
+  thus "\<exists>nss. num_graph_impl.steps (cn # nss) \<and> length nss = length [x] - 1 \<and> RELC (last [x]) (last (cn # nss)) w"
+    by (intro exI[where x = "[]"]) (auto intro: num_graph_impl.steps.intros(1))
+qed
+
+lemma RLP_step:
+  assumes RX: "RLP w xs"
+      and RY: "RLP w (last xs # ys)"
+      and xs: "xs \<noteq> []"
+  shows "RLP w (xs @ ys)"
+  unfolding RLP_def
+proof (intro conjI impI allI)
+  show "xs @ ys \<noteq> []" using xs by simp
+next
+  fix cn
+  assume steps: "graph_impl.steps (xs @ ys)"
+     and relhd: "RELC (hd (xs @ ys)) cn w"
+  show "\<exists>nss. num_graph_impl.steps (cn # nss) \<and> length nss = length (xs @ ys) - 1
+              \<and> RELC (last (xs @ ys)) (last (cn # nss)) w"
+  proof (cases "ys = []")
+    case True
+    have stepsX: "graph_impl.steps xs" using steps True by simp
+    have rhd: "RELC (hd xs) cn w" using relhd True xs by simp
+    obtain nss where
+        nss: "num_graph_impl.steps (cn # nss)"
+      and lnss: "length nss = length xs - 1"
+      and rlast: "RELC (last xs) (last (cn # nss)) w"
+      using conjunct2[OF RX[unfolded RLP_def], rule_format, OF stepsX rhd] by blast
+    show ?thesis
+      apply (intro exI[where x = nss] conjI)
+      subgoal by (rule nss)
+      subgoal using lnss True by simp
+      subgoal using rlast True by simp
+      done
+  next
+    case False
+    have stepsX: "graph_impl.steps xs" by (rule graph_impl.steps_appendD1[OF steps xs])
+    have stepsY: "graph_impl.steps ys" by (rule graph_impl.steps_appendD2[OF steps False])
+    have edge: "(case last xs of (L, s, u) \<Rightarrow> \<lambda>(L', s', u'). net_impl.sem \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow> \<langle>L', s', u'\<rangle>) (hd ys)"
+      using graph_impl.steps_decomp[OF steps xs False] by simp
+    have stepsLY: "graph_impl.steps (last xs # ys)"
+      using False edge stepsY by (cases ys) (auto intro: graph_impl.steps.intros)
+    \<comment> \<open>First sub-run from @{term cn}.\<close>
+    have rhd: "RELC (hd xs) cn w" using relhd xs by simp
+    obtain nss1 where
+        nss1: "num_graph_impl.steps (cn # nss1)"
+      and lnss1: "length nss1 = length xs - 1"
+      and rmid: "RELC (last xs) (last (cn # nss1)) w"
+      using conjunct2[OF RX[unfolded RLP_def], rule_format, OF stepsX rhd] by blast
+    \<comment> \<open>Second sub-run from the @{const RELC}-related endpoint @{term \<open>last (cn # nss1)\<close>}.\<close>
+    have relmid: "RELC (hd (last xs # ys)) (last (cn # nss1)) w" using rmid by simp
+    obtain nss2 where
+        nss2: "num_graph_impl.steps (last (cn # nss1) # nss2)"
+      and lnss2: "length nss2 = length (last xs # ys) - 1"
+      and rlast2: "RELC (last (last xs # ys)) (last (last (cn # nss1) # nss2)) w"
+      using conjunct2[OF RY[unfolded RLP_def], rule_format, OF stepsLY relmid] by blast
+    \<comment> \<open>Splice.\<close>
+    have spliced: "num_graph_impl.steps ((cn # nss1) @ nss2)"
+      by (rule num_steps_extend[OF nss1]) (use nss2 in simp)
+    have nss2_ne: "nss2 \<noteq> []" using lnss2 False by (cases ys) auto
+    have last_eq: "last ((cn # nss1) @ nss2) = last (last (cn # nss1) # nss2)"
+      using nss2_ne by simp
+    have last_ys: "last (last xs # ys) = last (xs @ ys)" using False xs by simp
+    have len_eq: "length (nss1 @ nss2) = length (xs @ ys) - 1"
+      using lnss1 lnss2 xs False by auto
+    show ?thesis
+      apply (intro exI[where x = "nss1 @ nss2"] conjI)
+      subgoal using spliced by simp
+      subgoal by (rule len_eq)
+      subgoal using rlast2 last_eq last_ys by simp
+      done
+  qed
+qed
+
+text \<open>The per-step kernel, packaged in the @{const RLP} shape the structural combinator's @{text PQ}
+case consumes: ONE @{const edge_3} step of the propositional run lifts to a single numeric step
+preserving @{const RELC}. The required propositional pre-facts (the @{const running_loc} source
+location and @{term \<open>n < length actions\<close>}) and the propositional post-bound are supplied by the
+phase's @{const end_start_pre} invariant / @{const LvP} threading; @{term \<open>fluent_in_bounds w\<close>} comes
+from the numeric valid-state sequence. The propositional step itself is the antecedent of @{const RLP},
+so it is consumed -- not re-derived.\<close>
+lemma RLP_edge_3_single:
+  assumes run: "fst s ! Suc n = running_loc"
+      and n: "n < length actions"
+      and Llen: "length (fst s) = length net_automata"
+      and pbnd': "Simple_Network_Language.bounded (map_of net_bounds) (fst (snd (edge_3_effect n s)))"
+      and fin: "fluent_in_bounds w"
+    shows "RLP w [s, edge_3_effect n s]"
+  unfolding RLP_def
+proof (intro conjI impI allI)
+  show "[s, edge_3_effect n s] \<noteq> []" by simp
+next
+  fix cn
+  assume pstep: "graph_impl.steps [s, edge_3_effect n s]"
+     and relhd: "RELC (hd [s, edge_3_effect n s]) cn w"
+  obtain L vp c where s: "s = (L, vp, c)" by (cases s)
+  obtain L' vp' c' where t: "edge_3_effect n s = (L', vp', c')" by (cases "edge_3_effect n s")
+  obtain Ln vn cnn where cn: "cn = (Ln, vn, cnn)" by (cases cn)
+  have Leq: "Ln = L" and ceq: "cnn = c" and relS: "REL vp vn w"
+    using relhd unfolding s cn list.sel by (auto dest: RELC_locD RELC_clkD RELC_relD)
+  \<comment> \<open>The propositional single step, extracted from the antecedent.\<close>
+  have t2: "edge_3_effect n (L, vp, c) = (L', vp', c')" using t unfolding s by simp
+  have step1: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>L', vp', c'\<rangle>"
+    using pstep unfolding s t2 by (auto elim: graph_impl.steps.cases)
+  have L'fst: "L' = fst (edge_3_effect n (L, vp, c))" using t unfolding s by simp
+  have pbnd2: "Simple_Network_Language.bounded (map_of net_bounds) vp'" using pbnd' unfolding t by simp
+  have run2: "L ! Suc n = running_loc" using run unfolding s by simp
+  have Llen2: "length L = length net_automata" using Llen unfolding s by simp
+  obtain vn' where
+      numstep: "num_net_impl.sem \<turnstile> \<langle>L, vn, c\<rangle> \<rightarrow> \<langle>L', vn', c'\<rangle>"
+    and relE: "REL vp' vn' w"
+    using num_edge_3_step_lift[OF relS Llen2 run2 n step1 L'fst pbnd2 fin] by blast
+  have "num_graph_impl.steps [cn, (L', vn', c')]"
+    unfolding cn Leq ceq by (rule num_single_step_intro) (use numstep in \<open>simp add: prod.case\<close>)
+  moreover have "RELC (edge_3_effect n s) (L', vn', c') w"
+    unfolding t by (rule RELCI[OF relE])
+  ultimately show "\<exists>nss. num_graph_impl.steps (cn # nss) \<and> length nss = length [s, edge_3_effect n s] - 1
+                         \<and> RELC (last [s, edge_3_effect n s]) (last (cn # nss)) w"
+    by (intro exI[where x = "[(L', vn', c')]"]) (simp add: t)
+qed
+
+text \<open>@{const RLP} satisfies the @{locale sequence_rules} composition laws (singleton @{thm [source]
+RLP_base} and the splice @{thm [source] RLP_step}), so the @{emph \<open>relational\<close>} run-lift predicate
+plugs into the same structural combinator @{const num_graph_impl.steps} uses. This is the numeric
+mirror of @{thm [source] steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable}, but threading
+@{const RELC} instead of the propositional happening invariants.\<close>
+lemma RLP_neD: "RLP w ps \<Longrightarrow> ps \<noteq> []"
+  unfolding RLP_def by blast
+
+lemma RLP_sequence_rules: "sequence_rules (RLP w)"
+proof (unfold_locales)
+  show "RLP w [x]" for x by (rule RLP_base)
+next
+  fix xs ys
+  assume a: "RLP w xs" and b: "RLP w (last xs # ys)"
+  show "RLP w (xs @ ys)" by (rule RLP_step[OF a b RLP_neD[OF a]])
+qed
+
+text \<open>The @{const edge_3} phase-lift, via the structural combinator. The propositional happening run
+through the @{const edge_3} phase is GIVEN (its existence is the @{const RLP} antecedent fired by the
+combinator per step); the per-step @{const edge_3} kernel @{thm [source] RLP_edge_3_single} discharges
+the combinator's @{text PQ} obligation under a propositional pre/post invariant pair @{term P} / @{term
+Q} that the CALLER threads (in the run-lift this is the @{const end_start_pre} / @{const end_start_post}
+bookkeeping established by @{thm [source] end_starts_possible}). Given @{const RELC} at the start config,
+the result is a numeric run @{const RELC}-related at the end.\<close>
+lemma num_edge_3_phase_lift:
+  fixes P Q :: "nat \<Rightarrow> (nat list \<times> (String.literal \<Rightarrow> int option) \<times> (String.literal \<Rightarrow> real)) \<Rightarrow> bool"
+  assumes R0: "RLP w xs \<and> R (last xs)"
+      and PQ: "\<And>j s. j < length ns \<Longrightarrow> P j s \<Longrightarrow> Q j (edge_3_effect (ns ! j) s) \<and> RLP w [s, edge_3_effect (ns ! j) s]"
+      and QP: "\<And>j s. Suc j < length ns \<Longrightarrow> Q j s \<Longrightarrow> P (Suc j) s"
+      and RP0: "\<And>x. 0 < length ns \<Longrightarrow> R x \<Longrightarrow> P 0 x"
+      and QSl: "\<And>x. 0 < length ns \<Longrightarrow> Q (length ns - 1) x \<Longrightarrow> S x"
+      and RS0: "\<And>x. length ns = 0 \<Longrightarrow> R x \<Longrightarrow> S x"
+      and SR': "\<And>x. S x \<Longrightarrow> R' x"
+    shows "RLP w ((ext_seq \<circ> seq_apply) (map edge_3_effect ns) xs)
+           \<and> R' (last ((ext_seq \<circ> seq_apply) (map edge_3_effect ns) xs))"
+  by (rule sequence_rules.ext_seq_comp_seq_apply_induct_list_prop_composable[
+            OF RLP_sequence_rules,
+            where R = R and P = P and Q = Q and S = S and R' = R' and fs = "map edge_3_effect ns",
+            simplified length_map nth_map, OF R0])
+     (use PQ QP RP0 QSl RS0 SR' in blast)+
+
 lemma num_happening_steps_possible:
   assumes i: "i < length planning_sem.htpl"
       and vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and m0: "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
       and lvp: "num_LvP cfg"
       and pres: "num_happening_pre_pre_delay M i cfg"
   shows "\<exists>ns. num_graph_impl.steps (cfg # ns)
@@ -2781,6 +4105,7 @@ since the numeric configs differ from the propositional ones): the inner @{text 
 and carrying @{const num_happening_post} to the next happening's @{const num_happening_pre_pre_delay}.\<close>
 lemma num_plan_steps_possible:
   assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and m0: "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
       and lvp: "num_LvP cfg"
       and pres: "num_init_planning_state_props' M cfg"
   shows "\<exists>ms. num_graph_impl.steps (cfg # ms) \<and> num_goal_trans_pre M (last (cfg # ms))"
@@ -2810,7 +4135,7 @@ next
     obtain ms where ms: "num_graph_impl.steps (cfg' # ms)"
                         "num_happening_post M j (last (cfg' # ms))"
                         "num_LvP (last (cfg' # ms))"
-      using num_happening_steps_possible[OF "0.prems"(3) vss "0.prems"(2) "0.prems"(1)] by blast
+      using num_happening_steps_possible[OF "0.prems"(3) vss m0 "0.prems"(2) "0.prems"(1)] by blast
     show ?case using ms jeq by blast
   next
     case (Suc d)
@@ -2818,7 +4143,7 @@ next
     obtain ms1 where ms1: "num_graph_impl.steps (cfg' # ms1)"
                           "num_happening_post M j (last (cfg' # ms1))"
                           "num_LvP (last (cfg' # ms1))"
-      using num_happening_steps_possible[OF Suc.prems(3) vss Suc.prems(2) Suc.prems(1)] by blast
+      using num_happening_steps_possible[OF Suc.prems(3) vss m0 Suc.prems(2) Suc.prems(1)] by blast
     have preSuc: "num_happening_pre_pre_delay M (Suc j) (last (cfg' # ms1))"
       and lvpSuc: "num_LvP (last (cfg' # ms1))"
       using num_post_imp_pre_pre_delay_Suc[OF jlt1 ms1(3) ms1(2)] by blast+
