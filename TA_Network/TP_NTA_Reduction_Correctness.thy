@@ -1220,6 +1220,14 @@ lemma num_Lv_conds_dests:
     "v planning_lock = Some 1"
   using assms unfolding num_Lv_conds_def by auto
 
+lemma num_Lv_conds_maintained:
+  assumes "num_Lv_conds L v"
+    and "length L = length L'"
+    and "L ! 0 = L' ! 0"
+    and "v' planning_lock = v planning_lock"
+    and "Simple_Network_Language.bounded (map_of num_net_bounds) v \<Longrightarrow> Simple_Network_Language.bounded (map_of num_net_bounds) v'"
+  shows "num_Lv_conds L' v'"
+  using assms unfolding num_Lv_conds_def by simp
 definition "num_happening_pre M i Lvc \<equiv>
   (case Lvc of (L, v, c) \<Rightarrow> happening_pre i (L, v |` dom (map_of net_bounds), c)
     \<and> num_tracks v (snd (M i)))"
@@ -1914,6 +1922,166 @@ next
     by (simp add: num_plan.num_rat_impl.happening_num_update_Cons)
   finally show ?case by (simp add: comp_def)
 qed
+
+text \<open>FACT-1 of the numeric run-lift: re-express a single happening as a union over action
+@{emph \<open>indices\<close>}. The abstract @{thm [source] planning_sem.happ_at_is_union_of_starting_ending_instant}
+splits the happening into instant/ending/starting snap sets; regrouping the @{term at_start} and
+@{term at_end} images and converting each @{term \<open>{a \<in> set actions. P a}\<close>} to its index form via
+@{thm [source] set_conv_nth} (folding the @{term is_starting_index} / @{term is_ending_index} /
+@{term is_instant_index} abbreviations) yields the index-indexed shape the run-order list consumes:
+the at-start snaps of the starting-or-instant indices, unioned with the at-end snaps of the
+ending-or-instant indices. Stated for an arbitrary time @{term t}; instantiate @{term \<open>t = planning_sem.time_index i\<close>}
+for the @{term i}-th happening.\<close>
+lemma happ_at_index_decomp:
+  "planning_sem.happ_at planning_sem.plan_happ_seq t
+     = at_start ` { actions ! j | j. j < length actions \<and> (is_starting_index t j \<or> is_instant_index t j) }
+       \<union> at_end ` { actions ! j | j. j < length actions \<and> (is_ending_index t j \<or> is_instant_index t j) }"
+proof -
+  have start_set: "planning_sem.instant_actions_at t \<union> planning_sem.starting_actions_at t
+                     = { actions ! j | j. j < length actions \<and> (is_starting_index t j \<or> is_instant_index t j) }"
+    unfolding planning_sem.instant_actions_at_def planning_sem.starting_actions_at_def
+              is_starting_index_def is_instant_index_def
+    by (simp only: set_conv_nth) blast
+  have end_set: "planning_sem.instant_actions_at t \<union> planning_sem.ending_actions_at t
+                   = { actions ! j | j. j < length actions \<and> (is_ending_index t j \<or> is_instant_index t j) }"
+    unfolding planning_sem.instant_actions_at_def planning_sem.ending_actions_at_def
+              is_ending_index_def is_instant_index_def
+    by (simp only: set_conv_nth) blast
+  have "planning_sem.happ_at planning_sem.plan_happ_seq t
+          = planning_sem.instant_snaps_at t \<union> planning_sem.ending_snaps_at t \<union> planning_sem.starting_snaps_at t"
+    by (rule planning_sem.happ_at_is_union_of_starting_ending_instant)
+  also have "\<dots> = at_start ` (planning_sem.instant_actions_at t \<union> planning_sem.starting_actions_at t)
+                    \<union> at_end ` (planning_sem.instant_actions_at t \<union> planning_sem.ending_actions_at t)"
+    unfolding planning_sem.instant_snaps_at_def planning_sem.ending_snaps_at_def planning_sem.starting_snaps_at_def
+    by (auto simp: image_Un)
+  finally show ?thesis
+    by (simp only: start_set end_set)
+qed
+
+text \<open>S-property export (1): the @{term i}-th happening is finite. The whole happening sequence
+@{const planning_sem.plan_happ_seq} is finite for a finite plan (@{thm [source]
+planning_sem.finite_happ_seq}), and a single happening is the @{term snd}-image of the slice of
+@{const planning_sem.plan_happ_seq} at @{term \<open>planning_sem.time_index i\<close>}.\<close>
+lemma happening_finite:
+  "finite (planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i))"
+proof -
+  have "planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)
+          = snd ` {p \<in> planning_sem.plan_happ_seq. fst p = planning_sem.time_index i}"
+    by (force simp: image_iff)
+  thus ?thesis by (simp add: planning_sem.finite_happ_seq)
+qed
+
+text \<open>S-property export (2): every snap in a happening has a functional update set. By
+@{thm [source] happ_at_index_decomp} each snap is @{term \<open>at_start (actions ! j)\<close>} or
+@{term \<open>at_end (actions ! j)\<close>} for some @{term \<open>j < length actions\<close>}, hence applied to an action in
+@{term \<open>set actions\<close>}; the locale's @{thm [source] upds_functional_start} /
+@{thm [source] upds_functional_end} give @{const upds_functional_list} of its updates, which
+@{thm [source] upds_functional_set} lifts to @{const upds_functional} on the @{term set}.\<close>
+lemma happening_upds_functional:
+  assumes "s \<in> planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+  shows "upds_functional ((set \<circ> upds) s)"
+proof -
+  have "s \<in> at_start ` { actions ! j | j. j < length actions
+                            \<and> (is_starting_index (planning_sem.time_index i) j
+                               \<or> is_instant_index (planning_sem.time_index i) j) }
+          \<union> at_end ` { actions ! j | j. j < length actions
+                          \<and> (is_ending_index (planning_sem.time_index i) j
+                             \<or> is_instant_index (planning_sem.time_index i) j) }"
+    using assms by (simp only: happ_at_index_decomp)
+  then consider
+      (starting) j where "j < length actions" and "s = at_start (actions ! j)"
+    | (ending) j where "j < length actions" and "s = at_end (actions ! j)"
+    by blast
+  thus ?thesis
+  proof cases
+    case starting
+    hence "actions ! j \<in> set actions" by simp
+    hence "upds_functional_list (upds (at_start (actions ! j)))"
+      using upds_functional_start by blast
+    thus ?thesis
+      using starting by (simp add: upds_functional_set upds_functional_list_def)
+  next
+    case ending
+    hence "actions ! j \<in> set actions" by simp
+    hence "upds_functional_list (upds (at_end (actions ! j)))"
+      using upds_functional_end by blast
+    thus ?thesis
+      using ending by (simp add: upds_functional_set upds_functional_list_def)
+  qed
+qed
+
+text \<open>The numeric mutex-validity of the plan is one conjunct of the numeric plan validity carried by
+the @{thm [source] num_valid} locale assumption.\<close>
+lemma num_mutex_valid_plan: "num_plan.num_rat_impl.num_mutex_valid_plan"
+  using num_valid unfolding num_plan.num_rat_impl.num_valid_plan_def by blast
+
+text \<open>S-property export (3): two distinct snaps that co-occur in one happening do not numerically
+interfere. Both snaps live at the same time @{term \<open>planning_sem.time_index i\<close>}; unfolding
+@{const planning_sem.plan_happ_seq} exposes their plan-entry witnesses in @{term \<open>ran \<pi>_sem\<close>}, lifted
+to @{term \<open>dom \<pi>_sem\<close>}. From two @{emph \<open>distinct\<close>} plan entries, the first conjunct of
+@{const num_plan.num_rat_impl.num_mutex_valid_plan} applies at equal times (\<epsilon>-distance @{term 0});
+from the @{emph \<open>same\<close>} entry the two distinct co-occurring snaps must be the start/end pair of an
+instantaneous (@{term \<open>d = 0\<close>}) action, discharged by its instant-action clause.
+NB the numeric @{term num_mutex_snap_action} machinery resolves through @{text num_plan.num_rat_impl},
+but the happening sequence is the shared @{const planning_sem.plan_happ_seq} (both interpretations are
+instantiated at the same @{term \<open>\<pi>_sem\<close>} / @{term \<open>rat_of_int \<epsilon>\<close>}).\<close>
+lemma happening_num_noninterfere:
+  assumes "s1 \<in> planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+      and "s2 \<in> planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i)"
+      and "s1 \<noteq> s2"
+    shows "\<not> num_plan.num_rat_impl.num_mutex_snap_action s1 s2"
+proof -
+  have h1: "(planning_sem.time_index i, s1) \<in> planning_sem.plan_happ_seq"
+    using assms(1) by (rule planning_sem.in_happ_atD)
+  have h2: "(planning_sem.time_index i, s2) \<in> planning_sem.plan_happ_seq"
+    using assms(2) by (rule planning_sem.in_happ_atD)
+  obtain a ta da where
+    A: "(a, ta, da) \<in> ran \<pi>_sem"
+    and as1: "at_start a = s1 \<and> planning_sem.time_index i = ta
+                \<or> at_end a = s1 \<and> planning_sem.time_index i = ta + da"
+    using planning_sem.in_happ_seq_exD[OF h1] by blast
+  obtain b tb db where
+    B: "(b, tb, db) \<in> ran \<pi>_sem"
+    and bs2: "at_start b = s2 \<and> planning_sem.time_index i = tb
+                \<or> at_end b = s2 \<and> planning_sem.time_index i = tb + db"
+    using planning_sem.in_happ_seq_exD[OF h2] by blast
+  obtain k where k: "\<pi>_sem k = Some (a, ta, da)" using A unfolding ran_def by blast
+  obtain l where l: "\<pi>_sem l = Some (b, tb, db)" using B unfolding ran_def by blast
+  have kdom: "k \<in> dom \<pi>_sem" using k by blast
+  have ldom: "l \<in> dom \<pi>_sem" using l by blast
+  note nmvp = num_mutex_valid_plan[unfolded num_plan.num_rat_impl.num_mutex_valid_plan_def, folded \<pi>_sem_def]
+  have distinct_clause: "\<not> num_plan.num_rat_impl.num_mutex_snap_action sa sb"
+    if "k' \<in> dom \<pi>_sem" and "l' \<in> dom \<pi>_sem" and "k' \<noteq> l'"
+       and "\<pi>_sem k' = Some (a', ta', da')" and "\<pi>_sem l' = Some (b', tb', db')"
+       and "sa = at_start a' \<and> tt = ta' \<or> sa = at_end a' \<and> tt = ta' + da'"
+       and "sb = at_start b' \<and> u = tb' \<or> sb = at_end b' \<and> u = tb' + db'"
+       and "tt - u < rat_of_int \<epsilon> \<and> u - tt < rat_of_int \<epsilon> \<or> tt = u"
+     for k' l' a' ta' da' b' tb' db' sa sb tt u
+    using nmvp that by blast
+  have instant_clause: "\<not> num_plan.num_rat_impl.num_mutex_snap_action (at_start a') (at_end a')"
+    if "(a', tt, d') \<in> ran \<pi>_sem" and "d' = 0 \<or> d' < rat_of_int \<epsilon>"
+    for a' tt d'
+    using nmvp that by blast
+  consider (diff) "k \<noteq> l" | (same) "k = l" by blast
+  thus ?thesis
+  proof cases
+    case diff
+    show ?thesis
+      by (rule distinct_clause[OF kdom ldom diff k l _ _ _])
+         (use as1 bs2 in blast)+
+  next
+    case same
+    hence eq: "a = b" "ta = tb" "da = db" using k l by auto
+    have s12: "s1 = at_start a \<and> s2 = at_end a \<or> s1 = at_end a \<and> s2 = at_start a"
+      using as1 bs2 assms(3) eq by auto
+    have da0: "da = 0" using as1 bs2 assms(3) eq by auto
+    have ni: "\<not> num_plan.num_rat_impl.num_mutex_snap_action (at_start a) (at_end a)"
+      by (rule instant_clause[OF A]) (simp add: da0)
+    thus ?thesis
+      using s12 by (metis num_plan.num_rat_impl.num_mutex_snap_action_refl)
+  qed
+qed
+
 
 text \<open>Guard invariance under a partial happening update by non-interfering snaps -- the heart of the
 intra-happening numeric content. If a guard set @{term C} reads only fluents of @{term s} (its read
