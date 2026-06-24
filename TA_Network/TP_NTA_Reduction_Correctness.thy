@@ -6,14 +6,15 @@ begin
 lemma happening_steps_possible:
   assumes i: "i < length planning_sem.htpl" 
       and pres: "happening_pre_pre_delay i s"
-  shows "graph_impl.steps (s#delay_and_apply i s) \<and> happening_post i (last (delay_and_apply i s))" 
+      and lvp: "LvP s"
+  shows "graph_impl.steps (s#delay_and_apply i s) \<and> happening_post i (last (delay_and_apply i s)) \<and> LvP (last (delay_and_apply i s))" 
 proof -
   let ?seq = "((ext_seq \<circ> seq_apply) (map edge_2_effect (filter (is_starting_index (planning_sem.time_index i)) [0..<length actions]))
              ((ext_seq \<circ> seq_apply) (map end_edge_effect (filter (is_ending_index (planning_sem.time_index i)) [0..<length actions]))
                ((ext_seq \<circ> seq_apply) (map start_edge_effect (filter (is_starting_index (planning_sem.time_index i)) [0..<length actions]))
                  (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) (filter (is_instant_index (planning_sem.time_index i)) [0..<length actions])) 
                   ((ext_seq \<circ> seq_apply) (map edge_3_effect (filter (is_ending_index (planning_sem.time_index i)) [0..<length actions])) [delay (get_delay i) s])))))"
-  presume p: "graph_impl.steps ?seq \<and> happening_post i (last ?seq)"
+  presume p: "graph_impl.steps ?seq \<and> happening_post i (last ?seq) \<and> LvP (last ?seq)"
 
   have delay_non_negative: "0 \<le> get_delay i" 
     unfolding get_delay_def
@@ -32,8 +33,7 @@ proof -
     and Lvc': "(L, v, c') = delay (get_delay i) (L, v, c)"
     unfolding delay_def by simp
 
-  from pres[simplified s happening_pre_pre_delay_def Let_def happening_pre_def]
-  have Lv_con: "Lv_conds L v" by fastforce
+  have Lv_con: "Lv_conds L v" using lvp unfolding s by simp
   
   have no_urgent: "\<forall>p<length (fst (snd net_impl.sem)). fst (L, v, c) ! p \<notin> urgent (fst (snd net_impl.sem) ! p)"
   proof (intro allI impI)
@@ -105,8 +105,8 @@ proof -
       using 1 by linarith
   qed
 
-  show "graph_impl.steps (s#delay_and_apply i s) \<and> happening_post i (last (delay_and_apply i s))" 
-    apply (rule conjI)
+  show "graph_impl.steps (s#delay_and_apply i s) \<and> happening_post i (last (delay_and_apply i s)) \<and> LvP (last (delay_and_apply i s))" 
+    apply (intro conjI)
     subgoal
       unfolding delay_and_apply_def Let_def
       unfolding s
@@ -121,12 +121,21 @@ proof -
       apply (subst comp_apply[of ext_seq seq_apply, symmetric])
       apply ((subst ext_seq_seq_apply_append_distrib[symmetric] | subst fold_ext_seq_comp_conv_foldl_append[symmetric]), (intro fold_ext_seq_comp_seq_apply_not_Nil ext_seq_comp_seq_apply_not_Nil)?, simp)+
       using p s by blast
-    unfolding delay_and_apply_def Let_def
-    apply (subst apply_nth_happening_def)
-    unfolding Let_def apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def  apply_instant_actions_alt
-    unfolding comp_apply[of ext_seq seq_apply, symmetric]
-    apply (subst last_tl_eq_last)
-    using p by blast
+    subgoal
+      unfolding delay_and_apply_def Let_def
+      apply (subst apply_nth_happening_def)
+      unfolding Let_def apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def  apply_instant_actions_alt
+      unfolding comp_apply[of ext_seq seq_apply, symmetric]
+      apply (subst last_tl_eq_last)
+      using p by blast
+    subgoal
+      unfolding delay_and_apply_def Let_def
+      apply (subst apply_nth_happening_def)
+      unfolding Let_def apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def  apply_instant_actions_alt
+      unfolding comp_apply[of ext_seq seq_apply, symmetric]
+      apply (subst last_tl_eq_last)
+      using p by blast
+    done
   
 next
 let ?seq = "((ext_seq \<circ> seq_apply) (map edge_2_effect (filter (is_starting_index (planning_sem.time_index i)) [0..<length actions]))
@@ -134,6 +143,9 @@ let ?seq = "((ext_seq \<circ> seq_apply) (map edge_2_effect (filter (is_starting
                ((ext_seq \<circ> seq_apply) (map start_edge_effect (filter (is_starting_index (planning_sem.time_index i)) [0..<length actions]))
                  (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) (filter (is_instant_index (planning_sem.time_index i)) [0..<length actions])) 
                   ((ext_seq \<circ> seq_apply) (map edge_3_effect (filter (is_ending_index (planning_sem.time_index i)) [0..<length actions])) [delay (get_delay i) s])))))"
+
+  have seed: "LvP (delay (get_delay i) s)"
+    using lvp by (cases s) (simp add: delay_def)
 
   have pres': "happening_pre_end_starts i (delay (get_delay i) s)"
   proof -
@@ -155,35 +167,35 @@ let ?seq = "((ext_seq \<circ> seq_apply) (map edge_2_effect (filter (is_starting
       subgoal by (auto 
             simp: planning_sem.open_active_count_eq_closed_active_count_if_only_instant_acts
               index_case_defs planning_sem.action_happening_case_defs 
-            dest!: happening_pre_post_delay_dests(5))
+            dest!: happening_pre_post_delay_dests(4))
       subgoal by (auto 
             simp: planning_sem.open_active_count_eq_closed_active_count_if_only_instant_acts
               index_case_defs planning_sem.action_happening_case_defs 
-            dest!: happening_pre_post_delay_dests(6))
+            dest!: happening_pre_post_delay_dests(5))
       using happening_pre_post_delay_dests apply auto[5]
       subgoal by (auto 
             simp: planning_sem.open_active_count_0_if_start_scheduled 
               index_case_defs planning_sem.action_happening_case_defs 
-            dest!: happening_pre_post_delay_dests(5))
+            dest!: happening_pre_post_delay_dests(4))
       subgoal by (auto 
             simp: planning_sem.open_active_count_0_if_start_scheduled 
               index_case_defs planning_sem.action_happening_case_defs 
-            dest!: happening_pre_post_delay_dests(5))
+            dest!: happening_pre_post_delay_dests(4))
       subgoal using happening_pre_post_delay_dests by auto
       subgoal by (auto 
             simp: planning_sem.open_active_count_1_if_ending
               index_case_defs planning_sem.action_happening_case_defs 
-            dest!: happening_pre_post_delay_dests(6))
-      subgoal by (auto dest!: happening_pre_post_delay_dests(8))
+            dest!: happening_pre_post_delay_dests(5))
+      subgoal by (auto dest!: happening_pre_post_delay_dests(7))
       done
   qed
-  show "graph_impl.steps ?seq \<and> happening_post i (last ?seq)"
+  show "graph_impl.steps ?seq \<and> happening_post i (last ?seq) \<and> LvP (last ?seq)"
       apply (rule start_ends_possible)
         apply (rule end_ends_possible)
           apply (rule start_starts_possible)
             apply (rule instant_actions_possible)
               apply (rule end_starts_possible)
-    by (auto intro!: i graph_impl.steps.intros pres')
+    by (auto intro!: i graph_impl.steps.intros pres' seed)
 qed
 
 
@@ -192,14 +204,14 @@ lemma set_foldl_append: "set (foldl (@) ys xs) = \<Union> (set ` (set xs)) \<uni
   by auto
 
 lemma plan_steps_possible: 
-  assumes "graph_impl.steps xs \<and> init_planning_state_props' (last xs)"
-  shows "graph_impl.steps (ext_seq' (map delay_and_apply [0..<length planning_sem.htpl]) xs) \<and> goal_trans_pre (last (ext_seq' (map delay_and_apply [0..<length planning_sem.htpl]) xs))"
+  assumes "graph_impl.steps xs \<and> init_planning_state_props' (last xs) \<and> LvP (last xs)"
+  shows "graph_impl.steps (ext_seq' (map delay_and_apply [0..<length planning_sem.htpl]) xs) \<and> goal_trans_pre (last (ext_seq' (map delay_and_apply [0..<length planning_sem.htpl]) xs)) \<and> LvP (last (ext_seq' (map delay_and_apply [0..<length planning_sem.htpl]) xs))"
 proof (rule steps_seq.ext_seq'_induct_list_prop_and_post[
-      where P = happening_pre_pre_delay 
-        and Q = happening_post 
-        and R = init_planning_state_props' 
+      where P = "\<lambda>i s. happening_pre_pre_delay i s \<and> LvP s" 
+        and Q = "\<lambda>i s. happening_post i s \<and> LvP s" 
+        and R = "\<lambda>x. init_planning_state_props' x \<and> LvP x" 
         and fs = "map delay_and_apply [0..<length planning_sem.htpl]" 
-        and S = goal_trans_pre, 
+        and S = "\<lambda>x. goal_trans_pre x \<and> LvP x", 
         OF assms,
         simplified length_map set_map length_upt minus_nat.diff_0 set_upt], 
         goal_cases)
@@ -228,11 +240,17 @@ proof (rule steps_seq.ext_seq'_induct_list_prop_and_post[
     using x by simp
 next
   case (2 i s)
-  then show ?case using happening_steps_possible by simp
+  then have lt: "i < length planning_sem.htpl"
+    and pre: "happening_pre_pre_delay i s"
+    and lvp: "LvP s" by blast+
+  have nth_eq: "(map delay_and_apply [0..<length planning_sem.htpl] ! i) = delay_and_apply i"
+    using lt by simp
+  show ?case unfolding nth_eq using happening_steps_possible[OF lt pre lvp] by blast
 next
   case (3 i s)
-  hence ib: "i < length planning_sem.htpl - 1"
-    and post: "happening_post i s" by blast+
+  then have ib: "i < length planning_sem.htpl - 1"
+    and post: "happening_post i s"
+    and lvp: "LvP s" by blast+
   have ib1: "i < length planning_sem.htpl"
     and ib2: "Suc i < length planning_sem.htpl"
     using ib by linarith+
@@ -240,45 +258,51 @@ next
   note D = happening_post_dests[OF post s]
   \<comment> \<open>The post-state of happening \<open>i\<close> is the pre-state of happening \<open>Suc i\<close>: transfer each
       invariant conjunct from \<open>after (time_index i)\<close> to \<open>before (time_index (Suc i))\<close>
-      (the transfer lemmas and the index-guarded \<open>prop_state\<close> defs need the bounds \<open>ib1\<close>/\<open>ib2\<close>).\<close>
+      (the transfer lemmas and the index-guarded \<open>prop_state\<close> defs need the bounds \<open>ib1\<close>/\<open>ib2\<close>).
+      \<open>Lv_conds\<close> is no longer a \<open>happening_post\<close> conjunct; it rides along in the threaded \<open>LvP s\<close>
+      and passes through unchanged (same store \<open>s\<close>).\<close>
   have c2: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ (Suc i) p)"
-    using D(2) ib1 ib2 by (auto simp: prop_state_after_happ_def prop_state_before_happ_def planning_sem.state_seq_Suc_is_upd_state)
+    using D(1) ib1 ib2 by (auto simp: prop_state_after_happ_def prop_state_before_happ_def planning_sem.state_seq_Suc_is_upd_state)
   have c3: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index (Suc i)) p))"
-    using D(3) ib1 ib2 by (auto simp: planning_sem.locked_after_indexed_timepoint_is_locked_before_Suc[symmetric])
+    using D(2) ib1 ib2 by (auto simp: planning_sem.locked_after_indexed_timepoint_is_locked_before_Suc[symmetric])
   have c4: "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index (Suc i))))"
-    using D(4) ib1 ib2 by (auto simp: planning_sem.active_after_indexed_timepoint_is_active_before_Suc[symmetric])
+    using D(3) ib1 ib2 by (auto simp: planning_sem.active_after_indexed_timepoint_is_active_before_Suc[symmetric])
   have c5: "\<forall>j<length actions. planning_sem.open_active_count (planning_sem.time_index (Suc i)) (actions ! j) = 0 \<longrightarrow> L ! Suc j = off_loc"
-    using D(5) ib1 ib2 by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
+    using D(4) ib1 ib2 by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
   have c6: "\<forall>j<length actions. planning_sem.open_active_count (planning_sem.time_index (Suc i)) (actions ! j) = 1 \<longrightarrow> L ! Suc j = running_loc"
-    using D(6) ib1 ib2 by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
+    using D(5) ib1 ib2 by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
   have c7: "\<forall>j<length actions. act_clock_pre_happ (c \<oplus> get_delay (Suc i)) act_to_start_clock (actions ! j) (planning_sem.time_index (Suc i))"
     apply (intro strip)
     apply (subst act_clock_pre_happ_simps)
     apply (subst planning_sem.updated_exec_time_and_next)
-    using D(7) ib1 ib2 by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
+    using D(6) ib1 ib2 by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
   have c8: "\<forall>j<length actions. act_clock_pre_happ (c \<oplus> get_delay (Suc i)) act_to_end_clock (actions ! j) (planning_sem.time_index (Suc i))"
     apply (intro strip)
     apply (subst act_clock_pre_happ_simps)
     apply (subst planning_sem.updated_exec_time_and_next)
-    using D(8) ib1 ib2 by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
-  show ?case by (rule happening_pre_pre_delayI[OF s D(1) c2 c3 c4 c5 c6 c7 c8])
+    using D(7) ib1 ib2 by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
+  have "happening_pre_pre_delay (Suc i) s" by (rule happening_pre_pre_delayI[OF s c2 c3 c4 c5 c6 c7 c8])
+  thus ?case using lvp by blast
 next
   case (4 x)
-  hence init_is_goal: "set goal \<subseteq> set init" using planning_sem.valid_plan_state_seq by auto
-  show ?case 
-    apply (insert 4)
-    apply (erule init_planning_state_props'E)
+  then have hlen0: "0 = length planning_sem.htpl"
+    and props': "init_planning_state_props' x"
+    and lvp: "LvP x" by blast+
+  have init_is_goal: "set goal \<subseteq> set init" using hlen0 planning_sem.valid_plan_state_seq by auto
+  have "goal_trans_pre x"
+    apply (rule init_planning_state_props'E[OF props'])
     apply (rule goal_trans_preI)
     using init_is_goal by auto
+  thus ?case using lvp by blast
 next
   case (5 x)
-  hence hlen: "0 < length planning_sem.htpl"
-    and props': "init_planning_state_props' x" by blast+
-  show ?case
+  then have hlen: "0 < length planning_sem.htpl"
+    and props': "init_planning_state_props' x"
+    and lvp: "LvP x" by blast+
+  have "happening_pre_pre_delay 0 x"
   proof (rule init_planning_state_props'E[OF props'])
     fix L v c
     assume s: "x = (L, v, c)"
-      and lv: "Lv_conds L v"
       and va: "v acts_active = Some 0"
       and Leq: "L = planning_loc # map (\<lambda>x. off_loc) actions"
       and pv: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state (set init) p)"
@@ -287,7 +311,8 @@ next
       and ce: "\<forall>i<length actions. c (act_to_end_clock (actions ! i)) = 0"
     \<comment> \<open>The very first happening is preceded by the initial state: every \<open>happening_pre_pre_delay 0\<close>
         conjunct follows from \<open>init_planning_state_props'\<close> by collapsing the
-        \<open>before (time_index 0)\<close> quantities to their initial values.\<close>
+        \<open>before (time_index 0)\<close> quantities to their initial values. \<open>Lv_conds\<close> is no longer supplied
+        by \<open>init_planning_state_props'E\<close>; it rides along in the threaded \<open>LvP x\<close>.\<close>
     have c2: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ 0 p)"
       using pv hlen by (auto simp: planning_sem.plan_state_seq_props prop_state_before_happ_def)
     have c3: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index 0) p))"
@@ -304,41 +329,46 @@ next
     have c8: "\<forall>i<length actions. act_clock_pre_happ (c \<oplus> get_delay 0) act_to_end_clock (actions ! i) (planning_sem.time_index 0)"
       using ce hlen by (subst act_clock_pre_happ_simps cval_add_def planning_sem.exec_time_at_init)+
         (auto simp: get_delay_def planning_sem.card_htps_len_htpl of_rat_add Rat.of_int_def)
-    show "happening_pre_pre_delay 0 x" by (rule happening_pre_pre_delayI[OF s lv c2 c3 c4 c5 c6 c7 c8])
+    show "happening_pre_pre_delay 0 x" by (rule happening_pre_pre_delayI[OF s c2 c3 c4 c5 c6 c7 c8])
   qed
+  thus ?case using lvp by blast
 next
   case (6 x)
-  hence hlen: "0 < length planning_sem.htpl"
-    and post: "happening_post (length planning_sem.htpl - 1) x" by blast+
+  then have hlen: "0 < length planning_sem.htpl"
+    and post: "happening_post (length planning_sem.htpl - 1) x"
+    and lvp: "LvP x" by blast+
   obtain L v c where s: "x = (L, v, c)" by (rule prod_cases3)
+  have lv: "Lv_conds L v" using lvp unfolding s by simp
   note D = happening_post_dests[OF post s]
   \<comment> \<open>The post-state of the final happening already satisfies the goal-transition pre-state: every
       invariant conjunct collapses to its final value (active and locks back to \<open>0\<close>, every action
-      location back to \<open>off_loc\<close>, and \<open>prop_state\<close> witnessed by the final state sequence entry).\<close>
+      location back to \<open>off_loc\<close>, and \<open>prop_state\<close> witnessed by the final state sequence entry).
+      \<open>Lv_conds\<close> is no longer a \<open>happening_post\<close> conjunct; the length/loc facts come from the threaded
+      \<open>LvP x\<close> via \<open>lv\<close>, and \<open>LvP x\<close> passes through to the conclusion unchanged.\<close>
   have c3: "v acts_active = Some 0"
-    using D(4) by (subst (asm) planning_sem.active_after_final_is_0) simp
+    using D(3) by (subst (asm) planning_sem.active_after_final_is_0) simp
   have c4: "L = planning_loc # map (\<lambda>x. off_loc) actions"
   proof (subst list_eq_iff_nth_eq, intro conjI allI impI)
     show "length L = length (planning_loc # map (\<lambda>x. off_loc) actions)"
-      using Lv_conds_dests(1)[OF D(1)] by simp
+      using Lv_conds_dests(1)[OF lv] by simp
   next
     fix i assume i: "i < length L"
     show "L ! i = (planning_loc # map (\<lambda>x. off_loc) actions) ! i"
     proof (cases i)
       case 0
-      thus ?thesis using Lv_conds_dests(2)[OF D(1)] by simp
+      thus ?thesis using Lv_conds_dests(2)[OF lv] by simp
     next
       case (Suc i')
-      hence i': "i' < length actions" using i Lv_conds_dests(1)[OF D(1)] by simp
+      hence i': "i' < length actions" using i Lv_conds_dests(1)[OF lv] by simp
       have "planning_sem.closed_active_count (planning_sem.time_index (length planning_sem.htpl - 1)) (actions ! i') = 0"
         by (rule planning_sem.closed_active_count_final_is_0[OF nth_mem[OF i']])
-      hence "L ! Suc i' = off_loc" using D(5) i' by blast
+      hence "L ! Suc i' = off_loc" using D(4) i' by blast
       thus ?thesis using Suc i' by simp
     qed
   qed
   have c5: "\<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state S p))"
     apply (rule exI[of _ "planning_sem.upd_state (length planning_sem.htpl - 1)"])
-    using D(2) hlen
+    using D(1) hlen
     apply (subst planning_sem.state_seq_Suc_is_upd_state[symmetric], simp)+
     apply (rule conjI)
     using planning_sem.plan_state_seq_valid apply fastforce
@@ -346,32 +376,56 @@ next
     apply (subst (asm) planning_sem.state_seq_Suc_is_upd_state[symmetric], simp)+
     by blast
   have c6: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some 0"
-    using D(3) unfolding planning_sem.locked_after_final_is_0 int_of_nat_def by simp
-  show ?case by (rule goal_trans_preI[OF s D(1) c3 c4 c5 c6])
+    using D(2) unfolding planning_sem.locked_after_final_is_0 int_of_nat_def by simp
+  have "goal_trans_pre x" by (rule goal_trans_preI[OF s c3 c4 c5 c6])
+  thus ?case using lvp by blast
 qed
 
 lemma final_step_possible: 
-  assumes "graph_impl.steps xs \<and> goal_trans_pre (last xs)"
+  assumes "graph_impl.steps xs \<and> goal_trans_pre (last xs) \<and> LvP (last xs)"
   shows "graph_impl.steps ((ext_seq \<circ> seq_apply) [main_auto_goal_edge_effect] xs) \<and> goal_state_conds (last ((ext_seq \<circ> seq_apply) [main_auto_goal_edge_effect] xs))"
-proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R = goal_trans_pre, OF assms], rule conjI)
+proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R = "\<lambda>x. goal_trans_pre x \<and> LvP x", OF assms], rule conjI)
   fix x::"nat list \<times> (String.literal \<Rightarrow> int option) \<times> (String.literal \<Rightarrow> real)"
-  assume a: "goal_trans_pre x"
-  show "goal_state_conds (main_auto_goal_edge_effect x)" 
-    apply (insert a)
-    apply (erule goal_trans_preE)
-    subgoal for L v c
-      apply (rule ssubst[of x], assumption)
-      unfolding main_auto_goal_edge_effect_alt
-      apply (rule goal_state_condsI, rule HOL.refl)
-      by (auto elim: Lv_condsE intro!: single_upd_bounded map_of_net_bounds_planning_lock simp: variables_unique)
-    done
+  assume aL: "goal_trans_pre x \<and> LvP x"
+  hence a: "goal_trans_pre x"
+    and lvp: "LvP x" by simp_all
+  \<comment> \<open>The goal edge fires from the goal-transition pre-state to the goal state: it only flips
+      location 0 to \<open>goal_loc\<close> and \<open>planning_lock\<close> to 2. Every \<open>goal_state_conds\<close> conjunct comes from
+      \<open>goal_trans_pre\<close> (value/lock/loc), except \<open>bounded\<close>, which is no longer a \<open>goal_trans_pre\<close>
+      conjunct and is re-sourced from the threaded \<open>LvP x\<close> via \<open>lv\<close> (\<open>single_upd_bounded\<close> on the
+      \<open>planning_lock \<mapsto> 2\<close> update, whose bound is \<open>(0, 2)\<close>).\<close>
+  show "goal_state_conds (main_auto_goal_edge_effect x)"
+  proof (rule goal_trans_preE[OF a])
+    fix L v c
+    assume s: "x = (L, v, c)"
+      and va: "v acts_active = Some 0"
+      and Leq: "L = planning_loc # map (\<lambda>x. off_loc) actions"
+      and pv: "\<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state S p))"
+      and pl: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some 0"
+    have lv: "Lv_conds L v" using lvp unfolding s by simp
+    show "goal_state_conds (main_auto_goal_edge_effect x)"
+      unfolding s main_auto_goal_edge_effect_alt
+    proof (rule goal_state_condsI, rule HOL.refl)
+      show "bounded (map_of net_bounds) (v(planning_lock \<mapsto> 2))"
+        by (rule single_upd_bounded[OF Lv_conds_dests(3)[OF lv] map_of_net_bounds_planning_lock]; simp)
+      show "(v(planning_lock \<mapsto> 2)) acts_active = Some 0" using va by (simp add: variables_unique)
+      show "(v(planning_lock \<mapsto> 2)) planning_lock = Some 2" by simp
+      show "L[0 := goal_loc] = goal_loc # map (\<lambda>x. off_loc) actions" unfolding Leq by simp
+      show "\<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> (v(planning_lock \<mapsto> 2)) (prop_to_var p) = Some (prop_state S p))"
+        using pv by (auto simp: variables_unique)
+      show "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> (v(planning_lock \<mapsto> 2)) (prop_to_lock p) = Some 0"
+        using pl by (auto simp: variables_unique)
+    qed
+  qed
   show "graph_impl.steps [x, main_auto_goal_edge_effect x]"
-    apply (rule single_step_intro)
-    apply (cases x)
-    subgoal for L v c
-      apply (rule ssubst, assumption)
+  proof -
+    obtain L v c where s: "x = (L, v, c)" by (rule prod_cases3)
+    have lv: "Lv_conds L v" using lvp unfolding s by simp
+    show "graph_impl.steps [x, main_auto_goal_edge_effect x]"
+      apply (rule single_step_intro)
+      apply (rule ssubst[OF s])
       unfolding main_auto_goal_edge_effect_alt prod.case
-      apply (insert a)
+      apply (insert a[unfolded s])
       apply (rule non_t_step_intro[where a = "Internal (STR '''')", simplified])
        apply (subst net_impl.sem_def)
        apply (rule step_u.step_int[where p = 0])
@@ -415,8 +469,7 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R =
               prefer 2
               apply (subst is_val_simps)
               apply (erule goal_trans_preE)
-              apply (erule Lv_condsE)
-              apply simp
+              apply (simp add: Lv_conds_dests(4)[OF lv])
              apply simp
             apply rule
            apply simp
@@ -427,10 +480,12 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R =
         by (rule check_bexp_is_val.intros)
               apply simp
       using no_invs apply simp
-            apply (erule goal_trans_preE)
-            apply fastforce
-           apply (erule goal_trans_preE)
-           apply fastforce
+      \<comment> \<open>The remaining \<open>step_int\<close> premises: the target-location facts (\<open>L ! 0 = planning_loc\<close>,
+          \<open>0 < length L\<close>) come from \<open>lv\<close> (no longer from \<open>goal_trans_pre\<close>); the \<open>is_upds\<close> of the single
+          \<open>planning_lock \<mapsto> 2\<close> update is structural; the two \<open>bounded\<close> goals reduce to \<open>bounded v\<close> from
+          \<open>lv\<close> via \<open>single_upd_bounded\<close> (bound \<open>(0, 2)\<close>).\<close>
+            apply (rule Lv_conds_dests(2)[OF lv])
+           apply (insert Lv_conds_dests(1)[OF lv]; simp)
           apply simp
          apply simp
         apply (rule is_upds.intros)
@@ -440,9 +495,9 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R =
           apply (rule check_bexp_is_val.intros)
          apply simp
         apply (rule is_upds.intros)
-       apply (rule single_upd_bounded)
-      by (auto elim: goal_trans_preE Lv_condsE simp: map_of_net_bounds_planning_lock)
-    done
+       apply (rule single_upd_bounded[OF Lv_conds_dests(3)[OF lv] map_of_net_bounds_planning_lock]; simp)
+      by (rule Lv_conds_dests(3)[OF lv])
+  qed
 qed
 
 
@@ -1135,29 +1190,58 @@ the integer variable store @{emph \<open>also\<close>} tracks the abstract numer
 projection direction reuses the existing proof verbatim; the extra @{const num_tracks} conjunct is the
 new numeric content threaded through the run.\<close>
 
+text \<open>The numeric structural invariant, the full-store analogue of @{const Lv_conds}: it is the
+propositional @{const Lv_conds} content (length / head location / @{const planning_lock}) but with the
+boundedness stated against the FULL numeric bounds @{const num_net_bounds}. It is factored OUT of the
+numeric twins below and carried as a SEPARATE conjunct (@{text num_LvP}) throughout the numeric run,
+exactly as @{const LvP} is carried through the propositional run.\<close>
+definition "num_Lv_conds L v \<equiv>
+  length L = Suc (length actions)
+\<and> L ! 0 = planning_loc
+\<and> Simple_Network_Language.bounded (map_of num_net_bounds) v
+\<and> v planning_lock = Some 1"
+
+fun num_LvP :: "(nat list \<times> (String.literal \<Rightarrow> int option) \<times> (String.literal \<Rightarrow> real)) \<Rightarrow> bool" where
+  "num_LvP (L, v, c) = num_Lv_conds L v"
+
+lemma num_Lv_condsI:
+  assumes "length L = Suc (length actions)"
+    "L ! 0 = planning_loc"
+    "Simple_Network_Language.bounded (map_of num_net_bounds) v"
+    "v planning_lock = Some 1"
+  shows "num_Lv_conds L v"
+  using assms unfolding num_Lv_conds_def by blast
+
+lemma num_Lv_conds_dests:
+  assumes "num_Lv_conds L v"
+  shows "length L = Suc (length actions)"
+    "L ! 0 = planning_loc"
+    "Simple_Network_Language.bounded (map_of num_net_bounds) v"
+    "v planning_lock = Some 1"
+  using assms unfolding num_Lv_conds_def by auto
+
 definition "num_happening_pre M i Lvc \<equiv>
   (case Lvc of (L, v, c) \<Rightarrow> happening_pre i (L, v |` dom (map_of net_bounds), c)
-    \<and> num_tracks v (snd (M i)) \<and> Simple_Network_Language.bounded (map_of num_net_bounds) v)"
+    \<and> num_tracks v (snd (M i)))"
 
 definition "num_happening_pre_pre_delay M i Lvc \<equiv>
   (case Lvc of (L, v, c) \<Rightarrow> happening_pre_pre_delay i (L, v |` dom (map_of net_bounds), c)
-    \<and> num_tracks v (snd (M i)) \<and> Simple_Network_Language.bounded (map_of num_net_bounds) v)"
+    \<and> num_tracks v (snd (M i)))"
 
 definition "num_happening_post M i Lvc \<equiv>
   (case Lvc of (L, v, c) \<Rightarrow> happening_post i (L, v |` dom (map_of net_bounds), c)
-    \<and> num_tracks v (snd (M (Suc i))) \<and> Simple_Network_Language.bounded (map_of num_net_bounds) v)"
+    \<and> num_tracks v (snd (M (Suc i))))"
 
 definition "num_init_planning_state_props' M Lvc \<equiv>
   (case Lvc of (L, v, c) \<Rightarrow> init_planning_state_props' (L, v |` dom (map_of net_bounds), c)
-    \<and> num_tracks v (snd (M 0)) \<and> Simple_Network_Language.bounded (map_of num_net_bounds) v)"
+    \<and> num_tracks v (snd (M 0)))"
 
 definition "num_goal_trans_pre M Lvc \<equiv>
   (case Lvc of (L, v, c) \<Rightarrow> goal_trans_pre (L, v |` dom (map_of net_bounds), c)
-    \<and> num_tracks v (snd (M (length planning_sem.htpl))) \<and> Simple_Network_Language.bounded (map_of num_net_bounds) v)"
+    \<and> num_tracks v (snd (M (length planning_sem.htpl))))"
 
 lemma num_happening_preI:
   assumes "happening_pre i (L, v |` dom (map_of net_bounds), c)" and "num_tracks v (snd (M i))"
-      and "Simple_Network_Language.bounded (map_of num_net_bounds) v"
   shows "num_happening_pre M i (L, v, c)"
   using assms by (simp add: num_happening_pre_def)
 
@@ -1167,12 +1251,8 @@ lemma num_happening_pre_propD: "num_happening_pre M i (L, v, c) \<Longrightarrow
 lemma num_happening_pre_trackD: "num_happening_pre M i (L, v, c) \<Longrightarrow> num_tracks v (snd (M i))"
   by (simp add: num_happening_pre_def)
 
-lemma num_happening_pre_boundD: "num_happening_pre M i (L, v, c) \<Longrightarrow> Simple_Network_Language.bounded (map_of num_net_bounds) v"
-  by (simp add: num_happening_pre_def)
-
 lemma num_happening_pre_pre_delayI:
   assumes "happening_pre_pre_delay i (L, v |` dom (map_of net_bounds), c)" and "num_tracks v (snd (M i))"
-      and "Simple_Network_Language.bounded (map_of num_net_bounds) v"
   shows "num_happening_pre_pre_delay M i (L, v, c)"
   using assms by (simp add: num_happening_pre_pre_delay_def)
 
@@ -1184,13 +1264,8 @@ lemma num_happening_pre_pre_delay_trackD:
   "num_happening_pre_pre_delay M i (L, v, c) \<Longrightarrow> num_tracks v (snd (M i))"
   by (simp add: num_happening_pre_pre_delay_def)
 
-lemma num_happening_pre_pre_delay_boundD:
-  "num_happening_pre_pre_delay M i (L, v, c) \<Longrightarrow> Simple_Network_Language.bounded (map_of num_net_bounds) v"
-  by (simp add: num_happening_pre_pre_delay_def)
-
 lemma num_happening_postI:
   assumes "happening_post i (L, v |` dom (map_of net_bounds), c)" and "num_tracks v (snd (M (Suc i)))"
-      and "Simple_Network_Language.bounded (map_of num_net_bounds) v"
   shows "num_happening_post M i (L, v, c)"
   using assms by (simp add: num_happening_post_def)
 
@@ -1200,12 +1275,8 @@ lemma num_happening_post_propD: "num_happening_post M i (L, v, c) \<Longrightarr
 lemma num_happening_post_trackD: "num_happening_post M i (L, v, c) \<Longrightarrow> num_tracks v (snd (M (Suc i)))"
   by (simp add: num_happening_post_def)
 
-lemma num_happening_post_boundD: "num_happening_post M i (L, v, c) \<Longrightarrow> Simple_Network_Language.bounded (map_of num_net_bounds) v"
-  by (simp add: num_happening_post_def)
-
 lemma num_init_planning_state_props'I:
   assumes "init_planning_state_props' (L, v |` dom (map_of net_bounds), c)" and "num_tracks v (snd (M 0))"
-      and "Simple_Network_Language.bounded (map_of num_net_bounds) v"
   shows "num_init_planning_state_props' M (L, v, c)"
   using assms by (simp add: num_init_planning_state_props'_def)
 
@@ -1217,13 +1288,8 @@ lemma num_init_planning_state_props'_trackD:
   "num_init_planning_state_props' M (L, v, c) \<Longrightarrow> num_tracks v (snd (M 0))"
   by (simp add: num_init_planning_state_props'_def)
 
-lemma num_init_planning_state_props'_boundD:
-  "num_init_planning_state_props' M (L, v, c) \<Longrightarrow> Simple_Network_Language.bounded (map_of num_net_bounds) v"
-  by (simp add: num_init_planning_state_props'_def)
-
 lemma num_goal_trans_preI:
   assumes "goal_trans_pre (L, v |` dom (map_of net_bounds), c)" and "num_tracks v (snd (M (length planning_sem.htpl)))"
-      and "Simple_Network_Language.bounded (map_of num_net_bounds) v"
   shows "num_goal_trans_pre M (L, v, c)"
   using assms by (simp add: num_goal_trans_pre_def)
 
@@ -1232,10 +1298,6 @@ lemma num_goal_trans_pre_propD: "num_goal_trans_pre M (L, v, c) \<Longrightarrow
 
 lemma num_goal_trans_pre_trackD:
   "num_goal_trans_pre M (L, v, c) \<Longrightarrow> num_tracks v (snd (M (length planning_sem.htpl)))"
-  by (simp add: num_goal_trans_pre_def)
-
-lemma num_goal_trans_pre_boundD:
-  "num_goal_trans_pre M (L, v, c) \<Longrightarrow> Simple_Network_Language.bounded (map_of num_net_bounds) v"
   by (simp add: num_goal_trans_pre_def)
 
 subsection \<open>Numeric network step infrastructure (mirroring the propositional Edges layer)\<close>
@@ -1441,8 +1503,10 @@ lemma check_bexp_is_val_mono:
 proof -
   have "check_bexp v b bv \<Longrightarrow> (\<forall>v'. v \<subseteq>\<^sub>m v' \<longrightarrow> check_bexp v' b bv)"
     and "is_val v e k \<Longrightarrow> (\<forall>v'. v \<subseteq>\<^sub>m v' \<longrightarrow> is_val v' e k)"
-    by (induction rule: check_bexp_is_val.inducts)
-       (fastforce intro: check_bexp_is_val.intros simp: map_le_def dom_def)+
+  proof (induction rule: check_bexp_is_val.inducts)
+    case (12 s x val)
+    then show ?case by (auto simp: map_le_def dom_def intro: check_bexp_is_val.intros)
+  qed (blast intro: check_bexp_is_val.intros)+
   thus "check_bexp v b bv \<Longrightarrow> v \<subseteq>\<^sub>m v' \<Longrightarrow> check_bexp v' b bv"
     and "is_val v e k \<Longrightarrow> v \<subseteq>\<^sub>m v' \<Longrightarrow> is_val v' e k"
     by blast+
@@ -1993,11 +2057,11 @@ action automata @{term \<open>{starting_loc, ending_loc}\<close>}) as the propos
 @{text no_urgent} block of @{thm [source] happening_steps_possible} with @{text num_} structure facts.\<close>
 lemma num_no_urgent:
   assumes pres: "happening_pre_pre_delay i (L, v, c)"
+      and lvp: "num_LvP (L, v, c)"
   shows "\<forall>p<length (fst (snd num_net_impl.sem)). fst (L, v, c) ! p \<notin> urgent (fst (snd num_net_impl.sem) ! p)"
 proof (intro allI impI)
-  from pres[simplified happening_pre_pre_delay_def Let_def happening_pre_def]
-  have Lv_con: "Lv_conds L v" by fastforce
-  have len_L: "length L = Suc (length actions)" using Lv_con unfolding Lv_conds_def by blast
+  have num_lv: "num_Lv_conds L v" using lvp by simp
+  have len_L: "length L = Suc (length actions)" by (rule num_Lv_conds_dests(1)[OF num_lv])
 
   fix p
   assume "p < length (fst (snd num_net_impl.sem))"
@@ -2009,7 +2073,7 @@ proof (intro allI impI)
   show "fst (L, v, c) ! p \<notin> urgent (fst (snd num_net_impl.sem) ! p)"
   proof (cases p)
     case 0
-    then have 1: "L ! p = planning_loc" using Lv_con unfolding Lv_conds_def by blast
+    then have 1: "L ! p = planning_loc" using num_Lv_conds_dests(2)[OF num_lv] by simp
 
     have 2: "urgent (fst (snd num_net_impl.sem) ! p) = {init_loc, goal_loc}"
       unfolding num_sem_alt_def fst_conv snd_conv
@@ -2137,6 +2201,32 @@ proof (rule ext)
   qed
 qed
 
+text \<open>The bridge to the propositional structural invariant: the projection of a
+@{const num_Lv_conds}-store to the propositional bounds domain satisfies @{const Lv_conds}. The
+boundedness comes from @{thm [source] prop_proj_bounded}; @{const planning_lock} survives the
+restriction because it is a propositional variable (@{thm [source] map_of_net_bounds_planning_lock}
+puts it in @{term \<open>dom (map_of net_bounds)\<close>}); length / head location are about @{term L} directly.
+This is what supplies the propositional @{const LvP} premise on the projection store when the numeric
+run invokes the propositional @{thm [source] happening_steps_possible}.\<close>
+lemma num_Lv_conds_imp_Lv_conds:
+  assumes "num_Lv_conds L v"
+  shows "Lv_conds L (v |` dom (map_of net_bounds))"
+proof (rule Lv_condsI)
+  show "length L = Suc (length actions)" by (rule num_Lv_conds_dests(1)[OF assms])
+  show "L ! 0 = planning_loc" by (rule num_Lv_conds_dests(2)[OF assms])
+  show "Simple_Network_Language.bounded (map_of net_bounds) (v |` dom (map_of net_bounds))"
+    by (rule prop_proj_bounded[OF num_Lv_conds_dests(3)[OF assms]])
+  have "planning_lock \<in> dom (map_of net_bounds)" using map_of_net_bounds_planning_lock by blast
+  hence "(v |` dom (map_of net_bounds)) planning_lock = v planning_lock" by (simp add: restrict_in)
+  thus "(v |` dom (map_of net_bounds)) planning_lock = Some 1"
+    using num_Lv_conds_dests(4)[OF assms] by simp
+qed
+
+lemma num_LvP_imp_LvP:
+  assumes "num_LvP (L, v, c)"
+  shows "LvP (L, v |` dom (map_of net_bounds), c)"
+  using assms num_Lv_conds_imp_Lv_conds by simp
+
 subsection \<open>Generic run-lift engine: combining the propositional and numeric nets\<close>
 
 text \<open>The numeric net carries the SAME urgent sets as the propositional net at every automaton index:
@@ -2223,27 +2313,36 @@ fluent variables through @{thm [source] num_int_step_lift} per internal step.\<c
 lemma num_happening_steps_possible:
   assumes i: "i < length planning_sem.htpl"
       and vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and lvp: "num_LvP cfg"
       and pres: "num_happening_pre_pre_delay M i cfg"
   shows "\<exists>ns. num_graph_impl.steps (cfg # ns)
-              \<and> num_happening_post M i (last (cfg # ns))"
+              \<and> num_happening_post M i (last (cfg # ns)) \<and> num_LvP (last (cfg # ns))"
 proof -
   obtain L v c where cfg: "cfg = (L, v, c)" by (rule prod_cases3)
   have ppd: "happening_pre_pre_delay i (L, v |` dom (map_of net_bounds), c)"
     using pres[unfolded cfg] by (rule num_happening_pre_pre_delay_propD)
   have tr: "num_tracks v (snd (M i))" using pres[unfolded cfg] by (rule num_happening_pre_pre_delay_trackD)
+  \<comment> \<open>The boundedness now rides in the separately-carried @{const num_LvP}, from which we re-derive the
+     full-store bound (still needed by the run-lift core) and -- via the bridge -- the propositional
+     @{const LvP} on the projection store that @{thm [source] happening_steps_possible} now requires.\<close>
   have bnd: "Simple_Network_Language.bounded (map_of num_net_bounds) v"
-    using pres[unfolded cfg] by (rule num_happening_pre_pre_delay_boundD)
+    using lvp[unfolded cfg] by (simp add: num_Lv_conds_dests(3))
+  have lvpr: "LvP (L, v |` dom (map_of net_bounds), c)"
+    using lvp[unfolded cfg] by (rule num_LvP_imp_LvP)
   \<comment> \<open>The propositional happening run over the net_bounds PROJECTION store v |` dom (map_of net_bounds),
-     which num_happening_pre_pre_delay_propD certifies as a valid propositional pre-state.\<close>
+     which num_happening_pre_pre_delay_propD certifies as a valid propositional pre-state; the projected
+     @{const LvP} premise is supplied by @{thm [source] num_LvP_imp_LvP}.\<close>
   have prun: "graph_impl.steps ((L, v |` dom (map_of net_bounds), c) # delay_and_apply i (L, v |` dom (map_of net_bounds), c))"
     and ppost: "happening_post i (last (delay_and_apply i (L, v |` dom (map_of net_bounds), c)))"
-    using happening_steps_possible[OF i ppd] by blast+
+    using happening_steps_possible[OF i ppd lvpr] by blast+
   \<comment> \<open>TODO (the run-lift core): lift prun to a numeric run over the FULL store v, threading num_tracks
      (the running happening_num_update_set partial fold) and the num_net_bounds bound via num_int_step_lift
      + num_data_no_write_edge / num_data_upd_edge per internal step (L ! p pins the fired edge) and
      num_steps_delay_replace for the leading delay; num_happening_post then follows from ppost since the
-     numeric run's last store projects (prop_proj_bounded) to the prop run's last store.\<close>
-  show "\<exists>ns. num_graph_impl.steps (cfg # ns) \<and> num_happening_post M i (last (cfg # ns))"
+     numeric run's last store projects (prop_proj_bounded) to the prop run's last store. The carried
+     num_LvP on the last config follows from num_Lv_conds_maintained across the numeric edges (locations
+     and planning_lock are preserved; the num_net_bounds bound is re-established per step by the lift).\<close>
+  show "\<exists>ns. num_graph_impl.steps (cfg # ns) \<and> num_happening_post M i (last (cfg # ns)) \<and> num_LvP (last (cfg # ns))"
     unfolding cfg
     sorry
 qed
@@ -2261,26 +2360,26 @@ proof -
     and ib2: "Suc i < length planning_sem.htpl" using ib by linarith+
   note D = happening_post_dests[OF post HOL.refl]
   have c2: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ (Suc i) p)"
-    using D(2) ib1 ib2 by (auto simp: prop_state_after_happ_def prop_state_before_happ_def planning_sem.state_seq_Suc_is_upd_state)
+    using D(1) ib1 ib2 by (auto simp: prop_state_after_happ_def prop_state_before_happ_def planning_sem.state_seq_Suc_is_upd_state)
   have c3: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index (Suc i)) p))"
-    using D(3) ib1 ib2 by (auto simp: planning_sem.locked_after_indexed_timepoint_is_locked_before_Suc[symmetric])
+    using D(2) ib1 ib2 by (auto simp: planning_sem.locked_after_indexed_timepoint_is_locked_before_Suc[symmetric])
   have c4: "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index (Suc i))))"
-    using D(4) ib1 ib2 by (auto simp: planning_sem.active_after_indexed_timepoint_is_active_before_Suc[symmetric])
+    using D(3) ib1 ib2 by (auto simp: planning_sem.active_after_indexed_timepoint_is_active_before_Suc[symmetric])
   have c5: "\<forall>j<length actions. planning_sem.open_active_count (planning_sem.time_index (Suc i)) (actions ! j) = 0 \<longrightarrow> L ! Suc j = off_loc"
-    using D(5) ib1 ib2 by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
+    using D(4) ib1 ib2 by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
   have c6: "\<forall>j<length actions. planning_sem.open_active_count (planning_sem.time_index (Suc i)) (actions ! j) = 1 \<longrightarrow> L ! Suc j = running_loc"
-    using D(6) ib1 ib2 by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
+    using D(5) ib1 ib2 by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
   have c7: "\<forall>j<length actions. act_clock_pre_happ (c \<oplus> get_delay (Suc i)) act_to_start_clock (actions ! j) (planning_sem.time_index (Suc i))"
     apply (intro strip)
     apply (subst act_clock_pre_happ_simps)
     apply (subst planning_sem.updated_exec_time_and_next)
-    using D(7) ib1 ib2 by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
+    using D(6) ib1 ib2 by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
   have c8: "\<forall>j<length actions. act_clock_pre_happ (c \<oplus> get_delay (Suc i)) act_to_end_clock (actions ! j) (planning_sem.time_index (Suc i))"
     apply (intro strip)
     apply (subst act_clock_pre_happ_simps)
     apply (subst planning_sem.updated_exec_time_and_next)
-    using D(8) ib1 ib2 by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
-  show ?thesis by (rule happening_pre_pre_delayI[OF HOL.refl D(1) c2 c3 c4 c5 c6 c7 c8])
+    using D(7) ib1 ib2 by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
+  show ?thesis by (rule happening_pre_pre_delayI[OF HOL.refl c2 c3 c4 c5 c6 c7 c8])
 qed
 
 lemma pp_init_imp_pre_pre_delay_0:
@@ -2290,7 +2389,6 @@ lemma pp_init_imp_pre_pre_delay_0:
 proof (rule init_planning_state_props'E[OF props'])
   fix L v c
   assume s: "x = (L, v, c)"
-    and lv: "Lv_conds L v"
     and va: "v acts_active = Some 0"
     and Leq: "L = planning_loc # map (\<lambda>x. off_loc) actions"
     and pv: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state (set init) p)"
@@ -2313,40 +2411,42 @@ proof (rule init_planning_state_props'E[OF props'])
   have c8: "\<forall>i<length actions. act_clock_pre_happ (c \<oplus> get_delay 0) act_to_end_clock (actions ! i) (planning_sem.time_index 0)"
     using ce hlen by (subst act_clock_pre_happ_simps cval_add_def planning_sem.exec_time_at_init)+
       (auto simp: get_delay_def planning_sem.card_htps_len_htpl of_rat_add Rat.of_int_def)
-  show "happening_pre_pre_delay 0 x" by (rule happening_pre_pre_delayI[OF s lv c2 c3 c4 c5 c6 c7 c8])
+  show "happening_pre_pre_delay 0 x" by (rule happening_pre_pre_delayI[OF s c2 c3 c4 c5 c6 c7 c8])
 qed
 
 lemma pp_post_last_imp_goal_trans_pre:
   assumes hlen: "0 < length planning_sem.htpl"
+      and lvp: "LvP x"
       and post: "happening_post (length planning_sem.htpl - 1) x"
   shows "goal_trans_pre x"
 proof -
   obtain L v c where s: "x = (L, v, c)" by (rule prod_cases3)
+  have lv: "Lv_conds L v" using lvp unfolding s by simp
   note D = happening_post_dests[OF post s]
   have c3: "v acts_active = Some 0"
-    using D(4) by (subst (asm) planning_sem.active_after_final_is_0) simp
+    using D(3) by (subst (asm) planning_sem.active_after_final_is_0) simp
   have c4: "L = planning_loc # map (\<lambda>x. off_loc) actions"
   proof (subst list_eq_iff_nth_eq, intro conjI allI impI)
     show "length L = length (planning_loc # map (\<lambda>x. off_loc) actions)"
-      using Lv_conds_dests(1)[OF D(1)] by simp
+      using Lv_conds_dests(1)[OF lv] by simp
   next
     fix i assume i: "i < length L"
     show "L ! i = (planning_loc # map (\<lambda>x. off_loc) actions) ! i"
     proof (cases i)
       case 0
-      thus ?thesis using Lv_conds_dests(2)[OF D(1)] by simp
+      thus ?thesis using Lv_conds_dests(2)[OF lv] by simp
     next
       case (Suc i')
-      hence i': "i' < length actions" using i Lv_conds_dests(1)[OF D(1)] by simp
+      hence i': "i' < length actions" using i Lv_conds_dests(1)[OF lv] by simp
       have "planning_sem.closed_active_count (planning_sem.time_index (length planning_sem.htpl - 1)) (actions ! i') = 0"
         by (rule planning_sem.closed_active_count_final_is_0[OF nth_mem[OF i']])
-      hence "L ! Suc i' = off_loc" using D(5) i' by blast
+      hence "L ! Suc i' = off_loc" using D(4) i' by blast
       thus ?thesis using Suc i' by simp
     qed
   qed
   have c5: "\<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state S p))"
     apply (rule exI[of _ "planning_sem.upd_state (length planning_sem.htpl - 1)"])
-    using D(2) hlen
+    using D(1) hlen
     apply (subst planning_sem.state_seq_Suc_is_upd_state[symmetric], simp)+
     apply (rule conjI)
     using planning_sem.plan_state_seq_valid apply fastforce
@@ -2354,8 +2454,8 @@ proof -
     apply (subst (asm) planning_sem.state_seq_Suc_is_upd_state[symmetric], simp)+
     by blast
   have c6: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some 0"
-    using D(3) unfolding planning_sem.locked_after_final_is_0 int_of_nat_def by simp
-  show ?thesis by (rule goal_trans_preI[OF s D(1) c3 c4 c5 c6])
+    using D(2) unfolding planning_sem.locked_after_final_is_0 int_of_nat_def by simp
+  show ?thesis by (rule goal_trans_preI[OF s c3 c4 c5 c6])
 qed
 
 lemma pp_init_imp_goal_trans_pre:
@@ -2375,43 +2475,46 @@ text \<open>The numeric twins of the four transfers: each is its propositional c
 (essentially identity) tracking transfer at the matching index.\<close>
 lemma num_post_imp_pre_pre_delay_Suc:
   assumes ib: "i < length planning_sem.htpl - 1"
+      and lvp: "num_LvP cfg"
       and post: "num_happening_post M i cfg"
-  shows "num_happening_pre_pre_delay M (Suc i) cfg"
+  shows "num_happening_pre_pre_delay M (Suc i) cfg \<and> num_LvP cfg"
 proof -
   obtain L v c where cfg: "cfg = (L, v, c)" by (rule prod_cases3)
   have p: "happening_post i (L, v |` dom (map_of net_bounds), c)" using post[unfolded cfg] by (rule num_happening_post_propD)
   have t: "num_tracks v (snd (M (Suc i)))" using post[unfolded cfg] by (rule num_happening_post_trackD)
-  have bnd: "Simple_Network_Language.bounded (map_of num_net_bounds) v" using post[unfolded cfg] by (rule num_happening_post_boundD)
-  show ?thesis unfolding cfg
-    by (rule num_happening_pre_pre_delayI[where M = M and i = "Suc i", OF pp_post_imp_pre_pre_delay_Suc[OF ib p] t bnd])
+  have "num_happening_pre_pre_delay M (Suc i) cfg" unfolding cfg
+    by (rule num_happening_pre_pre_delayI[where M = M and i = "Suc i", OF pp_post_imp_pre_pre_delay_Suc[OF ib p] t])
+  thus ?thesis using lvp by blast
 qed
 
 lemma num_init_imp_pre_pre_delay_0:
   assumes hlen: "0 < length planning_sem.htpl"
+      and lvp: "num_LvP cfg"
       and props': "num_init_planning_state_props' M cfg"
-  shows "num_happening_pre_pre_delay M 0 cfg"
+  shows "num_happening_pre_pre_delay M 0 cfg \<and> num_LvP cfg"
 proof -
   obtain L v c where cfg: "cfg = (L, v, c)" by (rule prod_cases3)
   have p: "init_planning_state_props' (L, v |` dom (map_of net_bounds), c)" using props'[unfolded cfg] by (rule num_init_planning_state_props'_propD)
   have t: "num_tracks v (snd (M 0))" using props'[unfolded cfg] by (rule num_init_planning_state_props'_trackD)
-  have bnd: "Simple_Network_Language.bounded (map_of num_net_bounds) v" using props'[unfolded cfg] by (rule num_init_planning_state_props'_boundD)
-  show ?thesis unfolding cfg
-    by (rule num_happening_pre_pre_delayI[where M = M and i = 0, OF pp_init_imp_pre_pre_delay_0[OF hlen p] t bnd])
+  have "num_happening_pre_pre_delay M 0 cfg" unfolding cfg
+    by (rule num_happening_pre_pre_delayI[where M = M and i = 0, OF pp_init_imp_pre_pre_delay_0[OF hlen p] t])
+  thus ?thesis using lvp by blast
 qed
 
 lemma num_post_last_imp_goal_trans_pre:
   assumes hlen: "0 < length planning_sem.htpl"
+      and lvp: "num_LvP cfg"
       and post: "num_happening_post M (length planning_sem.htpl - 1) cfg"
   shows "num_goal_trans_pre M cfg"
 proof -
   obtain L v c where cfg: "cfg = (L, v, c)" by (rule prod_cases3)
+  have lvpr: "LvP (L, v |` dom (map_of net_bounds), c)" using lvp[unfolded cfg] by (rule num_LvP_imp_LvP)
   have p: "happening_post (length planning_sem.htpl - 1) (L, v |` dom (map_of net_bounds), c)" using post[unfolded cfg] by (rule num_happening_post_propD)
   have t0: "num_tracks v (snd (M (Suc (length planning_sem.htpl - 1))))" using post[unfolded cfg] by (rule num_happening_post_trackD)
-  have bnd: "Simple_Network_Language.bounded (map_of num_net_bounds) v" using post[unfolded cfg] by (rule num_happening_post_boundD)
   have suc_eq: "Suc (length planning_sem.htpl - 1) = length planning_sem.htpl" using hlen by simp
   have t: "num_tracks v (snd (M (length planning_sem.htpl)))" using t0 unfolding suc_eq .
   show ?thesis unfolding cfg
-    by (rule num_goal_trans_preI[where M = M, OF pp_post_last_imp_goal_trans_pre[OF hlen p] t bnd])
+    by (rule num_goal_trans_preI[where M = M, OF pp_post_last_imp_goal_trans_pre[OF hlen lvpr p] t])
 qed
 
 lemma num_init_imp_goal_trans_pre:
@@ -2422,10 +2525,9 @@ proof -
   obtain L v c where cfg: "cfg = (L, v, c)" by (rule prod_cases3)
   have p: "init_planning_state_props' (L, v |` dom (map_of net_bounds), c)" using props'[unfolded cfg] by (rule num_init_planning_state_props'_propD)
   have t0: "num_tracks v (snd (M 0))" using props'[unfolded cfg] by (rule num_init_planning_state_props'_trackD)
-  have bnd: "Simple_Network_Language.bounded (map_of num_net_bounds) v" using props'[unfolded cfg] by (rule num_init_planning_state_props'_boundD)
   have t: "num_tracks v (snd (M (length planning_sem.htpl)))" using t0 by (simp add: hlen[symmetric])
   show ?thesis unfolding cfg
-    by (rule num_goal_trans_preI[where M = M, OF pp_init_imp_goal_trans_pre[OF hlen p] t bnd])
+    by (rule num_goal_trans_preI[where M = M, OF pp_init_imp_goal_trans_pre[OF hlen p] t])
 qed
 
 text \<open>The numeric plan run, existentially: from a combined initial config (propositional
@@ -2437,6 +2539,7 @@ since the numeric configs differ from the propositional ones): the inner @{text 
 and carrying @{const num_happening_post} to the next happening's @{const num_happening_pre_pre_delay}.\<close>
 lemma num_plan_steps_possible:
   assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and lvp: "num_LvP cfg"
       and pres: "num_init_planning_state_props' M cfg"
   shows "\<exists>ms. num_graph_impl.steps (cfg # ms) \<and> num_goal_trans_pre M (last (cfg # ms))"
 proof (cases "length planning_sem.htpl = 0")
@@ -2450,44 +2553,57 @@ proof (cases "length planning_sem.htpl = 0")
 next
   case False
   hence hlen: "0 < length planning_sem.htpl" by simp
+  \<comment> \<open>@{const num_LvP} is threaded as a SEPARATE conjunct through the run, mirroring @{const LvP} in
+     @{thm [source] plan_steps_possible}: each step's @{thm [source] num_happening_steps_possible} both
+     consumes and re-produces it, and the transfer to the next happening passes it through unchanged
+     (same store).\<close>
   have chain: "\<exists>ms. num_graph_impl.steps (cfg' # ms)
-                   \<and> num_happening_post M (length planning_sem.htpl - 1) (last (cfg' # ms))"
-    if "num_happening_pre_pre_delay M j cfg'" "j < length planning_sem.htpl" for j cfg'
+                   \<and> num_happening_post M (length planning_sem.htpl - 1) (last (cfg' # ms))
+                   \<and> num_LvP (last (cfg' # ms))"
+    if "num_happening_pre_pre_delay M j cfg'" "num_LvP cfg'" "j < length planning_sem.htpl" for j cfg'
     using that
   proof (induction "length planning_sem.htpl - 1 - j" arbitrary: j cfg')
     case 0
-    hence jeq: "j = length planning_sem.htpl - 1" using "0.prems"(2) by linarith
+    hence jeq: "j = length planning_sem.htpl - 1" using "0.prems"(3) by linarith
     obtain ms where ms: "num_graph_impl.steps (cfg' # ms)"
                         "num_happening_post M j (last (cfg' # ms))"
-      using num_happening_steps_possible[OF "0.prems"(2) vss "0.prems"(1)] by blast
+                        "num_LvP (last (cfg' # ms))"
+      using num_happening_steps_possible[OF "0.prems"(3) vss "0.prems"(2) "0.prems"(1)] by blast
     show ?case using ms jeq by blast
   next
     case (Suc d)
     have jlt1: "j < length planning_sem.htpl - 1" using Suc.hyps(2) by linarith
     obtain ms1 where ms1: "num_graph_impl.steps (cfg' # ms1)"
                           "num_happening_post M j (last (cfg' # ms1))"
-      using num_happening_steps_possible[OF Suc.prems(2) vss Suc.prems(1)] by blast
+                          "num_LvP (last (cfg' # ms1))"
+      using num_happening_steps_possible[OF Suc.prems(3) vss Suc.prems(2) Suc.prems(1)] by blast
     have preSuc: "num_happening_pre_pre_delay M (Suc j) (last (cfg' # ms1))"
-      by (rule num_post_imp_pre_pre_delay_Suc[OF jlt1 ms1(2)])
+      and lvpSuc: "num_LvP (last (cfg' # ms1))"
+      using num_post_imp_pre_pre_delay_Suc[OF jlt1 ms1(3) ms1(2)] by blast+
     have meas: "d = length planning_sem.htpl - 1 - Suc j" using Suc.hyps(2) by linarith
     have sucjlt: "Suc j < length planning_sem.htpl" using jlt1 by linarith
     obtain ms2 where ms2: "num_graph_impl.steps (last (cfg' # ms1) # ms2)"
                           "num_happening_post M (length planning_sem.htpl - 1) (last (last (cfg' # ms1) # ms2))"
-      using Suc.hyps(1)[OF meas preSuc sucjlt] by blast
+                          "num_LvP (last (last (cfg' # ms1) # ms2))"
+      using Suc.hyps(1)[OF meas preSuc lvpSuc sucjlt] by blast
     have steps: "num_graph_impl.steps (cfg' # ms1 @ ms2)"
       using num_graph_impl.steps_append[OF ms1(1) ms2(1)] by simp
     have lasteq: "last (cfg' # ms1 @ ms2) = last (last (cfg' # ms1) # ms2)"
       by (cases ms2) auto
     have "num_happening_post M (length planning_sem.htpl - 1) (last (cfg' # ms1 @ ms2))"
-      using ms2(2) lasteq by simp
+      and "num_LvP (last (cfg' # ms1 @ ms2))"
+      using ms2(2) ms2(3) lasteq by simp_all
     thus ?case using steps by blast
   qed
-  have pre0: "num_happening_pre_pre_delay M 0 cfg" by (rule num_init_imp_pre_pre_delay_0[OF hlen pres])
+  have pre0: "num_happening_pre_pre_delay M 0 cfg"
+    and lvp0: "num_LvP cfg"
+    using num_init_imp_pre_pre_delay_0[OF hlen lvp pres] by blast+
   obtain ms where ms: "num_graph_impl.steps (cfg # ms)"
                       "num_happening_post M (length planning_sem.htpl - 1) (last (cfg # ms))"
-    using chain[OF pre0 hlen] by blast
+                      "num_LvP (last (cfg # ms))"
+    using chain[OF pre0 lvp0 hlen] by blast
   have "num_goal_trans_pre M (last (cfg # ms))"
-    by (rule num_post_last_imp_goal_trans_pre[OF hlen ms(2)])
+    by (rule num_post_last_imp_goal_trans_pre[OF hlen ms(3) ms(2)])
   thus ?thesis using ms(1) by blast
 qed
 

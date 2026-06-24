@@ -44,6 +44,10 @@ definition "Lv_conds L v \<equiv>
 \<and> bounded (map_of net_bounds) v 
 \<and> v planning_lock = Some 1"
 
+text \<open>@{const Lv_conds} as a predicate on a whole config, for carrying it as a separate conjunct
+through a run (the structural invariant factored out of the per-step value predicates).\<close>
+fun LvP :: "(nat list \<times> (String.literal \<Rightarrow> int option) \<times> (String.literal \<Rightarrow> real)) \<Rightarrow> bool" where
+  "LvP (L, v, c) = Lv_conds L v"
 text \<open>Actual starting state\<close>
 definition init_state_props::"(nat list \<times> (String.literal \<Rightarrow> int option) \<times> (String.literal \<Rightarrow> real)) \<Rightarrow> bool" where
 "init_state_props Lvc \<equiv> 

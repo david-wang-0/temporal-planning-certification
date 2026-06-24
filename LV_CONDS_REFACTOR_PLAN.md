@@ -1,6 +1,10 @@
 # Plan: Refactor — factor `Lv_conds` out of the propositional invariants
 
-Status: implementation plan (2026-06-23). Prerequisite cleanup for [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md)
+Status: **DONE (2026-06-24)** — all 4 phases landed; whole build green, **0 errors / exactly 1 sorry** (the
+`num_happening_steps_possible` run-lift core, unchanged). `Lv_conds` carried as `LvP` through the propositional
+run; `num_Lv_conds` carried as `num_LvP` through the numeric run (the §3 plan below is the executed spec; see
+[HANDOVER.md](HANDOVER.md) 2026-06-24 for the as-built summary + next steps). Originally: implementation plan
+(2026-06-23). Prerequisite cleanup for [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md)
 (it removes the store-projection friction from the numeric twins); part of [NUMERIC_PLAN.md](NUMERIC_PLAN.md)
 §7 P4 (Layer-B forward correctness). Live per-lemma state in [HANDOVER.md](HANDOVER.md). Touches the
 propositional correctness proof in `TA_Network/TP_NTA_Reduction_Correctness{,_Happenings,_Steps}.thy`.
@@ -122,6 +126,39 @@ untouched by this refactor. Commit a green checkpoint after each phase; keep loc
   near-zero `Steps.thy` churn; numeric + boundary layers still get the clean separate conjunct.
 - **Fallback 2** (narrower): factor `Lv_conds` out of only the boundary predicates, leaving the internal
   `happening_invs` nest carrying it — isolates churn to `Correctness.thy`.
+
+## Follow-on ideas (revisit after this refactor lands)
+
+- **Factor out other always-preserved conditions, the same way as `Lv_conds`.** Several predicates bundle
+  structural/invariant conjuncts that hold throughout a run and could likewise be hoisted into a
+  separately-carried predicate to further slim the per-step value predicates — notably the **`*_invs`
+  family** (`happening_invs` / `end_start_invs` / `instant_action_invs`), which carry the
+  non-happening-action clock/location invariants threaded across every step. Same `LvP`-style treatment
+  (drop from the predicates, carry as a separate conjunct, preserve via a `*_maintained` lemma) is a
+  candidate if it would further simplify the numeric layer / run-lift. (User-flagged 2026-06-24.)
+
+## Phase-B idioms discovered (for the remaining group lemmas + future)
+
+Beyond the LvP-threading recipe (§3 Phase B), converting `end_starts_possible` / `instant_actions_possible`
+surfaced these (load-bearing for the clock-heavy lemmas):
+- **Passthrough cases:** `apply (insert N)` + `apply (rule conjI)` (NOT `thus ?case apply (rule conjI)`);
+  insert `apply (elim conjE)` right after `unfolding comp_def` so `*_dests` fire on atomic premises; the
+  new `LvP` conjunct closes `by simp` off the conjoined hypothesis.
+- **Forward case:** extract `lvp: LvP s` / `lv: Lv_conds L v` early; split `show ?case` with `rule conjI`s
+  into `[<post>, LvP, steps]`; prove the edge's `LvP` via `Lv_conds_maintained[OF lv]` (edge touches only
+  `L!Suc n`; `length`/`L!0` by `simp`; `planning_lock` via `map_upds_apply_nontin`/`fun_upd_other` +
+  `variables_unique`; `bounded` reuses the proof's own `bounded_after`/`upds_map_bounded`).
+- **`*_dests` index shift −1** (the `Lv_conds` concl was dropped): `happening_invs_dests(2,3,4,5)`→`(1,2,3,4)`, etc.
+- **`last_ConsR` double-subst:** with threading, `last (seq_apply …)` appears twice (in `<post>` and in `LvP`)
+  — rewrite BOTH or `seq_apply_ConsI` unification breaks.
+- **Source `Lv_conds` through `LvP.simps`:** after `elim conjE` the premise is `LvP (L,v,c)` (a `fun` eqn),
+  so use `prems(k)[unfolded LvP.simps]` for `Lv_conds_maintained`/`Lv_conds_dests`.
+- **CRITICAL — clock-maintenance diverges:** the old `apply (rule clocks_unique); (use iij_ran in simp)+`
+  idiom hangs (PIDE `running`, 800s+) under the new goal shape. Replace with targeted
+  `clocks_unique(9)[OF nth_mem nth_mem nth_actions_unique]` (end/end) / `clocks_unique(7)[…]` (start/start),
+  discharging `<` side-goals by `assumption`/`rule iij_ran` and the action-index `≠` by
+  `(use … index_case_disj in blast)`. Find such silent hangs via `get_document_info(timing_threshold_ms=…)`.
+- NB `start_starts_possible` has a pre-existing diverging `apply fastforce` (~line 1710) independent of the refactor.
 
 ## 6. Critical files
 

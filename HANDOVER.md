@@ -5,7 +5,112 @@ environment/gotchas, and the ordered next-steps list. Design docs:
 [ARCHITECTURE_pipeline.md](ARCHITECTURE_pipeline.md),
 [ARCHITECTURE_grounding.md](ARCHITECTURE_grounding.md); plans:
 [GROUNDING_PLAN.md](GROUNDING_PLAN.md), [NUMERIC_PLAN.md](NUMERIC_PLAN.md). The ROOT files are
-authoritative. Last updated 2026-06-23.
+authoritative. Last updated 2026-06-24.
+
+## Session handover — 2026-06-24 (cont.: stuck-call check + try0 DONE — `Correctness.thy` now GENUINELY green at 34.4s; found & fixed a CACHED FALSE-GREEN (diverging `fastforce`) in `num_no_urgent`; refactor Phases B–D + both fixes COMMITTED)
+
+**Status: `TP_NTA_Reduction_Correctness.thy` fully_processed + consolidated, 0 err / 1 sorry, 34.4s total (no
+command >5s).** The prior session's "green/consolidated" claim for this file was a **cached false-green** — a
+full reprocess after the refactor surfaced a DIVERGING proof. Two slow/stuck calls fixed (NEXT-STEP 1 done):
+
+- **`check_bexp_is_val_mono` (:1500)** — was `(induction rule: check_bexp_is_val.inducts)(fastforce … simp:
+  map_le_def dom_def)+`, ~313s because the `map_le`/`dom` simp ran on ALL 15 induction cases. Rewritten as a
+  structured `proof (induction rule: check_bexp_is_val.inducts) case (12 s x val) … qed (blast intro:
+  check_bexp_is_val.intros)+` — only case 12 (the `var` lookup) gets the costly `auto … map_le_def dom_def`;
+  the other 14 close with `blast`. Now 0s. (`case 12` out-of-order before the `qed` catch-all works fine —
+  `show ?case` unifies against the right pending goal.)
+- **`num_no_urgent` (:2058)** — was `have Lv_con: "Lv_conds L v" by fastforce` from
+  `pres[simplified happening_pre_pre_delay_def Let_def happening_pre_def]`. The Lv_conds refactor factored
+  `Lv_conds` OUT of `happening_pre`/`happening_pre_pre_delay`, so this goal became **unreachable → fastforce
+  DIVERGED** (a refactor straggler the Phase-A/D passes missed; the lemma has NO callers yet — it is a run-lift
+  engine brick). Fixed by adding a `num_LvP (L, v, c)` assumption (exactly what the run-lift will supply) and
+  deriving `length L = Suc (length actions)` / `L!0 = planning_loc` via `num_Lv_conds_dests(1,2)`.
+
+Static sweep confirmed NO other instances of the "derive `Lv_conds` from `happening_pre`" pattern: the other
+`Lv_conds L v` derivations (:36/:341/:405/:423/:2424) all correctly use `using lvp unfolding s by simp`, and
+:2093 legitimately reads `off_loc`/`running_loc` from `happening_pre` (those facts genuinely live there). The
+prior NEXT-STEP 1 claim that "the :1784 application is also ~313s" was a MISATTRIBUTION — a plain `rule` of the
+already-proven lemma, which is fast.
+
+**Committed** (NEXT-STEP 3 done): refactor Phases B–D + these two fixes form the green checkpoint. **NEXT** is
+the run-lift `sorry` (`num_happening_steps_possible`, :2347) per [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md).
+
+## Session handover — 2026-06-24 (the `Lv_conds` refactor LANDED — all 4 phases green; whole build back to 0 err / 1 sorry; the numeric layer now carries `num_Lv_conds` separately as `num_LvP`)
+
+**Status: GREEN end-to-end except the one pre-existing `sorry`.** `TP_NTA_Reduction_Correctness{,_Happenings,_Steps}.thy`
+all process with **0 errors**; **exactly 1 `sorry`** — `num_happening_steps_possible` (the run-lift core,
+`Correctness.thy:2345`), UNCHANGED by this refactor (still [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md)'s job).
+**UNCOMMITTED** (a standing "no commits / no backups" instruction held this session): everything is on disk,
+recoverable; last commit is `3ac2ca9` (Phase A). Modified-uncommitted: `..._Steps.thy`, `..._Correctness.thy`,
+`LV_CONDS_REFACTOR_PLAN.md` (Phases B–D + the plan). `..._Happenings.thy` (Phase A) is committed at `3ac2ca9`;
+the FACT-2 fold bridge + the run-lift engine pieces are committed at `70af423` / `3647a7d`.
+
+**What + why.** Factored the structural invariant `Lv_conds L v` (= `length L = Suc(length actions) ∧ L!0 =
+planning_loc ∧ bounded net_bounds v ∧ v planning_lock = Some 1`) OUT of the per-step value predicates
+(`happening_pre`/`happening_post`/`happening_invs`/`init_planning_state_props(')`/`goal_trans_pre`) and now carry
+it as a SEPARATE conjunct `LvP` (`fun LvP (L,v,c) = Lv_conds L v`, Happenings) threaded through the propositional
+run; SYMMETRICALLY the numeric layer carries `num_Lv_conds` (the `num_net_bounds`-bounded analog) as a separate
+`num_LvP` (`fun num_LvP`, Correctness). User-directed goal: slim the per-step predicates (projection/boundedness-
+free) so the numeric twins drop the store projection from their value conditions and the run-lift can thread value
+conditions on the full store. Full plan + the load-bearing proof idioms: [LV_CONDS_REFACTOR_PLAN.md](LV_CONDS_REFACTOR_PLAN.md)
+(§3 phases A–D, §"Phase-B idioms discovered" — passthrough via `insert N`+`conjI`+`elim conjE`; forward-case
+`Lv_conds_maintained[OF lv]`; `*_dests` −1 index shift; `last_ConsR` double-subst; `LvP.simps` sourcing; and the
+CRITICAL clock-maintenance fix replacing diverging `(use … in simp)+` with targeted `clocks_unique(n)[OF nth_mem …]`).
+
+**Phases (all green):**
+- **A — Happenings.thy** (committed `3ac2ca9`): dropped the `Lv_conds L v` conjunct from the 6 base defs + their
+  intro/dest/elim rules (`*I` lost the assm; `*_dests` lost concl (1) → **all later `*_dests` indices shift −1**;
+  `*E` lost the premise); simplified `happening_invs_maintained`; re-pinned `happening_invs`'s store type
+  (`(L, v :: _ ⇒ int option, c)`, its body became `v`-free). `Lv_conds`/`Lv_conds*`/`init_state_props`/
+  `goal_state_conds` unchanged. Added `fun LvP`.
+- **B — Steps.thy:** threaded `LvP` (`∧ LvP s` on assumption/conclusion + on the `sequence_rules` combinator's
+  R/P/Q/S) through all 5 group lemmas (`end_starts_possible`/`instant_actions_possible`/`start_starts_possible`/
+  `end_ends_possible`/`start_ends_possible`) + `initial_step_possible` (re-gained an `LvP` seed via `Lv_condsI` on
+  the init edge). Forward-step cases prove `LvP`-preservation via `Lv_conds_maintained`; transfer cases pass `LvP`
+  through. **Found + fixed a hidden diverging `blast`** in `start_ends_possible` case 6 (a cached false-green; a
+  full reprocess diverged) using the targeted `closed_active_count_*_happening_casesE` + pinned-dest idiom.
+- **C — Correctness.thy (propositional):** threaded `LvP` through `happening_steps_possible` (now TAKES `LvP s`,
+  CONCLUDES `∧ LvP (last …)`), `plan_steps_possible` (R/P/Q/S + `LvP`; case 2 feeds `LvP` into
+  `happening_steps_possible`; cases 3/5/6 re-source `Lv_conds` from the threaded `LvP`, drop the `Lv_conds` arg from
+  `*I`, shift `*_dests` −1), `final_step_possible`, and the capstone `valid_plan_imp_form_holds` (the latter needed
+  no change — `LvP` lines up automatically; the capstone conclusion is `LvP`-free).
+- **D — Correctness.thy (numeric):** defined `num_Lv_conds`/`fun num_LvP` + `num_Lv_condsI`/`num_Lv_conds_dests` +
+  the BRIDGES `num_Lv_conds_imp_Lv_conds` / `num_LvP_imp_LvP` (`num_Lv_conds L v ⟹ Lv_conds L (v|`dom(map_of net_bounds))`,
+  via `prop_proj_bounded` + `planning_lock ∈ dom net_bounds`). SLIMMED the 5 twins to
+  `<prop value-pred> i (L, v|`pv, c) ∧ num_tracks v (snd (M ?))` (dropped the `bounded num_net_bounds v` conjunct +
+  the `_boundD` rules). Fixed the 4 `pp_*` propositional transfers (dest-index −1 + dropped `Lv_conds` arg;
+  `pp_post_last_imp_goal_trans_pre` gained an explicit `LvP` premise). Threaded `num_LvP` SEPARATELY through
+  `num_happening_steps_possible` (assm `+ num_LvP cfg`, concl `+ num_LvP (last …)`; the setup supplies the prop `LvP`
+  to `happening_steps_possible` via the bridge; the `sorry` admits the augmented goal), the 4 `num_*` transfers
+  (passthrough, same store), and `num_plan_steps_possible`.
+
+**Run-lift core impact (READ before RUN_LIFT_PLAN work).** `num_happening_steps_possible` is now
+`i < length htpl ⟹ num_valid_state_sequence M ⟹ num_happening_pre_pre_delay M i cfg ⟹ num_LvP cfg ⟹
+∃ns. num_graph_impl.steps (cfg # ns) ∧ num_happening_post M i (last (cfg # ns)) ∧ num_LvP (last (cfg # ns))`.
+So the run-lift must ALSO produce `num_LvP (last …)` — provable: the augmented numeric edges preserve `num_Lv_conds`
+(locations/`planning_lock` unchanged; `bounded num_net_bounds` re-established per step by `num_int_step_lift`'s bound
+output / the §B INV obligation), so add a `num_Lv_conds_maintained` analog and thread it. PAYOFF realized: the twins
+are boundedness/projection-free, and the prop value-predicates now hold on the FULL store (they are `Lv_conds`-free,
+guarded to prop vars), so the run-lift's internal threading can use them on the full store, bridging to the
+projection only when invoking the prop `happening_steps_possible`.
+
+**NEXT STEPS (ordered, for the next agent):**
+1. **try0-minimize the two ~313s proofs** that now dominate cold processing (~11 min/file) and block in-session
+   consolidation: `check_bexp_is_val_mono` (`Correctness.thy:1506`, the `by (induction rule: check_bexp_is_val.inducts)
+   (fastforce …)+`) and its application `by (rule check_bexp_is_val_mono(1)[OF B le])` (:1784). Both are
+   **PRE-EXISTING** (verbatim vs `HEAD` — not refactor regressions) but make the file painful to develop; a faster
+   `check_bexp_is_val_mono` speeds the whole numeric layer. (Use the `try0-minimize` / `isabelle-stuck-method` skills.)
+2. **Close the run-lift `sorry`** (`num_happening_steps_possible`) per [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md) — now
+   easier: slimmed twins, `num_LvP` carried, value conditions on the full store; FACT-2
+   (`happening_num_update_set_eq_fold_list`) already in place near :1830.
+3. **Commit the refactor** (held this session at the user's request) once reviewed — clean green checkpoint
+   (0 err / 1 sorry). NB Phases B–D are uncommitted; reverting is `git checkout -- ` the .thy files (back to `3ac2ca9`).
+
+**Verification gotcha.** The file shows `consolidated: false` / `running: 1` in-session — benign global frontier
+phantom, NOT a failure (`get_diagnostics` = 0 errors, `unprocessed: 0`; the slow proofs TERMINATE at 313s/312s,
+confirmed finite via `get_document_info(timing_threshold_ms=8000)`). BUT a `running:1`/`consolidated:false` CAN mask a
+real divergence (it did in Steps Phase B). Always confirm via `get_document_info` timing that the stuck command has
+FINITE elapsed, not growing.
 
 ## Session handover — 2026-06-23 (cont.: run-lift ENGINE started -- projection relocated + urgency-transfer + delay-lift green; single-step "network combination" validated with the user; the run-lift core `num_happening_steps_possible` is still the one `sorry`, now at :2218)
 

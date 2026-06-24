@@ -7,15 +7,29 @@ in `TA_Network/TP_NTA_Reduction_Correctness.thy`.
 
 ---
 
+## Status (2026-06-24): the `Lv_conds` refactor ([LV_CONDS_REFACTOR_PLAN.md](LV_CONDS_REFACTOR_PLAN.md)) has LANDED
+
+The prerequisite is done (whole build green; this is still the one `sorry`). The numeric twins are now
+**slimmed**: `num_happening_pre_pre_delay`/`num_happening_post`/… are `<prop value-pred> i (L, v|`pv, c) ∧
+num_tracks v (snd (M ?))` — the `bounded (map_of num_net_bounds) v` conjunct moved into `num_Lv_conds`,
+carried separately as `num_LvP` (`fun num_LvP (L,v,c) = num_Lv_conds L v`). The propositional
+`happening_steps_possible` now TAKES `LvP s` and CONCLUDES `∧ LvP (last …)`; bridge `num_LvP cfg ⟹ LvP
+(L, v|`pv, c)` is `num_LvP_imp_LvP`. The §2/§3 plan below predates the refactor — read it through the new
+structure: the prop value-predicates are now `Lv_conds`-free and hold on the **full store** (guarded to
+prop vars), so the run-lift threads value conditions on the full store; boundedness + structure come from
+the carried `num_LvP`, which the run must also **preserve** (add a `num_Lv_conds_maintained` analog).
+
 ## 1. Goal
 
-`num_happening_steps_possible` must show: from a combined config `cfg = (L, v, c)` whose store
-satisfies `num_happening_pre_pre_delay M i cfg`, there is a numeric run
-`num_graph_impl.steps (cfg # ns)` ending in a config satisfying `num_happening_post M i`, i.e.
+`num_happening_steps_possible` (post-refactor statement) must show: from `cfg = (L, v, c)` with
+`num_happening_pre_pre_delay M i cfg` **and** `num_LvP cfg`, there is a numeric run
+`num_graph_impl.steps (cfg # ns)` whose last config satisfies
 
-- the propositional `happening_post i` on the **projected** store `v |` dom (map_of net_bounds)`,
-- **plus** `num_tracks (final store) (snd (M (Suc i)))` (the numeric valuation is tracked correctly),
-- **plus** `bounded (map_of num_net_bounds) (final store)`.
+- `num_happening_post M i` — the propositional `happening_post i` on the **projected** store
+  `v |` dom (map_of net_bounds)` **plus** `num_tracks (final store) (snd (M (Suc i)))`; and
+- **`num_LvP (last …)`** — i.e. `num_Lv_conds` (= `length`/`L!0=planning_loc`/`bounded num_net_bounds`/
+  `planning_lock`) on the final store, carried separately (NOT inside the twin). The augmented edges keep
+  locations/`planning_lock`; `num_int_step_lift` re-establishes `bounded num_net_bounds` per step.
 
 Everything else in the numeric forward direction is already green
 (0 err / 1 sorry / 2333 cmds, consolidated): the keystone per-step lift, the per-edge `num_data`
