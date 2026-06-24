@@ -660,6 +660,12 @@ locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
       and snap_inv_comp_ok:
             "\<forall>a \<in> set actions. \<forall>w. num_val_ok w \<longrightarrow> (\<forall>c \<in> set (n_inv a). comp_ok w c)"
       and num_init_val_ok: "\<forall>f \<in> set nfluents. num_init f \<in> \<int>"
+      \<comment> \<open>Snap effects write only DECLARED fluents (grounder-match): every update LHS is in
+         @{term nfluents}. Needed for the integer-encoding to land on declared fluent variables.\<close>
+      and snap_writes_nfluents_start:
+            "\<forall>a \<in> set actions. fst ` set (upds (at_start a)) \<subseteq> set nfluents"
+      and snap_writes_nfluents_end:
+            "\<forall>a \<in> set actions. fst ` set (upds (at_end a)) \<subseteq> set nfluents"
       \<comment> \<open>Numeric over_all invariants: the supported fragment restricts them to EQUALITIES
          (@{term n_inv_eq}) whose fluents are never written by any snap (read-only, @{term n_inv_readonly}).
          Then an over_all comparison's value is constant along every run, hence valuation-independent, so
