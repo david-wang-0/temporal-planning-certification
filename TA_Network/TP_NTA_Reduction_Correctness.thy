@@ -5647,6 +5647,143 @@ proof -
   thus ?thesis unfolding x fst_conv snd_conv B .
 qed
 
+text \<open>The POST-store of EVERY propositional @{const step_u'} step is @{const net_bounds}-bounded: the
+  internal half (@{text step_int}, the only non-@{const Del} action shape reachable in our action nets)
+  carries @{term \<open>bounded B s'\<close>} on its post-store as a tagged premise. This is the POST-store companion of
+  @{thm [source] graph_impl_steps_hd_bounded} (which bounds the PRE-store): it bounds the store the step
+  lands ON, so it reaches every non-head config of a run -- including each phase's LAST config.\<close>
+lemma step_u'_net_impl_post_bounded:
+  assumes step: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>L', vp', c'\<rangle>"
+      and Llen: "length L = length net_automata"
+    shows "Simple_Network_Language.bounded (map_of net_bounds) vp'"
+proof -
+  obtain Li vi ci a where
+      del: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>Li, vi, ci\<rangle>"
+    and aD: "a \<noteq> Simple_Network_Language.label.Del"
+    and act: "net_impl.sem \<turnstile> \<langle>Li, vi, ci\<rangle> \<rightarrow>\<^bsub>a\<^esub> \<langle>L', vp', c'\<rangle>"
+    by (rule step_u'_elims[OF step]) blast
+  obtain t where Lieq: "Li = L" and vieq: "vi = vp" and cieq: "ci = c \<oplus> t"
+    apply (cases rule: step_u_elims(1)[OF del])
+    unfolding net_impl.sem_def TAG_def by auto
+  have actI: "net_impl.sem \<turnstile> \<langle>L, vp, c \<oplus> t\<rangle> \<rightarrow>\<^bsub>a\<^esub> \<langle>L', vp', c'\<rangle>"
+    using act unfolding Lieq vieq cieq .
+  obtain aa where aInt: "a = Internal aa"
+    using prop_non_del_step_internal[OF actI aD Llen] by blast
+  obtain broad N B where as: "net_impl.sem = (broad, N, B)" by (cases net_impl.sem) auto
+  have B: "B = map_of net_bounds"
+    using as unfolding net_impl.sem_def by simp
+  have "Simple_Network_Language.bounded B vp'"
+    apply (cases rule: step_u_elims'(2)[OF actI[unfolded aInt as]])
+    unfolding TAG_def by blast
+  thus ?thesis unfolding B .
+qed
+
+text \<open>The POST-store of any non-head config @{term \<open>xs ! Suc k\<close>} of a propositional @{const graph_impl.steps}
+  run is @{const net_bounds}-bounded: the step @{term \<open>xs ! k \<rightarrow> xs ! Suc k\<close>} lands on it. Cleaner and more
+  complete than @{thm [source] graph_impl_steps_hd_bounded}: it reaches the LAST config of every sub-run.\<close>
+lemma graph_impl_steps_nth_bounded:
+  assumes steps: "graph_impl.steps xs"
+      and Sk: "Suc k < length xs"
+      and Llen: "length (fst (xs ! k)) = length net_automata"
+    shows "Simple_Network_Language.bounded (map_of net_bounds) (fst (snd (xs ! Suc k)))"
+proof -
+  have k_lt: "k < length xs" using Sk by simp
+  have dropNN: "drop k xs \<noteq> []" using Sk by simp
+  have split: "take k xs @ drop k xs = xs" by simp
+  have stepstake: "graph_impl.steps (take k xs @ drop k xs)" using steps unfolding split .
+  have stepsdrop: "graph_impl.steps (drop k xs)"
+    by (rule graph_impl.steps_appendD2[OF stepstake dropNN])
+  have drop_dec: "drop k xs = xs ! k # xs ! Suc k # drop (Suc (Suc k)) xs"
+    using Sk k_lt by (simp add: Cons_nth_drop_Suc Suc_lessD)
+  obtain L vp c where xk: "xs ! k = (L, vp, c)" by (cases "xs ! k")
+  obtain L' vp' c' where xSk: "xs ! Suc k = (L', vp', c')" by (cases "xs ! Suc k")
+  have stepsdec: "graph_impl.steps ((L, vp, c) # (L', vp', c') # drop (Suc (Suc k)) xs)"
+    using stepsdrop unfolding drop_dec xk xSk .
+  have step: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>L', vp', c'\<rangle>"
+    using stepsdec by (auto elim: graph_impl.steps.cases simp: prod.case)
+  have Llen': "length L = length net_automata" using Llen unfolding xk by simp
+  have "Simple_Network_Language.bounded (map_of net_bounds) vp'"
+    by (rule step_u'_net_impl_post_bounded[OF step Llen'])
+  thus ?thesis unfolding xSk by simp
+qed
+
+text \<open>The location-vector length and the main-automaton location @{const planning_loc} are preserved along
+  any @{const seq_apply} run whose every step preserves them (each action edge effect is a list-update at a
+  @{text \<open>Suc n\<close>} position, so it touches neither @{term 0} nor the length). Induct on the run position via
+  @{thm [source] seq_apply_Cons_nth_Suc}.\<close>
+lemma seq_apply_locs_preserved:
+  assumes pres: "\<And>j s. j < length fs \<Longrightarrow>
+                    length (fst ((fs ! j) s)) = length (fst s) \<and> fst ((fs ! j) s) ! 0 = fst s ! 0"
+      and k: "k < length (x # seq_apply fs x)"
+    shows "length (fst ((x # seq_apply fs x) ! k)) = length (fst x)
+           \<and> fst ((x # seq_apply fs x) ! k) ! 0 = fst x ! 0"
+  using k
+proof (induction k)
+  case 0
+  show ?case by simp
+next
+  case (Suc k)
+  have klen: "k < length fs" using Suc.prems by simp
+  have ih: "length (fst ((x # seq_apply fs x) ! k)) = length (fst x)
+            \<and> fst ((x # seq_apply fs x) ! k) ! 0 = fst x ! 0"
+    using Suc.IH Suc.prems by simp
+  have step: "(x # seq_apply fs x) ! Suc k = (fs ! k) ((x # seq_apply fs x) ! k)"
+    by (rule seq_apply_Cons_nth_Suc[OF klen])
+  have "length (fst ((fs ! k) ((x # seq_apply fs x) ! k))) = length (fst ((x # seq_apply fs x) ! k))
+        \<and> fst ((fs ! k) ((x # seq_apply fs x) ! k)) ! 0 = fst ((x # seq_apply fs x) ! k) ! 0"
+    by (rule pres[OF klen])
+  thus ?case using ih step by simp
+qed
+
+text \<open>The propositional internal step @{term \<open>xs ! k \<rightarrow> xs ! Suc k\<close>} of a @{const graph_impl.steps} run,
+  extracted from the run by dropping the leading @{term k} configs and inverting the head step. Supplies the
+  per-position step the source-location pinning lemmas consume.\<close>
+lemma graph_impl_steps_nth_step:
+  assumes steps: "graph_impl.steps xs"
+      and Sk: "Suc k < length xs"
+    shows "net_impl.sem \<turnstile> \<langle>fst (xs ! k), fst (snd (xs ! k)), snd (snd (xs ! k))\<rangle>
+                          \<rightarrow> \<langle>fst (xs ! Suc k), fst (snd (xs ! Suc k)), snd (snd (xs ! Suc k))\<rangle>"
+proof -
+  have k_lt: "k < length xs" using Sk by simp
+  have dropNN: "drop k xs \<noteq> []" using Sk by simp
+  have split: "take k xs @ drop k xs = xs" by simp
+  have stepstake: "graph_impl.steps (take k xs @ drop k xs)" using steps unfolding split .
+  have stepsdrop: "graph_impl.steps (drop k xs)"
+    by (rule graph_impl.steps_appendD2[OF stepstake dropNN])
+  have drop_dec: "drop k xs = xs ! k # xs ! Suc k # drop (Suc (Suc k)) xs"
+    using Sk k_lt by (simp add: Cons_nth_drop_Suc Suc_lessD)
+  obtain L vp c where xk: "xs ! k = (L, vp, c)" by (cases "xs ! k")
+  obtain L' vp' c' where xSk: "xs ! Suc k = (L', vp', c')" by (cases "xs ! Suc k")
+  have stepsdec: "graph_impl.steps ((L, vp, c) # (L', vp', c') # drop (Suc (Suc k)) xs)"
+    using stepsdrop unfolding drop_dec xk xSk .
+  have step: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>L', vp', c'\<rangle>"
+    using stepsdec by (auto elim: graph_impl.steps.cases simp: prod.case)
+  show ?thesis using step unfolding xk xSk by simp
+qed
+
+text \<open>The per-effect length/@{const planning_loc}-preservation facts for the five action edge effects: each
+  is a list-update at @{text \<open>Suc n\<close>} (from the alt-rewrite forms), so it preserves the length and the
+  @{term 0}-th (main-automaton) location.\<close>
+lemma start_edge_effect_preserves_loc0:
+  "length (fst (start_edge_effect n s)) = length (fst s) \<and> fst (start_edge_effect n s) ! 0 = fst s ! 0"
+  by (cases s) (simp add: start_edge_effect_alt)
+
+lemma end_edge_effect_preserves_loc0:
+  "length (fst (end_edge_effect n s)) = length (fst s) \<and> fst (end_edge_effect n s) ! 0 = fst s ! 0"
+  by (cases s) (simp add: end_edge_effect_alt)
+
+lemma edge_2_effect_preserves_loc0:
+  "length (fst (edge_2_effect n s)) = length (fst s) \<and> fst (edge_2_effect n s) ! 0 = fst s ! 0"
+  by (cases s) (simp add: edge_2_effect_alt)
+
+lemma edge_3_effect_preserves_loc0:
+  "length (fst (edge_3_effect n s)) = length (fst s) \<and> fst (edge_3_effect n s) ! 0 = fst s ! 0"
+  by (cases s) (simp add: edge_3_effect_alt)
+
+lemma instant_trans_edge_effect_preserves_loc0:
+  "length (fst (instant_trans_edge_effect n s)) = length (fst s) \<and> fst (instant_trans_edge_effect n s) ! 0 = fst s ! 0"
+  by (cases s) (simp add: instant_trans_edge_effect_alt)
+
 text \<open>Inverting a propositional internal step whose POST-location vector is @{term \<open>L[Suc n := l']\<close>}: under
   @{term \<open>L ! 0 = planning_loc\<close>} (which @{const Lv_conds} pins at every run config) the fired edge sits at
   automaton @{term \<open>Suc n\<close>} -- the main automaton (@{term \<open>p = 0\<close>}) is excluded because from
@@ -5776,6 +5913,310 @@ proof -
   show ?thesis using e src tgt
     by (auto simp: start_edge_def edge_2_def edge_3_def end_edge_def instant_trans_edge_def
                    Let_def locations_unique)
+qed
+
+text \<open>The START-phase @{text struct} export: for a @{const start_edge_effect} @{const seq_apply} sub-run
+  whose head config has the @{const planning_loc} main location and the @{const net_automata} length, every
+  run-position @{term k} satisfies the three @{text struct} facts @{thm [source] num_start_phase_lift}
+  demands -- the @{const off_loc} SOURCE location (recovered from the @{const starting_loc} TARGET via
+  @{thm [source] prop_step_source_off}), the length, and the @{const net_bounds} bound on the post-store
+  (via @{thm [source] graph_impl_steps_nth_bounded}). Locations/length thread through the run by
+  @{thm [source] seq_apply_locs_preserved}, the per-position step by @{thm [source] graph_impl_steps_nth_step}.\<close>
+lemma start_phase_struct:
+  assumes run: "graph_impl.steps (sp # seq_apply (map start_edge_effect ns) sp)"
+      and head0: "fst sp ! 0 = planning_loc"
+      and headlen: "length (fst sp) = length net_automata"
+      and ns_act: "\<And>n. n \<in> set ns \<Longrightarrow> n < length actions"
+      and k: "k < length ns"
+    shows "fst ((sp # seq_apply (map start_edge_effect ns) sp) ! k) ! Suc (ns ! k) = off_loc
+           \<and> length (fst ((sp # seq_apply (map start_edge_effect ns) sp) ! k)) = length net_automata
+           \<and> Simple_Network_Language.bounded (map_of net_bounds)
+                 (fst (snd (start_edge_effect (ns ! k)
+                             ((sp # seq_apply (map start_edge_effect ns) sp) ! k))))"
+proof -
+  let ?xs = "sp # seq_apply (map start_edge_effect ns) sp"
+  let ?ck = "?xs ! k"
+  have lenxs: "length ?xs = Suc (length ns)" by simp
+  have Sk: "Suc k < length ?xs" using k by simp
+  have k_lt_xs: "k < length ?xs" using k by simp
+  \<comment> \<open>Per-step location/length preservation along the run.\<close>
+  have pres: "length (fst ((map start_edge_effect ns ! j) s)) = length (fst s)
+                \<and> fst ((map start_edge_effect ns ! j) s) ! 0 = fst s ! 0"
+    if j: "j < length (map start_edge_effect ns)" for j s
+    using start_edge_effect_preserves_loc0[of "ns ! j" s] j by simp
+  have loc0len: "length (fst ?ck) = length (fst sp) \<and> fst ?ck ! 0 = fst sp ! 0"
+    using seq_apply_locs_preserved[OF pres, of k] k_lt_xs by simp
+  have ckloc0: "fst ?ck ! 0 = planning_loc" using loc0len head0 by simp
+  have cklen: "length (fst ?ck) = length net_automata" using loc0len headlen by simp
+  \<comment> \<open>The next config is the @{const start_edge_effect} image, a @{const starting_loc}-targeting update.\<close>
+  have nxt: "?xs ! Suc k = start_edge_effect (ns ! k) ?ck"
+    using seq_apply_Cons_nth_Suc[of k "map start_edge_effect ns" sp] k by simp
+  obtain L vp c where ck: "?ck = (L, vp, c)" by (cases ?ck)
+  have nxt_eq: "fst (?xs ! Suc k) = L[Suc (ns ! k) := starting_loc]"
+    unfolding nxt ck by (simp add: start_edge_effect_alt)
+  \<comment> \<open>The per-position propositional step.\<close>
+  have step: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>fst (?xs ! Suc k), fst (snd (?xs ! Suc k)), snd (snd (?xs ! Suc k))\<rangle>"
+    using graph_impl_steps_nth_step[OF run Sk] unfolding ck by simp
+  have nk_act: "ns ! k < length actions" using ns_act[of "ns ! k"] k by simp
+  have Llen: "length L = length net_automata" using cklen ck by simp
+  have main0: "L ! 0 = planning_loc" using ckloc0 ck by simp
+  \<comment> \<open>Conjunct 1: the @{const off_loc} source location.\<close>
+  have off: "L ! Suc (ns ! k) = off_loc"
+    by (rule prop_step_source_off[OF step Llen nxt_eq main0 nk_act])
+  have c1: "fst ?ck ! Suc (ns ! k) = off_loc" using off ck by simp
+  \<comment> \<open>Conjunct 3: the @{const net_bounds} bound on the post-store.\<close>
+  have c3: "Simple_Network_Language.bounded (map_of net_bounds)
+              (fst (snd (start_edge_effect (ns ! k) ?ck)))"
+    using graph_impl_steps_nth_bounded[OF run Sk] cklen nxt by simp
+  show ?thesis using c1 cklen c3 by blast
+qed
+
+text \<open>The END-phase @{text struct} export, the mirror of @{thm [source] start_phase_struct}: each
+  @{const end_edge_effect} step targets @{const off_loc}, so the SOURCE location is @{const ending_loc}
+  (via @{thm [source] prop_step_source_ending}).\<close>
+lemma end_phase_struct:
+  assumes run: "graph_impl.steps (sp # seq_apply (map end_edge_effect ns) sp)"
+      and head0: "fst sp ! 0 = planning_loc"
+      and headlen: "length (fst sp) = length net_automata"
+      and ns_act: "\<And>n. n \<in> set ns \<Longrightarrow> n < length actions"
+      and k: "k < length ns"
+    shows "fst ((sp # seq_apply (map end_edge_effect ns) sp) ! k) ! Suc (ns ! k) = ending_loc
+           \<and> length (fst ((sp # seq_apply (map end_edge_effect ns) sp) ! k)) = length net_automata
+           \<and> Simple_Network_Language.bounded (map_of net_bounds)
+                 (fst (snd (end_edge_effect (ns ! k)
+                             ((sp # seq_apply (map end_edge_effect ns) sp) ! k))))"
+proof -
+  let ?xs = "sp # seq_apply (map end_edge_effect ns) sp"
+  let ?ck = "?xs ! k"
+  have Sk: "Suc k < length ?xs" using k by simp
+  have k_lt_xs: "k < length ?xs" using k by simp
+  have pres: "length (fst ((map end_edge_effect ns ! j) s)) = length (fst s)
+                \<and> fst ((map end_edge_effect ns ! j) s) ! 0 = fst s ! 0"
+    if j: "j < length (map end_edge_effect ns)" for j s
+    using end_edge_effect_preserves_loc0[of "ns ! j" s] j by simp
+  have loc0len: "length (fst ?ck) = length (fst sp) \<and> fst ?ck ! 0 = fst sp ! 0"
+    using seq_apply_locs_preserved[OF pres, of k] k_lt_xs by simp
+  have ckloc0: "fst ?ck ! 0 = planning_loc" using loc0len head0 by simp
+  have cklen: "length (fst ?ck) = length net_automata" using loc0len headlen by simp
+  have nxt: "?xs ! Suc k = end_edge_effect (ns ! k) ?ck"
+    using seq_apply_Cons_nth_Suc[of k "map end_edge_effect ns" sp] k by simp
+  obtain L vp c where ck: "?ck = (L, vp, c)" by (cases ?ck)
+  have nxt_eq: "fst (?xs ! Suc k) = L[Suc (ns ! k) := off_loc]"
+    unfolding nxt ck by (simp add: end_edge_effect_alt)
+  have step: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>fst (?xs ! Suc k), fst (snd (?xs ! Suc k)), snd (snd (?xs ! Suc k))\<rangle>"
+    using graph_impl_steps_nth_step[OF run Sk] unfolding ck by simp
+  have nk_act: "ns ! k < length actions" using ns_act[of "ns ! k"] k by simp
+  have Llen: "length L = length net_automata" using cklen ck by simp
+  have main0: "L ! 0 = planning_loc" using ckloc0 ck by simp
+  have endl: "L ! Suc (ns ! k) = ending_loc"
+    by (rule prop_step_source_ending[OF step Llen nxt_eq main0 nk_act])
+  have c1: "fst ?ck ! Suc (ns ! k) = ending_loc" using endl ck by simp
+  have c3: "Simple_Network_Language.bounded (map_of net_bounds)
+              (fst (snd (end_edge_effect (ns ! k) ?ck)))"
+    using graph_impl_steps_nth_bounded[OF run Sk] cklen nxt by simp
+  show ?thesis using c1 cklen c3 by blast
+qed
+
+text \<open>The @{const apply_instant_actions} run has @{term \<open>3 * length ns\<close>} configs (each instant index
+  contributes its three-config @{const apply_snap_action} block). Induct on @{term ns}.\<close>
+lemma length_apply_instant_actions:
+  "length (apply_instant_actions ns s) = 3 * length ns"
+proof (induction ns arbitrary: s)
+  case Nil
+  show ?case by (simp add: apply_instant_actions_def seq_apply'_def ext_seq'_with_Nil)
+next
+  case (Cons n ns')
+  have "apply_instant_actions (n # ns') s
+          = apply_snap_action n s @ apply_instant_actions ns' (last (apply_snap_action n s))"
+    by (rule apply_instant_actions_Cons)
+  thus ?case using Cons.IH by (simp add: apply_snap_action_unfold)
+qed
+
+text \<open>The block-config decomposition of an @{const apply_instant_actions} run: for any instant index
+  @{term \<open>k < length ns\<close>}, the four configs of block @{term k} in @{term \<open>s # apply_instant_actions ns s\<close>}
+  sit at positions @{term \<open>3 * k\<close>}, @{term \<open>3 * k + 1\<close>}, @{term \<open>3 * k + 2\<close>}, @{term \<open>3 * k + 3\<close>} and are
+  the @{const start_edge_effect}/@{const instant_trans_edge_effect}/@{const end_edge_effect} chain. Induct
+  on @{term ns} (the head block sits at the front, the rest shifts by 3).\<close>
+lemma apply_instant_actions_block_nth_conj:
+  assumes k: "k < length ns"
+  shows "(s # apply_instant_actions ns s) ! (3 * k + 1)
+            = start_edge_effect (ns ! k) ((s # apply_instant_actions ns s) ! (3 * k))
+         \<and> (s # apply_instant_actions ns s) ! (3 * k + 2)
+            = instant_trans_edge_effect (ns ! k) ((s # apply_instant_actions ns s) ! (3 * k + 1))
+         \<and> (s # apply_instant_actions ns s) ! (3 * k + 3)
+            = end_edge_effect (ns ! k) ((s # apply_instant_actions ns s) ! (3 * k + 2))"
+  using k
+proof (induction ns arbitrary: s k)
+  case Nil
+  thus ?case by simp
+next
+  case (Cons n ns')
+  let ?s1 = "start_edge_effect n s"
+  let ?s2 = "instant_trans_edge_effect n ?s1"
+  let ?s3 = "end_edge_effect n ?s2"
+  have run_unfold: "s # apply_instant_actions (n # ns') s
+                      = s # ?s1 # ?s2 # ?s3 # apply_instant_actions ns' ?s3"
+    by (subst apply_instant_actions_Cons) (simp add: apply_snap_action_unfold)
+  show ?case
+  proof (cases k)
+    case 0
+    show ?thesis unfolding run_unfold 0 by simp
+  next
+    case (Suc k')
+    have k'lt: "k' < length ns'" using Cons.prems Suc by simp
+    have shift1: "3 * Suc k' + 1 = Suc (Suc (Suc (3 * k' + 1)))" by simp
+    have shift2: "3 * Suc k' + 2 = Suc (Suc (Suc (3 * k' + 2)))" by simp
+    have shift3: "3 * Suc k' + 3 = Suc (Suc (Suc (3 * k' + 3)))" by simp
+    have shift0: "3 * Suc k' = Suc (Suc (Suc (3 * k')))" by simp
+    note IH = Cons.IH[OF k'lt, of ?s3]
+    show ?thesis
+      unfolding run_unfold Suc shift0 shift1 shift2 shift3
+      using IH by (simp add: nth_Cons')
+  qed
+qed
+
+lemmas apply_instant_actions_block_nth = apply_instant_actions_block_nth_conj[THEN conjunct1]
+  apply_instant_actions_block_nth_conj[THEN conjunct2, THEN conjunct1]
+  apply_instant_actions_block_nth_conj[THEN conjunct2, THEN conjunct2]
+
+text \<open>The location-vector length and the @{const planning_loc} main location are preserved along any
+  @{const apply_instant_actions} run: each of the three block effects is a @{text \<open>Suc n\<close>}-update. Induct on
+  @{term ns}, threading the block-end config; the head block's three configs preserve loc0/length by the
+  per-effect facts, the tail by the IH.\<close>
+lemma apply_instant_actions_locs_preserved:
+  assumes k: "k < length (s # apply_instant_actions ns s)"
+  shows "length (fst ((s # apply_instant_actions ns s) ! k)) = length (fst s)
+         \<and> fst ((s # apply_instant_actions ns s) ! k) ! 0 = fst s ! 0"
+  using k
+proof (induction ns arbitrary: s k)
+  case Nil
+  show ?case using Nil.prems
+    by (simp add: apply_instant_actions_def seq_apply'_def ext_seq'_with_Nil)
+next
+  case (Cons n ns')
+  let ?s1 = "start_edge_effect n s"
+  let ?s2 = "instant_trans_edge_effect n ?s1"
+  let ?s3 = "end_edge_effect n ?s2"
+  have run_unfold: "s # apply_instant_actions (n # ns') s
+                      = s # ?s1 # ?s2 # ?s3 # apply_instant_actions ns' ?s3"
+    by (subst apply_instant_actions_Cons) (simp add: apply_snap_action_unfold)
+  \<comment> \<open>The three head-block configs preserve loc0/length relative to @{term s}.\<close>
+  have p1: "length (fst ?s1) = length (fst s) \<and> fst ?s1 ! 0 = fst s ! 0"
+    using start_edge_effect_preserves_loc0[of n s] .
+  have p2: "length (fst ?s2) = length (fst s) \<and> fst ?s2 ! 0 = fst s ! 0"
+    using instant_trans_edge_effect_preserves_loc0[of n ?s1] p1 by simp
+  have p3: "length (fst ?s3) = length (fst s) \<and> fst ?s3 ! 0 = fst s ! 0"
+    using end_edge_effect_preserves_loc0[of n ?s2] p2 by simp
+  show ?case
+  proof (cases k)
+    case 0
+    show ?thesis unfolding run_unfold 0 by simp
+  next
+    case (Suc k0)
+    show ?thesis
+    proof (cases k0)
+      case 0
+      show ?thesis unfolding run_unfold Suc 0 using p1 by simp
+    next
+      case (Suc k1)
+      show ?thesis
+      proof (cases k1)
+        case 0
+        show ?thesis unfolding run_unfold \<open>k = Suc k0\<close> Suc 0 using p2 by simp
+      next
+        case (Suc k2)
+        \<comment> \<open>Positions @{term \<open>k \<ge> 3\<close>} land in the tail run from @{term ?s3}.\<close>
+        have keq: "k = 3 + k2" using \<open>k = Suc k0\<close> \<open>k0 = Suc k1\<close> \<open>k1 = Suc k2\<close> by simp
+        have ktail: "k2 < length (?s3 # apply_instant_actions ns' ?s3)"
+          using Cons.prems unfolding run_unfold keq by simp
+        have idx: "(s # apply_instant_actions (n # ns') s) ! k
+                     = (?s3 # apply_instant_actions ns' ?s3) ! k2"
+          unfolding run_unfold keq by simp
+        have ih: "length (fst ((?s3 # apply_instant_actions ns' ?s3) ! k2)) = length (fst ?s3)
+                  \<and> fst ((?s3 # apply_instant_actions ns' ?s3) ! k2) ! 0 = fst ?s3 ! 0"
+          using Cons.IH[OF ktail] .
+        show ?thesis unfolding idx using ih p3 by simp
+      qed
+    qed
+  qed
+qed
+
+text \<open>The INSTANT-phase @{text struct} export: for an @{const apply_instant_actions} sub-run whose head
+  config has the @{const planning_loc} main location and the @{const net_automata} length, every block index
+  @{term k} satisfies @{const instant_block_struct} at run-position @{term \<open>3 * k\<close>}. The block entry config's
+  @{const off_loc} source comes from @{thm [source] prop_step_source_off} (its start sub-step targets
+  @{const starting_loc}); the two later block source locations (@{const starting_loc} after the start edge,
+  @{const ending_loc} after the instant-trans edge) come straight from the effect shapes
+  @{thm [source] start_edge_effect_alt} / @{thm [source] instant_trans_edge_effect_alt}; the three post-store
+  bounds from @{thm [source] graph_impl_steps_nth_bounded}; lengths from
+  @{thm [source] apply_instant_actions_locs_preserved}.\<close>
+lemma instant_phase_struct:
+  assumes run: "graph_impl.steps (sp # apply_instant_actions ns sp)"
+      and head0: "fst sp ! 0 = planning_loc"
+      and headlen: "length (fst sp) = length net_automata"
+      and ns_act: "\<And>n. n \<in> set ns \<Longrightarrow> n < length actions"
+      and k: "k < length ns"
+    shows "instant_block_struct ((sp # apply_instant_actions ns sp) ! (3 * k)) (ns ! k)"
+proof -
+  let ?xs = "sp # apply_instant_actions ns sp"
+  let ?m = "ns ! k"
+  let ?c = "?xs ! (3 * k)"
+  let ?s1 = "start_edge_effect ?m ?c"
+  let ?s2 = "instant_trans_edge_effect ?m ?s1"
+  let ?s3 = "end_edge_effect ?m ?s2"
+  have lenxs: "length ?xs = Suc (3 * length ns)"
+    by (simp add: length_apply_instant_actions)
+  have m_act: "?m < length actions" using ns_act[of ?m] k by simp
+  have Sm_lt: "Suc ?m < length net_automata" using m_act  by (simp add: length_net_automata)
+  \<comment> \<open>The block configs at the three positions following @{term \<open>3 * k\<close>}.\<close>
+  have b1: "?xs ! (3 * k + 1) = ?s1" by (rule apply_instant_actions_block_nth(1)[OF k])
+  have b2: "?xs ! (3 * k + 2) = ?s2" using apply_instant_actions_block_nth(2)[OF k] b1 by simp
+  have b3: "?xs ! (3 * k + 3) = ?s3" using apply_instant_actions_block_nth(3)[OF k] b2 by simp
+  \<comment> \<open>Position bounds within the run.\<close>
+  have p1lt: "3 * k + 1 < length ?xs" using k lenxs by simp
+  have p2lt: "3 * k + 2 < length ?xs" using k lenxs by simp
+  have p3lt: "3 * k + 3 < length ?xs" using k lenxs by simp
+  have c_lt: "3 * k < length ?xs" using p1lt by simp
+  \<comment> \<open>Lengths/loc0 along the run.\<close>
+  have lc_pair: "length (fst ?c) = length (fst sp) \<and> fst ?c ! 0 = fst sp ! 0"
+    using apply_instant_actions_locs_preserved[OF c_lt] .
+  have c_len: "length (fst ?c) = length net_automata" using lc_pair headlen by simp
+  have c_loc0: "fst ?c ! 0 = planning_loc" using lc_pair head0 by simp
+  have s1_len: "length (fst ?s1) = length net_automata"
+    using start_edge_effect_preserves_loc0[of ?m ?c] c_len by simp
+  have s2_len: "length (fst ?s2) = length net_automata"
+    using instant_trans_edge_effect_preserves_loc0[of ?m ?s1] s1_len by simp
+  \<comment> \<open>Conjunct 1: the @{const off_loc} block-entry source location.\<close>
+  obtain L vp c where ck: "?c = (L, vp, c)" by (cases ?c)
+  have s1_alt: "fst (?xs ! (3 * k + 1)) = L[Suc ?m := starting_loc]"
+    unfolding b1 ck by (simp add: start_edge_effect_alt)
+  have stepc: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>fst (?xs ! (3 * k + 1)), fst (snd (?xs ! (3 * k + 1))), snd (snd (?xs ! (3 * k + 1)))\<rangle>"
+    using graph_impl_steps_nth_step[OF run, of "3 * k"] p1lt unfolding ck by simp
+  have Llen: "length L = length net_automata" using c_len ck by simp
+  have main0: "L ! 0 = planning_loc" using c_loc0 ck by simp
+  have off: "L ! Suc ?m = off_loc"
+    by (rule prop_step_source_off[OF stepc Llen s1_alt main0 m_act])
+  have conj1: "fst ?c ! Suc ?m = off_loc" using off ck by simp
+  \<comment> \<open>Conjuncts 4, 7: the @{const starting_loc} / @{const ending_loc} source locations from the effect shapes.\<close>
+  have Sm_ltL: "Suc ?m < length L" using Sm_lt Llen by simp
+  have conj4: "fst ?s1 ! Suc ?m = starting_loc"
+    unfolding ck by (simp add: start_edge_effect_alt nth_list_update_eq Sm_ltL)
+  have conj7: "fst ?s2 ! Suc ?m = ending_loc"
+  proof -
+    obtain L1 v1 c1 where s1k: "?s1 = (L1, v1, c1)" by (cases ?s1)
+    have l1len: "Suc ?m < length L1" using s1_len Sm_lt s1k by simp
+    show ?thesis unfolding s1k by (simp add: instant_trans_edge_effect_alt l1len)
+  qed
+  \<comment> \<open>Conjuncts 3, 6, 9: the post-store bounds.\<close>
+  have conj3: "Simple_Network_Language.bounded (map_of net_bounds) (fst (snd ?s1))"
+    using graph_impl_steps_nth_bounded[OF run, of "3 * k"] p1lt c_len b1 by simp
+  have conj6: "Simple_Network_Language.bounded (map_of net_bounds) (fst (snd ?s2))"
+    using graph_impl_steps_nth_bounded[OF run, of "3 * k + 1"] p2lt s1_len b1 b2 by simp
+  have conj9: "Simple_Network_Language.bounded (map_of net_bounds) (fst (snd ?s3))"
+    using graph_impl_steps_nth_bounded[OF run, of "3 * k + 2"] p3lt s2_len b2 b3 by simp
+  show ?thesis
+    unfolding instant_block_struct_def Let_def
+    using conj1 c_len conj3 conj4 s1_len conj6 conj7 s2_len conj9 by blast
 qed
 
 lemma num_happening_steps_possible:
