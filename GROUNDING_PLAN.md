@@ -1,6 +1,6 @@
 # Plan: Datalog Delete-Relaxation Grounding for Temporal PDDL
 
-Status: draft (2026-06-18). Companion: [NUMERIC_PLAN.md](NUMERIC_PLAN.md) — the two interlock
+Status: draft (2026-06-18). Companion: [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md) — the two interlock
 (see §7). This plan covers bringing the classical grounder's *datalog certificate / delete-
 relaxation* grounding procedure into this project so that **lifted** temporal PDDL problems can be
 grounded to the nullary ground temporal PDDL that the NTA reduction already consumes.
@@ -15,7 +15,7 @@ Today this project only accepts **ground** temporal PDDL (`ground_ast_problem` i
 and grounding is assumed to have happened upstream (the Python `run.py` harness does it untrusted).
 
 The goal is a **verified grounder** for lifted temporal PDDL, reusing the Helmert-2009-style
-pipeline from `~/work/Isabelle-PDDL-Grounding`:
+pipeline from `Isabelle-PDDL-Grounding`:
 
 ```
 lifted temporal PDDL  ──normalize──▶ delete-relax ──▶ datalog program ──▶ untrusted oracle
@@ -34,7 +34,7 @@ problem.*
 
 ## 2. What we reuse vs. what is new
 
-The grounder (`~/work/Isabelle-PDDL-Grounding`) is **fully proven (0 sorry)** for classical PDDL:
+The grounder (`Isabelle-PDDL-Grounding`) is **fully proven (0 sorry)** for classical PDDL:
 normalization stages, delete relaxation (`PDDL_Relaxation`), the generic positive-datalog
 certificate kernel (`Datalog/`, `Datalog_Graph/`), the PDDL reachability certificate
 (`Reachability_Analysis/PDDL_Reachability_*`), the grounder core (`Grounded_PDDL/`), and the
@@ -101,7 +101,7 @@ reachability. So:
 
 **Projection `π_C` (temporal schema → classical schema)** — for a durative action `a`. This is
 **exactly** what Temporal Fast Downward's translator does when it builds its Datalog exploration
-rules (`tfd/downward/translate/normalize.py`, `ActionConditionProxy.build_rules` /
+rules (`Fast Downward's translate/normalize.py`, `ActionConditionProxy.build_rules` /
 `EffectConditionProxy.build_rules` / `condition_to_rule_body`), confirmed by reading the source:
 - classical precondition (rule **body / RHS**) =
   `positive(pre_s)` ∪ `static_positive(inv)` ∪ `static_positive(pre_e)`
@@ -127,7 +127,7 @@ through the *same* datalog program as ordinary atoms: an **EDB fact** for every 
 every numeric comparison condition (in `pre_s`/effect-conditions) and every PNE in the duration
 constraint. This is exactly the grounder's `Definedness_Normalization` + `Definedness_Translation`
 stages — reused verbatim; the numeric *value* semantics is **not** in datalog (see §7 and
-[NUMERIC_PLAN.md](NUMERIC_PLAN.md)).
+[RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md)).
 
 > **Why dropping `inv`/`pre_e` fluents is required for soundness, not just precision.** An over-all
 > or end fluent condition may only become achievable *during* the action's own duration — via its own
@@ -208,7 +208,7 @@ grounder's per-stage session split.
 ## 7. Interlock with the numeric plan
 
 The grounder currently *rejects* numerics (`grounding_checks_exec` includes a numeric-free check).
-When [NUMERIC_PLAN.md](NUMERIC_PLAN.md) lands, the seam is:
+When [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md) lands, the seam is:
 - **Reachability tracks definedness but ignores comparison *values***. Datalog carries the
   `defined!f` predicate (EDB from init, head from numeric assignments, body from `pre_s`/duration
   PNEs — see §4); it does **not** evaluate the `≤/≥/=` test. Treating the comparison *value* as
@@ -241,7 +241,7 @@ When [NUMERIC_PLAN.md](NUMERIC_PLAN.md) lands, the seam is:
 
 ## 9. Documentation conventions (mirror the classical grounder)
 
-Document this development in the **same idiom** as `~/work/Isabelle-PDDL-Grounding` so the two read as
+Document this development in the **same idiom** as `Isabelle-PDDL-Grounding` so the two read as
 one project. Concretely, produce/maintain:
 
 - **`ARCHITECTURE_pipeline.md`-style** one-pager: the ASCII pipeline diagram (§1), a **stage table**

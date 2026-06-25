@@ -16,7 +16,7 @@ value sort @{typ 'r} (intended instance @{typ rat}). These stay PDDL-agnostic: P
 @{text numeric_expression} is mapped into this type only at the @{text Ground_PDDL} boundary, exactly
 as PDDL atoms become an opaque @{text 'proposition}. Explicit operator constructors (not Munta's
 @{text \<open>binop "'r \<Rightarrow> 'r \<Rightarrow> 'r"\<close>}) so the type code-exports, has decidable equality, and maps 1:1 to
-@{text \<open>binop (+)/(-)/(*)/(div)\<close>}. See @{file \<open>../NUMERIC_PLAN.md\<close>} \<section>A.1.\<close>
+@{text \<open>binop (+)/(-)/(*)/(div)\<close>}.\<close>
 
 datatype ('n, 'r) nexp =
     NConst 'r                                       \<comment> \<open>a value constant\<close>
@@ -35,8 +35,7 @@ text \<open>Evaluation of numeric expressions and comparisons against a partial 
 @{typ \<open>'n \<rightharpoonup> 'r\<close>}, and application of numeric effects. Partiality is definedness: a read of an
 undefined fluent makes the expression undefined, so any comparison over it fails (fail-closed). Values
 live in a @{class linordered_field} (intended instance @{typ rat}); division is exact field division
-here -- the integer-division/truncation gap lives only at the Munta boundary. See
-@{file \<open>../NUMERIC_PLAN.md\<close>} \<section>A.2.\<close>
+here -- the integer-division/truncation gap lives only at the Munta boundary.\<close>
 
 text \<open>Fluents read by a numeric expression (its @{term NVar} leaves).\<close>
 fun nexp_fluents :: "('n, 'r) nexp \<Rightarrow> 'n set" where
@@ -276,7 +275,7 @@ text \<open>Numeric extension of @{locale action_defs}. Additive: it imports eve
 parameter and adds the numeric data, so @{locale action_defs} and its existing sublocales are
 untouched. Numeric preconditions/effects attach to snap actions; the @{term over_all} numeric
 invariant @{term n_inv} is per action (cf. @{term over_all}). A comparison/effect @{emph \<open>set\<close>} is
-read conjunctively. See @{file \<open>../NUMERIC_PLAN.md\<close>} \<section>A.2.\<close>
+read conjunctively.\<close>
 locale numeric_action_defs =
   action_defs at_start at_end over_all lower upper pre adds dels
     for at_start :: "'action  \<Rightarrow> 'snap_action"
@@ -359,8 +358,7 @@ for additive @{text increase}/@{text decrease} effects, which PDDL accumulates; 
 @{text \<open>(= item_id counter)\<close>} guard), and the Layer-C checker rejects (fail-closed) any task that could.
 This includes the @{emph \<open>self\<close>}-pair @{term \<open>at_start a\<close>}/@{term \<open>at_end a\<close>} of one action when its
 duration collapses (@{term \<open>d = 0\<close>}/@{term \<open>d < \<epsilon>\<close>}): an action's own start/end effects must not write a
-common fluent (mirrors the propositional self-pair clause in @{term mutex_valid_plan}). See
-@{file \<open>../NUMERIC_PLAN.md\<close>} \<section>A.2.\<close>
+common fluent (mirrors the propositional self-pair clause in @{term mutex_valid_plan}).\<close>
 definition num_mutex_snap_action :: "'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" where
   "num_mutex_snap_action a b \<longleftrightarrow>
       snap_writes a \<inter> snap_writes b \<noteq> {}
@@ -1416,8 +1414,7 @@ end
 
 text \<open>Numeric plan-level locale: the propositional @{locale temp_plan_defs} merged with the numeric
 data of @{locale numeric_action_defs}, sharing the @{locale action_defs} parameters. This is the
-@{emph \<open>parallel\<close>} (additive) numeric hierarchy -- the propositional development is untouched. See
-@{file \<open>../NUMERIC_PLAN.md\<close>} \<section>3 / \<section>7 (P2).\<close>
+@{emph \<open>parallel\<close>} (additive) numeric hierarchy -- the propositional development is untouched.\<close>
 locale numeric_temp_plan_defs =
   temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
   + numeric_action_defs at_start at_end over_all lower upper pre adds dels n_pre n_inv upds

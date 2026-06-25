@@ -2,7 +2,7 @@
 
 How the **planned** grounding front-end turns a *lifted* temporal PDDL problem into the ground
 `ground_ast_problem` the NTA reduction consumes, by reusing the classical grounder
-(`~/work/Isabelle-PDDL-Grounding`) through a **temporal → classical projection**. This is the
+(`Isabelle-PDDL-Grounding`) through a **temporal → classical projection**. This is the
 `ARCHITECTURE_datalog_certification.md` analog for this repo. See
 [ARCHITECTURE_pipeline.md](ARCHITECTURE_pipeline.md) for where it sits, and
 [GROUNDING_PLAN.md](GROUNDING_PLAN.md) for the work breakdown. Last updated 2026-06-18.
@@ -14,7 +14,7 @@ So for grounding we **project** each durative action to a single classical actio
 grounder's certified datalog reachability on the projection, then **re-expand** the reachable ground
 instances back into ground durative actions. The projection is not an approximation we invented — it
 is **exactly** Temporal Fast Downward's translator behaviour, confirmed against
-`~/work/tfd/downward/translate/normalize.py`.
+`Fast Downward's translate/normalize.py`.
 
 ## The projection `π_C` (durative action → classical action)
 

@@ -355,8 +355,8 @@ sublocale temp_plan_for_action_defs at_start at_end "set o over_all" lower upper
   by unfold_locales
 end
 
-text \<open>**Numeric collapse twin of @{locale temp_plan_for_problem_list_defs}** (NUMERIC_PLAN.md
-\<section>7, "begin the collapse"). The list-refined plan-for-problem locale, additively carrying the
+text \<open>**Numeric collapse twin of @{locale temp_plan_for_problem_list_defs}** (the "begin the
+collapse" stage). The list-refined plan-for-problem locale, additively carrying the
 numeric data of @{locale numeric_temp_plan_defs} on the @{emph \<open>same\<close>} @{locale temp_plan_defs}
 base (the @{term \<open>set o pre\<close>} / @{term \<open>set o over_all\<close>} projection of line 349). Because the
 numeric locales are @{emph \<open>fixes\<close>}-only (no \<^theory_text>\<open>assumes\<close>), this merge has no proof

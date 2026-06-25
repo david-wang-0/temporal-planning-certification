@@ -2,7 +2,7 @@
 
 One-page summary of the end-to-end pipeline. Companion design notes:
 [ARCHITECTURE_grounding.md](ARCHITECTURE_grounding.md) (the planned datalog grounding front-end) and
-the two plans [GROUNDING_PLAN.md](GROUNDING_PLAN.md) / [NUMERIC_PLAN.md](NUMERIC_PLAN.md). Build/run
+the two plans [GROUNDING_PLAN.md](GROUNDING_PLAN.md) / [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md). Build/run
 instructions live in [Readme.md](Readme.md); the ROOT files are authoritative. Last updated
 2026-06-18.
 
@@ -42,7 +42,7 @@ Legend: **[done]** proven/in-tree today · **[planned]** designed in the plans, 
 | Executable certificate check (capstone) | `Ground_PDDL_Exec_Imp/Check_Unsolvability.thy` (`check_and_cert_pddl_problem_okay`, `make_certified_net_okay`) | **[done]** |
 | Code export → SML certifier | `Ground_PDDL_Exec_Imp/Unsolvability_Code_*.thy`, `ML/` | **[done]** plans MatchCellar-impossible instances |
 | PDDL semantics | Formal-PDDL-Semantics `Temporal_Planning` (new) ⟵ migrating off old `Temporal_AI_Planning_Languages_Semantics` | **[planned P0]** re-point |
-| Datalog grounding front-end (lifted → ground) | `Ground_Temporal_PDDL/*` (new) reusing `~/work/Isabelle-PDDL-Grounding` | **[planned]** see GROUNDING_PLAN |
+| Datalog grounding front-end (lifted → ground) | `Ground_Temporal_PDDL/*` (new) reusing `Isabelle-PDDL-Grounding` | **[planned]** see GROUNDING_PLAN |
 | Numeric conditions / effects (semantics + reduction) | Layers A/B/C across the above | **[planned]** see NUMERIC_PLAN |
 
 ## Trust story
@@ -68,7 +68,7 @@ an accepted answer is a sound statement about the *original* temporal problem.
 
 ## Reading order
 
-1. This file. 2. [GROUNDING_PLAN.md](GROUNDING_PLAN.md) / [NUMERIC_PLAN.md](NUMERIC_PLAN.md) for the
+1. This file. 2. [GROUNDING_PLAN.md](GROUNDING_PLAN.md) / [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md) for the
 two in-flight workstreams. 3. [ARCHITECTURE_grounding.md](ARCHITECTURE_grounding.md) for the
 projection design. 4. [HANDOVER.md](HANDOVER.md) for the per-session inventory, `sorry` list, and
 ordered next steps. 5. `Index.thy` maps the paper's theorems/locales to source.
