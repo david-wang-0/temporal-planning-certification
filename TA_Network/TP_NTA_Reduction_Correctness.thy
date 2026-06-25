@@ -6252,9 +6252,635 @@ proof -
      numeric run's last store projects (prop_proj_bounded) to the prop run's last store. The carried
      num_LvP on the last config follows from num_Lv_conds_maintained across the numeric edges (locations
      and planning_lock are preserved; the num_net_bounds bound is re-established per step by the lift).\<close>
-  show "\<exists>ns. num_graph_impl.steps (cfg # ns) \<and> num_happening_post M i (last (cfg # ns)) \<and> num_LvP (last (cfg # ns))"
-    unfolding cfg
+  \<comment> \<open>The base configs and the index lists driving the five phases.\<close>
+  let ?proj = "(L, v |` dom (map_of net_bounds), c)"
+  let ?d = "get_delay i"
+  let ?t = "planning_sem.time_index i"
+  let ?SS = "filter (is_starting_index ?t) [0..<length actions]"
+  let ?SE = "filter (is_ending_index ?t) [0..<length actions]"
+  let ?SB = "filter (is_instant_index ?t) [0..<length actions]"
+  let ?w = "\<lambda>ys. num_plan.num_rat_impl.happening_num_update ys (snd (M i))"
+  \<comment> \<open>The propositional happening run in @{const ext_seq} combinator form (the @{text ?seq} of
+     @{thm [source] happening_steps_possible}); @{text prun} relates @{const delay_and_apply} to it.\<close>
+  let ?seq = "((ext_seq \<circ> seq_apply) (map edge_2_effect ?SS)
+             ((ext_seq \<circ> seq_apply) (map end_edge_effect ?SE)
+               ((ext_seq \<circ> seq_apply) (map start_edge_effect ?SS)
+                 (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) ?SB)
+                  ((ext_seq \<circ> seq_apply) (map edge_3_effect ?SE) [delay ?d ?proj])))))"
+
+  have delay_non_negative: "0 \<le> ?d"
+    unfolding get_delay_def
+    apply (cases "i = 0")
+     apply (subst if_P, simp)
+    using eps_ran apply simp
+    apply (subst if_not_P, simp)
+    using planning_sem.time_index_sorted_list[of "i - 1" "i"] i
+    unfolding planning_sem.time_index_def by auto
+
+  \<comment> \<open>The full prop run in @{text ?seq} form, obtained from @{text prun} by the same algebra the
+     propositional assembly uses (lines 110-123 of @{thm [source] happening_steps_possible}).\<close>
+  \<comment> \<open>The list-shape facts: @{term \<open>delay_and_apply i ?proj\<close>} is the @{const tl} of the @{text ?seq}
+     chain, whose head is @{term \<open>delay ?d ?proj\<close>}.\<close>
+  have seq_ne: "?seq \<noteq> []" by simp
+  have da_eq_tl: "delay_and_apply i ?proj = tl ?seq"
+    unfolding delay_and_apply_def Let_def
+    apply (subst apply_nth_happening_def)
+    unfolding Let_def apply_edge_3_effects_def apply_start_edge_effects_def apply_end_edge_effects_def apply_edge_2_effects_def apply_snap_action_def apply_instant_actions_alt
+    by simp
+  have fold_hd_pres: "hd (fold (ext_seq \<circ> seq_apply) gss X) = hd X" if "X \<noteq> []" for gss X
+    using that
+  proof (induction gss arbitrary: X)
+    case Nil
+    show ?case by simp
+  next
+    case (Cons g gss')
+    have ne: "(ext_seq \<circ> seq_apply) g X \<noteq> []" using Cons.prems by simp
+    have "hd (fold (ext_seq \<circ> seq_apply) (g # gss') X) = hd (fold (ext_seq \<circ> seq_apply) gss' ((ext_seq \<circ> seq_apply) g X))"
+      by simp
+    also have "\<dots> = hd ((ext_seq \<circ> seq_apply) g X)" by (rule Cons.IH[OF ne])
+    also have "\<dots> = hd X" using Cons.prems by (simp add: hd_ext_seq)
+    finally show ?case .
+  qed
+  have hd_seq: "hd ?seq = delay ?d ?proj"
+    apply (subst comp_apply)+
+    apply (subst hd_ext_seq, simp)+
+    apply (subst fold_hd_pres, simp)
+    by (subst hd_ext_seq) simp_all
+  have seq_cons: "?seq = delay ?d ?proj # delay_and_apply i ?proj"
+    using hd_seq da_eq_tl seq_ne by (metis list.exhaust_sel)
+  \<comment> \<open>@{text prun_seq}: the delay-headed run, rebuilt by the five propositional phase constructors from the
+     delay-headed seed -- the same chain @{thm [source] happening_steps_possible} uses internally. The
+     @{const happening_pre_end_starts} pre-state on @{term \<open>delay ?d ?proj\<close>} is derived from @{text ppd}
+     exactly as in that lemma's @{text pres'} block.\<close>
+  have seed_lvp: "LvP (delay ?d ?proj)"
+    using lvpr by (cases ?proj) (simp add: delay_def)
+  have pres': "happening_pre_end_starts i (delay ?d ?proj)"
+  proof -
+    obtain Ld vd cd where
+      s': "delay ?d ?proj = (Ld, vd, cd)" by (rule prod_cases3)
+    have "happening_pre_post_delay i (delay ?d ?proj)"
+      apply (insert ppd)
+      apply (induction ?proj)
+      unfolding delay_def map_prod_simp id_def
+      unfolding happening_pre_pre_delay_def happening_pre_post_delay_def
+      by simp
+    thus ?thesis
+      apply -
+      unfolding s'
+      apply (rule happening_pre_end_startsI, simp)
+         apply (rule end_start_invsI, simp)
+                apply (rule happening_invsI, simp)
+      using happening_pre_post_delay_dests apply auto[5]
+      subgoal by (auto
+            simp: planning_sem.open_active_count_eq_closed_active_count_if_only_instant_acts
+              index_case_defs planning_sem.action_happening_case_defs
+            dest!: happening_pre_post_delay_dests(4))
+      subgoal by (auto
+            simp: planning_sem.open_active_count_eq_closed_active_count_if_only_instant_acts
+              index_case_defs planning_sem.action_happening_case_defs
+            dest!: happening_pre_post_delay_dests(5))
+      using happening_pre_post_delay_dests apply auto[5]
+      subgoal by (auto
+            simp: planning_sem.open_active_count_0_if_start_scheduled
+              index_case_defs planning_sem.action_happening_case_defs
+            dest!: happening_pre_post_delay_dests(4))
+      subgoal by (auto
+            simp: planning_sem.open_active_count_0_if_start_scheduled
+              index_case_defs planning_sem.action_happening_case_defs
+            dest!: happening_pre_post_delay_dests(4))
+      subgoal using happening_pre_post_delay_dests by auto
+      subgoal by (auto
+            simp: planning_sem.open_active_count_1_if_ending
+              index_case_defs planning_sem.action_happening_case_defs
+            dest!: happening_pre_post_delay_dests(5))
+      subgoal by (auto dest!: happening_pre_post_delay_dests(7))
+      done
+  qed
+  have prun_seq: "graph_impl.steps ?seq \<and> happening_post i (last ?seq) \<and> LvP (last ?seq)"
+      apply (rule start_ends_possible)
+        apply (rule end_ends_possible)
+          apply (rule start_starts_possible)
+            apply (rule instant_actions_possible)
+              apply (rule end_starts_possible)
+    by (auto intro!: i graph_impl.steps.intros pres' seed_lvp)
+  note prun_seq_full = prun_seq
+  note ppost_seq = prun_seq_full[THEN conjunct2, THEN conjunct1]
+  note prun_seq = prun_seq_full[THEN conjunct1]
+
+  \<comment> \<open>SEED: the projection store is map-le below the full store, so the head configs are RELC-related
+     at the pre-happening fold @{term \<open>snd (M i)\<close>}.\<close>
+  have rel_stores: "REL (v |` dom (map_of net_bounds)) v (snd (M i))"
+  proof (rule RELI)
+    show "v |` dom (map_of net_bounds) \<subseteq>\<^sub>m v" by (auto simp: map_le_def)
+    show "num_tracks v (snd (M i))" by (rule tr)
+    show "Simple_Network_Language.bounded (map_of num_net_bounds) v" by (rule bnd)
+  qed
+  have seed: "RELC (delay ?d ?proj) (delay ?d (L, v, c)) (snd (M i))"
+    unfolding delay_def map_prod_simp id_def prod.case
+    by (rule RELCI[OF rel_stores])
+
+  \<comment> \<open>Extracting a phase's cons-form prop sub-run @{term \<open>last xs # f (last xs)\<close>} from the combinator
+     form @{term \<open>ext_seq f xs\<close>} of the full run.\<close>
+  have steps_ext_seq_tail: "graph_impl.steps (last xs # f (last xs))"
+    if steps: "graph_impl.steps (ext_seq f xs)" and xs: "xs \<noteq> []" for f xs
+  proof -
+    have split: "ext_seq f xs = butlast xs @ (last xs # f (last xs))"
+      unfolding ext_seq_def using xs by (simp add: append_butlast_last_id)
+    have ne: "last xs # f (last xs) \<noteq> []" by simp
+    show ?thesis using steps unfolding split by (rule graph_impl.steps_appendD2[OF _ ne])
+  qed
+
+  \<comment> \<open>A combinator step is its prefix appended with the sub-run of the last config: this is the
+     append-shape @{thm [source] graph_impl.steps_appendD1} consumes to peel an inner segment.\<close>
+  have ext_seq_comp_append: "(ext_seq \<circ> seq_apply) gs ys = ys @ seq_apply gs (last ys)" for gs ys
+    by (simp add: ext_seq_def)
+  \<comment> \<open>A @{const fold} of @{text \<open>ext_seq \<circ> seq_apply\<close>} extends its base by an appended tail (so the base
+     is a prefix), provided the base is non-empty.\<close>
+  have fold_ext_seq_append: "\<exists>zs. fold (ext_seq \<circ> seq_apply) gss ys = ys @ zs" if "ys \<noteq> []" for gss ys
+    using that
+  proof (induction gss arbitrary: ys)
+    case Nil
+    show ?case by simp
+  next
+    case (Cons g gss')
+    have ne: "(ext_seq \<circ> seq_apply) g ys \<noteq> []" using Cons.prems by simp
+    obtain zs where zs: "fold (ext_seq \<circ> seq_apply) gss' ((ext_seq \<circ> seq_apply) g ys) = (ext_seq \<circ> seq_apply) g ys @ zs"
+      using Cons.IH[OF ne] by blast
+    have "fold (ext_seq \<circ> seq_apply) (g # gss') ys = fold (ext_seq \<circ> seq_apply) gss' ((ext_seq \<circ> seq_apply) g ys)"
+      by simp
+    also have "\<dots> = (ys @ seq_apply g (last ys)) @ zs" using zs by (simp only: ext_seq_comp_append)
+    finally show ?case by (metis append.assoc)
+  qed
+
+  \<comment> \<open>The five segments of @{text ?seq}, innermost (edge_3) to outermost (edge_2).\<close>
+  define SEG1 where "SEG1 = (ext_seq \<circ> seq_apply) (map edge_3_effect ?SE) [delay ?d ?proj]"
+  define SEG2 where "SEG2 = fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) ?SB) SEG1"
+  define SEG3 where "SEG3 = (ext_seq \<circ> seq_apply) (map start_edge_effect ?SS) SEG2"
+  define SEG4 where "SEG4 = (ext_seq \<circ> seq_apply) (map end_edge_effect ?SE) SEG3"
+  have SEG1_ne: "SEG1 \<noteq> []" unfolding SEG1_def by (simp add: ext_seq_comp_append)
+  \<comment> \<open>The per-segment append equations: each outer segment is its inner prefix appended with the phase's
+     sub-run from the inner segment's last config.\<close>
+  obtain zs2 where eq2: "SEG2 = SEG1 @ zs2"
+    using fold_ext_seq_append[OF SEG1_ne] unfolding SEG2_def by blast
+  have SEG2_ne: "SEG2 \<noteq> []" using eq2 SEG1_ne by simp
+  have eq3: "SEG3 = SEG2 @ seq_apply (map start_edge_effect ?SS) (last SEG2)"
+    unfolding SEG3_def by (rule ext_seq_comp_append)
+  have SEG3_ne: "SEG3 \<noteq> []" using eq3 SEG2_ne by simp
+  have eq4: "SEG4 = SEG3 @ seq_apply (map end_edge_effect ?SE) (last SEG3)"
+    unfolding SEG4_def by (rule ext_seq_comp_append)
+  have SEG4_ne: "SEG4 \<noteq> []" using eq4 SEG3_ne by simp
+  have seqeq: "?seq = SEG4 @ seq_apply (map edge_2_effect ?SS) (last SEG4)"
+    unfolding SEG4_def SEG3_def SEG2_def SEG1_def by (rule ext_seq_comp_append)
+
+  \<comment> \<open>Peel the prop runs of the segments from @{text prun_seq} (inner is a prefix of outer).\<close>
+  have steps_SEG4: "graph_impl.steps SEG4"
+    using prun_seq unfolding seqeq by (rule graph_impl.steps_appendD1[OF _ SEG4_ne])
+  have steps_SEG3: "graph_impl.steps SEG3"
+    using steps_SEG4 unfolding eq4 by (rule graph_impl.steps_appendD1[OF _ SEG3_ne])
+  have steps_SEG2: "graph_impl.steps SEG2"
+    using steps_SEG3 unfolding eq3 by (rule graph_impl.steps_appendD1[OF _ SEG2_ne])
+  have steps_SEG1: "graph_impl.steps SEG1"
+    using steps_SEG2 unfolding eq2 by (rule graph_impl.steps_appendD1[OF _ SEG1_ne])
+
+  \<comment> \<open>The phase head configs (each is the last config of the previous segment).\<close>
+  define h1 where "h1 = delay ?d ?proj"   \<comment> \<open>edge_3 phase head\<close>
+  define h2 where "h2 = last SEG1"         \<comment> \<open>instant phase head\<close>
+  define h3 where "h3 = last SEG2"         \<comment> \<open>start phase head\<close>
+  define h4 where "h4 = last SEG3"         \<comment> \<open>end phase head\<close>
+  define h5 where "h5 = last SEG4"         \<comment> \<open>edge_2 phase head\<close>
+  have h1_hd: "h1 = hd SEG1" unfolding h1_def SEG1_def by (simp add: hd_ext_seq)
+
+  \<comment> \<open>The three snap prefixes; their concatenation is @{const run_order_snaps}.\<close>
+  define snaps_inst where "snaps_inst = concat (map (\<lambda>n. [at_start (actions ! n), at_end (actions ! n)]) ?SB)"
+  define snaps_start where "snaps_start = map (\<lambda>n. at_start (actions ! n)) ?SS"
+  define snaps_end where "snaps_end = map (\<lambda>n. at_end (actions ! n)) ?SE"
+  have ros_eq: "run_order_snaps i = snaps_inst @ snaps_start @ snaps_end"
+    unfolding run_order_snaps_def Let_def snaps_inst_def snaps_start_def snaps_end_def by simp
+  have ros_dist: "distinct (snaps_inst @ snaps_start @ snaps_end)"
+    using distinct_run_order_snaps[of i] unfolding ros_eq .
+  have ros_set: "set (snaps_inst @ snaps_start @ snaps_end) = planning_sem.happ_at planning_sem.plan_happ_seq ?t"
+    using set_run_order_snaps[of i] unfolding ros_eq .
+
+  \<comment> \<open>Index-list membership facts.\<close>
+  have SS_mem: "n < length actions \<and> is_starting_index ?t n" if "n \<in> set ?SS" for n using that by auto
+  have SE_mem: "n < length actions \<and> is_ending_index ?t n" if "n \<in> set ?SE" for n using that by auto
+  have SB_mem: "n < length actions \<and> is_instant_index ?t n" if "n \<in> set ?SB" for n using that by auto
+
+  \<comment> \<open>Every accumulated snap is a start/end of some action (used as @{text ys_act} per phase).\<close>
+  have snaps_inst_act: "\<exists>a \<in> set actions. s = at_start a \<or> s = at_end a" if "s \<in> set snaps_inst" for s
+    using that unfolding snaps_inst_def using SB_mem by auto
+  have snaps_start_act: "\<exists>a \<in> set actions. s = at_start a \<or> s = at_end a" if "s \<in> set snaps_start" for s
+    using that unfolding snaps_start_def using SS_mem by auto
+  have snaps_inst_start_act: "\<exists>a \<in> set actions. s = at_start a \<or> s = at_end a" if "s \<in> set (snaps_inst @ snaps_start)" for s
+    using that snaps_inst_act snaps_start_act by auto
+
+  \<comment> \<open>The accumulated prefixes are subsets of the happening.\<close>
+  have snaps_inst_sub: "set snaps_inst \<subseteq> planning_sem.happ_at planning_sem.plan_happ_seq ?t"
+    using ros_set by auto
+  have snaps_inst_start_sub: "set (snaps_inst @ snaps_start) \<subseteq> planning_sem.happ_at planning_sem.plan_happ_seq ?t"
+    using ros_set by auto
+
+  \<comment> \<open>The cons-form prop sub-runs of each phase (head config @{term \<open>h_k\<close>} followed by the phase's run).\<close>
+  have prun1: "graph_impl.steps (h1 # seq_apply (map edge_3_effect ?SE) h1)"
+  proof -
+    have "SEG1 = ext_seq (seq_apply (map edge_3_effect ?SE)) [delay ?d ?proj]"
+      unfolding SEG1_def by simp
+    thus ?thesis using steps_ext_seq_tail[OF _ ] steps_SEG1 unfolding h1_def by (metis last_ConsL list.distinct(1))
+  qed
+  have SEG2_inst: "SEG2 = ext_seq (apply_instant_actions ?SB) SEG1"
+    unfolding SEG2_def by (simp add: apply_instant_actions_alt)
+  have prun2: "graph_impl.steps (h2 # apply_instant_actions ?SB h2)"
+    using steps_ext_seq_tail[OF steps_SEG2[unfolded SEG2_inst] SEG1_ne] unfolding h2_def .
+  have SEG3_start: "SEG3 = ext_seq (seq_apply (map start_edge_effect ?SS)) SEG2"
+    unfolding SEG3_def by simp
+  have prun3: "graph_impl.steps (h3 # seq_apply (map start_edge_effect ?SS) h3)"
+    using steps_ext_seq_tail[OF steps_SEG3[unfolded SEG3_start] SEG2_ne] unfolding h3_def .
+  have SEG4_end: "SEG4 = ext_seq (seq_apply (map end_edge_effect ?SE)) SEG3"
+    unfolding SEG4_def by simp
+  have prun4: "graph_impl.steps (h4 # seq_apply (map end_edge_effect ?SE) h4)"
+    using steps_ext_seq_tail[OF steps_SEG4[unfolded SEG4_end] SEG3_ne] unfolding h4_def .
+  have seq_edge2: "?seq = ext_seq (seq_apply (map edge_2_effect ?SS)) SEG4"
+    unfolding SEG4_def SEG3_def SEG2_def SEG1_def by simp
+  have prun5: "graph_impl.steps (h5 # seq_apply (map edge_2_effect ?SS) h5)"
+    using steps_ext_seq_tail[OF prun_seq[unfolded seq_edge2] SEG4_ne] unfolding h5_def .
+
+  \<comment> \<open>Every phase head config has the @{const planning_loc} main location and the @{const net_automata}
+     length (the head @{term \<open>delay ?d ?proj\<close>} does, and every edge effect preserves both).\<close>
+  have h1_props: "fst h1 ! 0 = planning_loc \<and> length (fst h1) = length net_automata"
+  proof -
+    have "Lv_conds L (v |` dom (map_of net_bounds))" using lvpr by simp
+    thus ?thesis unfolding h1_def delay_def map_prod_simp id_def prod.case fst_conv
+      by (simp add: Lv_conds_def length_net_automata)
+  qed
+  \<comment> \<open>Loc0/length propagate along any @{const seq_apply} sub-run of the edge effects.\<close>
+  have seq_head_props: "fst (last (sp # seq_apply (map E ns) sp)) ! 0 = fst sp ! 0
+                        \<and> length (fst (last (sp # seq_apply (map E ns) sp))) = length (fst sp)"
+    if E_pres: "\<And>n s. length (fst (E n s)) = length (fst s) \<and> fst (E n s) ! 0 = fst s ! 0" for E ns sp
+  proof -
+    have pres: "length (fst ((map E ns ! j) s)) = length (fst s) \<and> fst ((map E ns ! j) s) ! 0 = fst s ! 0"
+      if j: "j < length (map E ns)" for j s
+      using E_pres[of "ns ! j" s] j by simp
+    have lenxs: "length (sp # seq_apply (map E ns) sp) = Suc (length ns)" by simp
+    have k: "length ns < length (sp # seq_apply (map E ns) sp)" by simp
+    have idx: "last (sp # seq_apply (map E ns) sp) = (sp # seq_apply (map E ns) sp) ! (length ns)"
+      by (subst last_conv_nth) (simp_all add: lenxs)
+    show ?thesis using seq_apply_locs_preserved[OF pres k] unfolding idx by simp
+  qed
+  have inst_head_props: "fst (last (sp # apply_instant_actions ns sp)) ! 0 = fst sp ! 0
+                        \<and> length (fst (last (sp # apply_instant_actions ns sp))) = length (fst sp)" for ns sp
+  proof -
+    have lenxs: "length (sp # apply_instant_actions ns sp) = Suc (3 * length ns)"
+      by (simp add: length_apply_instant_actions)
+    have k: "3 * length ns < length (sp # apply_instant_actions ns sp)" using lenxs by simp
+    have idx: "last (sp # apply_instant_actions ns sp) = (sp # apply_instant_actions ns sp) ! (3 * length ns)"
+      by (subst last_conv_nth) (simp_all add: lenxs length_apply_instant_actions)
+    show ?thesis using apply_instant_actions_locs_preserved[OF k] unfolding idx by simp
+  qed
+  \<comment> \<open>Last of an appended list equals the last of @{term \<open>last xs # ys\<close>} (matching the @{const ext_seq}
+     last with the phase-lift's cons-form last).\<close>
+  have last_app_cons: "last (xs @ ys) = last (last xs # ys)" if "xs \<noteq> []" for xs ys :: "'z list"
+    using that by (cases "ys = []") (simp_all add: last_appendR)
+  \<comment> \<open>@{term \<open>h2 = last SEG1\<close>}, etc.: chain the per-phase head-property preservation.\<close>
+  have h2_props: "fst h2 ! 0 = planning_loc \<and> length (fst h2) = length net_automata"
+  proof -
+    have e: "h2 = last (h1 # seq_apply (map edge_3_effect ?SE) h1)"
+      unfolding h2_def SEG1_def comp_apply ext_seq_def h1_def by simp
+    show ?thesis
+      unfolding e using seq_head_props[of edge_3_effect h1 ?SE, OF edge_3_effect_preserves_loc0] h1_props
+      by argo
+  qed
+  have h3_props: "fst h3 ! 0 = planning_loc \<and> length (fst h3) = length net_automata"
+  proof -
+    have "h3 = last (h2 # apply_instant_actions ?SB h2)"
+      unfolding h3_def SEG2_inst ext_seq_def using SEG1_ne
+      by (subst last_app_cons) (simp_all add: h2_def[symmetric])
+    thus ?thesis using inst_head_props[of h2 ?SB] h2_props by simp
+  qed
+  have h4_props: "fst h4 ! 0 = planning_loc \<and> length (fst h4) = length net_automata"
+  proof -
+    have e: "h4 = last (h3 # seq_apply (map start_edge_effect ?SS) h3)"
+      unfolding h4_def SEG3_start ext_seq_def using SEG2_ne
+      by (subst last_app_cons) (simp_all add: h3_def[symmetric])
+    show ?thesis
+      unfolding e using seq_head_props[of start_edge_effect h3 ?SS, OF start_edge_effect_preserves_loc0] h3_props
+      by argo
+  qed
+  have h5_props: "fst h5 ! 0 = planning_loc \<and> length (fst h5) = length net_automata"
+  proof -
+    have e: "h5 = last (h4 # seq_apply (map end_edge_effect ?SE) h4)"
+      unfolding h5_def SEG4_end ext_seq_def using SEG3_ne
+      by (subst last_app_cons) (simp_all add: h4_def[symmetric])
+    show ?thesis
+      unfolding e using seq_head_props[of end_edge_effect h4 ?SE, OF end_edge_effect_preserves_loc0] h4_props
+      by argo
+  qed
+
+  \<comment> \<open>Each phase head is the last config of the previous segment's cons-form run.\<close>
+  have h2_last: "last (h1 # seq_apply (map edge_3_effect ?SE) h1) = h2"
+    unfolding h2_def SEG1_def comp_apply ext_seq_def h1_def by simp
+  have h3_last: "last (h2 # apply_instant_actions ?SB h2) = h3"
+    unfolding h3_def SEG2_inst ext_seq_def using SEG1_ne
+    by (subst last_app_cons) (simp_all add: h2_def[symmetric])
+  have h4_last: "last (h3 # seq_apply (map start_edge_effect ?SS) h3) = h4"
+    unfolding h4_def SEG3_start ext_seq_def using SEG2_ne
+    by (subst last_app_cons) (simp_all add: h3_def[symmetric])
+  have h5_last: "last (h4 # seq_apply (map end_edge_effect ?SE) h4) = h5"
+    unfolding h5_def SEG4_end ext_seq_def using SEG3_ne
+    by (subst last_app_cons) (simp_all add: h4_def[symmetric])
+  have seq_last: "last (h5 # seq_apply (map edge_2_effect ?SS) h5) = last ?seq"
+    unfolding seq_edge2 ext_seq_def using SEG4_ne
+    by (subst last_app_cons) (simp_all add: h5_def[symmetric])
+
+  \<comment> \<open>The five numeric phase results, threading RELC and the growing @{text happening_num_update} fold.
+     Each carries its sub-run length (for the non-emptiness of the spliced run).\<close>
+  \<comment> \<open>The two NO-WRITE phases (edge_3, edge_2) are lifted via the RLP combinator @{thm [source]
+     num_edge_3_phase_lift} / @{thm [source] num_edge_2_phase_lift}; threading their caller-supplied
+     propositional pre/post invariants (the @{const end_start_pre} / @{const start_end_pre}
+     bookkeeping that @{thm [source] end_starts_possible} / @{thm [source] start_ends_possible}
+     establish) is the one remaining obligation. The edge_3 result is a concrete run from the seed;
+     the edge_2 result is stated parametrically over the entry numeric config (the RLP shape), so both
+     no-write phases share a SINGLE obligation.\<close>
+  have edge_phases:
+    "(\<exists>nss1 cn1. num_graph_impl.steps (delay ?d (L, v, c) # nss1)
+                 \<and> RELC h2 cn1 (snd (M i))
+                 \<and> cn1 = last (delay ?d (L, v, c) # nss1)
+                 \<and> length nss1 = length ?SE)
+     \<and> (\<forall>cn. RELC h5 cn (?w (snaps_inst @ snaps_start @ snaps_end)) \<longrightarrow>
+            (\<exists>nss5. num_graph_impl.steps (cn # nss5)
+                    \<and> RELC (last ?seq) (last (cn # nss5)) (?w (snaps_inst @ snaps_start @ snaps_end))
+                    \<and> length nss5 = length ?SS))"
     sorry
+  obtain nss1 cn1 where
+      nrun1: "num_graph_impl.steps (delay ?d (L, v, c) # nss1)"
+    and rel1: "RELC h2 cn1 (snd (M i))"
+    and last1: "cn1 = last (delay ?d (L, v, c) # nss1)"
+    and len1: "length nss1 = length ?SE"
+    using edge_phases by blast
+  \<comment> \<open>INSTANT phase: lift @{term \<open>apply_instant_actions ?SB h2\<close>} from @{term cn1}, growing the fold by
+     both at-start and at-end snaps of the instant indices (@{term snaps_inst}).\<close>
+  have w_Nil: "?w [] = snd (M i)"
+    by (simp add: num_plan.num_rat_impl.happening_num_update_def)
+  have inst_struct: "instant_block_struct ((h2 # apply_instant_actions ?SB h2) ! (3 * k)) (?SB ! k)"
+    if k: "k < length ?SB" for k
+    by (rule instant_phase_struct[OF prun2 conjunct1[OF h2_props] conjunct2[OF h2_props] _ k])
+       (rule conjunct1[OF SB_mem])
+  obtain nss2 cn2 where
+      nrun2: "num_graph_impl.steps (cn1 # nss2)"
+    and rel2: "RELC h3 cn2 (?w snaps_inst)"
+    and last2: "cn2 = last (cn1 # nss2)"
+    and len2: "length nss2 = 3 * length ?SB"
+  proof -
+    have ya: "\<exists>a \<in> set actions. s = at_start a \<or> s = at_end a" if "s \<in> set []" for s using that by simp
+    have ys: "set [] \<subseteq> planning_sem.happ_at planning_sem.plan_happ_seq ?t" by simp
+    have zsd: "distinct ([] @ concat (map (\<lambda>n. [at_start (actions ! n), at_end (actions ! n)]) ?SB) @ (snaps_start @ snaps_end))"
+      using ros_dist unfolding snaps_inst_def by simp
+    have zsf: "set ([] @ concat (map (\<lambda>n. [at_start (actions ! n), at_end (actions ! n)]) ?SB) @ (snaps_start @ snaps_end))
+                 = planning_sem.happ_at planning_sem.plan_happ_seq ?t"
+      using ros_set unfolding snaps_inst_def by simp
+    have rel0: "RELC h2 cn1 (?w [])" using rel1 unfolding w_Nil .
+    obtain nss where
+        ph2: "num_graph_impl.steps (cn1 # nss)"
+      and ph2len: "length nss = length (apply_instant_actions ?SB h2)"
+      and ph2rel: "RELC (last (h2 # apply_instant_actions ?SB h2)) (last (cn1 # nss))
+                        (?w ([] @ concat (map (\<lambda>n. [at_start (actions ! n), at_end (actions ! n)]) ?SB)))"
+      using num_instant_phase_lift[OF vss m0 i SB_mem ya ys zsd zsf prun2 inst_struct rel0] by blast
+    have rew: "[] @ concat (map (\<lambda>n. [at_start (actions ! n), at_end (actions ! n)]) ?SB) = snaps_inst"
+      unfolding snaps_inst_def by simp
+    have lenrew: "length (apply_instant_actions ?SB h2) = 3 * length ?SB"
+      by (rule length_apply_instant_actions)
+    show ?thesis
+      apply (rule that[of nss "last (cn1 # nss)"])
+      subgoal by (rule ph2)
+      subgoal using ph2rel unfolding h3_last rew .
+      subgoal by simp
+      subgoal using ph2len lenrew by simp
+      done
+  qed
+  \<comment> \<open>START phase: lift @{term \<open>seq_apply (map start_edge_effect ?SS) h3\<close>} from @{term cn2}, growing the
+     fold by the start snaps @{term snaps_start}.\<close>
+  have start_struct: "fst ((h3 # seq_apply (map start_edge_effect ?SS) h3) ! k) ! Suc (?SS ! k) = off_loc
+                      \<and> length (fst ((h3 # seq_apply (map start_edge_effect ?SS) h3) ! k)) = length net_automata
+                      \<and> Simple_Network_Language.bounded (map_of net_bounds)
+                            (fst (snd (start_edge_effect (?SS ! k)
+                                        ((h3 # seq_apply (map start_edge_effect ?SS) h3) ! k))))"
+    if k: "k < length ?SS" for k
+    by (rule start_phase_struct[OF prun3 conjunct1[OF h3_props] conjunct2[OF h3_props] _ k])
+       (rule conjunct1[OF SS_mem])
+  obtain nss3 cn3 where
+      nrun3: "num_graph_impl.steps (cn2 # nss3)"
+    and rel3: "RELC h4 cn3 (?w (snaps_inst @ snaps_start))"
+    and last3: "cn3 = last (cn2 # nss3)"
+    and len3: "length nss3 = length ?SS"
+  proof -
+    obtain nss where
+        ph3: "num_graph_impl.steps (cn2 # nss)"
+      and ph3len: "length nss = length ?SS"
+      and ph3rel: "RELC (last (h3 # seq_apply (map start_edge_effect ?SS) h3)) (last (cn2 # nss))
+                        (?w (snaps_inst @ map (\<lambda>n. at_start (actions ! n)) ?SS))"
+      using num_start_phase_lift[OF vss m0 i SS_mem snaps_inst_act snaps_inst_sub
+              ros_dist[unfolded snaps_start_def snaps_end_def] ros_set[unfolded snaps_start_def snaps_end_def]
+              prun3 start_struct rel2] by blast
+    have rew: "snaps_inst @ map (\<lambda>n. at_start (actions ! n)) ?SS = snaps_inst @ snaps_start"
+      unfolding snaps_start_def by simp
+    show ?thesis
+      apply (rule that[of nss "last (cn2 # nss)"])
+      subgoal by (rule ph3)
+      subgoal using ph3rel unfolding h4_last rew .
+      subgoal by simp
+      subgoal by (rule ph3len)
+      done
+  qed
+  \<comment> \<open>END phase: lift @{term \<open>seq_apply (map end_edge_effect ?SE) h4\<close>} from @{term cn3}, growing the
+     fold by the end snaps @{term snaps_end}.\<close>
+  have end_struct: "fst ((h4 # seq_apply (map end_edge_effect ?SE) h4) ! k) ! Suc (?SE ! k) = ending_loc
+                    \<and> length (fst ((h4 # seq_apply (map end_edge_effect ?SE) h4) ! k)) = length net_automata
+                    \<and> Simple_Network_Language.bounded (map_of net_bounds)
+                          (fst (snd (end_edge_effect (?SE ! k)
+                                      ((h4 # seq_apply (map end_edge_effect ?SE) h4) ! k))))"
+    if k: "k < length ?SE" for k
+    by (rule end_phase_struct[OF prun4 conjunct1[OF h4_props] conjunct2[OF h4_props] _ k])
+       (rule conjunct1[OF SE_mem])
+  obtain nss4 cn4 where
+      nrun4: "num_graph_impl.steps (cn3 # nss4)"
+    and rel4: "RELC h5 cn4 (?w (snaps_inst @ snaps_start @ snaps_end))"
+    and last4: "cn4 = last (cn3 # nss4)"
+    and len4: "length nss4 = length ?SE"
+  proof -
+    have rew: "(snaps_inst @ snaps_start) @ map (\<lambda>n. at_end (actions ! n)) ?SE = snaps_inst @ snaps_start @ snaps_end"
+      unfolding snaps_end_def by simp
+    have zsd: "distinct ((snaps_inst @ snaps_start) @ map (\<lambda>n. at_end (actions ! n)) ?SE @ [])"
+      using ros_dist unfolding snaps_end_def by simp
+    have zsf: "set ((snaps_inst @ snaps_start) @ map (\<lambda>n. at_end (actions ! n)) ?SE @ [])
+                 = planning_sem.happ_at planning_sem.plan_happ_seq ?t"
+      using ros_set unfolding snaps_end_def by simp
+    obtain nss where
+        ph4: "num_graph_impl.steps (cn3 # nss)"
+      and ph4len: "length nss = length ?SE"
+      and ph4rel: "RELC (last (h4 # seq_apply (map end_edge_effect ?SE) h4)) (last (cn3 # nss))
+                        (?w ((snaps_inst @ snaps_start) @ map (\<lambda>n. at_end (actions ! n)) ?SE))"
+      using num_end_phase_lift[OF vss m0 i SE_mem snaps_inst_start_act snaps_inst_start_sub
+              zsd zsf prun4 end_struct rel3] by blast
+    show ?thesis
+      apply (rule that[of nss "last (cn3 # nss)"])
+      subgoal by (rule ph4)
+      subgoal using ph4rel unfolding h5_last rew .
+      subgoal by simp
+      subgoal by (rule ph4len)
+      done
+  qed
+  \<comment> \<open>EDGE_2 phase: instantiate the parametric RLP result from @{text edge_phases} at @{term cn4}.\<close>
+  obtain nss5 cn5 where
+      nrun5: "num_graph_impl.steps (cn4 # nss5)"
+    and rel5: "RELC (last ?seq) cn5 (?w (snaps_inst @ snaps_start @ snaps_end))"
+    and last5: "cn5 = last (cn4 # nss5)"
+    and len5: "length nss5 = length ?SS"
+  proof -
+    obtain nss where
+        ph5: "num_graph_impl.steps (cn4 # nss)"
+      and ph5rel: "RELC (last ?seq) (last (cn4 # nss)) (?w (snaps_inst @ snaps_start @ snaps_end))"
+      and ph5len: "length nss = length ?SS"
+      using conjunct2[OF edge_phases, rule_format, OF rel4] by blast
+    show ?thesis
+      by (rule that[of nss "last (cn4 # nss)"]) (use ph5 ph5rel ph5len in simp_all)
+  qed
+
+  \<comment> \<open>The terminal fold is the after-happening valuation.\<close>
+  have term_fold: "?w (snaps_inst @ snaps_start @ snaps_end) = snd (M (Suc i))"
+    using run_order_fold_eq_happening_num_update_set[OF i vss ros_dist[unfolded ros_eq[symmetric]] ros_set[unfolded ros_eq[symmetric]]]
+    unfolding ros_eq[symmetric] .
+
+  \<comment> \<open>Splice the five numeric sub-runs into one run from @{term \<open>delay ?d (L, v, c)\<close>}.\<close>
+  define NSS where "NSS = nss1 @ nss2 @ nss3 @ nss4 @ nss5"
+  have spliced: "num_graph_impl.steps (delay ?d (L, v, c) # NSS)"
+  proof -
+    have s12: "num_graph_impl.steps (delay ?d (L, v, c) # nss1 @ nss2)"
+      using num_graph_impl.steps_append[OF nrun1 nrun2[unfolded last1]] by simp
+    have s123: "num_graph_impl.steps (delay ?d (L, v, c) # nss1 @ nss2 @ nss3)"
+      using num_graph_impl.steps_append[OF s12 nrun3[unfolded last2 last1]] by simp
+    have s1234: "num_graph_impl.steps (delay ?d (L, v, c) # nss1 @ nss2 @ nss3 @ nss4)"
+      using num_graph_impl.steps_append[OF s123 nrun4[unfolded last3 last2 last1]] by simp
+    have s12345: "num_graph_impl.steps (delay ?d (L, v, c) # nss1 @ nss2 @ nss3 @ nss4 @ nss5)"
+      using num_graph_impl.steps_append[OF s1234 nrun5[unfolded last4 last3 last2 last1]] by simp
+    show ?thesis using s12345 unfolding NSS_def by simp
+  qed
+  \<comment> \<open>The numeric run from @{term \<open>(L, v, c)\<close>}: absorb the leading delay. The
+     @{const happening_pre_pre_delay} on the FULL store follows from the projected one (the predicate
+     reads the store only on @{const net_bounds}-domain variables, where the two stores agree).\<close>
+  have hp_proj_eq: "happening_pre i (L, va, c') = happening_pre i (L, va |` dom (map_of net_bounds), c')"
+    for va c'
+  proof -
+    have aa: "acts_active \<in> dom (map_of net_bounds)" using map_of_net_bounds_acts_active by blast
+    have "va x = (va |` dom (map_of net_bounds)) x" if "x \<in> dom (map_of net_bounds)" for x
+      using that by (simp add: restrict_in)
+    note ag = this
+    show ?thesis
+      unfolding happening_pre_def Let_def prod.case
+      using ag[OF aa] by (simp cong: conj_cong)
+  qed
+  have ppd_full: "happening_pre_pre_delay i (L, v, c)"
+    using ppd unfolding happening_pre_pre_delay_def Let_def prod.case
+    by (subst hp_proj_eq) (simp add: restrict_map_def)
+  have num_no_urg: "\<forall>p<length (fst (snd num_net_impl.sem)). fst (L, v, c) ! p \<notin> urgent (fst (snd num_net_impl.sem) ! p)"
+    by (rule num_no_urgent[OF ppd_full lvp[unfolded cfg]])
+  have nrun_full: "num_graph_impl.steps ((L, v, c) # NSS)"
+    using num_steps_delay_replace[OF spliced delay_non_negative num_no_urg] .
+  \<comment> \<open>The spliced run is non-empty: the happening fires at least one snap (so at least one phase grows),
+     hence the terminal numeric config is the run's last.\<close>
+  have NSS_ne: "NSS \<noteq> []"
+  proof -
+    have "0 < length ?SS + length ?SE + length ?SB"
+    proof (rule time_index_action_index_happening_cases[OF i])
+      fix n assume "n < length actions" "is_starting_index ?t n"
+      hence "n \<in> set ?SS" by (simp add: set_filter)
+      thus "0 < length ?SS + length ?SE + length ?SB" by (cases ?SS) auto
+    next
+      fix n assume "n < length actions" "is_ending_index ?t n"
+      hence "n \<in> set ?SE" by (simp add: set_filter)
+      thus "0 < length ?SS + length ?SE + length ?SB" by (cases ?SE) auto
+    next
+      fix n assume "n < length actions" "is_instant_index ?t n"
+      hence "n \<in> set ?SB" by (simp add: set_filter)
+      thus "0 < length ?SS + length ?SE + length ?SB" by (cases ?SB) auto
+    qed
+    hence "0 < length NSS"
+      unfolding NSS_def using len1 len2 len3 len4 len5 by simp
+    thus ?thesis by simp
+  qed
+  have last_spliced: "last (delay ?d (L, v, c) # NSS) = cn5"
+  proof -
+    have "last (delay ?d (L, v, c) # nss1 @ nss2 @ nss3 @ nss4 @ nss5) = cn5"
+      unfolding last5 last4 last3 last2 last1 by (simp add: last_append)
+    thus ?thesis unfolding NSS_def .
+  qed
+  have last_full: "last ((L, v, c) # NSS) = cn5"
+    using last_spliced NSS_ne by (simp add: last_ConsR)
+  have rel_term: "RELC (last ?seq) (last ((L, v, c) # NSS)) (snd (M (Suc i)))"
+    using rel5 unfolding last_full term_fold[symmetric] .
+
+  \<comment> \<open>Conclude: the run, the post-invariant, and the carried @{const num_LvP}.\<close>
+  obtain Lp vp cp where lp: "last ?seq = (Lp, vp, cp)" by (rule prod_cases3)
+  obtain Ln vn cn where ln: "last ((L, v, c) # NSS) = (Ln, vn, cn)" by (rule prod_cases3)
+  have Leq: "Lp = Ln" using rel_term unfolding lp ln by (rule RELC_locD)
+  have ceq: "cp = cn" using rel_term unfolding lp ln by (rule RELC_clkD)
+  have relS: "REL vp vn (snd (M (Suc i)))" using rel_term unfolding lp ln by (rule RELC_relD)
+  have le: "vp \<subseteq>\<^sub>m vn" by (rule REL_leD[OF relS])
+  have trk: "num_tracks vn (snd (M (Suc i)))" by (rule REL_trD[OF relS])
+  have bndn: "Simple_Network_Language.bounded (map_of num_net_bounds) vn" by (rule REL_bndD[OF relS])
+  \<comment> \<open>The propositional post-invariant and the carried @{const LvP} of @{term \<open>last ?seq\<close>}.\<close>
+  have ppost_last: "happening_post i (last ?seq)" by (rule ppost_seq)
+  have lvp_last: "LvP (last ?seq)" using prun_seq_full by simp
+  have lv_p: "Lv_conds Lp vp" using lvp_last unfolding lp by simp
+  have pbnd_p: "Simple_Network_Language.bounded (map_of net_bounds) vp"
+    by (rule Lv_conds_dests(3)[OF lv_p])
+  \<comment> \<open>The propositional last store is the net_bounds-projection of the numeric last store.\<close>
+  have vp_dom: "dom vp = dom (map_of net_bounds)"
+    using pbnd_p unfolding Simple_Network_Language.bounded_def by blast
+  have proj_eq: "vn |` dom (map_of net_bounds) = vp"
+  proof (rule ext)
+    fix x
+    show "(vn |` dom (map_of net_bounds)) x = vp x"
+    proof (cases "x \<in> dom (map_of net_bounds)")
+      case True
+      hence "x \<in> dom vp" using vp_dom by simp
+      then obtain y where y: "vp x = Some y" by auto
+      have "vn x = Some y" using le y unfolding map_le_def by (metis domI)
+      thus ?thesis using True y by (simp add: restrict_in)
+    next
+      case False
+      hence "x \<notin> dom vp" using vp_dom by simp
+      thus ?thesis using False by (simp add: restrict_map_def domIff)
+    qed
+  qed
+  \<comment> \<open>The propositional post-invariant transports to the numeric last config via the projection.\<close>
+  have nppost: "num_happening_post M i (last ((L, v, c) # NSS))"
+    unfolding ln
+  proof (rule num_happening_postI)
+    show "happening_post i (Ln, vn |` dom (map_of net_bounds), cn)"
+      using ppost_last unfolding lp proj_eq Leq ceq .
+    show "num_tracks vn (snd (M (Suc i)))" by (rule trk)
+  qed
+  \<comment> \<open>The carried @{const num_LvP}: locations and the planning lock are preserved, the bound from the
+     terminal @{const REL}.\<close>
+  have num_lv0: "num_Lv_conds L v" using lvp[unfolded cfg] by simp
+  have planning_lock_dom: "planning_lock \<in> dom (map_of net_bounds)"
+    using map_of_net_bounds_planning_lock by blast
+  have vp_pl: "vp planning_lock = Some 1" by (rule Lv_conds_dests(4)[OF lv_p])
+  have vn_pl: "vn planning_lock = Some 1"
+    using le vp_pl unfolding map_le_def by (metis domI planning_lock_dom restrict_in vp_dom)
+  have nlvp: "num_LvP (last ((L, v, c) # NSS))"
+    unfolding ln
+  proof (simp, rule num_Lv_conds_maintained[OF num_lv0])
+    show "length L = length Ln"
+      using num_Lv_conds_dests(1)[OF num_lv0] Lv_conds_dests(1)[OF lv_p] Leq by simp
+    show "L ! 0 = Ln ! 0"
+      using num_Lv_conds_dests(2)[OF num_lv0] Lv_conds_dests(2)[OF lv_p] Leq by simp
+    show "vn planning_lock = v planning_lock"
+      using vn_pl num_Lv_conds_dests(4)[OF num_lv0] by simp
+    show "Simple_Network_Language.bounded (map_of num_net_bounds) v \<Longrightarrow> Simple_Network_Language.bounded (map_of num_net_bounds) vn"
+      using bndn by simp
+  qed
+  show "\<exists>ns. num_graph_impl.steps (cfg # ns) \<and> num_happening_post M i (last (cfg # ns)) \<and> num_LvP (last (cfg # ns))"
+    unfolding cfg using nrun_full nppost nlvp by blast
 qed
 
 text \<open>The propositional invariant transfers between consecutive happenings, extracted (config-generic)
