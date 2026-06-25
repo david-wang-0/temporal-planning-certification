@@ -678,5 +678,13 @@ locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
             "\<forall>a \<in> set actions. \<forall>b \<in> set actions.
                (fst ` set (upds (at_start a)) \<union> fst ` set (upds (at_end a)))
                  \<inter> (\<Union>c \<in> set (n_inv b). comp_fluents c) = {}"
+      \<comment> \<open>The over_all equalities hold at the INITIAL valuation. With @{term n_inv_readonly} (the
+         over_all fluents never change along any run) this makes the over_all hold at EVERY reachable
+         valuation, so @{const num_edge_2}'s entry guard discharges without a per-action "active at i'"
+         witness. Vacuous when @{term \<open>n_inv a = []\<close>} (the benchmark case); for equality over_all it is
+         exactly what the grounder certifies -- the invariant holds throughout the plan, hence at init.\<close>
+      and n_inv_init_sat:
+            "\<forall>a \<in> set actions.
+               sat_comps (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None) (set (n_inv a))"
 
 end
