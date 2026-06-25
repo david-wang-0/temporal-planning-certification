@@ -1,5 +1,5 @@
 theory Temporal_Plans
-  imports Temporal_Planning_Common.Utils "Difference_Bound_Matrices.DBM"
+  imports Temporal_Planning_Common.TP_Utils "Difference_Bound_Matrices.DBM"
 begin
 
 datatype ('t) lower_bound =
@@ -75,9 +75,8 @@ fun cmp_op_rel :: "cmp_op \<Rightarrow> 'r::linorder \<Rightarrow> 'r \<Rightarr
 | "cmp_op_rel Cgt = (>)"
 
 text \<open>A single comparison holds against a valuation; fails if either side is undefined (fail-closed).\<close>
-definition sat_comp :: "('n \<rightharpoonup> 'r::linordered_field) \<Rightarrow> ('n, 'r) comp \<Rightarrow> bool" where
-  "sat_comp v c \<longleftrightarrow> (case c of Comp p a b \<Rightarrow>
-     (case (eval_nexp v a, eval_nexp v b) of (Some x, Some y) \<Rightarrow> cmp_op_rel p x y | _ \<Rightarrow> False))"
+fun sat_comp :: "('n \<rightharpoonup> 'r::linordered_field) \<Rightarrow> ('n, 'r) comp \<Rightarrow> bool" where
+  "sat_comp v (Comp p a b) = (lift2_option (cmp_op_rel p) (eval_nexp v a) (eval_nexp v b) = Some True)"
 
 text \<open>A set of comparisons is read conjunctively (all hold simultaneously).\<close>
 definition sat_comps :: "('n \<rightharpoonup> 'r::linordered_field) \<Rightarrow> ('n, 'r) comp set \<Rightarrow> bool" where

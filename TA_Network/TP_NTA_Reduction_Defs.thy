@@ -1,7 +1,8 @@
 theory TP_NTA_Reduction_Defs
   imports Temporal_Planning_Semantics.Temporal_Plans_Lemmas
       Temporal_Planning_Semantics.Temporal_Plans_Code
-      Munta_Model_Checker.Simple_Network_Language_Export_Code
+      Munta_Model_Checker.Simple_Network_Language_Model_Checking
+      Munta_Base.Error_List_Monad
 
 begin
 section \<open>Abstract definition of reduction\<close>

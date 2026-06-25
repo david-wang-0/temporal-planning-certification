@@ -22,7 +22,7 @@ session Temporal_Planning_Base in Temporal_Planning_Base = Temporal_Planning +
 
 session Temporal_Planning_Common in Temporal_Planning_Common = Temporal_Planning_Base +
   theories
-    Utils
+    TP_Utils
     ListMisc
     Sequences
 

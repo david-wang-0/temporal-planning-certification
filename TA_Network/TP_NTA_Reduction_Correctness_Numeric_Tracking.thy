@@ -268,7 +268,7 @@ proof -
   obtain y where y: "eval_nexp w b = Some y" "y \<in> \<int>"
     "is_val v (nexp_to_exp fluent_to_var const_to_int b) (const_to_int y)"
     using nexp_ok_is_val[OF assms(1) okb] by blast
-  have rel: "cmp_op_rel p x y" using assms(3) c x(1) y(1) by (simp add: sat_comp_def)
+  have rel: "cmp_op_rel p x y" using assms(3) c x(1) y(1) by simp
   let ?ea = "nexp_to_exp fluent_to_var const_to_int a"
   let ?eb = "nexp_to_exp fluent_to_var const_to_int b"
   show ?thesis

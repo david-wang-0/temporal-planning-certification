@@ -545,7 +545,7 @@ proof (cases c)
   case (Comp p a b)
   have ea: "eval_nexp w a = eval_nexp w' a" by (rule eval_nexp_cong) (use assms Comp in auto)
   have eb: "eval_nexp w b = eval_nexp w' b" by (rule eval_nexp_cong) (use assms Comp in auto)
-  show ?thesis unfolding sat_comp_def Comp by (simp only: comp.case ea eb)
+  show ?thesis unfolding Comp by (simp only: sat_comp.simps ea eb)
 qed
 
 lemma sat_comps_cong:
