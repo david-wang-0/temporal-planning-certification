@@ -4,6 +4,39 @@ Status: draft (2026-06-25). This is **P0** (`GROUNDING_PLAN.md` §3). Companions
 [GROUNDING_PLAN.md](GROUNDING_PLAN.md) (links here from §3), [NUMERIC_PLAN.md](NUMERIC_PLAN.md)
 (§5 expanded). The ROOT files remain authoritative.
 
+## Status (live, 2026-06-25)
+
+**Both integration blockers resolved; abstract stack green; the `Ground_PDDL_Exec_Imp` retype is the
+remaining work.** Branch `numeric-conditions-effects`, commits: `c7b266d` (Step 1 plumbing),
+`31a9e17` (blocker resolution).
+
+- **Step 1 DONE** — submodule removed; base heap re-rooted on `Temporal_Planning` (+ Munta_Certificate_Checker
+  + List-Index), **built green**; launch `isabelle jedit -d . -l Temporal_Planning_Base`.
+- **Blocker 1 (Utils name clash) RESOLVED** — renamed project `Temporal_Planning_Common.Utils` ->
+  `TP_Utils` (it collided with FPS `Continuous_Planning.Utils`).
+- **Blocker 2 (`prod`-arity conflict `(linorder,linorder) sup` vs `(sup,sup) sup`) RESOLVED** — the
+  abstract reduction pulled Munta's code-export theory `Simple_Network_Language_Export_Code`
+  (lexicographic `Product_Lexorder`), incompatible with FPS's analysis `Product_Order`. Fix:
+  `TP_NTA_Reduction_Defs` now imports `Munta_Model_Checker.Simple_Network_Language_Model_Checking`
+  (network semantics: `graph_impl`, `step_u'`, `reachable`) **+ `Munta_Base.Error_List_Monad`** (for the
+  `|>` operator) instead. `Export_Code` is kept **only** in `Check_Unsolvability.thy` (executability).
+- **Verified green on the new heap**: `Temporal_Plans`, `TP_NTA_Reduction_Defs`,
+  `TP_NTA_Reduction_Model_Checking`. (`sat_comp` is now a pattern-matching `fun` using `lift2_option`;
+  the 2 downstream `sat_comp_def` sites in `TP_NTA_Reduction_Correctness_Numeric_{Tracking,StepInfra}`
+  were adapted to `sat_comp.simps` but the heavy numeric-correctness chain is **not yet re-verified**.)
+- **NEXT — Step 2/2b retype of `Ground_PDDL_Exec_Imp`.** `Ground_PDDL_Problem_Defs.thy` (~1340 lines) is
+  the bulk; current real errors: `ast_action_schema` -> `ast_temporal_action_schema` (head/body
+  constructors `SimpleActionSchema (ActionHead n ps) ...` / `DurativeActionSchema ... (DurativeActionBody
+  dc cond deff)`); `Time_Const|No_Const|Func_Const` -> `DurationConstraint d_op expr` (now an **annotated
+  list** `(temporal_annotation \times term duration_constraint) list`, numeric-free `expr = ConstantExpr`);
+  `Ground_Action n anno pre eff` -> `GroundAction pre eff` (reuse it; mutex stays list-based, §2b);
+  `Effect adds dels` -> `Effect adds dels []`. Then `Plan_Defs`/`Plan_Reduction`/`Problem_Reduction`/
+  `Problem_Code`/`NTA_Reduction_Correctness`/`NTA_Reduction_Impl`, and the `grounded_temporal_problem`
+  redesign (§2b).
+- **Step 3 risk (noted)** — the same `prod` tension recurs where `Check_Unsolvability` needs `Export_Code`
+  **and** the FPS-typed ground problem; needs an isolation strategy (a code-export theory that does not
+  import the FPS semantics in the same theory).
+
 ## Context
 
 `temporal-planning-certification` currently builds on a **vendored** temporal-semantics
