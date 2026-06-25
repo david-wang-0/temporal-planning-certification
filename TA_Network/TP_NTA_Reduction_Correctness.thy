@@ -5620,6 +5620,164 @@ proof -
   thus ?thesis unfolding m0 using n_inv_init_sat a by simp
 qed
 
+text \<open>The propositional @{const net_impl.sem} carries @{const net_bounds}-boundedness of the store as a
+  PREMISE on the @{const Simple_Network_Language.label.Del} half of every @{const step_u'} (the
+  @{thm [source] step_u_elims} extraction), so the HEAD store of any @{const graph_impl.steps} run that has
+  a step from it is @{const net_bounds}-bounded. This supplies the @{text pbnd'} (PRE-store bound) the
+  per-phase struct facts need, WITHOUT a propositional per-step post-bound invariant -- it is recovered by
+  inverting the very step that leaves the config.\<close>
+lemma graph_impl_steps_hd_bounded:
+  assumes "graph_impl.steps (x # y # xs)"
+  shows "Simple_Network_Language.bounded (map_of net_bounds) (fst (snd x))"
+proof -
+  obtain L vp c where x: "x = (L, vp, c)" by (cases x)
+  obtain Ly vy cy where y: "y = (Ly, vy, cy)" by (cases y)
+  have step: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>Ly, vy, cy\<rangle>"
+    using assms unfolding x y by (auto elim: graph_impl.steps.cases simp: prod.case)
+  obtain Li vi ci a where
+      del: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>Li, vi, ci\<rangle>"
+    and act: "net_impl.sem \<turnstile> \<langle>Li, vi, ci\<rangle> \<rightarrow>\<^bsub>a\<^esub> \<langle>Ly, vy, cy\<rangle>"
+    by (rule step_u'_elims[OF step]) blast
+  obtain broad N B where as: "net_impl.sem = (broad, N, B)" by (cases net_impl.sem) auto
+  have B: "B = map_of net_bounds"
+    using as unfolding net_impl.sem_def by simp
+  have "Simple_Network_Language.bounded B vp"
+    apply (cases rule: step_u_elims(1)[OF del])
+    unfolding as TAG_def by blast
+  thus ?thesis unfolding x fst_conv snd_conv B .
+qed
+
+text \<open>Inverting a propositional internal step whose POST-location vector is @{term \<open>L[Suc n := l']\<close>}: under
+  @{term \<open>L ! 0 = planning_loc\<close>} (which @{const Lv_conds} pins at every run config) the fired edge sits at
+  automaton @{term \<open>Suc n\<close>} -- the main automaton (@{term \<open>p = 0\<close>}) is excluded because from
+  @{const planning_loc} its only edge moves to @{const goal_loc}, which would change position @{term 0}; an
+  action edge (@{term \<open>p = Suc m\<close>}) strictly moves its location, so the changed position
+  @{term \<open>Suc n\<close>} pins @{term \<open>p = Suc n\<close>}. The edge targets @{term l'} and is one of the five action edges,
+  so the SOURCE location @{term \<open>L ! Suc n\<close>} is recovered. TARGET analogue of the source-based pinning
+  lemmas (@{thm [source] prop_start_edge_pinned} et al.).\<close>
+lemma prop_step_edge_at_Sucn:
+  assumes step: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>L', vp', c'\<rangle>"
+      and Llen: "length L = length net_automata"
+      and L'eq: "L' = L[Suc n := l']"
+      and main_planning: "L ! 0 = planning_loc"
+      and n: "n < length actions"
+    shows "\<exists>e \<in> set [start_edge (actions ! n), edge_2 (actions ! n), edge_3 (actions ! n),
+                     end_edge (actions ! n), instant_trans_edge (actions ! n)].
+             fst e = L ! Suc n \<and> snd (snd (snd (snd (snd (snd e))))) = l'"
+proof -
+  obtain Li vi ci a where
+      del: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>Li, vi, ci\<rangle>"
+    and aD: "a \<noteq> Simple_Network_Language.label.Del"
+    and act: "net_impl.sem \<turnstile> \<langle>Li, vi, ci\<rangle> \<rightarrow>\<^bsub>a\<^esub> \<langle>L', vp', c'\<rangle>"
+    by (rule step_u'_elims[OF step]) blast
+  obtain t where Lieq: "Li = L" and vieq: "vi = vp" and cieq: "ci = c \<oplus> t"
+    apply (cases rule: step_u_elims(1)[OF del])
+    unfolding net_impl.sem_def TAG_def by auto
+  have actI: "net_impl.sem \<turnstile> \<langle>L, vp, c \<oplus> t\<rangle> \<rightarrow>\<^bsub>a\<^esub> \<langle>L', vp', c'\<rangle>"
+    using act unfolding Lieq vieq cieq .
+  obtain aa where aInt: "a = Internal aa"
+    using prop_non_del_step_internal[OF actI aD Llen] by blast
+  obtain p l b g f r l'' where
+      P: "p < length net_automata"
+    and E: "(l, b, g, Sil aa, f, r, l'') \<in> trans (automaton_of (net_automata ! p))"
+    and LOC: "L ! p = l"
+    and L'eq2: "L' = L[p := l'']"
+    by (rule prop_int_step_invert[OF actI[unfolded aInt] Llen])
+  have Sn_lt: "Suc n < length L" using Llen n by (simp add: length_net_automata)
+  have len0: "0 < length L" using Sn_lt by simp
+  \<comment> \<open>The main automaton cannot fire: from @{const planning_loc} its only edge targets @{const goal_loc},
+     which would change position @{term 0} -- but @{term L'} fixes position @{term 0}.\<close>
+  have p_ne0: "p \<noteq> 0"
+  proof
+    assume p0: "p = 0"
+    have l_pl: "l = planning_loc" using LOC p0 main_planning by simp
+    have "(l, b, g, Sil aa, f, r, l'') \<in> set [main_auto_init_edge, main_auto_goal_edge, main_auto_loop]"
+      using E unfolding p0 main_auto_trans by simp
+    hence l''_goal: "l'' = goal_loc"
+      using l_pl
+      by (auto simp: main_auto_init_edge_def main_auto_goal_edge_def main_auto_loop_def
+                     Let_def locations_unique)
+    have "L' ! 0 = goal_loc" using L'eq2 p0 l''_goal len0 by simp
+    moreover have "L' ! 0 = planning_loc" using L'eq main_planning len0 by simp
+    ultimately show False by (simp add: locations_unique)
+  qed
+  \<comment> \<open>So an action automaton fired; its edge strictly moves location (@{term \<open>l \<noteq> l''\<close>}).\<close>
+  obtain m where pSucm: "p = Suc m" using p_ne0 by (cases p) auto
+  have m_lt: "m < length actions" using P unfolding pSucm length_net_automata by simp
+  have edge_m: "(l, b, g, Sil aa, f, r, l'') \<in> set [start_edge (actions ! m), edge_2 (actions ! m),
+                  edge_3 (actions ! m), end_edge (actions ! m), instant_trans_edge (actions ! m)]"
+    using E unfolding pSucm nth_auto_trans[OF m_lt] action_to_automaton_def Let_def by simp
+  have l_ne: "l \<noteq> l''"
+    using edge_m
+    by (auto simp: start_edge_def edge_2_def edge_3_def end_edge_def instant_trans_edge_def
+                   Let_def locations_unique)
+  \<comment> \<open>Since the edge changes the location and @{term L'} differs from @{term L} only at @{term \<open>Suc n\<close>},
+     the fired automaton is @{term \<open>Suc n\<close>}.\<close>
+  have pSuc: "p = Suc n"
+  proof (rule ccontr)
+    assume pne: "p \<noteq> Suc n"
+    have "L' ! p = L ! p" using L'eq pne by simp
+    moreover have "L' ! p = l''" using L'eq2 LOC P Llen by (simp add: length_net_automata)
+    ultimately show False using LOC l_ne by simp
+  qed
+  have m_eq_n: "m = n" using pSuc pSucm by simp
+  have edge: "(l, b, g, Sil aa, f, r, l'') \<in> set [start_edge (actions ! n), edge_2 (actions ! n),
+                edge_3 (actions ! n), end_edge (actions ! n), instant_trans_edge (actions ! n)]"
+    using edge_m unfolding m_eq_n .
+  have l_src: "l = L ! Suc n" using LOC pSuc by simp
+  have l''_tgt: "l'' = l'"
+  proof -
+    have "L' ! Suc n = l'" using L'eq Sn_lt by simp
+    moreover have "L' ! Suc n = l''" using L'eq2 pSuc Sn_lt by simp
+    ultimately show ?thesis by simp
+  qed
+  show ?thesis
+    apply (rule bexI[where x = "(l, b, g, Sil aa, f, r, l'')"])
+    using l_src l''_tgt edge by auto
+qed
+
+text \<open>A propositional internal step whose POST location at @{term \<open>Suc n\<close>} is @{const starting_loc} fired
+  @{const start_edge}, so its SOURCE location is @{const off_loc} (only @{const start_edge} targets
+  @{const starting_loc} among the five action edges).\<close>
+lemma prop_step_source_off:
+  assumes step: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>L', vp', c'\<rangle>"
+      and Llen: "length L = length net_automata"
+      and L'eq: "L' = L[Suc n := starting_loc]"
+      and main_planning: "L ! 0 = planning_loc"
+      and n: "n < length actions"
+    shows "L ! Suc n = off_loc"
+proof -
+  obtain e where e: "e \<in> set [start_edge (actions ! n), edge_2 (actions ! n), edge_3 (actions ! n),
+                              end_edge (actions ! n), instant_trans_edge (actions ! n)]"
+    and src: "fst e = L ! Suc n"
+    and tgt: "snd (snd (snd (snd (snd (snd e))))) = starting_loc"
+    using prop_step_edge_at_Sucn[OF step Llen L'eq main_planning n] by blast
+  show ?thesis using e src tgt
+    by (auto simp: start_edge_def edge_2_def edge_3_def end_edge_def instant_trans_edge_def
+                   Let_def locations_unique)
+qed
+
+text \<open>A propositional internal step whose POST location at @{term \<open>Suc n\<close>} is @{const off_loc} fired
+  @{const end_edge}, so its SOURCE location is @{const ending_loc} (only @{const end_edge} targets
+  @{const off_loc} among the five action edges).\<close>
+lemma prop_step_source_ending:
+  assumes step: "net_impl.sem \<turnstile> \<langle>L, vp, c\<rangle> \<rightarrow> \<langle>L', vp', c'\<rangle>"
+      and Llen: "length L = length net_automata"
+      and L'eq: "L' = L[Suc n := off_loc]"
+      and main_planning: "L ! 0 = planning_loc"
+      and n: "n < length actions"
+    shows "L ! Suc n = ending_loc"
+proof -
+  obtain e where e: "e \<in> set [start_edge (actions ! n), edge_2 (actions ! n), edge_3 (actions ! n),
+                              end_edge (actions ! n), instant_trans_edge (actions ! n)]"
+    and src: "fst e = L ! Suc n"
+    and tgt: "snd (snd (snd (snd (snd (snd e))))) = off_loc"
+    using prop_step_edge_at_Sucn[OF step Llen L'eq main_planning n] by blast
+  show ?thesis using e src tgt
+    by (auto simp: start_edge_def edge_2_def edge_3_def end_edge_def instant_trans_edge_def
+                   Let_def locations_unique)
+qed
+
 lemma num_happening_steps_possible:
   assumes i: "i < length planning_sem.htpl"
       and vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
