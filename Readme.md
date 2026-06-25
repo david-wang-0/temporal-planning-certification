@@ -50,10 +50,14 @@ Once a local copy is obtained, add the theories as Isabelle component
 isabelle components -u <path-to>/afp-2025/thys
 ```
 
-### Add Temporal Planning Semantics as Isabelle component
+### Add the PDDL semantics (Formal-PDDL-Semantics) as Isabelle component
+
+The temporal PDDL semantics come from the standalone **Formal-PDDL-Semantics** repository
+(sessions `Temporal_Planning` / `Continuous_Planning`). Clone it alongside this project and register
+it as an Isabelle component:
 
 ```shell
-isabelle components -u lib/temporal-pddl-semantics
+isabelle components -u <path-to>/Formal-PDDL-Semantics
 ```
 
 ### Make Isabelle recognise the project's dependencies

@@ -1,6 +1,6 @@
 # Plan: Datalog Delete-Relaxation Grounding for Temporal PDDL
 
-Status: draft (2026-06-18). Companion: [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md) — the two interlock
+Status: draft (2026-06-18). Companion: [NUMERIC_PLAN.md](NUMERIC_PLAN.md) — the two interlock
 (see §7). This plan covers bringing the classical grounder's *datalog certificate / delete-
 relaxation* grounding procedure into this project so that **lifted** temporal PDDL problems can be
 grounded to the nullary ground temporal PDDL that the NTA reduction already consumes.
@@ -80,16 +80,21 @@ already proves `ast_temporal_problem.valid_temp_plan2 (ast_classical_plan_to_pla
 valid_classical_plan2 π`. This bridge is the backbone of the grounding reuse: the grounder's
 classical task and our temporal task live in the **same** semantic family.
 
-**P0 tasks** (blocking; tracked in both plans):
+**P0 tasks** (blocking; tracked in both plans) — full step-by-step in
+[SEMANTICS_REPOINT_PLAN.md](SEMANTICS_REPOINT_PLAN.md):
 - [ ] Port `Ground_PDDL_Exec_Imp/*` and `TA_Network/*` off `Temporal_AI_Planning_Languages_Semantics`
   onto `Temporal_Planning` (new abstract syntax `Temporal_Abstract_Syntax`, semantics
-  `Temporal_Happening_Semantics`, checker `Temporal_PDDL_Checker_Explicit`). This is a mechanical
-  but large rename/retype pass; expect the `ground_ast_problem` locale and the
-  `Ground_PDDL_NTA_Reduction_Impl` codegen to need re-typing (`predicate`, `term`, `ast_effect`,
-  `duration_constraint` all change shape).
-- [ ] Update `ROOT`: `PDDL_TP_Reduction` session parent `Temporal_AI_Planning_Languages_Semantics`
-  → `Temporal_Planning`; register the standalone Formal-PDDL-Semantics component (done) and retire
-  the old `lib/temporal-pddl-semantics` submodule import.
+  `Temporal_Happening_Semantics`, checker `Temporal_PDDL_Checker_Explicit`). This is **more than a
+  retype**: it includes a **redesign of the grounded target** — rename `ground_ast_problem` →
+  `grounded_temporal_problem` and split it grounder-style into reused signature locales + grounded-ness
+  + positivity (see [SEMANTICS_REPOINT_PLAN.md](SEMANTICS_REPOINT_PLAN.md) §2b) — plus the retype onto
+  the new types (`ast_effect` gains `numeric_effects`, `duration_constraint` carries a
+  `numeric_expression`, the action schema is head/body). Done **numeric-free first**; the numeric path
+  is a later phase (re-point plan §5).
+- [ ] Update `ROOT`: re-point the `Temporal_Planning_Base` heap off
+  `Temporal_AI_Planning_Languages_Semantics` onto `Temporal_Planning`. Dependency mechanism:
+  **sibling component, no submodule** — retire the `lib/temporal-pddl-semantics` submodule and register
+  the standalone Formal-PDDL-Semantics via `isabelle components -u` (mirrors the classical grounder).
 - [ ] Re-establish `check_ground_problem` (`Ground_PDDL_NTA_Reduction_Impl`) against the new checker.
 
 ## 4. Core design — temporal grounding via the classical projection
@@ -127,7 +132,7 @@ through the *same* datalog program as ordinary atoms: an **EDB fact** for every 
 every numeric comparison condition (in `pre_s`/effect-conditions) and every PNE in the duration
 constraint. This is exactly the grounder's `Definedness_Normalization` + `Definedness_Translation`
 stages — reused verbatim; the numeric *value* semantics is **not** in datalog (see §7 and
-[RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md)).
+[NUMERIC_PLAN.md](NUMERIC_PLAN.md)).
 
 > **Why dropping `inv`/`pre_e` fluents is required for soundness, not just precision.** An over-all
 > or end fluent condition may only become achievable *during* the action's own duration — via its own
@@ -158,7 +163,7 @@ targets the *real-deletes* problem `P_N`, not the relaxation — and reproduces 
 `G`, instantiate the **original** temporal schema (not the projection) to obtain the ground durative
 action, then split into `at_start/over_all/at_end` snaps exactly as `at_start_spec` /
 `at_end_spec` / `over_all_snap` do today, but over the **lifted** schema instantiated at the binding.
-Assemble the resulting `ground_ast_problem`.
+Assemble the resulting `grounded_temporal_problem`.
 
 > **Decision (per the "whichever is faster" call):** use the projection. A "direct per-snap datalog"
 > that put `inv`/`pre_e` *fluent* conditions into rule bodies would be **unsound** (it prunes
@@ -196,7 +201,7 @@ New session `Ground_Temporal_PDDL` (parent: `PDDL_TP_Reduction` after P0, + the 
 1. `Temporal_Classical_Projection.thy` — `π_C`, well-formedness preservation, instance-set equality.
 2. `Temporal_Reachability_Soundness.thy` — the over-approximation lemma (§4).
 3. `Ground_Temporal_PDDL_Defs.thy` — `χ` re-expansion, `ground_via_cert_temporal`, assembly into
-   `ground_ast_problem`.
+   `grounded_temporal_problem` (the target structure fixed by SEMANTICS_REPOINT_PLAN.md §2b).
 4. `Ground_Temporal_PDDL_Plan.thy` — the plan-preservation theorem (§5).
 5. `Ground_Temporal_PDDL_Code.thy` — executable refinement + code export; extend `run.sh`/`run.py`
    to call the verified grounder instead of (or cross-checking) the untrusted Python grounder.
@@ -208,7 +213,7 @@ grounder's per-stage session split.
 ## 7. Interlock with the numeric plan
 
 The grounder currently *rejects* numerics (`grounding_checks_exec` includes a numeric-free check).
-When [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md) lands, the seam is:
+When [NUMERIC_PLAN.md](NUMERIC_PLAN.md) lands, the seam is:
 - **Reachability tracks definedness but ignores comparison *values***. Datalog carries the
   `defined!f` predicate (EDB from init, head from numeric assignments, body from `pre_s`/duration
   PNEs — see §4); it does **not** evaluate the `≤/≥/=` test. Treating the comparison *value* as
@@ -222,13 +227,17 @@ When [RUN_LIFT_PLAN.md](RUN_LIFT_PLAN.md) lands, the seam is:
   → propositional `defined!f` predicates) are reused **as-is** for definedness reachability — extend
   only to pull definedness out of the **duration constraint** too; the **value** semantics is the
   numeric plan's job.
-- Net dependency: §3 (P0) is shared; the numeric plan should land **the semantics + reduction**
-  first, then this plan flips the grounder's numeric-free check into "ground numerics through".
+- Net dependency: §3 (P0) is shared and itself stages **numeric-free first** (the re-point reaches
+  green with empty `numeric_effects`; re-point plan §5 then adds numerics on the new semantics). The
+  numeric plan should land **the semantics + reduction** on the new `Temporal_Planning` first, then
+  this plan flips the grounder's numeric-free check into "ground numerics through".
 
 ## 8. Risks / open questions
 
-- **Semantics re-point (P0) is the long pole** — large mechanical retype of `Ground_PDDL_Exec_Imp`
-  and `TA_Network`. Do it first, on its own branch, fully green, before any grounding work.
+- **Semantics re-point (P0) is the long pole** — redesign of the grounded target + numeric-free
+  retype of `Ground_PDDL_Exec_Imp` and `TA_Network` (see
+  [SEMANTICS_REPOINT_PLAN.md](SEMANTICS_REPOINT_PLAN.md)). Do it first, on its own branch, fully green,
+  before any grounding work.
 - The grounder assumes positive, DNF preconditions; temporal `over_all` conditions and the union in
   `π_C` must respect the same normalization — verify the normalization stages accept the projected
   schema unchanged.

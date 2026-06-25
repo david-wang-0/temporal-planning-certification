@@ -1,6 +1,5 @@
 theory Ground_PDDL_Plan_Defs
   imports Ground_PDDL_Problem_Defs
-    "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics_Alt"
 begin
                          
 instantiation real::infinity

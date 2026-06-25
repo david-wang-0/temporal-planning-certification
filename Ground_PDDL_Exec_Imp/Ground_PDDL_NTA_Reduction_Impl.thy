@@ -1,6 +1,5 @@
 theory Ground_PDDL_NTA_Reduction_Impl
-  imports Ground_PDDL_NTA_Reduction_Correctness 
-    "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Checker"
+  imports Ground_PDDL_NTA_Reduction_Correctness
 begin
 
 

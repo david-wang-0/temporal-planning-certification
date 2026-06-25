@@ -1,6 +1,5 @@
 theory Ground_PDDL_Problem_Defs
-  imports "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics"
-    "TP_NTA_Reduction.TP_NTA_Reduction_Model_Checking"
+  imports "TP_NTA_Reduction.TP_NTA_Reduction_Model_Checking"
 begin
 
 fun to_literals::"object atom Formulas.formula \<Rightarrow> object atom Formulas.formula list" where

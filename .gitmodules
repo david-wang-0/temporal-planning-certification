@@ -1,6 +1,3 @@
-[submodule "lib/temporal-pddl-semantics"]
-	path = lib/temporal-pddl-semantics
-	url = https://github.com/david-wang-0/temporal-pddl-semantics.git
 [submodule "ML/lib/mlunta"]
 	path = ML/lib/mlunta
 	url = https://github.com/david-wang-0/mlunta.git

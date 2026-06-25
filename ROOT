@@ -1,17 +1,24 @@
-session Temporal_Planning_Base in Temporal_Planning_Base = Munta_Certificate_Checker +
-  description \<open>External/library dependencies shared by the whole development: the Munta model
-    checker + verified certificate checker, List-Index, and the (old) temporal PDDL semantics.
-    Contains no project-local theories, so it builds once and loads in jEdit as a stable heap
-    while the editable sessions below are developed on top. P0 (re-point onto the new
-    Formal-PDDL-Semantics) is a localized change to the semantics import here.\<close>
-  options [timeout = 900]
+session Temporal_Planning_Base in Temporal_Planning_Base = Temporal_Planning +
+  description \<open>External/library dependencies shared by the whole development. The temporal PDDL
+    semantics (Formal-PDDL-Semantics, session Temporal_Planning) is the heap PARENT, so the heavy
+    HOL-Analysis / ODE / algebraic-numbers tower is inherited from its cached image rather than
+    re-elaborated; the Munta model checker + verified certificate checker and List-Index are loaded on
+    top. Contains no project-local theories, so it builds once and loads in jEdit as a stable heap
+    while the editable sessions below are developed on top.\<close>
+  options [timeout = 7200]
   sessions
     "List-Index"
-    "Temporal_AI_Planning_Languages_Semantics"
+    "Munta_Certificate_Checker"
   theories [document = false]
     "List-Index.List_Index"
-    "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Semantics"
-    "Temporal_AI_Planning_Languages_Semantics.TEMPORAL_PDDL_Checker"
+    "Munta_Certificate_Checker.Lasso_Freeness_Certificates_Complete"
+    "Munta_Certificate_Checker.Unreachability_Certification"
+    "Munta_Certificate_Checker.Unreachability_Certification2"
+    "Munta_Certificate_Checker.Simulation_Graphs2"
+    "Munta_Certificate_Checker.TA_Simulation"
+    "Munta_Certificate_Checker.Normalized_Zone_Semantics_Certification_Impl"
+    "Munta_Certificate_Checker.Normalized_Zone_Semantics_Certification_Impl2"
+    "Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code"
 
 session Temporal_Planning_Common in Temporal_Planning_Common = Temporal_Planning_Base +
   theories
