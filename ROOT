@@ -1,10 +1,11 @@
-session Temporal_Planning_Base in Temporal_Planning_Base = Temporal_Planning +
-  description \<open>External/library dependencies shared by the whole development. The temporal PDDL
-    semantics (Formal-PDDL-Semantics, session Temporal_Planning) is the heap PARENT, so the heavy
-    HOL-Analysis / ODE / algebraic-numbers tower is inherited from its cached image rather than
-    re-elaborated; the Munta model checker + verified certificate checker and List-Index are loaded on
-    top. Contains no project-local theories, so it builds once and loads in jEdit as a stable heap
-    while the editable sessions below are developed on top.\<close>
+session Temporal_Munta_Base in Temporal_Munta_Base = Continuous_Planning +
+  description \<open>Stable, expensive base layer: the Munta model checker + verified certificate
+    checker and List-Index, re-elaborated ONCE on top of the Formal-PDDL-Semantics
+    Continuous_Planning heap (which carries the heavy HOL-Analysis / ODE / algebraic-numbers tower,
+    inherited from its cached image). This heap does NOT depend on the temporal PDDL semantics
+    session (Temporal_Planning), so editing the temporal / state-sequence theories does not
+    invalidate it -- only the thin Temporal_Planning_Base layer above is rebuilt. Contains no
+    project-local theories.\<close>
   options [timeout = 7200]
   sessions
     "List-Index"
@@ -19,6 +20,27 @@ session Temporal_Planning_Base in Temporal_Planning_Base = Temporal_Planning +
     "Munta_Certificate_Checker.Normalized_Zone_Semantics_Certification_Impl"
     "Munta_Certificate_Checker.Normalized_Zone_Semantics_Certification_Impl2"
     "Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code"
+
+session Temporal_Planning_Base in Temporal_Planning_Base = Temporal_Munta_Base +
+  description \<open>Thin layer loading the Formal-PDDL-Semantics temporal PDDL semantics (session
+    Temporal_Planning) on top of the stable Munta heap. Because Munta lives BELOW this layer, an edit
+    to the temporal / state-sequence semantics only re-elaborates these light FPS theories
+    (~minutes) instead of the whole Munta tower. The whole development is built on top of this heap
+    in jEdit. Contains no project-local theories.\<close>
+  options [timeout = 7200]
+  sessions
+    "Utils"
+    "Temporal_Planning"
+  theories [document = false]
+    "Temporal_Planning.Temporal_Abstract_Syntax"
+    "Temporal_Planning.Temporal_Utils"
+    "Temporal_Planning.Temporal_Well_Formedness"
+    "Temporal_Planning.Temporal_Happening_Semantics"
+    "Temporal_Planning.Temporal_Instantiations"
+    "Temporal_Planning.Temporal_Continuous_Reduction"
+    "Temporal_Planning.Temporal_State_Sequence_Semantics"
+    "Temporal_Planning.Temporal_PDDL_Checker_Numeric"
+    "Temporal_Planning.Temporal_PDDL_Checker_Explicit"
 
 session Temporal_Planning_Common in Temporal_Planning_Common = Temporal_Planning_Base +
   theories
@@ -51,6 +73,8 @@ session TP_NTA_Reduction in TA_Network = Temporal_Planning_Semantics +
     TP_NTA_Reduction_Correctness_Numeric_Plan
 
 session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp = TP_NTA_Reduction +
+  sessions
+    "Temporal_Planning"
   theories
     Ground_PDDL_Problem_Defs
     Ground_PDDL_Problem_Reduction

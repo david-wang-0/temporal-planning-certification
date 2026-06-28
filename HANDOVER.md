@@ -5,6 +5,13 @@ Living inventory + ordered next-steps for the numeric-fluent extension of the
 green; this work extends it to numeric fluents. The whole effort funnels into one lemma,
 `num_happening_steps_possible` (`TA_Network/TP_NTA_Reduction_Correctness_Numeric_Happening.thy`).
 
+> **Current active work is the semantics RE-POINT (P0), not this numeric run-lift.** The development
+> is being re-pointed onto Formal-PDDL-Semantics' `Temporal_Planning`; see the **HANDOFF (2026-06-28)**
+> at the top of [SEMANTICS_REPOINT_PLAN.md](SEMANTICS_REPOINT_PLAN.md). `Ground_PDDL_Plan_Defs.thy` is
+> at 214 errors (down from ~616), all foundational/design-hard pieces green, remaining is a mechanical
+> body grind + one `validity \<Rightarrow> durations_match` derivation. The numeric run-lift below resumes once the
+> re-point lands green.
+
 ## File layout — numeric split (2026-06-25)
 
 Layer B was carved out of `TP_NTA_Reduction_Correctness.thy` (now propositional-only, ~675 lines)

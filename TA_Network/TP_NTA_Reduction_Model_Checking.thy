@@ -138,9 +138,6 @@ lemma locations_unique:
   unfolding init_loc_def planning_loc_def goal_loc_def off_loc_def starting_loc_def running_loc_def ending_loc_def 
   by simp+
 
-thm Simple_Network_Rename_Formula.models_iff[no_vars, unfolded Simple_Network_Rename_Start.a\<^sub>0_def]
-term "Simple_Network_Language_Model_Checking.N net_broadcast net_automata net_bounds,Simple_Network_Rename_Start.a\<^sub>0 init_vars init_locs \<Turnstile> reach_formula"
-
 definition "a\<^sub>0 = (init_locs, map_of init_vars, (\<lambda>_::String.literal. 0::int))"
 
 lemma [code]: "a\<^sub>0 = (init_locs, map_of init_vars, (\<lambda>_::String.literal. 0::int))"
