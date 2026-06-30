@@ -95,7 +95,10 @@ classical task and our temporal task live in the **same** semantic family.
   `Temporal_AI_Planning_Languages_Semantics` onto `Temporal_Planning`. Dependency mechanism:
   **sibling component, no submodule** — retire the `lib/temporal-pddl-semantics` submodule and register
   the standalone Formal-PDDL-Semantics via `isabelle components -u` (mirrors the classical grounder).
-- [ ] Re-establish `check_ground_problem` (`Ground_PDDL_NTA_Reduction_Impl`) against the new checker.
+- [ ] Re-establish `check_ground_problem` (`Ground_PDDL_NTA_Reduction_Impl`) against the new checker
+  *as an interim runtime gate*. It is slated for **retirement** once the verified grounder (§4) lands:
+  the grounder discharges the `grounded_temporal_problem` assumptions (incl. `positive_act_pres`, via
+  the constant-fold/feasibility-prune step) *by construction*, replacing the runtime check.
 
 ## 4. Core design — temporal grounding via the classical projection
 
@@ -165,6 +168,29 @@ action, then split into `at_start/over_all/at_end` snaps exactly as `at_start_sp
 `at_end_spec` / `over_all_snap` do today, but over the **lifted** schema instantiated at the binding.
 Assemble the resulting `grounded_temporal_problem`.
 
+**Constant evaluation + feasibility prune (`eqAtm` and other constant literals).** `χ` instantiates
+conditions over the binding's constants, so any object-equality `eqAtm` becomes a *constant*. **Reuse
+the classical grounder's `ground_fmla`** (`Grounded_PDDL/Grounded_PDDL.thy`) to evaluate it —
+`Atom (eqAtm a b) ↦ (if a = b then ¬⊥ else ⊥)` (and the negated case). Sound because `eqAtm` is
+**model-independent** — FPS values `Atom (eqAtm a b)` as `Some (a = b)` (`Continuous_Planning/Worlds.thy`)
+— so replacing it by its truth value is a per-condition logical equivalence. So there is **no bespoke
+`eqAtm` problem→problem pass**; equality is gone *by construction* in the grounded problem.
+
+`ground_fmla` leaves `⊥`/`¬⊥` constants, and the classical grounder does **not** simplify them: `¬⊥`
+is kept (`un_and` flags removing it as an undone optimization, `Common/Formula_Utils.thy`; its
+`is_pos_lit` accepts both `⊥` and `¬⊥`), and a `⊥` condition is dropped only later in the *datalog
+reachability* (`Reachability_Analysis/PDDL_Reachability_Locales.thy` — a `⊥` clause is statically
+unsatisfiable). The temporal NTA path does **not** inherit that, and this project's **narrow
+`is_pos_lit` rejects `⊥`** (only `predAtm`/`¬⊥`). So add a small, general **constant-fold +
+feasibility-prune** step in `χ`/assembly: fold `φ ∧ ¬⊥ = φ`, `φ ∧ ⊥ = ⊥`, …, and **drop any action
+whose condition reduces to `⊥`** (never enabled). The result is a positive `predAtm` conjunction,
+discharging the grounded target's `act_pres_pos` / `positive_act_pres` obligation for the numeric-free
+fragment — which is exactly what lets the runtime `check_ground_problem` be retired (the grounder
+establishes the assumption *by construction* rather than checking it). It is semantics-preserving
+(constant folding = logical equivalence; dropping unsatisfiable-condition actions preserves valid
+plans) and general (any constant literal, not just `eqAtm`-derived). `numericEq`/numeric comparisons
+are **not** evaluated here — state-dependent, kept for the numeric path (§7).
+
 > **Decision (per the "whichever is faster" call):** use the projection. A "direct per-snap datalog"
 > that put `inv`/`pre_e` *fluent* conditions into rule bodies would be **unsound** (it prunes
 > instances whose end-conditions are achieved mid-duration — see the soundness box above), which is
@@ -201,7 +227,10 @@ New session `Ground_Temporal_PDDL` (parent: `PDDL_TP_Reduction` after P0, + the 
 1. `Temporal_Classical_Projection.thy` — `π_C`, well-formedness preservation, instance-set equality.
 2. `Temporal_Reachability_Soundness.thy` — the over-approximation lemma (§4).
 3. `Ground_Temporal_PDDL_Defs.thy` — `χ` re-expansion, `ground_via_cert_temporal`, assembly into
-   `grounded_temporal_problem` (the target structure fixed by SEMANTICS_REPOINT_PLAN.md §2b).
+   `grounded_temporal_problem` (the target structure fixed by SEMANTICS_REPOINT_PLAN.md §2b),
+   including the **constant-fold + feasibility-prune** step (§4): reuse classical `ground_fmla` for
+   `eqAtm`, fold `⊥`/`¬⊥`, drop `⊥`-condition actions ⟹ positive `predAtm` conjunctions discharging
+   `act_pres_pos`/`positive_act_pres`.
 4. `Ground_Temporal_PDDL_Plan.thy` — the plan-preservation theorem (§5).
 5. `Ground_Temporal_PDDL_Code.thy` — executable refinement + code export; extend `run.sh`/`run.py`
    to call the verified grounder instead of (or cross-checking) the untrusted Python grounder.

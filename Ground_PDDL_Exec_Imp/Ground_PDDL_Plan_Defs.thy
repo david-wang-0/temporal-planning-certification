@@ -1010,123 +1010,17 @@ proof -
 qed
 
 
-lemma res_inst_pre_pos:
-  assumes "(t, a) \<in> simple_acts tp"
-  shows "ground_act_pres_pos (the (res_inst a))"
-proof -
-  obtain n as where
-    a: "a = SimplePlanAction n as" 
-      "(t, SimplePlanAction n as) \<in> set tp"
-    using assms unfolding simple_acts_def is_act_simple apply (cases a) by auto
-  
-  obtain ps pre eff where
-    res: "resolve_temporal_action_schema n = Some (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff))"
-    using res_simple_act_name[OF assms] unfolding a(1) by auto
-  
-  have params_match: "action_params_match (ActionHead n ps) as"
-    using wf_plan_action_params_match[OF wf_plan a(2)] a(1) res by simp
-
-  have pres_pos: "act_pres_pos (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff))"
-    using res resolve_action_in_actions positive_act_pres unfolding list_all_iff actions_spec_def by blast
-  
-  show ?thesis using instantiate_action_schema_pres_pos[OF pres_pos] res a(1) by simp
-qed                                   
-
-lemma res_inst_snap_action_pre_pos:
-  assumes "(t, a) \<in> durative_acts tp"
-  shows "ground_act_pres_pos (the (res_inst_snap_action a b))"
-proof -
-  obtain n as d where
-    a: "a = DurativePlanAction n as d" 
-      "(t, DurativePlanAction n as d) \<in> set tp"
-    using assms unfolding durative_acts_def is_act_simple apply (cases a) by auto
-  
-  obtain ps dcs pre eff where
-    res: "resolve_temporal_action_schema n = Some (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
-    using res_durative_act_name[OF assms[simplified a]] by auto 
-  
-  have params_match: "action_params_match (ActionHead n ps) as"
-    using wf_plan_action_params_match[OF wf_plan a(2)] a(1) res by simp
-
-  have pres_pos: "act_pres_pos (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
-    using res resolve_action_in_actions positive_act_pres unfolding list_all_iff actions_spec_def by blast
-  
-  show ?thesis using inst_snap_act_pres_pos[OF pres_pos] res a(1)
-qed
 
 text \<open>The acts of a plan at a time point are wf\<close>
 
 lemma acts_of_temporal_plan_at_wf:
-  assumes "a \<in> acts_of_temporal_plan_at t tp"
+  assumes "a \<in> set (acts_of_temporal_plan_at t tp)"
   shows "wf_ground_action a"
-proof (rule in_acts_of_temporal_plan_atE[OF assms], goal_cases)
-  case (1 \<pi>)
-  obtain n as where
-    \<pi>: "\<pi> = SimplePlanAction n as" 
-        "(t, SimplePlanAction n as) \<in> set tp"
-    using 1 unfolding simple_acts_def is_act_simple by (cases \<pi>) auto
-  obtain ps pre eff where
-    res: "resolve_temporal_action_schema n = Some (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff))"
-    using res_simple_act_name 1 \<pi> by fastforce
-  hence "wf_action_schema (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff))" using resolve_action_wf by blast
-  moreover
-  have "action_params_match (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff)) as"
-    using wf_plan_action_params_match[OF wf_plan] \<pi> res by fastforce
-  ultimately
-  have "wf_ground_action (the (res_inst \<pi>))" 
-    unfolding \<pi> res_inst.simps res option.sel
-    using wf_inst_action_schema by auto
-  moreover
-  have "a = the (res_inst \<pi>)" using 1 option.sel by metis
-  ultimately
-  show ?case by simp 
-next
-  case (2 \<pi>)
-  then obtain n as d where
-    \<pi>: "\<pi> = DurativePlanAction n as d" 
-        "(t, DurativePlanAction n as d) \<in> set tp"
-    unfolding durative_acts_def is_act_simple by (cases \<pi>) auto
-  obtain ps dcs pre eff where
-    res: "resolve_temporal_action_schema n = Some (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
-    using res_durative_act_name 2 \<pi> using plan_action.sel by metis
-  hence "wf_action_schema (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))" using resolve_action_wf by blast
-  moreover
-  have "action_params_match (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff)) as"
-    using wf_plan_action_params_match[OF wf_plan] \<pi> res by fastforce
-  ultimately
-  have "wf_ground_action (the (res_inst_snap_action \<pi> At_Start))" 
-    unfolding \<pi> res_inst_snap_action.simps res option.sel
-    using wf_inst_durative_action_schema by simp
-  moreover
-  have "a = the (res_inst_snap_action \<pi> At_Start)" using 2 option.sel by metis
-  ultimately
-  show ?case by simp 
-next
-  case (3 t' \<pi>)
-  then obtain n as d where
-    \<pi>: "\<pi> = DurativePlanAction n as d" 
-        "(t', DurativePlanAction n as d) \<in> set tp"
-    unfolding durative_acts_def is_act_simple by (cases \<pi>) auto
-  obtain ps dcs pre eff where
-    res: "resolve_temporal_action_schema n = Some (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
-    using res_durative_act_name 3 \<pi> using plan_action.sel by metis
-  hence "wf_action_schema (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))" using resolve_action_wf by blast
-  moreover
-  have "action_params_match (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff)) as"
-    using wf_plan_action_params_match[OF wf_plan] \<pi> res by fastforce
-  ultimately
-  have "wf_ground_action (the (res_inst_snap_action \<pi> At_End))" 
-    unfolding \<pi> res_inst_snap_action.simps res option.sel
-    using wf_inst_durative_action_schema by simp
-  moreover
-  have "a = the (res_inst_snap_action \<pi> At_End)" using 3 option.sel by metis
-  ultimately
-  show ?case by simp
-qed
+  using wf_acts_of_temporal_plan_at[OF wf_plan assms] .
 
 text \<open>Plan actions provide no arguments\<close>
 
-lemma plan_acts_no_args: "list_all (snd #> plan_act_no_args) tp"
+lemma plan_acts_no_args: "list_all (\<lambda>x. plan_act_no_args (snd x)) tp"
 proof -
   { fix t a 
     assume "(t, a) \<in> set tp"
@@ -1160,84 +1054,67 @@ qed
 text \<open>The ground actions of the plan at a timepoint have no arguments\<close>
 
 lemma acts_of_temporal_plan_at_no_args:
-  assumes "a \<in> acts_of_temporal_plan_at t tp"
+  assumes "a \<in> set (acts_of_temporal_plan_at t tp)"
   shows "ground_act_no_args a"
 proof (rule in_acts_of_temporal_plan_atE[OF assms], goal_cases)
   case (1 \<pi>)
-  obtain n as where
-    \<pi>: "\<pi> = SimplePlanAction n as" 
-        "(t, SimplePlanAction n as) \<in> set tp"
-    using 1 unfolding simple_acts_def is_act_simple by (cases \<pi>) auto
-  obtain ps pre eff where
-    res: "resolve_temporal_action_schema n = Some (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff))"
-    using res_simple_act_name 1 \<pi> by fastforce
-  hence "wf_action_schema (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff))" using resolve_action_wf by blast
-  moreover
-  {
-    have "action_params_match (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff)) []"
-      using res resolve_action_in_actions act_params_match_empty by simp
-    hence "act_no_params (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff))" 
-      unfolding action_params_match_def by simp
-  }
-  ultimately
-  have "ground_act_no_args (the (res_inst \<pi>))" 
-    unfolding \<pi> res_inst.simps res option.sel
-    using instantiate_action_schema_no_params by auto
-  moreover
-  have "a = the (res_inst \<pi>)" using 1 option.sel by metis
-  ultimately
-  show ?case by simp 
+  obtain n as where \<pi>: "\<pi> = SimplePlanAction n as"
+    using 1 unfolding simple_acts_def is_act_simple_def by (cases \<pi>) auto
+  have mem: "(t, \<pi>) \<in> set tp" using 1 unfolding simple_acts_def by simp
+  hence wfpa: "wf_plan_action \<pi>" using wf_plan_actions by blast
+  obtain h b where
+    res: "resolve_temporal_action_schema n = Some (SimpleActionSchema h b)"
+    using wfpa \<pi> by (cases "resolve_temporal_action_schema n") (auto split: ast_temporal_action_schema.splits)
+  obtain pre eff where bb: "b = SimpleActionBody pre eff"
+    by (cases b)
+  have sch: "SimpleActionSchema h (SimpleActionBody pre eff) \<in> set actions_spec"
+    using resolve_action_in_actions[OF res] bb by simp
+  have "ground_act_no_args (instantiate_temporal_action_schema (SimpleActionSchema h (SimpleActionBody pre eff)) as)"
+    using instantiate_action_schema_no_params[OF act_no_params[OF sch] resolve_temporal_action_wf[OF res[unfolded bb]] act_pres_pos_spec[OF sch]] .
+  thus ?case
+    using 1 \<pi> res bb by simp
 next
   case (2 \<pi>)
-  then obtain n as d where
-    \<pi>: "\<pi> = DurativePlanAction n as d" 
-        "(t, DurativePlanAction n as d) \<in> set tp"
-    unfolding durative_acts_def is_act_simple by (cases \<pi>) auto
-  obtain ps dcs pre eff where
-    res: "resolve_temporal_action_schema n = Some (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
-    using res_durative_act_name 2 \<pi> using plan_action.sel by metis
-  hence "wf_action_schema (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))" using resolve_action_wf by blast
-  moreover
-  {
-    have "action_params_match (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff)) []"
-      using res resolve_action_in_actions act_params_match_empty by simp
-    hence "act_no_params (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))" using \<pi>(2)
-      unfolding action_params_match_def by simp
-  }
-  ultimately
-  have "ground_act_no_args (the (res_inst_snap_action \<pi> At_Start))" 
-    unfolding \<pi> res_inst_snap_action.simps res option.sel
-    using inst_snap_action_no_params by simp
-  moreover
-  have "a = the (res_inst_snap_action \<pi> At_Start)" using 2 option.sel by metis
-  ultimately
-  show ?case by simp 
+  obtain n as d where \<pi>: "\<pi> = DurativePlanAction n as d"
+    using 2 unfolding durative_acts_def is_act_simple_def by (cases \<pi>) auto
+  have mem: "(t, DurativePlanAction n as d) \<in> set tp"
+    using 2 \<pi> unfolding durative_acts_def by auto
+  have as_Nil: "as = []"
+    using mem plan_acts_no_args unfolding list_all_iff by (cases as) auto
+  obtain h b where
+    res: "resolve_temporal_action_schema n = Some (DurativeActionSchema h b)"
+    using \<pi> 2 by (cases "resolve_temporal_action_schema n") (auto split: ast_temporal_action_schema.splits)
+  obtain dcs pre eff where b: "b = DurativeActionBody dcs pre eff"
+    by (cases b)
+  have sch: "DurativeActionSchema h (DurativeActionBody dcs pre eff) \<in> set actions_spec"
+    using resolve_action_in_actions[OF res] b by simp
+  have "ground_act_no_args (at_start_spec (DurativeActionSchema h (DurativeActionBody dcs pre eff)))"
+    unfolding at_start_spec.simps
+    using inst_snap_action_no_params[OF act_no_params[OF sch] resolve_temporal_action_wf[OF res[unfolded b]] act_pres_pos_spec[OF sch]] .
+  thus ?case
+    using 2 \<pi> res b as_Nil
+    unfolding res_inst.simps at_start_spec.simps by simp
 next
   case (3 t' \<pi>)
-  then obtain n as d where
-    \<pi>: "\<pi> = DurativePlanAction n as d" 
-        "(t', DurativePlanAction n as d) \<in> set tp"
-    unfolding durative_acts_def is_act_simple by (cases \<pi>) auto
-  obtain ps dcs pre eff where
-    res: "resolve_temporal_action_schema n = Some (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
-    using res_durative_act_name 3 \<pi> using plan_action.sel by metis
-  hence "wf_action_schema (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))" using resolve_action_wf by blast
-  moreover
-  {
-    have "action_params_match (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff)) []"
-      using res resolve_action_in_actions act_params_match_empty by simp
-    hence "act_no_params (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))" 
-      unfolding action_params_match_def by simp
-  }
-  ultimately
-  have "ground_act_no_args (the (res_inst_snap_action \<pi> At_End))" 
-    unfolding \<pi> res_inst_snap_action.simps res option.sel
-    using inst_snap_action_no_params by simp
-  moreover
-  moreover
-  have "a = the (res_inst_snap_action \<pi> At_End)" using 3 option.sel by metis
-  ultimately
-  show ?case by simp
+  obtain n as d where \<pi>: "\<pi> = DurativePlanAction n as d"
+    using 3 unfolding durative_acts_def is_act_simple_def by (cases \<pi>) auto
+  have mem: "(t', DurativePlanAction n as d) \<in> set tp"
+    using 3 \<pi> unfolding durative_acts_def by auto
+  have as_Nil: "as = []"
+    using mem plan_acts_no_args unfolding list_all_iff by (cases as) auto
+  obtain h b where
+    res: "resolve_temporal_action_schema n = Some (DurativeActionSchema h b)"
+    using \<pi> 3 by (cases "resolve_temporal_action_schema n") (auto split: ast_temporal_action_schema.splits)
+  obtain dcs pre eff where b: "b = DurativeActionBody dcs pre eff"
+    by (cases b)
+  have sch: "DurativeActionSchema h (DurativeActionBody dcs pre eff) \<in> set actions_spec"
+    using resolve_action_in_actions[OF res] b by simp
+  have "ground_act_no_args (at_end_spec (DurativeActionSchema h (DurativeActionBody dcs pre eff)))"
+    unfolding at_end_spec.simps
+    using inst_snap_action_no_params[OF act_no_params[OF sch] resolve_temporal_action_wf[OF res[unfolded b]] act_pres_pos_spec[OF sch]] .
+  thus ?case
+    using 3 \<pi> res b as_Nil
+    unfolding res_inst.simps at_end_spec.simps by simp
 qed
 
 text \<open>Plan actions have no arguments\<close>
@@ -1318,36 +1195,15 @@ lemma resolve_temporal_action_schema_inj_on_dom:
       and "resolve_temporal_action_schema x = Some a"
       and "resolve_temporal_action_schema y = Some b"
   shows "x = y"
-proof (cases a; cases b)
-  fix l as pre eff n bs ore fff
-  assume a: "a = SimpleActionSchema (ActionHead l as) (SimpleActionBody pre eff)" 
-     and b: "b = SimpleActionSchema (ActionHead n bs) (SimpleActionBody ore fff)"
-  have dist: "distinct (map ast_action_schema.name (actions D))" using wf_domain wf_domain_def by blast
-  have "x = l" using index_by_eq_Some_eq[OF dist] a assms(2) unfolding resolve_temporal_action_schema_def by simp
+proof -
+  have "ast_temporal_action_schema_name a = x"
+    using assms(2) index_by_eq_SomeD unfolding resolve_temporal_action_schema_def by fastforce
   moreover
-  have "y = n" using index_by_eq_Some_eq[OF dist] b assms(3) unfolding resolve_temporal_action_schema_def by simp
-  ultimately 
-  show "x = y" using assms a b by simp
-next 
-  fix l as pre eff n bs ore fff d
-  assume a: "a = SimpleActionSchema (ActionHead l as) (SimpleActionBody pre eff)" 
-     and b: "b = DurativeActionSchema (ActionHead n bs) (DurativeActionBody d ore fff)"
-  show "x = y" using assms a b by simp
-next 
-  fix l as pre eff n bs ore fff d
-  assume a: "a = DurativeActionSchema (ActionHead l as) (DurativeActionBody d pre eff)" 
-     and b: "b = SimpleActionSchema (ActionHead n bs) (SimpleActionBody ore fff)"
-  show "x = y" using assms a b by simp
-next 
-  fix l as pre eff n bs ore fff d e
-  assume a: "a = DurativeActionSchema (ActionHead l as) (DurativeActionBody d pre eff)" 
-     and b: "b = DurativeActionSchema (ActionHead n bs) (DurativeActionBody e ore fff)"
-  have dist: "distinct (map ast_action_schema.name (actions D))" using wf_domain wf_domain_def by blast
-  have "x = l" using index_by_eq_Some_eq[OF dist] a assms(2) unfolding resolve_temporal_action_schema_def by simp
+  have "ast_temporal_action_schema_name b = y"
+    using assms(3) index_by_eq_SomeD unfolding resolve_temporal_action_schema_def by fastforce
   moreover
-  have "y = n" using index_by_eq_Some_eq[OF dist] b assms(3) unfolding resolve_temporal_action_schema_def by simp
-  ultimately 
-  show "x = y" using assms a b by simp
+  have "a = b" using assms(1,2,3) by simp
+  ultimately show "x = y" by simp
 qed
 
 text \<open>Well-formedness and properties of the refined plan.\<close>
@@ -1369,10 +1225,8 @@ lemma ref_plan_acts_in_actions:
 
 lemma ref_plan_acts_wf:
   assumes "(a, t, d) \<in> set ref_plan"
-  shows "wf_action_schema a" 
-  apply (cases a)
-  using assms simple_action_in_ref_plan durative_action_in_ref_plan resolve_action_wf 
-  by blast+
+  shows "wf_temporal_action_schema a"
+  using acts_wf[OF ref_plan_acts_in_actions[OF assms]] .
 
 lemma ref_plan_durs:
   assumes "(a, t, d) \<in> set ref_plan"
@@ -1384,9 +1238,16 @@ lemma ref_plan_durs:
 lemma ref_plan_start_is_htp:
   assumes "(a, t, d) \<in> set ref_plan"
   shows "is_htp tp (rat_of_int t)"
-  apply (cases a)
-  using assms simple_action_in_ref_plan durative_action_in_ref_plan resolve_action_wf 
-  unfolding is_htp_def by blast+
+  using assms
+proof (cases a rule: ast_temporal_action_schema_cases_unfold)
+  case (SimpleActionSchema n params pre eff)
+  thus ?thesis
+    using assms simple_action_in_ref_plan unfolding is_htp_def by blast
+next
+  case (DurativeActionSchema n params dc cond deff)
+  thus ?thesis
+    using assms durative_action_in_ref_plan unfolding is_htp_def by blast
+qed
 
 lemma ref_plan_end_is_htp_if_durative:
   assumes "(DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff), t, d) \<in> set ref_plan"
@@ -1429,10 +1290,10 @@ if dels b = {x}, pre b = {x}, adds b = {}, dels a = {x}, pre a = {x}, adds a = {
 
 lemma at_start_snap_at_t:
   assumes "(a, t, d) \<in> set ref_plan"
-  shows "at_start_spec a \<in> acts_of_temporal_plan_at (rat_of_int t) tp"
-  using assms 
-proof (induction a)
-  case 1: (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff))
+  shows "at_start_spec a \<in> set (acts_of_temporal_plan_at (rat_of_int t) tp)"
+  using assms
+proof (induction a rule: ast_temporal_action_schema_induct_unfold)
+  case (SimpleActionSchema n ps pre eff)
   then obtain as where
     x: "(rat_of_int t, SimplePlanAction n as) \<in> set tp" 
     and y: "resolve_temporal_action_schema n = Some (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff))"
@@ -1448,7 +1309,7 @@ proof (induction a)
     unfolding res_inst.simps at_start_spec.simps unfolding z as_Nil by auto
   thus ?case unfolding acts_of_temporal_plan_at_def by simp
 next
-  case (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))
+  case (DurativeActionSchema n ps dcs pre eff)
   then obtain as d where
     x: "(rat_of_int t, DurativePlanAction n as d) \<in> set tp" 
     and y: "resolve_temporal_action_schema n = Some (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
@@ -1467,7 +1328,7 @@ qed
 
 lemma at_end_snap_at_t_if_durative:
   assumes "((DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff)), t, d) \<in> set ref_plan"
-  shows "at_end_spec (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff)) \<in> acts_of_temporal_plan_at (rat_of_int (t + d)) tp"
+  shows "at_end_spec (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff)) \<in> set (acts_of_temporal_plan_at (rat_of_int (t + d)) tp)"
 proof -
   obtain as where
     x: "(rat_of_int t, DurativePlanAction n as (rat_of_int d)) \<in> set tp"
@@ -1646,7 +1507,7 @@ qed
 lemma ref_plan_no_self_overlap: "ref_plan_no_self_overlap"
 proof -
   have "wf_plan tp" using valid_temporal_state_seq_plan unfolding valid_temporal_state_seq_plan_def valid_temporal_state_seq_plan_from_def by blast
-  hence "list_all (snd #> wf_plan_action) tp" unfolding wf_plan_def list_all_iff by auto
+  hence "list_all (\<lambda>x. wf_plan_action (snd x)) tp" unfolding wf_plan_def list_all_iff by auto
   thus ?thesis
     using pddl_nso plan_acts_no_args plan_acts_durs_integer
     unfolding PDDL_plan_no_self_overlap_def ref_plan_no_self_overlap_def ref_plan_def
@@ -1657,7 +1518,7 @@ proof -
     case (Cons pa pas)
     have 1: "list_pairwise ref_no_self_overlap (map timed_plan_action_to_ref_plan_action pas)" using Cons by simp
 
-    have nso: "list_all (PDDL_no_self_overlap pa) pas" using Cons by simp
+    have nso: "list_all (PDDL_no_self_overlap pa) pas" using Cons.prems unfolding list_all_iff by auto
     have wf: "list_all (\<lambda>x. wf_plan_action (snd x)) (pa # pas)" using Cons by blast
     have no_args: "list_all (\<lambda>x. plan_act_no_args (snd x)) (pa # pas)" using Cons by blast
     have are_integer: "list_all timed_plan_action_durs_integer (pa # pas)" using Cons by blast
@@ -1665,7 +1526,11 @@ proof -
     have 2: "list_all (ref_no_self_overlap (timed_plan_action_to_ref_plan_action pa)) (map timed_plan_action_to_ref_plan_action pas)"
       using nso wf no_args are_integer PDDL_no_self_overlap_imp_ref_no_self_overlap unfolding list_all_iff by simp
 
-    show ?case using 1 2 by simp
+    have "ref_no_self_overlap (timed_plan_action_to_ref_plan_action pa) y'
+          \<and> ref_no_self_overlap y' (timed_plan_action_to_ref_plan_action pa)"
+      if "y' \<in> set (map timed_plan_action_to_ref_plan_action pas)" for y'
+      using that 2 ref_no_self_overlap_refl unfolding list_all_iff by blast
+    thus ?case using 1 by simp
   qed
 qed
 
@@ -1780,7 +1645,7 @@ lemma length_plan_state_list:
 
 lemma plan_state_list_nth_conv_abstr_state_list_nth:
   assumes "n < length plan_state_list"
-  shows "plan_state_list ! n = (\<Union>x\<in>abstr_state_list ! n. to_predicate ` set (to_literals x))"
+  shows "plan_state_list ! n = (\<Union>x\<in>fst (abstr_state_list ! n). to_predicate ` set (to_literals x))"
   using assms unfolding plan_state_list_def
   by auto
 
@@ -1827,17 +1692,69 @@ lemma abstr_state_list_nth_length:
   apply (subst nth_add_final_time_point_length)
   by simp
 
+text \<open>Forward decomposition of a valid state sequence at an arbitrary split point.  Unlike the
+  old two-case @{text valid_state_seq} (where the invariants were a per-happening precondition and
+  the split was a clean iff), the new three-case @{const valid_temporal_state_seq} checks an
+  \<^emph>\<open>interval\<close> invariant @{term \<open>invs_of_temporal_plan_in_interval (t\<^sub>i, t\<^sub>j)\<close>} across each consecutive
+  pair, so the converse glue is unavailable at a non-shared boundary.  Only the forward direction
+  (which \<^emph>\<open>drops\<close> the straddling interval invariant) holds, and that is all our @{const state_at}
+  proofs consume.\<close>
+lemma valid_temporal_state_seq_app_decompose:
+  assumes "valid_temporal_state_seq M (xs @ ys) \<pi> M'"
+  shows "\<exists>Mm. valid_temporal_state_seq M xs \<pi> Mm \<and> valid_temporal_state_seq Mm ys \<pi> M'"
+  using assms
+proof (induction M xs \<pi> M' arbitrary: ys rule: valid_temporal_state_seq.induct)
+  case (1 M \<pi> M')
+  then show ?case by auto
+next
+  case (2 M t\<^sub>i \<pi> M')
+  show ?case
+  proof (cases ys)
+    case Nil
+    hence "valid_temporal_state_seq M [t\<^sub>i] \<pi> M'" using 2 by simp
+    moreover
+    have "valid_temporal_state_seq M' ys \<pi> M'" using Nil by simp
+    ultimately
+    show ?thesis by blast
+  next
+    case (Cons t\<^sub>j ys')
+    have "valid_temporal_state_seq M [t\<^sub>i] \<pi> (apply_eff (acts_of_temporal_plan_at t\<^sub>i \<pi>) M)"
+      using 2 Cons by (simp add: Let_def)
+    moreover
+    have "valid_temporal_state_seq (apply_eff (acts_of_temporal_plan_at t\<^sub>i \<pi>) M) ys \<pi> M'"
+      using 2 Cons by (simp add: Let_def)
+    ultimately
+    show ?thesis by blast
+  qed
+next
+  case (3 M t\<^sub>i t\<^sub>j ts \<pi> M')
+  have rec: "valid_temporal_state_seq (apply_eff (acts_of_temporal_plan_at t\<^sub>i \<pi>) M) (t\<^sub>j # ts @ ys) \<pi> M'"
+    using 3 by (simp add: Let_def)
+  have "valid_temporal_state_seq (apply_eff (acts_of_temporal_plan_at t\<^sub>i \<pi>) M) ((t\<^sub>j # ts) @ ys) \<pi> M'"
+    using rec by simp
+  hence "\<exists>Mm. valid_temporal_state_seq (apply_eff (acts_of_temporal_plan_at t\<^sub>i \<pi>) M) (t\<^sub>j # ts) \<pi> Mm
+           \<and> valid_temporal_state_seq Mm ys \<pi> M'"
+    using "3.IH" by blast
+  then obtain Mm where
+    pre: "valid_temporal_state_seq (apply_eff (acts_of_temporal_plan_at t\<^sub>i \<pi>) M) (t\<^sub>j # ts) \<pi> Mm"
+    and suf: "valid_temporal_state_seq Mm ys \<pi> M'"
+    by blast
+  have "valid_temporal_state_seq M (t\<^sub>i # t\<^sub>j # ts) \<pi> Mm"
+    using 3 pre by (simp add: Let_def)
+  thus ?case using suf by blast
+qed
+
 lemma state_at_is_state_at:
   assumes "valid_temporal_state_seq M ts \<pi> M'"
       and "strict_sorted ts"
   shows "is_state_at \<pi> ts M M' t (state_at \<pi> ts M M' t)"
 proof -
-  show ?thesis
-    unfolding state_at_def
-    apply (rule someI_ex)
-    unfolding is_state_at_def 
-    apply (subst valid_temporal_state_seq_app_iff[symmetric])
-    using assms by auto
+  have "valid_temporal_state_seq M (takeWhile (\<lambda>x. x < t) ts @ dropWhile (\<lambda>x. x < t) ts) \<pi> M'"
+    using assms(1) by simp
+  hence "\<exists>M\<^sub>m. is_state_at \<pi> ts M M' t M\<^sub>m"
+    unfolding is_state_at_def using valid_temporal_state_seq_app_decompose by blast
+  thus ?thesis
+    unfolding state_at_def by (rule someI_ex)
 qed
 
 lemma is_state_at_unique:
@@ -1956,6 +1873,23 @@ next
   show ?thesis using valid_temporal_state_seq_final_state by presburger
 qed
 
+text \<open>The temporal wf-problem locale does not assume @{term \<open>wf_world_model I\<close>} directly
+  (the \<open>wf_world_model (set (init P))\<close> clause is commented out of @{const wf_temporal_problem});
+  we recover it from the per-fact clause
+  \<open>\<forall>f\<in>set (init P). wf_fmla_atom objT f \<or> wf_func_assign f\<close>, since for a predAtom
+  @{term \<open>wf_func_assign f\<close>} is always false.\<close>
+lemma wf_I: "wf_world_model I"
+proof -
+  have "wf_fmla_atom objT f" if "f \<in> set (init P)" and "is_predAtom f" for f
+    using that wf_temporal_problem
+    unfolding wf_temporal_problem_def
+    by (metis is_predAtom.elims(2) wf_func_assign.simps)
+  thus ?thesis
+    using wf_temporal_problem
+    unfolding I_def wf_temporal_problem_def
+    by auto
+qed
+
 
 lemma abstr_state_list_nth_wf_world_model:
   assumes "i \<le> length htps"
@@ -2002,7 +1936,7 @@ proof -
       by auto
   qed 
   hence "\<exists>Mj. valid_temporal_state_seq I (take n htps) tp Mj \<and> valid_temporal_state_seq Mj [htps ! n] tp (abstr_state_list ! Suc n)" 
-    unfolding take_Sn valid_temporal_state_seq_app_iff by auto
+    unfolding take_Sn using valid_temporal_state_seq_app_decompose by blast
   then obtain Mj where
     Ij: "valid_temporal_state_seq I (take n htps) tp Mj" 
     and jSn: "valid_temporal_state_seq Mj [htps ! n] tp (abstr_state_list ! Suc n)" by auto
@@ -2014,7 +1948,7 @@ proof -
     using valid_temporal_state_seq_abstr_state_list_i assms by simp
   have eq: "Mj = (abstr_state_list ! n)" using Ij In valid_temporal_state_seq_state_unique by blast
 
-  show ?thesis using Mj_eff_Sn eq by blast
+  show ?thesis using Mj_eff_Sn eq by simp
 qed
 
 lemma ref_htpl_eq_htps: "imp_defs.rat_impl.htpl = htps"

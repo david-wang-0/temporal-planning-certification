@@ -4,6 +4,32 @@ theory Ground_PDDL_Problem_Defs
       "Temporal_Planning.Temporal_Happening_Semantics"
 begin
 
+subsection \<open>To move\<close>
+
+
+text \<open>Full case/induction/split rules for \<open>duration_constraint\<close> that also expand the
+  \<open>duration_op\<close> into its three constructors EQ/LEQ/GEQ (the generated
+  \<open>duration_constraint.cases\<close>/\<open>.induct\<close> only expose the \<open>DurationConstraint\<close> wrapper).
+  TODO: move to a more appropriate location.\<close>
+
+lemma duration_constraint_split_full:
+  "P (case x of DurationConstraint dop r \<Rightarrow> f dop r)
+   = ((\<forall>r. x = DurationConstraint duration_op.EQ r \<longrightarrow> P (f duration_op.EQ r))
+      \<and> (\<forall>r. x = DurationConstraint duration_op.LEQ r \<longrightarrow> P (f duration_op.LEQ r))
+      \<and> (\<forall>r. x = DurationConstraint duration_op.GEQ r \<longrightarrow> P (f duration_op.GEQ r)))"
+  by (cases x rule: duration_constraint_as_formula.cases) auto
+
+lemma duration_constraint_split_full_asm:
+  "P (case x of DurationConstraint dop r \<Rightarrow> f dop r)
+   = (\<not> ((\<exists>r. x = DurationConstraint duration_op.EQ r \<and> \<not> P (f duration_op.EQ r))
+        \<or> (\<exists>r. x = DurationConstraint duration_op.LEQ r \<and> \<not> P (f duration_op.LEQ r))
+        \<or> (\<exists>r. x = DurationConstraint duration_op.GEQ r \<and> \<not> P (f duration_op.GEQ r))))"
+  by (cases x rule: duration_constraint_as_formula.cases) auto
+
+
+
+subsection \<open>\<close>
+
 text \<open>The FPS imports introduce a second @{text "|>"} notation (\<open>Syntax_Utils.app\<close>), identical to
   Munta's \<open>Error_List_Monad.app\<close> already used here. Suppress the duplicate so \<open>|>\<close> resolves uniquely.\<close>
 no_notation Syntax_Utils.app (infixl "|>" 59)
@@ -477,6 +503,11 @@ proof -
     using 1 is_pos_conj_map_formula by simp
 qed
 
+
+text \<open>The snap precondition specs are built with no duration constraints (\<open>dc = []\<close>, cf.
+  \<^const>\<open>at_start_spec\<close>/\<^const>\<open>at_end_spec\<close>/\<^const>\<open>over_all_snap\<close>), so the precondition is a positive
+  conjunction of the (predicate) timed conditions only -- the numeric duration atoms enter the
+  network locale separately via \<^const>\<open>lower_spec\<close>/\<^const>\<open>upper_spec\<close>, not here.\<close>
 lemma inst_snap_act_pres_pos:
   assumes "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff))"
     shows "ground_act_pres_pos (inst_snap_action_body_elements [] cond deff (tsubst h args) dur anno)"
@@ -486,12 +517,13 @@ proof -
     unfolding filter_time_spec_def comp_def
     apply (subst (asm) act_pres_pos.simps)
     unfolding list_all_iff by auto
-  show ?thesis
-    unfolding inst_snap_action_body_elements.simps Let_def inst_formula.simps
-    apply simp
+  have "is_pos_conj (inst_formula (tsubst h args) dur (BigAnd (filter_time_spec anno cond)))"
+    unfolding inst_formula.simps
     apply (rule is_pos_conj_map_formula_pred)
-     apply (rule is_pos_conj_Big_And)
-    using 1 by (auto split: atom.split)
+     apply (rule is_pos_conj_Big_And[OF 1])
+    by auto
+  thus ?thesis
+    by (simp add: inst_snap_action_body_elements.simps Let_def)
 qed
 
 lemma max_lb_opt_propI:

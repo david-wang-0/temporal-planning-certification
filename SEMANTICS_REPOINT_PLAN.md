@@ -4,7 +4,112 @@ Status: draft (2026-06-25). This is **P0** (`GROUNDING_PLAN.md` §3). Companions
 [GROUNDING_PLAN.md](GROUNDING_PLAN.md) (links here from §3), [NUMERIC_PLAN.md](NUMERIC_PLAN.md)
 (§5 expanded). The ROOT files remain authoritative.
 
-## HANDOFF (2026-06-28) — Plan_Defs re-bridge at 214 errors, clean state, ready to resume
+## UPDATE (2026-06-30) — the grounded-temporal locale now lives in the GROUNDER; REUSE it (do not mirror)
+
+The classical grounder (standalone repo `Isabelle-PDDL-Grounding`, branch `verified-sat-planner`) was
+refactored into a reusable/classical/temporal "ladder". It now PROVIDES the §2b grounded-temporal
+characterization in session **`Grounding_Temporal_Common`**
+(`Temporal_Grounding/Common/Temporal_PDDL_Normalization.thy`, imports `Temporal_Planning.Temporal_Well_Formedness`
++ `Grounding_Common.{PDDL_Normalization,Formula_Utils}`):
+- `grounded_temporal_ac` (nullary head), `grounded_temporal_dom`/`grounded_temporal_prob`,
+  `locale grounded_temporal_domain`/`grounded_temporal_problem` (extend `wf_ast_temporal_*`),
+  `typeless_temporal_domain`/`problem` (sublocale into the grounder's `typeless_*_signature`),
+  `prec_normed_dom` + `normalized_*` + `grounded_normalized_temporal_*`.
+- Grounded-ness allows **nullary numeric functions** (`grounded_func`), not `functions D = []`.
+- `prec_normed_dom` uses the **classical right-deep `is_conj`** (Grounding_Common.Formula_Utils), NOT
+  the project's tree `is_pos_conj`.
+
+**Decision (David, "use that"):** when (re)building the temporal grounded target, **import + reuse**
+`Grounding_Temporal_Common.Temporal_PDDL_Normalization`'s `grounded_temporal_problem` for the
+grounded-ness layer instead of writing/mirroring a `Grounded_Temporal_PDDL_Locales`. The project's
+NTA-reduction-input bundle = grounder `grounded_temporal_problem` (nullary/typeless grounded-ness,
+positivity-free) + project `positive_temporal_problem` (`is_pos_conj`) + `integer_duration_problem`.
+Using only `grounded_temporal_problem` (not `grounded_normalized_*`) avoids the right-deep-`is_conj`
+vs tree-`is_pos_conj` clash, since `is_conj` only enters `prec_normed_dom`. The completed nullary
+check (`num_exp_no_args` for numeric/duration atoms) belongs with this reuse too.
+
+**Positivity also moves to the grounder (David, 2026-06-30): add `positive_temporal_problem`.** The
+grounder's temporal tree has NO positivity locale; only the CLASSICAL side has `relaxed_*`, and that
+bundles positivity with **delete-relaxation** (`relaxed_action = is_pos_conj (ac_pre a) ∧ dels = []`,
+`Classical_PDDL_Normalization.thy:258/261`) for datalog reachability. The NTA reduction is the REAL
+problem (keeps deletes), so it must reuse only the **positivity** half. Spec (for a grounder session):
+add a positivity-only `positive_temporal_problem` (`is_pos_conj` preconditions + goal, deletes intact)
+to `Temporal_PDDL_Normalization.thy`, mirroring the `is_pos_conj` conjunct of classical `relaxed_*`,
+using the grounder's `is_pos_conj`. **DONE + committed** in the grounder (`positive_temporal_problem`
+in `Temporal_Grounding/Common/Temporal_PDDL_Normalization.thy`; `Grounding_Temporal_Common` builds
+green). The negation-elimination and grounder-into-FPS follow-ups are tracked in the grounder repo's
+`HANDOVER.md`.
+
+**Project-side adaptation ("adapt the project's input to the grounder's output", David 2026-06-30):**
+re-point the NTA-reduction-input (today's bundled `ground_ast_problem`) to consume the grounder's
+output — extend grounder `grounded_temporal_problem` + `positive_temporal_problem` (+ a project
+`integer_duration_problem` for the numeric-free phase) — and **retire the project-local
+`is_pos_conj`/`is_pos_lit`/`pred_no_args`/`act_no_params`/... in favour of the grounder's**. This means
+the project ADOPTS the grounder's `is_pos_conj` (right-deep; `is_pos_lit` accepts `eqAtm`±), so the
+project's positivity-dependent proofs are re-proved against it — incl. re-deriving the duration-fold
+`acts_non_intrf` insensitivity (transfers: `eqAtm`/numeric still aren't in adds/dels) and the
+`init_no_args` lemma. `init_no_args` becomes a lemma from `grounded_temporal_prob`, not an assume.
+
+**Wiring needed (disruptive — heap rebuild; coordinate timing):** add `Grounding_Temporal_Common`
+to `PDDL_TP_Reduction`'s `sessions` in `ROOT` (grounder already a registered component); rebuild heaps.
+
+**STATUS 2026-06-30: grounder side COMMITTED + green.** `grounded_temporal_problem` +
+`positive_temporal_problem` are in the green normalization ladder (`Grounding_Temporal_Common`,
+`Temporal_Grounding/Common/Temporal_PDDL_Normalization.thy`). The grounder's
+reachability/relaxation/numeric sessions are **placeholder/sorried** and SEPARATE — do NOT depend on
+them (depend only on `Grounding_Temporal_Common`). Grounder is standalone but a **registered Isabelle
+component**, so importable without the FPS-merge. Ready to wire. Concrete order:
+1. (build check) verify `Grounding_Temporal_Common` builds green in this environment.
+2. add `Grounding_Temporal_Common` to `PDDL_TP_Reduction` `sessions`; `isabelle components -u .` /
+   `make register-components`; rebuild the base/`PDDL_TP_Reduction` heap; restart jEdit.
+3. re-point `ground_ast_problem` -> extend grounder `grounded_temporal_problem` +
+   `positive_temporal_problem` (+ project `integer_duration_problem`); retire project-local
+   `is_pos_conj`/`is_pos_lit`/`pred_no_args`/`act_no_params`/...; `init_no_args` becomes a lemma.
+4. re-prove the ~5 reduction consumers + finish the Plan_Defs grind (duration-fold `acts_non_intrf`
+   bridge + `validity => durations_match`) against the grounder's `is_pos_conj` (right-deep,
+   eqAtm-accepting).
+
+## HANDOFF (2026-06-29) — Problem_Defs GREEN; Plan_Defs 148 -> 61 (mechanical sweep done; 3 design/proof blockers)
+
+**Problem_Defs.thy GREEN** (fully_processed + consolidated, 0 errors): the `is_pos_conj -> is_conj`
+swap was ABANDONED (`is_pos_lit`/`is_pos_conj` stay narrow). Fix was restating `inst_snap_act_pres_pos`
+at `dc=[]` (snap specs already pass `[]`), dropping its `sorry`, and removing the dead
+`duration_constraint_as_formula_conj` + the unused copied `is_conj`/`un_and`/`conj_induct*` machinery.
+Grounder/eqAtm design recorded in **GROUNDING_PLAN.md §4/§6** (reuse classical `ground_fmla` in
+re-expansion `chi` + a constant-fold/feasibility-prune stage; no standalone eqAtm pass;
+`check_ground_problem` to be retired). `Ground_PDDL_Problem_Defs` already assumes eqAtm-removed via
+`positive_act_pres`.
+
+**Plan_Defs.thy: 148 -> 61 errors** (no sorry; fully_processed + consolidated). The mechanical recipe
+sweep (set-coercion, `#>`-disambiguation, `res_inst` arity, head/body schema, `Effect adds dels num`,
+world-model PAIR `fst`, open-world `valuation`, lemma renames `wf_*` -> `wf_temporal_*`,
+`resolve_action_wf` -> `resolve_temporal_action_wf`) is DONE. Deleted dead `res_inst_pre_pos` +
+`res_inst_snap_action_pre_pos` (broken/false, unused). The remaining 61 are 3 NON-mechanical blockers:
+
+1. **Duration-fold mismatch: FPS semantics snap vs NTA-reduction-target snap** (~1086-1117, ~1310-1346:
+   `acts_of_temporal_plan_at_no_args` durative cases, `at_start_snap_at_t`, `at_end_snap_at_t_if_durative`).
+   NB both are ABSTRACT definitions (not "exec" vs "spec" -- the FPS layer is abstract semantics, not the
+   executable `*_impl`). The **FPS plan-validity semantics snap** `res_inst_snap_action _ At_Start`
+   (= `inst_temporal_snap_action`, what `valid_temporal_state_seq`/`acts_of_temporal_plan_at` use) FOLDS
+   the duration constraints into the precondition as numeric atoms; the **NTA-reduction-target snap**
+   `at_start_spec` (locale parameter of `temp_plan_finite`) uses `inst_snap_action_body_elements [] cond
+   deff _ 0` (duration stripped, carried as the locale's `lower_spec`/`upper_spec`). So
+   `ground_act_no_args (res_inst_snap_action _)` and `at_start_spec a = res_inst_snap_action _` are FALSE
+   as literal statements. FIX = bridge the two abstract snaps at the `to_literals`/predicate level
+   (duration atoms drop under `to_literals`; predicate cond/adds/dels coincide), mirroring the green
+   `over_all_spec_eq_res_inst_temporal_inv` bridge. (Duration-atom design family.)
+2. **Missing `wf_world_model I`** (~1829, `abstr_state_list_nth_wf_world_model`): temporal wf-problem
+   locale does NOT assume init wf (`wf_temporal_problem_def` has `wf_world_model (set (init P))`
+   commented out, FPS `Temporal_Well_Formedness.thy:63`); FPS has `wf_I` only continuous-side. Add a
+   temporal `wf_I` or route via `ast_cont_problem` `I_equiv`.
+3. **Missing `valid_temporal_state_seq_app_iff`** (~1704-1705, `state_at_is_state_at`): the state-seq
+   split lemma (`valid... M (xs@ys) ... <-> exists Mm. valid... M xs Mm /\ valid... Mm ys ...`) no longer
+   exists by that name; re-prove over the 3-case `valid_temporal_state_seq` recursion.
+
+(2)+(3) are self-contained lemma gaps and likely unblock downstream cascades; (1) is the design cluster.
+The `validity => durations_match` carve-out (~2884) is currently blocked upstream, no sorry needed yet.
+
+
 
 **Headline:** `Ground_PDDL_Plan_Defs.thy` went from a non-elaborating ~616-error wreck to **214 errors**,
 fully elaborating, **0 sorry**, reprocess ~41s (a 114s `blast` at the old line 2476 was replaced by
