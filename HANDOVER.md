@@ -1,4 +1,115 @@
-# HANDOVER — numeric run-lift (closing `num_happening_steps_possible`)
+# HANDOVER — semantics + positivity RE-POINT (active) · numeric run-lift (dormant appendix)
+
+Living inventory + ordered next-steps for the RE-POINT of the development onto Formal-PDDL-Semantics (FPS)
+`Temporal_Planning` + the grounder's grounded/positive temporal locales (session `Grounding_Temporal_Common`,
+a registered Isabelle component). Design docs: `SEMANTICS_REPOINT_PLAN.md`, `GROUNDING_PLAN.md`,
+`ARCHITECTURE_pipeline.md`, `ARCHITECTURE_grounding.md`. The numeric run-lift is DORMANT (appendix below); it
+resumes once this re-point lands green.
+
+## HEADLINE STATUS (2026-07-02)
+- **`Ground_PDDL_Problem_Defs.thy`: GREEN** — fully_processed + consolidated, 0 errors, 0 sorries. The whole
+  positivity re-point is done and verified.
+- **`Ground_PDDL_Plan_Defs.thy`: GREEN** — fully_processed + consolidated, 0 errors, **0 sorries**, 9283
+  commands (2026-07-02). `temp_plan_valid` and `acts_non_intrf_simplified_of_fps` are done; the whole
+  reduction (Problem_Defs + Plan_Defs) is now green. How the endgame closed:
+    - **§A mutex** — reworked off the (now-false) snap injectivity onto POSITION-based non-interference:
+      distinct ref-plan entries at the same htp occupy distinct positions in the snap list, so
+      `list_pairwise acts_non_intrf` (from FPS `htps_acts_list_pairwise`, transferred to the project snaps
+      via a position-preserving `list_all2` bridge + `acts_non_intrf_mono`) gives non-interference without
+      needing `at_start_spec a \<noteq> at_start_spec b`. `acts_non_intrf_simplified_of_fps` rebuilt the same way
+      (the unprovable `a_ne_b` hole and the phantom `acts_of_plan_snap_full_bridge'` are gone). New helpers:
+      `acts_of_plan_at_simplified_fps_list_all2`, `all_htps_acts_non_intrf_simplified`,
+      `list_pairwise_concat_{distinct_blocks,same_block}`, `at_{start,end}_block_of_ref_plan`,
+      `acts_non_intrf_simplified_{distinct_entries,same_entry}`.
+    - **§B durations** — `durations_match d (map snd dcs) ps as` derived from PLAN VALIDITY (FPS
+      `wf_plan_action` gives only `0 \<le> d`), via new `durations_match_of_valid`: the At_Start/At_End snaps
+      fold the `filter_time_spec`-routed duration atoms into their preconditions, and plan validity
+      (`valid_temporal_state_seq_head_precond`) makes the valuation model them at value `d`, yielding
+      `d = r`/`\<le>`/`\<ge>` per dc. Helper chain: `valid_temporal_state_seq_some_state_precond`,
+      `htp_{start,end}_of_durative`, `inst_formula_{And,BigAnd_conjunct}`,
+      `duration_matches_of_{inst_atom,snap_precond}`, `res_inst_snap_action_eq`, `at_{start,end}_snap_mem`.
+- UNCOMMITTED. The pre-session green commit is intact in git; the mutex/durations rework is on disk, verified
+  green in jEdit, not yet committed.
+- Base heap: build `Temporal_Planning_Base` once, launch `isabelle jedit -d . -l Temporal_Planning_Base`
+  (it now also preloads `Grounding_Temporal_Common.Temporal_PDDL_Normalization`).
+
+## WHAT LANDED (all green)
+### Step 1 — grounder wired into the base heap
+`Grounding_Temporal_Common` added to `Temporal_Planning_Base`'s `sessions` + preloaded `theories` in `ROOT`
+(mirrors how FPS `Temporal_Planning` is baked in, so jEdit resolves grounder imports fast); also added to
+`PDDL_TP_Reduction`'s `sessions`. Base rebuilt green.
+
+### Step 2 — positivity re-point (Problem_Defs, GREEN)
+Project `is_pos_lit`/`is_pos_conj` RETIRED; the grounder's adopted (right-deep `is_pos_conj`; `is_pos_lit`
+accepts `eqAtm`+-). Two design forks (decided):
+- **eqAtm gap** -> grounder positivity + an explicit eqAtm-free SIDE ASSUMPTION, realised as the locale
+  predicate `act_conds_no_args` (parallel to `act_pres_pos`) + locale assumption `conds_no_args` +
+  `act_conds_no_args_spec`, threaded through the `*_snap_pre_pos_conj` and `*_no_params` lemmas. To be
+  DISCHARGED once the grounder adds an eqAtm-elimination stage (recorded in the grounder repo's HANDOVER).
+- **right-deep vs nested `BigAnd`** -> a nesting-tolerant, project-local
+  `pos_conj_form form == (Atom \` atoms form = set (to_literals form))`;
+  `ground_act_pres_pos (GroundAction pre eff) = pos_conj_form pre`.
+New Problem_Defs lemmas (green): boundary bridge `pos_conj_form_inst_formula` / `pos_conj_form_map_atom`
+(from `is_pos_conj` + `form_preds_no_args`), the `inst_formula`/`map_atom` preservation lemmas,
+`pos_conj_form_BigAnd`, `inst_formula_BigAnd`, `pos_conj_form_predicates`, `wf_fmla_imp_wf_to_literals`,
+locale `integer_duration_problem`. DELETED `wf_fmla_no_args` (false under the grounder's `is_pos_conj`);
+`wf_fmla_atom_no_args` / `wf_ground_action_pres_in_props` re-proved from well-formedness alone.
+
+### Step 3 — Plan_Defs Blocker A (duration-fold snap mismatch) RESOLVED
+FPS `res_inst_snap_action` FOLDS duration constraints into the snap precondition as numeric atoms; the
+project's `at_start_spec`/`at_end_spec` are at `dc=[]`, `dur=0` (durations carried by the network clock bounds
+`lower_spec`/`upper_spec`, not the precondition). Fix (the `acts_of_plan_at_simplified` design): a simplified
+plan-actions-at-t using the project snaps + snap bridges — FPS and project snaps have EQUAL `adds`/`dels`
+and EQUAL `to_literals(precondition)` (the numeric duration atoms + the duration value drop under
+`to_literals`). Re-pointed `at_start_snap_at_t` / `at_end_snap_at_t` / `acts_of_temporal_plan_at_no_args` /
+`plan_happ_seq_alt` / `apply_effects_subseq` / mutex-membership onto it. Mirrors the green
+`over_all_spec_eq_res_inst_temporal_inv`.
+
+## temp_plan_valid endgame — RESOLVED (2026-07-02, green; see HEADLINE STATUS for how §A/§B closed)
+The section below is the original problem analysis, kept as historical record — both (A) and (B) are DONE.
+### (A) mutex — a semantic regression the re-point surfaced
+The mutex proof relied on snap INJECTIVITY (`inj_on_at_start_spec`: distinct schema => distinct snap). Now
+FALSE: FPS builds the snap via `tsubst (ActionHead n ps) []` = `subst_term (psubst (parameters h) [])`,
+depending ONLY on the parameters, NEVER the schema name (and `acts_no_params` forces `ps=[]`) — so two
+distinct schemas sharing a body give the SAME snap. **FIX: rework the mutex onto position-based
+`list_pairwise acts_non_intrf (acts_of_plan_at_simplified t tp)`** (distinct plan entries => distinct
+positions in `concat (map ..)`; `list_pairwise` gives non-interference even when two snaps are equal, which
+validity precludes since `acts_non_intrf s s = False`). This also dissolves the `a_ne_b`/functional-bridge
+need. Position/count-preserving transfer from FPS `htps_acts_list_pairwise` + a clean `acts_non_intrf_mono`,
+using the green numeric-effect-trivial helpers below + the `to_literals`/`adds`/`dels` bridges. (Rejected
+alternative: embed a name-guard atom in each snap — that changes snap semantics.)
+
+Green helpers already added for this (numeric conjuncts of `acts_non_intrf` trivial, from the locale's
+`no_functions`): `no_func_sig`, `no_wf_func_args`, `no_wf_numeric_effect`, `wf_effect_numeric_effects_Nil`,
+`wf_ground_action_numeric_effects_Nil`, `wf_ground_action_lvalues_Nil`, `wf_ground_action_additive_lvalues_Nil`.
+
+### (B) `durs_valid` — `durations_match` from PLAN VALIDITY (a ~100-line lemma)
+FPS `wf_plan_action` gives only `d >= 0`. The FPS snap FOLDS `map (\<lambda>(x,y).(x, duration_constraint_as_formula y)) dcs`
+(routed by `filter_time_spec ta`) into its precondition; `duration_constraint_as_formula (DurationConstraint EQ r)
+= Atom (numericEqAtm DurationExpr r)` (LEQ/GEQ analogues); `inst_formula f d` sends `DurationExpr -> ConstantExpr d`.
+So plan validity (`valuation M models precondition` of the At_Start/At_End snap) already verifies `d = r` / `<= r`
+/ `>= r`. Derive `durations_match d (map snd dcs) ps as` from the satisfied snap duration atoms via the validity
+hook `pres_sat` / `valid_temporal_state_seq_head_precond`. NOTE `dcs :: (temporal_annotation, term
+duration_constraint) list`, so `durations_match d dcs` / `dc_list_lower dcs` / `dc_list_upper dcs` need
+`map snd dcs`. Also: `resolve_action_wf` -> `wf_ast_temporal_domain.resolve_temporal_action_wf` (FPS
+`Temporal_Instantiations.thy`); verify `temp_plan_valid`'s conclusion constants are the actual
+`imp_defs.rat_impl.` names (`valid_plan` / `valid_state_sequence` / `valid_plan_def`).
+
+## GOTCHAS / RULES
+- Do NOT commit (per current instruction). Do NOT leave a `sorry`.
+- Do NOT disturb the green `acts_of_plan_at_simplified` / snap-bridge machinery, the green helpers, or
+  the green `Ground_PDDL_Problem_Defs.thy`.
+- When a `.thy` is open in jEdit, mutate through the buffer (`mcp__isabelle__write_file`); declare green only
+  when `fully_processed: true` AND `consolidated: true`.
+- Stray `find_theorems "inst_of_plan_action"` in Plan_Defs (~line 1527, green territory) — cleanup candidate.
+
+---
+
+# APPENDIX (DORMANT) — numeric run-lift (closing `num_happening_steps_possible`)
+
+> This appendix is the PRIOR handover for the (dormant) numeric run-lift. Its "Git state" and
+> "ORDERED NEXT STEPS" below are STALE relative to the active re-point above; ignore until the re-point is
+> green. The numeric run-lift resumes only after `temp_plan_valid` closes.
 
 Living inventory + ordered next-steps for the numeric-fluent extension of the
 "timed-automata network simulates a temporal plan" proof. The propositional case is fully

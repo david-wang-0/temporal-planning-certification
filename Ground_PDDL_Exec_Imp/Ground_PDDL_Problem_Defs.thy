@@ -2,6 +2,7 @@ theory Ground_PDDL_Problem_Defs
   imports "TP_NTA_Reduction.TP_NTA_Reduction_Model_Checking"
       "Temporal_Planning.Temporal_Instantiations"
       "Temporal_Planning.Temporal_Happening_Semantics"
+      "Grounding_Temporal_Common.Temporal_PDDL_Normalization"
 begin
 
 subsection \<open>To move\<close>
@@ -58,6 +59,22 @@ fun to_literals::"object atom Formulas.formula \<Rightarrow> object atom Formula
 "to_literals (Atom (predAtm x as)) = [Atom (predAtm x as)]" |
 "to_literals (x \<^bold>\<and> y) = to_literals x @ to_literals y" |
 "to_literals _ = []"
+
+text \<open>Nesting-tolerant ground-action positivity: the positive predAtm literals \<open>to_literals\<close>
+  keeps are exactly the formula's atoms. Unlike the grounder's right-deep \<open>is_pos_conj\<close> this tolerates
+  the nested \<open>BigAnd\<close> of the snap-precondition construction (both \<open>atoms\<close> and \<open>to_literals\<close> flatten
+  over \<open>\<^bold>\<and>\<close>). Derived from the grounder's \<open>is_pos_conj\<close> + the eqAtm-free side condition
+  \<open>form_preds_no_args\<close>, then lifted over \<open>BigAnd\<close>.\<close>
+definition pos_conj_form :: "object atom Formulas.formula \<Rightarrow> bool" where
+  "pos_conj_form form \<equiv> (Atom ` atoms form = set (to_literals form))"
+
+lemma pos_conj_form_BigAnd:
+  assumes "\<forall>c \<in> set cs. pos_conj_form c"
+  shows "pos_conj_form (BigAnd cs)"
+  using assms unfolding pos_conj_form_def
+  by (induction cs) (auto simp: image_Un)
+
+(* PLACEHOLDER: inst_formula preservation lemmas moved below is_pos_conj_to_literals_conv_atoms *)
 
 fun to_predicate::"object atom Formulas.formula \<Rightarrow> predicate" where
 "to_predicate (Atom (predAtm x _)) = x"
@@ -153,18 +170,12 @@ fun comp_opt_ge::"('a::linorder) option \<Rightarrow> ('a::linorder) option \<Ri
 "comp_opt_ge (Some x) None = True" |
 "comp_opt_ge (Some x) (Some y) = (x \<ge> y)"
 
-text \<open>Begin: Adapted from Maximillian Vollath\<close>
-fun is_pos_lit :: "'a atom Formulas.formula \<Rightarrow> bool" where
-  f: "is_pos_lit (\<^bold>\<not>\<bottom>) = True" |
-  "is_pos_lit (Atom (predAtm n args)) = True" |
-  "is_pos_lit _ = False"
-
-fun is_pos_conj :: "'a atom Formulas.formula \<Rightarrow> bool" where
-  "is_pos_conj (f \<^bold>\<and> g) \<longleftrightarrow> is_pos_conj f \<and> is_pos_conj g" |
-  "is_pos_conj f \<longleftrightarrow> is_pos_lit f"
-(* This does not have to be right recursive for our purposes. It originally was. *) 
-
-text \<open>End: Adapted from M. Vollath\<close>
+text \<open>Positivity (\<open>is_pos_lit\<close> / \<open>is_pos_conj\<close>) is REUSED from the grounder
+  (\<open>Grounding_Common.Formula_Utils\<close>, imported via \<open>Grounding_Temporal_Common.Temporal_PDDL_Normalization\<close>):
+  there \<open>is_pos_conj\<close> is right-deep and \<open>is_pos_lit\<close> additionally accepts \<open>eqAtm\<close> (and its negation).
+  The predAtm-only guarantee the NTA reduction needs is carried separately by the \<open>predAtm_only\<close> side
+  condition below (eqAtm-free preconditions/goal), to be discharged once the grounder's eqAtm-elimination
+  stage lands (grounder HANDOVER, "Temporal equality-atom (eqAtm) elimination stage").\<close>
 
 fun atom_no_args::"'a atom \<Rightarrow> bool" where
 "atom_no_args (predAtm p []) = True" |
@@ -194,6 +205,14 @@ fun act_pres_pos::"ast_temporal_action_schema \<Rightarrow> bool" where
 "act_pres_pos (SimpleActionSchema h (SimpleActionBody pre eff)) = (is_pos_conj pre)" |
 "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff)) = (list_all is_pos_conj (map snd cond))"
 
+text \<open>The eqAtm-free side condition on preconditions/timed-conditions (predAtm-only, no eqAtm). Bundled
+  with @{const act_pres_pos} it upgrades the grounder's @{const is_pos_conj} to @{const pos_conj_form}
+  of the instantiated ground precondition. To be DISCHARGED once the grounder's eqAtm-elimination stage
+  lands (grounder HANDOVER); until then it is a locale assumption.\<close>
+fun act_conds_no_args::"ast_temporal_action_schema \<Rightarrow> bool" where
+"act_conds_no_args (SimpleActionSchema h (SimpleActionBody pre eff)) = (form_preds_no_args pre)" |
+"act_conds_no_args (DurativeActionSchema h (DurativeActionBody dc cond deff)) = (list_all form_preds_no_args (map snd cond))"
+
 fun dc_no_func::"term duration_constraint \<Rightarrow> bool" where
 "dc_no_func (DurationConstraint dop (ConstantExpr x)) = True" |
 "dc_no_func _ = False"
@@ -211,7 +230,7 @@ fun act_dcs_integers::"ast_temporal_action_schema \<Rightarrow> bool" where
 "act_dcs_integers (DurativeActionSchema h (DurativeActionBody dc cond deff)) = (list_all duration_constraint_integer (map snd dc))"
 
 fun ground_act_pres_pos::"ground_action \<Rightarrow> bool" where
-"ground_act_pres_pos (GroundAction pre eff) = (is_pos_conj pre)"
+"ground_act_pres_pos (GroundAction pre eff) = (pos_conj_form pre)"
 
 fun ground_act_no_args::"ground_action \<Rightarrow> bool" where
 "ground_act_no_args (GroundAction pre eff) = (
@@ -362,41 +381,94 @@ lemma is_pos_conj_map_formula:
   subgoal for f g by (cases f) auto
   by auto
 
-lemma is_pos_conj_Big_And:
-  assumes "list_all is_pos_conj x"
-  shows "is_pos_conj (BigAnd x)"
-  using assms by (induction x) auto
-
 lemma is_pos_conj_to_literals_conv_atoms:
-  assumes "is_pos_conj form"
+  assumes "is_pos_conj form" and "form_preds_no_args form"
   shows "Atom ` atoms form = set (to_literals form)"
-  using assms
-  apply (induction form)
-  subgoal for x by (cases x) simp+
-      apply simp
-  subgoal for form
-    apply (induction form)
-    subgoal for x by (induction x) simp+
-    by simp+
-  by auto
+  using assms unfolding form_preds_no_args_def
+proof (induction form)
+  case (Atom x) thus ?case by (cases x) auto
+next
+  case (And x y)
+  from And.prems have px: "is_pos_lit x" and py: "is_pos_conj y"
+    and fx: "\<forall>a\<in>atoms x. atom_no_args a" and fy: "\<forall>a\<in>atoms y. atom_no_args a" by auto
+  from px have "is_pos_conj x" by (cases x) auto
+  hence "Atom ` atoms x = set (to_literals x)" using And.IH(1) fx by simp
+  moreover have "Atom ` atoms y = set (to_literals y)" using And.IH(2) py fy by simp
+  ultimately show ?case by (simp add: image_Un)
+next
+  case (Not x) thus ?case by (cases x) (auto elim!: atom_no_args.elims)
+qed auto
+
+text \<open>Instantiation preservation (BOUNDARY BRIDGE): inst_formula's atom-map keeps predAtm/eqAtm and
+  is identity on predAtm, so is_pos_conj, form_preds_no_args and hence pos_conj_form carry through --
+  the grounder's is_pos_conj + eqAtm-free side condition on the (term) snap conditions gives
+  pos_conj_form of the (object) instantiated ground precondition.\<close>
+
+lemma is_pos_lit_inst_formula:
+  "is_pos_lit L \<Longrightarrow> is_pos_lit (inst_formula f dur L)"
+  by (induction L rule: is_pos_lit.induct) (auto simp: inst_formula.simps)
+
+lemma is_pos_lit_imp_is_pos_conj: "is_pos_lit L \<Longrightarrow> is_pos_conj L"
+  by (cases L rule: is_pos_conj.cases) auto
+
+lemma is_pos_conj_inst_formula:
+  "is_pos_conj c \<Longrightarrow> is_pos_conj (inst_formula f dur c)"
+proof (induction c rule: is_pos_conj.induct)
+  case (1 F G)
+  from "1.prems" have "is_pos_lit F" and "is_pos_conj G" by auto
+  from \<open>is_pos_lit F\<close> have "is_pos_lit (inst_formula f dur F)" by (rule is_pos_lit_inst_formula)
+  moreover from \<open>is_pos_conj G\<close> have "is_pos_conj (inst_formula f dur G)" by (rule "1.IH")
+  ultimately show ?case by (simp add: inst_formula.simps)
+next
+  case ("2_1" v) thus ?case by (cases v) (auto simp: inst_formula.simps)
+next
+  case "2_2" thus ?case by (simp add: inst_formula.simps)
+next
+  case ("2_3" v) thus ?case by (cases "\<^bold>\<not> v" rule: is_pos_lit.cases) (auto simp: inst_formula.simps)
+next
+  case ("2_4" v va) thus ?case by simp
+next
+  case ("2_5" v va) thus ?case by simp
+qed
+
+lemma form_preds_no_args_inst_formula:
+  assumes "form_preds_no_args c"
+  shows "form_preds_no_args (inst_formula f dur c)"
+proof -
+  have h: "atom_no_args (inst_duration_in_atom (map_atom f a) dur)" if "atom_no_args a" for a
+    using that by (cases a rule: atom_no_args.cases) auto
+  show ?thesis using assms unfolding form_preds_no_args_def inst_formula.simps
+    by (auto simp: formula.set_map h)
+qed
+
+lemma pos_conj_form_inst_formula:
+  assumes "is_pos_conj c" and "form_preds_no_args c"
+  shows "pos_conj_form (inst_formula f dur c)"
+  unfolding pos_conj_form_def
+  using is_pos_conj_to_literals_conv_atoms[OF is_pos_conj_inst_formula[OF assms(1)]
+                                              form_preds_no_args_inst_formula[OF assms(2)]] .
 
 lemma is_pos_conj_atoms_preds:
-  assumes "is_pos_conj form"
+  assumes "form_preds_no_args form"
   shows "\<forall>a \<in> Atom ` atoms form. is_predAtom a"
-  using assms
-  apply (induction form rule: is_pos_conj.induct)
-       apply auto[1]
-  subgoal for v by (cases v) auto
-  apply simp
-  subgoal for v by (cases v) auto
-  by auto
+proof
+  fix a assume "a \<in> Atom ` atoms form"
+  then obtain x where x: "a = Atom x" and "x \<in> atoms form" by auto
+  hence "atom_no_args x" using assms unfolding form_preds_no_args_def by blast
+  thus "is_predAtom a" unfolding x by (cases x) auto
+qed
 
 lemma is_pos_conj_predicates: 
-  assumes "is_pos_conj form"
+  assumes "is_pos_conj form" and "form_preds_no_args form"
   shows "to_predicate ` Atom ` atoms form = set (map to_predicate (to_literals form))"
   using assms unfolding set_remdups set_map 
-  using is_pos_conj_to_literals_conv_atoms
+  using is_pos_conj_to_literals_conv_atoms[OF assms]
   by simp 
+
+lemma pos_conj_form_predicates:
+  assumes "pos_conj_form form"
+  shows "to_predicate ` Atom ` atoms form = set (map to_predicate (to_literals form))"
+  using assms unfolding pos_conj_form_def by (metis set_map) 
 
 
 lemma is_predAtom_imp_is_pos_conj:
@@ -411,19 +483,7 @@ lemma is_predAtom_literals:
   using assms
   by (induction f rule: is_predAtom.induct) simp+
 
-lemma pos_conj_models_iff_superset:
-  assumes "is_pos_conj form"
-  shows "valuation M \<Turnstile>\<^sub>m form \<longleftrightarrow> set (to_literals form) \<subseteq> fst M"
-  using assms
-  apply (induction form)
-  subgoal for x by (cases x) (auto simp: valuation_def map_formula_semantics_simps)
-       apply simp
-  subgoal for f by (cases f) (auto simp: map_formula_semantics_simps)
-  subgoal for f g by simp
-  apply simp
-  by simp
-
-text \<open>Forward (monotone) half of @{thm pos_conj_models_iff_superset}, with NO positivity
+text \<open>Forward (monotone) half of the models/superset correspondence, with NO positivity
   hypothesis: satisfaction always forces the formula's \<^emph>\<open>positively-occurring predicate\<close> literals into
   the logical world model.  @{const to_literals} keeps only those (every other shape --- equality,
   numeric, negated, disjunction, implication --- maps to \<^term>\<open>[]\<close>), so the duration-constraint
@@ -471,38 +531,39 @@ lemma eff_dels_no_args_conjunct_effect:
   unfolding comp_def set_concat
   by auto
 
-lemma Collect_is_pos_litE:
-  assumes "x \<in> Collect is_pos_lit"
-      and "\<And>p ps. x = Atom (predAtm p ps) \<Longrightarrow> thesis"
-      and "x = \<^bold>\<not>\<bottom> \<Longrightarrow> thesis"
-    shows thesis
-  using assms
-  by (induction x rule: is_pos_lit.induct) auto
+lemma form_preds_no_args_map_atom:
+  assumes "form_preds_no_args c"
+  shows "form_preds_no_args (Formulas.map_formula (map_atom f) c)"
+proof -
+  have h: "atom_no_args (map_atom f a)" if "atom_no_args a" for a
+    using that by (cases a rule: atom_no_args.cases) auto
+  show ?thesis using assms unfolding form_preds_no_args_def
+    by (auto simp: formula.set_map h)
+qed
 
-lemma is_pos_conj_map_formula_pred:
-  assumes "is_pos_conj form"
-      and "\<And>p as. \<exists>p' as'. g (predAtm p as) = predAtm p' as'"
-  shows "is_pos_conj (Formulas.map_formula g form)"
-  using assms
-  apply (induction form)
-  subgoal for x using assms(2) by (cases x) (auto, metis is_pos_lit.simps(2))
-       apply simp
-  subgoal for f using assms(2) by (cases f) auto
-  subgoal for f g' by simp
-  apply simp
-  by simp
+lemma pos_conj_form_map_atom:
+  assumes "is_pos_conj c" and "form_preds_no_args c"
+  shows "pos_conj_form (Formulas.map_formula (map_atom f) c)"
+  unfolding pos_conj_form_def
+  using is_pos_conj_to_literals_conv_atoms[OF is_pos_conj_map_formula[OF assms(1)]
+                                              form_preds_no_args_map_atom[OF assms(2)]] .
 
 lemma instantiate_action_schema_pres_pos:
   assumes "act_pres_pos (SimpleActionSchema h (SimpleActionBody pre eff))"
+      and "form_preds_no_args pre"
     shows "ground_act_pres_pos (instantiate_temporal_action_schema (SimpleActionSchema h (SimpleActionBody pre eff)) as)"
 proof -
   have 1: "is_pos_conj pre"
     using assms by auto
   show ?thesis
     unfolding instantiate_temporal_action_schema.simps instantiate_simple_body.simps Let_def
-    using 1 is_pos_conj_map_formula by simp
+    using pos_conj_form_map_atom[OF 1 assms(2)] by simp
 qed
 
+
+lemma inst_formula_BigAnd:
+  "inst_formula f dur (BigAnd Fs) = BigAnd (map (inst_formula f dur) Fs)"
+  by (induction Fs) (auto simp: inst_formula.simps)
 
 text \<open>The snap precondition specs are built with no duration constraints (\<open>dc = []\<close>, cf.
   \<^const>\<open>at_start_spec\<close>/\<^const>\<open>at_end_spec\<close>/\<^const>\<open>over_all_snap\<close>), so the precondition is a positive
@@ -510,18 +571,22 @@ text \<open>The snap precondition specs are built with no duration constraints (
   network locale separately via \<^const>\<open>lower_spec\<close>/\<^const>\<open>upper_spec\<close>, not here.\<close>
 lemma inst_snap_act_pres_pos:
   assumes "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff))"
+      and "list_all form_preds_no_args (map snd cond)"
     shows "ground_act_pres_pos (inst_snap_action_body_elements [] cond deff (tsubst h args) dur anno)"
 proof -
-  have 1: "list_all is_pos_conj (filter_time_spec anno cond)"
-    using assms
+  have pos: "list_all is_pos_conj (filter_time_spec anno cond)"
+    using assms(1)
     unfolding filter_time_spec_def comp_def
     apply (subst (asm) act_pres_pos.simps)
     unfolding list_all_iff by auto
-  have "is_pos_conj (inst_formula (tsubst h args) dur (BigAnd (filter_time_spec anno cond)))"
-    unfolding inst_formula.simps
-    apply (rule is_pos_conj_map_formula_pred)
-     apply (rule is_pos_conj_Big_And[OF 1])
-    by auto
+  have noargs: "list_all form_preds_no_args (filter_time_spec anno cond)"
+    using assms(2) unfolding filter_time_spec_def list_all_iff by auto
+  have "\<forall>c \<in> set (filter_time_spec anno cond). pos_conj_form (inst_formula (tsubst h args) dur c)"
+    using pos noargs unfolding list_all_iff by (blast intro: pos_conj_form_inst_formula)
+  hence "pos_conj_form (BigAnd (map (inst_formula (tsubst h args) dur) (filter_time_spec anno cond)))"
+    by (auto intro!: pos_conj_form_BigAnd)
+  hence "pos_conj_form (inst_formula (tsubst h args) dur (BigAnd (filter_time_spec anno cond)))"
+    by (simp only: inst_formula_BigAnd)
   thus ?thesis
     by (simp add: inst_snap_action_body_elements.simps Let_def)
 qed
@@ -706,6 +771,16 @@ lemma dels_spec_alt:
 
 end
 
+
+text \<open>Numeric-free / integer-duration assumptions for the (numeric-free) NTA reduction phase that
+  the grounder's grounded/positive locales do not cover: no numeric functions, duration constraints
+  are function-free and integer-valued. Bundled with the grounder's grounded_temporal_problem
+  + positive_temporal_problem by ground_ast_problem below.\<close>
+locale integer_duration_problem = wf_ast_temporal_problem P
+  for P :: ast_temporal_problem +
+  assumes no_functions: "functions D = []"
+      and acts_no_func_dcs: "list_all act_no_func_dcs (actions D)"
+      and acts_dcs_integers: "list_all act_dcs_integers (actions D)"
 locale ground_ast_problem = 
     ground_ast_problem_defs P +
     wf_ast_temporal_problem P
@@ -716,6 +791,7 @@ locale ground_ast_problem =
       and acts_no_func_dcs: "list_all act_no_func_dcs (actions D)" 
       and acts_dcs_integers: "list_all act_dcs_integers (actions D)"
       and positive_act_pres: "list_all act_pres_pos (actions D)"
+      and conds_no_args: "list_all act_conds_no_args (actions D)"
       and no_functions: "functions D = []"
       and no_consts: "consts D = []"
       and init_no_args: "list_all form_preds_no_args (init P)"
@@ -884,6 +960,12 @@ lemma act_pres_pos_spec:
   using assms unfolding actions_spec_def using positive_act_pres unfolding list_all_iff
   by simp
 
+lemma act_conds_no_args_spec:
+  assumes "a \<in> set actions_spec"
+  shows "act_conds_no_args a"
+  using assms unfolding actions_spec_def using conds_no_args unfolding list_all_iff
+  by simp
+
 lemma constT_None:
   "constT x = None"
   by (simp add: domain_signature.constT_def no_consts)
@@ -918,32 +1000,21 @@ lemma wf_fmla_imp_wf_atom:
   shows "wf_atom tyt a"
   using assms by (induction form) auto
 
-lemma wf_fmla_no_args: 
-  assumes "wf_fmla (ty_term (map_of []) constT) form" 
-      and "is_pos_conj form"
-  shows "form_preds_no_args form" 
-  unfolding form_preds_no_args_def
-proof (intro ballI)
-  fix a
-  assume a: "a \<in> formula.atoms form"
-  hence pred: "is_predAtom (Atom a)"
-    using assms(2) is_pos_conj_atoms_preds by fastforce
-  then obtain n obs where a_eq: "a = predAtm n obs"
-    by (cases a) auto
-  have "wf_atom (ty_term (map_of []) constT) a"
-    using assms(1) a wf_fmla_imp_wf_atom by blast
-  thus "atom_no_args a"
-    using wf_atom_no_args unfolding a_eq by blast
-qed
-
+text \<open>A well-formed formula ATOM (a single \<open>predAtm\<close> over the empty term signature) is nullary --
+  from well-formedness alone (no positivity / eqAtm-free condition needed for effect atoms).\<close>
 lemma wf_fmla_atom_no_args:
   assumes "wf_fmla_atom (ty_term (map_of []) constT) form" 
   shows "form_preds_no_args form" 
-proof -
+  unfolding form_preds_no_args_def
+proof
+  fix a assume a: "a \<in> formula.atoms form"
   have "is_predAtom form" using assms wf_fmla_atom_imp_is_predAtom by blast
-  hence "is_pos_conj form" using is_predAtom_imp_is_pos_conj by blast
-  thus ?thesis
-    using assms wf_fmla_no_args wf_fmla_atom_alt by auto
+  then obtain n obs where feq: "form = Atom (predAtm n obs)"
+    by (cases form rule: is_predAtom.cases) auto
+  with a have a_eq: "a = predAtm n obs" by simp
+  have "wf_atom (ty_term (map_of []) constT) (predAtm n obs)"
+    using assms feq wf_fmla_atom_alt by auto
+  thus "atom_no_args a" unfolding a_eq using wf_atom_no_args by blast
 qed
 
 lemma map_formula_no_args_gen:
@@ -988,15 +1059,15 @@ lemma instantiate_action_schema_no_params:
   assumes "act_no_params (SimpleActionSchema h (SimpleActionBody pre eff))"
       and "wf_temporal_action_schema (SimpleActionSchema h (SimpleActionBody pre eff))"
       and "act_pres_pos (SimpleActionSchema h (SimpleActionBody pre eff))"
+      and "act_conds_no_args (SimpleActionSchema h (SimpleActionBody pre eff))"
     shows "ground_act_no_args (instantiate_temporal_action_schema (SimpleActionSchema h (SimpleActionBody pre eff)) as)"
 proof -
   have ps: "parameters h = []" using assms(1) by simp
-  have pos: "is_pos_conj pre" using assms(3) by simp
   have p: "wf_fmla (ty_term (map_of []) constT) pre" 
    and e: "wf_effect (ty_term (map_of []) constT) eff" 
     using assms(2) ps unfolding wf_temporal_action_schema.simps wf_simple_action_body.simps Let_def by auto
 
-  have pre_no_args: "form_preds_no_args pre" using wf_fmla_no_args p pos by auto
+  have pre_no_args: "form_preds_no_args pre" using assms(4) by simp
 
   have eff_adds_no_args: "list_all form_preds_no_args (adds eff)"
     apply (cases eff) 
@@ -1020,17 +1091,16 @@ lemma inst_snap_action_no_params:
   assumes "act_no_params (DurativeActionSchema h (DurativeActionBody dcs cond deff))"
       and "wf_temporal_action_schema (DurativeActionSchema h (DurativeActionBody dcs cond deff))"
       and "act_pres_pos (DurativeActionSchema h (DurativeActionBody dcs cond deff))"
+      and "act_conds_no_args (DurativeActionSchema h (DurativeActionBody dcs cond deff))"
     shows "ground_act_no_args (inst_snap_action_body_elements [] cond deff (tsubst h args) dur ta)"
 proof -
   have ps: "parameters h = []" using assms(1) by simp
-  have pos: "\<forall>(t, pre) \<in> set cond. is_pos_conj pre"
-    using assms(3) unfolding act_pres_pos.simps list_all_iff by auto
   have p: "\<forall>(t, pre) \<in> set cond. wf_fmla (ty_term (map_of []) constT) pre" 
    and e: "\<forall>(t, eff) \<in> set deff. wf_effect (ty_term (map_of []) constT) eff" 
     using assms(2) ps unfolding wf_temporal_action_schema.simps wf_temporal_durative_action_body.simps Let_def by auto
   
   have pre_no_args: "\<forall>(t, pre) \<in> set cond. form_preds_no_args pre"
-    using p pos wf_fmla_no_args by fastforce
+    using assms(4) unfolding act_conds_no_args.simps list_all_iff by auto
 
   have eff_adds_no_args: "\<forall>(t, eff) \<in> set deff. list_all form_preds_no_args (adds eff)"
     using wf_fmla_atom_no_args e unfolding list_all_iff
@@ -1090,7 +1160,7 @@ proof (induction a rule: ast_temporal_action_schema.induct)
   show ?case 
     unfolding at_start_spec.simps b
     apply (rule instantiate_action_schema_no_params[where as = "[]", unfolded b])
-    using act_no_params acts_wf act_pres_pos_spec SimpleActionSchema b by blast+
+    using act_no_params acts_wf act_pres_pos_spec act_conds_no_args_spec SimpleActionSchema b by blast+
 next
   case (DurativeActionSchema h b)
   obtain dcs cond deff where
@@ -1098,7 +1168,7 @@ next
   show ?case 
     unfolding at_start_spec.simps b
     apply (rule inst_snap_action_no_params)
-    using act_no_params acts_wf act_pres_pos_spec DurativeActionSchema b by blast+
+    using act_no_params acts_wf act_pres_pos_spec act_conds_no_args_spec DurativeActionSchema b by blast+
 qed
 
 lemma end_snap_no_args:
@@ -1117,7 +1187,7 @@ next
   show ?case 
     unfolding at_end_spec.simps b
     apply (rule inst_snap_action_no_params)
-    using act_no_params acts_wf act_pres_pos_spec DurativeActionSchema b by blast+
+    using act_no_params acts_wf act_pres_pos_spec act_conds_no_args_spec DurativeActionSchema b by blast+
 qed
 
 text \<open>The over-all condition is obtained by first instantiating the action.\<close>
@@ -1138,7 +1208,7 @@ next
   show ?case 
     unfolding over_all_snap.simps b
     apply (rule inst_snap_action_no_params)
-    using act_no_params acts_wf act_pres_pos_spec DurativeActionSchema b by blast+
+    using act_no_params acts_wf act_pres_pos_spec act_conds_no_args_spec DurativeActionSchema b by blast+
 qed
 
 text \<open>Conditions\<close>
@@ -1148,21 +1218,21 @@ lemma start_snap_pre_pos_conj:
   using assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
-  obtain pre eff where
-    b: "b = SimpleActionBody pre eff" by (cases b)
-  have "act_pres_pos (SimpleActionSchema h b)" using SimpleActionSchema positive_act_pres 
-    unfolding actions_spec_def list_all_iff by auto
-  then show ?case unfolding at_start_spec.simps b
-    using instantiate_action_schema_pres_pos[where as = "[]"] b by simp
+  obtain pre eff where b: "b = SimpleActionBody pre eff" by (cases b)
+  have p: "act_pres_pos (SimpleActionSchema h (SimpleActionBody pre eff))"
+    using SimpleActionSchema positive_act_pres unfolding actions_spec_def list_all_iff b by auto
+  have n: "form_preds_no_args pre"
+    using SimpleActionSchema conds_no_args unfolding actions_spec_def list_all_iff b by auto
+  show ?case unfolding at_start_spec.simps b
+    using instantiate_action_schema_pres_pos[OF p n, where as = "[]"] by simp
 next
   case (DurativeActionSchema h b)
-  obtain dc cond deff where
-    b: "b = DurativeActionBody dc cond deff" by (cases b)
-  have "act_pres_pos (DurativeActionSchema h b)" using DurativeActionSchema positive_act_pres 
-    unfolding actions_spec_def list_all_iff by auto
-  then show ?case unfolding at_start_spec.simps b
-    using inst_snap_act_pres_pos[where h = h and dc = dc and cond = cond and deff = deff]
-    unfolding b by blast
+  obtain dc cond deff where b: "b = DurativeActionBody dc cond deff" by (cases b)
+  have p: "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff))"
+    using DurativeActionSchema positive_act_pres unfolding actions_spec_def list_all_iff b by auto
+  have n: "list_all form_preds_no_args (map snd cond)"
+    using act_conds_no_args_spec[OF DurativeActionSchema] unfolding b by simp
+  from inst_snap_act_pres_pos[OF p n] show ?case unfolding at_start_spec.simps b by blast
 qed
 
 lemma end_snap_pre_pos_conj:
@@ -1171,16 +1241,15 @@ lemma end_snap_pre_pos_conj:
   using assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
-  show ?case unfolding at_end_spec.simps ground_non_action_def by auto
+  show ?case unfolding at_end_spec.simps ground_non_action_def by (simp add: pos_conj_form_def)
 next
   case (DurativeActionSchema h b)
-  obtain dc cond deff where
-    b: "b = DurativeActionBody dc cond deff" by (cases b)
-  have "act_pres_pos (DurativeActionSchema h b)" using DurativeActionSchema positive_act_pres 
-    unfolding actions_spec_def list_all_iff by auto
-  then show ?case unfolding at_end_spec.simps b
-    using inst_snap_act_pres_pos[where h = h and dc = dc and cond = cond and deff = deff]
-    unfolding b by blast
+  obtain dc cond deff where b: "b = DurativeActionBody dc cond deff" by (cases b)
+  have p: "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff))"
+    using DurativeActionSchema positive_act_pres unfolding actions_spec_def list_all_iff b by auto
+  have n: "list_all form_preds_no_args (map snd cond)"
+    using act_conds_no_args_spec[OF DurativeActionSchema] unfolding b by simp
+  from inst_snap_act_pres_pos[OF p n] show ?case unfolding at_end_spec.simps b by blast
 qed
 
 lemma over_all_snap_pre_pos_conj:
@@ -1189,33 +1258,36 @@ lemma over_all_snap_pre_pos_conj:
   using assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
-  show ?case unfolding over_all_snap.simps ground_non_action_def by simp
+  show ?case unfolding over_all_snap.simps ground_non_action_def by (simp add: pos_conj_form_def)
 next
   case (DurativeActionSchema h b)
-  obtain dc cond deff where
-    b: "b = DurativeActionBody dc cond deff" by (cases b)
-  have "act_pres_pos (DurativeActionSchema h b)" using DurativeActionSchema positive_act_pres 
-    unfolding actions_spec_def list_all_iff by auto
-  then show ?case unfolding over_all_snap.simps b
-    using inst_snap_act_pres_pos[where h = h and dc = dc and cond = cond and deff = deff]
-    unfolding b by blast
+  obtain dc cond deff where b: "b = DurativeActionBody dc cond deff" by (cases b)
+  have p: "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff))"
+    using DurativeActionSchema positive_act_pres unfolding actions_spec_def list_all_iff b by auto
+  have n: "list_all form_preds_no_args (map snd cond)"
+    using act_conds_no_args_spec[OF DurativeActionSchema] unfolding b by simp
+  from inst_snap_act_pres_pos[OF p n] show ?case unfolding over_all_snap.simps b by blast
 qed
 
+
+text \<open>\<^const>\<open>to_literals\<close> only extracts \<open>predAtm\<close> literals, which are well-formed atoms whenever the
+  formula is well-formed -- no positivity needed for the props inclusion.\<close>
+lemma wf_fmla_imp_wf_to_literals:
+  "wf_fmla M form \<Longrightarrow> list_all (wf_fmla_atom M) (to_literals form)"
+  by (induction form rule: to_literals.induct) auto
 
 text \<open>Conditions and effects of well formed ground actions are in props. Snap actions are ground actions\<close>
 lemma wf_ground_action_pres_in_props:
   assumes "wf_ground_action h"
       and "ground_act_pres_pos h"
   shows "(set \<circ> pre_spec) h \<subseteq> set props_spec"
-  using assms
+  using assms(1)
 proof (induction h)
   case (GroundAction pre eff)
   have 1: "(wf_fmla objT) pre"
     using GroundAction by auto
-  have 2: "is_pos_conj pre"
-    using GroundAction by auto
   show ?case  
-    using wf_pos_conj_fmla_imp_wf_atoms[OF 1 2] 
+    using wf_fmla_imp_wf_to_literals[OF 1] 
       wf_fmla_atom_in_props 
     unfolding list_all_iff by auto
 qed

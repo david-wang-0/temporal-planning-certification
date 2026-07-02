@@ -23,14 +23,17 @@ session Temporal_Munta_Base in Temporal_Munta_Base = Continuous_Planning +
 
 session Temporal_Planning_Base in Temporal_Planning_Base = Temporal_Munta_Base +
   description \<open>Thin layer loading the Formal-PDDL-Semantics temporal PDDL semantics (session
-    Temporal_Planning) on top of the stable Munta heap. Because Munta lives BELOW this layer, an edit
-    to the temporal / state-sequence semantics only re-elaborates these light FPS theories
-    (~minutes) instead of the whole Munta tower. The whole development is built on top of this heap
-    in jEdit. Contains no project-local theories.\<close>
+    Temporal_Planning) plus the grounder's temporal normalization locales (session
+    Grounding_Temporal_Common: grounded_temporal_problem / positive_temporal_problem) on top of the
+    stable Munta heap. Because Munta lives BELOW this layer, an edit to the temporal / state-sequence
+    semantics only re-elaborates these light FPS / grounder theories (~minutes) instead of the whole
+    Munta tower. The whole development is built on top of this heap in jEdit. Contains no
+    project-local theories (FPS + grounder externals only).\<close>
   options [timeout = 7200]
   sessions
     "Utils"
     "Temporal_Planning"
+    "Grounding_Temporal_Common"
   theories [document = false]
     "Temporal_Planning.Temporal_Abstract_Syntax"
     "Temporal_Planning.Temporal_Utils"
@@ -41,6 +44,7 @@ session Temporal_Planning_Base in Temporal_Planning_Base = Temporal_Munta_Base +
     "Temporal_Planning.Temporal_State_Sequence_Semantics"
     "Temporal_Planning.Temporal_PDDL_Checker_Numeric"
     "Temporal_Planning.Temporal_PDDL_Checker_Explicit"
+    "Grounding_Temporal_Common.Temporal_PDDL_Normalization"
 
 session Temporal_Planning_Common in Temporal_Planning_Common = Temporal_Planning_Base +
   theories
@@ -75,6 +79,7 @@ session TP_NTA_Reduction in TA_Network = Temporal_Planning_Semantics +
 session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp = TP_NTA_Reduction +
   sessions
     "Temporal_Planning"
+    "Grounding_Temporal_Common"
   theories
     Ground_PDDL_Problem_Defs
     Ground_PDDL_Problem_Reduction
