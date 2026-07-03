@@ -638,7 +638,6 @@ end
 
 context tp_nta_reduction_model_checking'
 begin
-find_theorems name: "ref_model_checking"
 
 lemma valid_temp_plan_imp_form_holds:
   assumes "\<exists>\<pi>::(nat, 'action, int) temp_plan. temp_plan_for_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>"
@@ -660,6 +659,11 @@ so plan-existence at the numeric twin discharges @{thm [source] valid_temp_plan_
 hypothesis. Inside that numeric locale the empty-numeric collapse
 @{thm [source] numeric_temp_plan_for_problem_list_defs.collapse_num_valid_plan} identifies its
 @{term num_valid_plan} with this propositional @{term valid_plan}.\<close>
+abbreviation numeric_plan_for_problem :: "(nat, 'action, int) temp_plan \<Rightarrow> bool" where
+  "numeric_plan_for_problem \<pi> \<equiv>
+    numeric_temp_plan_for_problem_list_impl_int'
+      at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>"
+
 lemma numeric_valid_temp_plan_imp_form_holds:
   assumes "\<exists>\<pi>::(nat, 'action, int) temp_plan.
     numeric_temp_plan_for_problem_list_impl_int' at_start at_end over_all lower upper pre adds dels
