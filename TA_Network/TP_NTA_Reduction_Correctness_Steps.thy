@@ -575,7 +575,7 @@ proof -
           using eij_in_act timed_automaton_net_def apply simp
                     apply (rule image_eqI[of _ _ "edge_3 (actions ! (end_indices ! j))"])
                      apply (subst edge_3_def)
-                     apply simp
+                     apply (simp add: Let_def prod.case)
           using nth_auto_trans eij_in_act apply simp
           subgoal apply (rule disjI2) 
             apply (intro strip)
@@ -1076,7 +1076,7 @@ proof -
                  apply (subst conv_trans)
       using iij_ran length_net_automata apply simp
                  apply (rule image_eqI[where x = "end_edge (actions ! (instant_indices ! j))"])
-      apply (subst end_edge_def) apply simp
+      apply (subst end_edge_def) apply (simp add: Let_def prod.case)
                  apply (subst nth_auto_trans)
       using iij_ran apply simp
                  apply simp
@@ -1234,7 +1234,7 @@ proof -
       using iij_ran apply simp
                   apply (rule image_eqI[where x = "instant_trans_edge (actions ! (instant_indices ! j))"])
                    apply (subst instant_trans_edge_def)
-                   apply simp
+                   apply (simp add: Let_def prod.case)
                   apply simp
       subgoal apply (intro disjI2 strip)
         apply (subst conv_committed, simp)
@@ -1411,7 +1411,7 @@ proof -
       using iij_ran timed_automaton_net_def apply simp
                   apply (rule image_eqI[where x = "start_edge (actions ! (instant_indices ! j))"])
                    apply (subst start_edge_def)
-                   apply simp
+                   apply (simp add: Let_def prod.case)
                   apply (subst nth_auto_trans)
       using iij_ran timed_automaton_net_def apply simp
                   apply simp
@@ -1977,7 +1977,7 @@ proof -
                     apply (subst conv_trans[where p = "Suc (start_indices ! j)"])
         using sij_ran length_net_automata apply simp
                     apply (rule image_eqI[where x = "start_edge (actions ! (start_indices ! j))"])
-                     apply (simp add: start_edge_def)
+                     apply (simp add: start_edge_def Let_def prod.case)
                     apply (simp add: sij_ran nth_auto_trans)
         subgoal apply (intro disjI2 strip)
           apply (subst conv_committed, simp)
@@ -2422,7 +2422,7 @@ proof -
                     apply (subst conv_trans[where p = "Suc (end_indices ! j)"])
                      apply (simp add: eij_ran length_net_automata)
                     apply (rule image_eqI[where x = "end_edge (actions ! (end_indices ! j))"])
-                     apply (simp add: end_edge_def)
+                     apply (simp add: end_edge_def Let_def prod.case)
                     apply (simp add: eij_ran nth_auto_trans)
         subgoal by (intro disjI2 strip) ((subst conv_committed no_committed | simp)+)
         subgoal  apply (rule check_bexp_Cons)
@@ -2854,7 +2854,7 @@ proof -
                     apply (subst conv_trans[where p = "Suc (start_indices ! j)"])
                      apply (simp add: sij_ran length_net_automata)
                     apply (rule image_eqI[where x = "edge_2 (actions ! (start_indices ! j))"])
-                     apply (simp add: edge_2_def)
+                     apply (simp add: edge_2_def Let_def prod.case)
                     apply (simp add: sij_ran nth_auto_trans)
         subgoal apply (intro disjI2 strip)
           by (subst conv_committed no_committed | simp)+

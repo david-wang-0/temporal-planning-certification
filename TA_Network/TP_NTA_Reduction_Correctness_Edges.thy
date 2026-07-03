@@ -3,6 +3,18 @@ theory TP_NTA_Reduction_Correctness_Edges
 begin
 context tp_nta_reduction_correctness
 begin
+
+text \<open>Generic Map lemmas restored from Munta's \<open>Simple_Network_Language_Renaming\<close>
+  (dropped from the import path by the FPS re-point); used by \<open>init_vars_bounded\<close>
+  and \<open>map_of_net_bounds_init_goal\<close>.\<close>
+lemma dom_map_of_map:
+  "dom (map_of (map (\<lambda> (a, b). (f a, g b)) xs)) = f ` fst ` set xs"
+  unfolding dom_map_of_conv_image_fst by (auto 4 3)
+
+lemma map_of_NoneI:
+  "map_of xs x = None" if "x \<notin> fst ` set xs"
+  by (simp add: map_of_eq_None_iff that)
+
 subsection \<open>Effects of Edges\<close>
 
 definition edge_effect::"
@@ -808,7 +820,7 @@ proof (intro conjI ballI)
 qed
 
 lemma map_of_net_bounds_acts_active: 
-  "map_of net_bounds acts_active = Some (0, int (length actions))" using all_vars_def by simp
+  "map_of net_bounds acts_active = Some (0, int (length actions))" unfolding all_vars_def Let_def by simp
 
 lemma map_of_net_bounds_planning_lock:
   "map_of net_bounds planning_lock = Some (0, 2)" 

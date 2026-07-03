@@ -874,7 +874,7 @@ lemma happening_pre_pre_delay_dests:
     "(\<forall>i<length actions. planning_sem.open_active_count (planning_sem.time_index n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = running_loc)"
     "(\<forall>i<length actions. act_clock_pre_happ (c \<oplus> get_delay n) act_to_start_clock (actions ! i) (planning_sem.time_index n))"
     "(\<forall>i<length actions. act_clock_pre_happ (c \<oplus> get_delay n) act_to_end_clock (actions ! i) (planning_sem.time_index n))"
-  using assms unfolding happening_pre_pre_delay_def happening_pre_def by auto
+  using assms unfolding happening_pre_pre_delay_def happening_pre_def Let_def by auto
 
 lemma happening_pre_post_delay_dests:
   assumes "happening_pre_post_delay n x"
@@ -886,7 +886,7 @@ lemma happening_pre_post_delay_dests:
     "(\<forall>i<length actions. planning_sem.open_active_count (planning_sem.time_index n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = running_loc)"
     "(\<forall>i<length actions. act_clock_pre_happ c act_to_start_clock (actions ! i) (planning_sem.time_index n))"
     "(\<forall>i<length actions. act_clock_pre_happ c act_to_end_clock (actions ! i) (planning_sem.time_index n))" 
-  using assms unfolding happening_pre_post_delay_def happening_pre_def by auto
+  using assms unfolding happening_pre_post_delay_def happening_pre_def Let_def by auto
 
 
 lemma happening_pre_post_delayI:
@@ -899,7 +899,7 @@ lemma happening_pre_post_delayI:
     "(\<forall>i<length actions. act_clock_pre_happ c act_to_start_clock (actions ! i) (planning_sem.time_index n))"
     "(\<forall>i<length actions. act_clock_pre_happ c act_to_end_clock (actions ! i) (planning_sem.time_index n))" 
   shows "happening_pre_post_delay n x"
-  using assms unfolding happening_pre_post_delay_def happening_pre_def by auto
+  using assms unfolding happening_pre_post_delay_def happening_pre_def Let_def by auto
 
 lemma happening_postI:
   assumes "x = (L, v, c)"
@@ -960,7 +960,7 @@ lemma end_start_invsE:
     (\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> L ! Suc i = off_loc) \<Longrightarrow>
     thesis"
   shows thesis
-  using assms by (auto simp: end_start_invs_def)
+  using assms by (auto simp: end_start_invs_def Let_def split: prod.splits)
 
 
 lemma end_start_invsD:
@@ -973,7 +973,7 @@ lemma end_start_invsD:
     (\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> act_clock_pre_happ c act_to_end_clock (actions ! i) (planning_sem.time_index n)) \<and>
     (\<forall>i<length actions. is_starting_index (planning_sem.time_index n) i \<longrightarrow> L ! Suc i = off_loc) \<and>
     (\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> L ! Suc i = off_loc)"
-  using assms by (auto simp: end_start_invs_def)
+  using assms by (auto simp: end_start_invs_def Let_def split: prod.splits)
 
 
 lemma end_start_invs_dests:
@@ -1012,7 +1012,7 @@ lemma happening_invsE:
      (\<forall>i<length actions. is_not_happening_index (planning_sem.time_index n) i \<longrightarrow> planning_sem.closed_active_count (planning_sem.time_index n) (actions ! i) = 1 \<longrightarrow> L ! Suc i = running_loc) \<Longrightarrow>
        thesis"
   shows thesis
-  using assms by (auto simp: happening_invs_def)
+  using assms by (auto simp: happening_invs_def Let_def split: prod.splits)
 
 lemma happening_invs_dests:
   assumes "happening_invs n (L, v, c)"
@@ -1023,7 +1023,7 @@ lemma happening_invs_dests:
     "i < length actions \<Longrightarrow> is_not_happening_index (planning_sem.time_index n) i \<Longrightarrow> planning_sem.closed_active_count (planning_sem.time_index n) (actions ! i) = 0 \<Longrightarrow> L ! Suc i = off_loc"
     "i < length actions \<Longrightarrow> is_not_happening_index (planning_sem.time_index n) i \<Longrightarrow> planning_sem.closed_active_count (planning_sem.time_index n) (actions ! i) = 1 \<Longrightarrow> L ! Suc i = running_loc"
   using assms 
-  by (auto simp: happening_invs_def)
+  by (auto simp: happening_invs_def Let_def split: prod.splits)
 
 lemma happening_invsI:
   assumes "x = (L, v, c)"
@@ -1063,7 +1063,7 @@ lemma end_start_preD:
     (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (planning_sem.time_index n) j \<longrightarrow> L ! Suc j = running_loc) \<and>
     (\<forall>j. j < i \<and> is_ending_index (planning_sem.time_index n) j \<longrightarrow> c (act_to_end_clock (actions ! j)) = 0) \<and>
     (\<forall>j. i \<le> j \<and> j < length actions \<and> is_ending_index (planning_sem.time_index n) j \<longrightarrow> act_clock_pre_happ c act_to_end_clock (actions ! j) (planning_sem.time_index n))"
-  using assms by (auto simp: end_start_pre_def end_start_cond_def)
+  using assms by (auto simp: end_start_pre_def end_start_cond_def Let_def split: prod.splits)
 
 lemma end_start_pre_dests:
   assumes "end_start_pre n i (L, v, c)"
@@ -1097,7 +1097,7 @@ lemma end_start_postE:
     (\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (planning_sem.time_index n) j \<longrightarrow> act_clock_pre_happ c act_to_end_clock (actions ! j) (planning_sem.time_index n)) \<Longrightarrow> 
     thesis"
   shows thesis
-  using assms by (auto simp: end_start_post_def end_start_cond_def)
+  using assms by (auto simp: end_start_post_def end_start_cond_def Let_def split: prod.splits)
 
 lemma end_start_post_dests:
   assumes "end_start_post n i x"
@@ -1108,7 +1108,7 @@ lemma end_start_post_dests:
     "(\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (planning_sem.time_index n) j \<longrightarrow> L ! Suc j = running_loc)"
     "(\<forall>j. j \<le> i \<and> is_ending_index (planning_sem.time_index n) j \<longrightarrow> c (act_to_end_clock (actions ! j)) = 0)"
     "(\<forall>j. i < j \<and> j < length actions \<and> is_ending_index (planning_sem.time_index n) j \<longrightarrow> act_clock_pre_happ c act_to_end_clock (actions ! j) (planning_sem.time_index n))"
-  using assms by (auto simp: end_start_post_def end_start_cond_def)
+  using assms by (auto simp: end_start_post_def end_start_cond_def Let_def split: prod.splits)
 
 lemma end_start_postI:
   assumes "x = (L, v, c)"
@@ -1128,7 +1128,7 @@ lemma happening_pre_end_starts_dests:
         "(\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index n) p)))"
         "(\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> L ! Suc i = running_loc)" 
         "(\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> act_clock_pre_happ c act_to_end_clock (actions ! i) (planning_sem.time_index n))"
-  using assms happening_pre_end_starts_def by auto
+  using assms unfolding happening_pre_end_starts_def Let_def by (auto split: prod.splits)
 
 lemma happening_pre_end_startsI:
   assumes "x = (L, v, c)"
@@ -1146,7 +1146,7 @@ lemma happening_post_end_starts_dests:
     "(\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_during (planning_sem.time_index n) p)))"
     "(\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> L ! Suc i = ending_loc)"
     "(\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> c (act_to_end_clock (actions ! i)) = 0)"
-  using assms unfolding happening_post_end_starts_def by auto
+  using assms unfolding happening_post_end_starts_def Let_def by (auto split: prod.splits)
 
 
 lemma happening_post_end_startsI:
@@ -1166,8 +1166,8 @@ lemma happening_pre_instants_dests:
   "(\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> act_clock_pre_happ c act_to_start_clock (actions ! i) (planning_sem.time_index n))"
   "(\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> act_clock_pre_happ c act_to_end_clock (actions ! i) (planning_sem.time_index n))"
   "(\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> L ! Suc i = off_loc)"
-  using assms unfolding happening_pre_instants_def
-  by auto
+  using assms unfolding happening_pre_instants_def Let_def prod.case
+  by (auto split: prod.splits)
 
 lemma happening_pre_instantsI:
   assumes "x = (L, v, c)"
@@ -1187,7 +1187,7 @@ lemma instant_action_invs_dests:
     "(\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> c (act_to_end_clock (actions ! i)) = 0)"
     "(\<forall>i<length actions. is_starting_index (planning_sem.time_index n) i \<longrightarrow> L ! Suc i = off_loc)"
     "(\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> L ! Suc i = ending_loc)"
-  using assms unfolding instant_action_invs_def by auto
+  using assms unfolding instant_action_invs_def Let_def by (auto split: prod.splits)
   
 lemma instant_action_invsI:
   assumes "x = (L, v, c)"
@@ -1410,7 +1410,7 @@ lemma start_start_invs_maintained:
           "(\<forall>ia<length actions. is_ending_index (planning_sem.time_index i) ia \<longrightarrow> L' ! Suc ia = L ! Suc ia)"
           "(\<forall>ia<length actions. is_instant_index (planning_sem.time_index i) ia \<longrightarrow> L' ! Suc ia = L ! Suc ia)"
   shows "start_start_invs i (L', v', c')"
-  using assms unfolding start_start_invs_def by auto
+  using assms unfolding start_start_invs_def Let_def by (auto split: prod.splits)
 
 lemma start_start_invsI:
   assumes "happening_invs i (L, v, c)"
@@ -1696,7 +1696,7 @@ lemma start_end_post_dests:
     "p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of net_bounds) \<Longrightarrow> v (prop_to_lock p) = Some (int (updated_locked_during i (Suc n) p))"
     "(Suc n) \<le> k \<Longrightarrow> k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = starting_loc"
     "k < (Suc n) \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = running_loc"
-  using assms unfolding start_end_post_def start_end_cond_def by auto
+  using assms unfolding start_end_post_def start_end_cond_def Let_def by (auto split: prod.splits)
 
 lemma happening_post_start_endsI:
   assumes "start_end_invs i (L, v, c)"

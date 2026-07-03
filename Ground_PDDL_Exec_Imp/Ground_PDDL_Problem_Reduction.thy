@@ -15,29 +15,18 @@ sublocale abstr_model_checking: tp_nta_reduction_model_checking'
   act_to_name_spec prop_to_name_spec
 proof 
   show "distinct props_spec"
-    using wf_problem
-    unfolding wf_problem_def wf_domain_def props_spec_def 
+    using wf_domain_signature
+    unfolding wf_domain_signature_def props_spec_def 
     by simp
   show "distinct actions_spec"
   proof -
-    have "distinct (map ast_action_schema.name (actions local.D))"
-    using wf_problem
-    unfolding wf_problem_def wf_domain_def actions_spec_def 
-    by simp
-    hence "distinct (actions local.D)"
+    have "distinct (map ast_temporal_action_schema_name actions_spec)"
+      using distinct_act_names .
+    thus ?thesis
       using distinct_map by blast
-    thus ?thesis unfolding actions_spec_def by auto
   qed                                         
   show "\<forall>a\<in>set actions_spec. distinct (over_all_spec a)"
-    apply (intro ballI)
-    subgoal for a
-      apply (induction a)
-       apply (subst over_all_spec.simps)
-       apply (subst over_all_snap.simps)
-       apply (subst ground_non_action_def)
-       apply simp
-      using distinct_remdups ground_non_action_def by simp
-    done
+    by (simp add: pre_spec_alt)
   show "set goal_spec - set props_spec \<subseteq> set init_spec - set props_spec"
     using init_in_props goal_in_props by auto
   show "\<forall>a\<in>set actions_spec. action_and_prop_set.act_mod_props at_start_spec at_end_spec (set \<circ> adds_spec) (set \<circ> dels_spec) (set props_spec) a"
@@ -61,10 +50,7 @@ proof
     hence "x \<in> {}" 
     proof (cases)
       case 1
-      obtain n anno pre eff where
-        a': "Ground_Action n anno pre eff = at_start_spec a"
-        "wf_ground_action (Ground_Action n anno  pre eff)" 
-        using start_snaps_wf[OF a_in_acts] apply (cases "at_start_spec a") by auto
+      have a': "wf_ground_action (at_start_spec a)" using start_snaps_wf[OF a_in_acts] .
       have b: "ground_act_pres_pos (at_start_spec a)" using start_snap_pre_pos_conj a_in_acts by blast
       have "(set \<circ> pre_spec) (at_start_spec a) \<union> (set \<circ> adds_spec) (at_start_spec a) \<union> (set \<circ> dels_spec) (at_start_spec a) \<subseteq> set props_spec"
         using wf_ground_action_pres_in_props wf_ground_action_dels_in_props wf_ground_action_adds_in_props
@@ -72,10 +58,7 @@ proof
       then show ?thesis using 1 unfolding action_and_prop_set.snap_consts_def by blast
     next
       case 2
-      obtain n anno pre eff where
-        a': "Ground_Action n anno pre eff = at_end_spec a"
-        "wf_ground_action (Ground_Action n anno pre eff)" 
-        using end_snaps_wf[OF a_in_acts] apply (cases "at_end_spec a") by auto
+      have a': "wf_ground_action (at_end_spec a)" using end_snaps_wf[OF a_in_acts] .
       have b: "ground_act_pres_pos (at_end_spec a)" using end_snap_pre_pos_conj a_in_acts by blast
       have "(set \<circ> pre_spec) (at_end_spec a) \<union> (set \<circ> adds_spec) (at_end_spec a) \<union> (set \<circ> dels_spec) (at_end_spec a) \<subseteq> set props_spec"
         using wf_ground_action_pres_in_props wf_ground_action_dels_in_props wf_ground_action_adds_in_props
@@ -89,14 +72,14 @@ proof
   qed
   show "inj_on act_to_name_spec (set actions_spec)"
   proof -
-    have "distinct (map ast_action_schema.name actions_spec)" 
-      using wf_domain wf_domain_def actions_spec_def by presburger
-    thus ?thesis unfolding distinct_map act_to_name_spec_def by blast
+    have "distinct (map act_to_name_spec actions_spec)" 
+      using distinct_act_names unfolding act_to_name_spec_def .
+    thus ?thesis unfolding distinct_map by blast
   qed                                       
   show "inj_on prop_to_name_spec (set props_spec)"
   proof -
     have "distinct (map pred (predicates local.D))"
-      using wf_domain unfolding wf_domain_def by auto
+      using wf_domain_signature unfolding wf_domain_signature_def by auto
     hence "distinct (map predicate.name (map pred (predicates local.D)))"
       apply (rule distinct_inj_map)
       apply (rule injI)
