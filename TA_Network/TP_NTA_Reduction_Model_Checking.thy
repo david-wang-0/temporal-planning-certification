@@ -225,12 +225,6 @@ sublocale tp_nta_reduction_model_checking
   by unfold_locales
 end
 
-lemma assumes "tp_nta_reduction_model_checking init goal at_start at_end over_all pre adds dels \<epsilon> props actions act_to_name prop_to_name"
-  and "temp_plan_for_problem_list_impl_int at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>"
-shows "tp_nta_reduction_correctness init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name"
-  unfolding tp_nta_reduction_correctness_def 
-  using assms unfolding tp_nta_reduction_model_checking_def 
-  by auto
 
 text \<open>This is the locale we instantiate, if we instantiate one\<close>
 locale tp_nta_reduction_correctness' = temp_plan_for_problem_list_impl_int'

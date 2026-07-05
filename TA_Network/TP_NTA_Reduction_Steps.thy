@@ -1,8 +1,56 @@
-theory TP_NTA_Reduction_Correctness_Steps
-  imports TP_NTA_Reduction_Correctness_Happenings
+theory TP_NTA_Reduction_Steps
+  imports TP_NTA_Reduction_Properties
 begin
 context tp_nta_reduction_correctness
 begin
+(* apply all snap actions of the nth happening in the plan *)
+definition apply_nth_happening::"
+nat
+\<Rightarrow> (nat list \<times> (String.literal \<Rightarrow> int option) \<times> (String.literal \<Rightarrow> real)) 
+\<Rightarrow> (nat list \<times> (String.literal \<Rightarrow> int option) \<times> (String.literal \<Rightarrow> real)) list" where
+"apply_nth_happening n s \<equiv>
+let
+  t = planning_sem.time_index n;
+  act_indices = [0..<length actions];
+  start_indices = filter (is_starting_index t) act_indices;
+  end_indices = filter (is_ending_index t) act_indices;
+  both = filter (is_instant_index t) act_indices
+in [s] 
+    |> ext_seq (apply_edge_3_effects end_indices)
+    |> ext_seq (apply_instant_actions both)
+    |> ext_seq (apply_start_edge_effects start_indices)
+    |> ext_seq (apply_end_edge_effects end_indices)
+    |> ext_seq (apply_edge_2_effects start_indices)
+    |> tl
+"
+
+definition delay_and_apply::"
+nat
+\<Rightarrow> (nat list \<times> (String.literal \<Rightarrow> int option) \<times> (String.literal \<Rightarrow> real)) 
+\<Rightarrow> (nat list \<times> (String.literal \<Rightarrow> int option) \<times> (String.literal \<Rightarrow> real)) list" where
+"delay_and_apply i s \<equiv>
+let
+  d = get_delay i
+in
+  s 
+  |> delay d  
+  |> apply_nth_happening i
+"
+
+definition plan_steps::"(nat list \<times>
+    (String.literal \<Rightarrow> int option) \<times>
+    (String.literal, real) cval) list" where
+"plan_steps \<equiv> 
+  [a\<^sub>0]
+    |> ext_seq (seq_apply [main_auto_init_edge_effect])
+    |> ext_seq' (map delay_and_apply [0..<length planning_sem.htpl])
+    |> ext_seq (seq_apply [main_auto_goal_edge_effect])"
+
+definition plan_state_sequence::"(nat list \<times>
+    (String.literal \<Rightarrow> int option) \<times>
+    (String.literal, real) cval) stream" where
+"plan_state_sequence \<equiv> plan_steps @- (goal_run (last plan_steps))"
+
 section \<open>Properties of states\<close>
 subsection \<open>The initial state\<close>
 

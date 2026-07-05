@@ -1,9 +1,33 @@
-theory TP_NTA_Reduction_Correctness_Happenings
-  imports TP_NTA_Reduction_Correctness_Edges
+theory TP_NTA_Reduction_Happenings
+  imports TP_NTA_Reduction_Edges
 begin
 context tp_nta_reduction_correctness
 begin
 section \<open>Applying happenings\<close>
+subsection \<open>Definitions for conditions\<close>
+definition act_clock_pre_happ where
+"act_clock_pre_happ c cons a t = (
+  if (cons = act_to_start_clock) 
+  then (c (act_to_start_clock a) = real_of_rat (planning_sem.exec_time (at_start a) t))
+  else 
+  if (cons = act_to_end_clock) 
+  then (c (act_to_end_clock a) = real_of_rat (planning_sem.exec_time (at_end a) t)) 
+  else undefined)"
+
+lemma act_clock_pre_happ_simps[simp]:
+  "act_clock_pre_happ c act_to_end_clock a t =  (c (act_to_end_clock a) = real_of_rat (planning_sem.exec_time (at_end a) t))"
+  "act_clock_pre_happ c act_to_start_clock a t =  (c (act_to_start_clock a) = real_of_rat (planning_sem.exec_time (at_start a) t))"
+  using act_clock_pre_happ_def clock_cons_unique by auto
+  
+
+subsubsection \<open>Mutex constraints\<close>
+
+text \<open>This only works for the direction from plan to run.\<close>
+(* goal cases*)
+schematic_goal net_int_clocks_alt:
+  shows "set (net_int_clocks h) = ?x"
+  unfolding net_int_clocks_def Let_def filter_append set_append set_map set_filter ..
+
 
 definition act_clock_post_happ where
 "act_clock_post_happ c cons a t = (
@@ -1303,65 +1327,6 @@ lemma instant_ending_condI:
   using assms unfolding instant_ending_cond_def by auto
 
 
-lemma Lv_conds_maintained:
-  assumes "Lv_conds L v"
-    and "length L = length L'"
-    and "L ! 0 = L' ! 0"
-    and "v' planning_lock = v planning_lock"
-    and "bounded (map_of net_bounds) v \<Longrightarrow> bounded (map_of net_bounds) v'"
-  shows "Lv_conds L' v'"
-  using assms unfolding Lv_conds_def by simp
-
-lemma happening_invs_maintained:
-  assumes "happening_invs n (L, v, c)"
-      and clock: 
-          "\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_start_clock (actions ! i))  = c (act_to_start_clock (actions ! i))"
-          "\<forall>i<length actions. is_starting_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_end_clock (actions ! i))  = c (act_to_end_clock (actions ! i))"
-          "\<forall>i<length actions. is_not_happening_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_start_clock (actions ! i))  = c (act_to_start_clock (actions ! i))"
-          "\<forall>i<length actions. is_not_happening_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_end_clock (actions ! i))  = c (act_to_end_clock (actions ! i))"
-      and Loc: "\<forall>i<length actions. is_not_happening_index (planning_sem.time_index n) i \<longrightarrow> L' ! Suc i = L ! Suc i"
-  shows "happening_invs n (L', v', c')"
-  apply (insert assms(1))
-  apply (rule happening_invsI)
-         apply (rule HOL.refl)
-  using happening_invs_dests
-  unfolding act_clock_pre_happ_def
-  using clock apply (presburger, presburger, presburger, presburger)
-  using Loc happening_invs_dests by auto
-
-lemma end_start_invs_maintained:
-  assumes "end_start_invs n (L, v, c)"
-      and happ_invs: "happening_invs n (L, v, c) \<Longrightarrow> happening_invs n (L', v', c')"
-      and p: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v' (prop_to_var p) = v (prop_to_var p)"
-      and aa: "v' acts_active  = v acts_active"
-      and clock: 
-          "\<forall>i<length actions. is_starting_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_start_clock (actions ! i))  = c (act_to_start_clock (actions ! i))"
-          "\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_start_clock (actions ! i))  = c (act_to_start_clock (actions ! i))"
-          "\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_end_clock (actions ! i))  = c (act_to_end_clock (actions ! i))"
-      and Loc: 
-          "\<forall>i<length actions. is_starting_index (planning_sem.time_index n) i \<longrightarrow> L' ! Suc i = L ! Suc i"
-          "\<forall>i<length actions. is_instant_index (planning_sem.time_index n) i \<longrightarrow> L' ! Suc i = L ! Suc i"
-  shows "end_start_invs n (L', v', c')"
-  apply (rule end_start_invsI, simp)
-         apply (rule happ_invs, rule end_start_invs_dests, simp add: assms(1))
-  unfolding act_clock_pre_happ_def
-  by (auto simp: clock[THEN spec, THEN mp, THEN mp] p[THEN spec, THEN mp] aa Loc[THEN spec, THEN mp, THEN mp] end_start_invs_dests[OF assms(1), simplified act_clock_pre_happ_def])
-
-lemma instant_action_invs_maintained:
-  assumes "instant_action_invs n (L, v, c)"
-      and happ_invs: "happening_invs n (L, v, c) \<Longrightarrow> happening_invs n (L', v', c')"
-      and lock: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v' (prop_to_lock p) = v (prop_to_lock p)"
-      and clock: 
-          "\<forall>i<length actions. is_starting_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_start_clock (actions ! i))  = c (act_to_start_clock (actions ! i))"
-          "\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_end_clock (actions ! i))  = c (act_to_end_clock (actions ! i))"
-      and Loc: 
-          "\<forall>i<length actions. is_starting_index (planning_sem.time_index n) i \<longrightarrow> L' ! Suc i = L ! Suc i"
-          "\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> L' ! Suc i = L ! Suc i"
-  shows "instant_action_invs n (L', v', c')"
-  apply (insert assms(1))
-  apply (rule instant_action_invsI, simp)
-  by (auto dest: instant_action_invs_dests simp: happ_invs lock clock Loc act_clock_pre_happ_def)
-
 lemma happening_post_instants_dests:
   assumes "happening_post_instants n (L, v, c)"
   shows "instant_action_invs n (L, v, c)"
@@ -1399,18 +1364,6 @@ lemma happening_pre_start_startsI:
       "\<And>ia. ia < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) ia \<Longrightarrow> L ! Suc ia = off_loc"
   shows "happening_pre_start_starts i (L, v, c)"
   unfolding happening_pre_start_starts_def using assms unfolding Let_def prod.case by blast+
-
-lemma start_start_invs_maintained:
-  assumes "start_start_invs i (L, v, c)"
-      and "happening_invs i (L, v, c) \<Longrightarrow> happening_invs i (L', v', c')"
-      and "(\<forall>p. p \<in> set props \<longrightarrow> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v' (prop_to_lock p) = v (prop_to_lock p))"
-          "(\<forall>ia<length actions. is_ending_index (planning_sem.time_index i) ia \<longrightarrow> c' (act_to_end_clock (actions ! ia)) = c (act_to_end_clock (actions ! ia)))"
-          "(\<forall>ia<length actions. is_instant_index (planning_sem.time_index i) ia \<longrightarrow> c' (act_to_start_clock (actions ! ia)) = c (act_to_start_clock (actions ! ia)))"
-          "(\<forall>ia<length actions. is_instant_index (planning_sem.time_index i) ia \<longrightarrow> c' (act_to_end_clock (actions ! ia)) = c (act_to_end_clock (actions ! ia)))"
-          "(\<forall>ia<length actions. is_ending_index (planning_sem.time_index i) ia \<longrightarrow> L' ! Suc ia = L ! Suc ia)"
-          "(\<forall>ia<length actions. is_instant_index (planning_sem.time_index i) ia \<longrightarrow> L' ! Suc ia = L ! Suc ia)"
-  shows "start_start_invs i (L', v', c')"
-  using assms unfolding start_start_invs_def Let_def by (auto split: prod.splits)
 
 lemma start_start_invsI:
   assumes "happening_invs i (L, v, c)"
@@ -1541,22 +1494,6 @@ lemma end_end_invs_dests:
     "k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = off_loc"
   using assms unfolding end_end_invs_def Let_def prod.case by blast+
 
-lemma end_end_invs_maintained:
-  assumes "end_end_invs i (L, v, c)"
-    "happening_invs i (L, v, c) \<Longrightarrow> happening_invs i (L', v', c')"
-  and syn: "\<And>p. p \<in> set props \<Longrightarrow>prop_to_lock p \<in> dom (map_of net_bounds) \<Longrightarrow> v (prop_to_lock p) = v' (prop_to_lock p)"
-    "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = c'(act_to_start_clock (actions ! k))"
-    "\<And>k. k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = c' (act_to_end_clock (actions ! k))"
-    "\<And>k. k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = c' (act_to_start_clock (actions ! k))"
-    "\<And>k. k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = c' (act_to_end_clock (actions ! k))"
-    "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = L' ! Suc k"
-    "\<And>k. k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = L' ! Suc k"
-  shows "end_end_invs i (L', v', c')"
-  apply (insert assms(1))
-  apply (rule end_end_invsI)
-  subgoal by (intro assms(2) end_end_invs_dests)
-  by (subst syn[symmetric], force+, blast intro: end_end_invs_dests)+
-
 lemma end_end_preI:
   assumes "end_end_invs i (L, v, c)"
     "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of net_bounds) \<Longrightarrow> v (prop_to_var p) = Some (ending_part_updated_prop_state i n p)"
@@ -1649,23 +1586,6 @@ lemma start_end_invs_dests:
     "k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = off_loc"
   using assms unfolding start_end_invs_def Let_def prod.case by blast+
 
-lemma start_end_invs_maintained:
-  assumes prev: "start_end_invs i (L, v, c)"
-      and happ: "happening_invs i (L, v, c) \<Longrightarrow> happening_invs i (L', v', c')"
-      and syn: "v acts_active = v' acts_active"
-        "\<And>p. p \<in> set props \<Longrightarrow> prop_to_var p \<in> dom (map_of net_bounds) \<Longrightarrow> v (prop_to_var p) = v' (prop_to_var p)"
-        "\<And>k. k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = c' (act_to_start_clock (actions ! k))"
-        "\<And>k. k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = c' (act_to_end_clock (actions ! k))"
-        "\<And>k. k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_start_clock (actions ! k)) = c' (act_to_start_clock (actions ! k))"
-        "\<And>k. k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> c (act_to_end_clock (actions ! k)) = c' (act_to_end_clock (actions ! k))"
-        "\<And>k. k < length actions \<Longrightarrow> is_ending_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = L' ! Suc k"
-        "\<And>k. k < length actions \<Longrightarrow> is_instant_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = L' ! Suc k"
-      shows "start_end_invs i (L', v', c')"
-  apply (insert prev)
-  apply (rule start_end_invsI)
-  subgoal by (intro happ start_end_invs_dests)
-  by (subst syn[symmetric], force?, force?, blast intro: start_end_invs_dests)+
-
 lemma start_end_preI:
   assumes "start_end_invs i (L, v, c)"
     "\<And>p. p \<in> set props \<Longrightarrow> prop_to_lock p \<in> dom (map_of net_bounds) \<Longrightarrow> v (prop_to_lock p) = Some (int (updated_locked_during i n p))"
@@ -1726,10 +1646,6 @@ lemma happening_post_inv_check_dests:
       "k < length actions \<Longrightarrow> is_starting_index (planning_sem.time_index i) k \<Longrightarrow> L ! Suc k = running_loc"
   using assms unfolding happening_post_inv_check_def Let_def prod.case by blast+
 
-text \<open>The rules used to show that the composition of sequences results in a run\<close>
-sublocale steps_seq: sequence_rules graph_impl.steps
-  apply standard                                 
-  using graph_impl.steps.intros(1) steps_extend .
 
 end
 end

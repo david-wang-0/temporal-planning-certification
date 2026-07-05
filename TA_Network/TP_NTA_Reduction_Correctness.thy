@@ -1,5 +1,5 @@
 theory TP_NTA_Reduction_Correctness
-  imports TP_NTA_Reduction_Correctness_Steps
+  imports TP_NTA_Reduction_Steps
 begin
 context tp_nta_reduction_correctness
 begin
@@ -651,14 +651,11 @@ proof -
   show ?thesis using x.valid_plan_imp_form_holds by auto
 qed
 
-text \<open>**Numeric collapse at the capstone.** The reduction's existence-form capstone applies
-unchanged to an (empty-)numeric problem: a @{const numeric_temp_plan_for_problem_list_impl_int'}
-problem is a @{const temp_plan_for_problem_list_impl_int'} problem (the numeric fixes carry no
-@{theory_text \<open>assumes\<close>}; @{thm [source] numeric_temp_plan_for_problem_list_impl_int'_imp_prop}),
-so plan-existence at the numeric twin discharges @{thm [source] valid_temp_plan_imp_form_holds}'s
-hypothesis. Inside that numeric locale the empty-numeric collapse
-@{thm [source] numeric_temp_plan_for_problem_list_defs.collapse_num_valid_plan} identifies its
-@{term num_valid_plan} with this propositional @{term valid_plan}.\<close>
+text \<open>
+A numeric problem without fluents is a propositional problem.
+
+A version of this lemma with numeric fluents exists in theory \<open>TP_NTA_Reduction_Correctness_Numeric\<close> 
+as \<open>num_valid_plan_imp_form_holds\<close>.\<close>
 abbreviation numeric_plan_for_problem :: "(nat, 'action, int) temp_plan \<Rightarrow> bool" where
   "numeric_plan_for_problem \<pi> \<equiv>
     numeric_temp_plan_for_problem_list_impl_int'

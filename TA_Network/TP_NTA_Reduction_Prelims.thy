@@ -1,19 +1,9 @@
-theory TP_NTA_Reduction_Correctness_Prelims
-  imports TP_NTA_Reduction_Model_Checking
+theory TP_NTA_Reduction_Prelims
+  imports TP_NTA_Reduction_Utils
           "Temporal_Planning_Common.Sequences"
           "Temporal_Planning_Common.ListMisc"
           NTA_Temp_Planning_Sem
 begin
-
-lemma fold_union:
-  "fold (\<union>) S T =  \<Union> (set S) \<union> T"
-  by (induction S arbitrary: T) auto
-
-lemma fold_union':
-  "fold (\<union>) S {} =  \<Union> (set S)"
-  apply (subst fold_union)
-  apply (subst Un_empty_right)
-  ..
 
 context tp_nta_reduction_correctness
 begin
@@ -96,10 +86,6 @@ lemma nth_end_start_disj:
   using assms in_set_conv_nth[of "actions ! n" actions] rat_impl.set_impl.end_start_disj_on_acts by blast
   
 
-lemma set_nthI:
-  assumes "n < length xs"
-  shows "xs ! n \<in> set xs" using assms in_set_conv_nth by auto
-
 lemma nth_actions_unique:
   assumes i: "i < length actions"
       and n: "n < length actions"
@@ -142,31 +128,6 @@ definition "partially_updated_locked_before t p n \<equiv> planning_sem.locked_b
       (filter 
         (\<lambda>a. p \<in> set (over_all a)) 
         (map (\<lambda>n. actions ! n) [0..<n])))"
-
-lemma sum_list_eq:
-  assumes "distinct xs" "distinct ys" "set xs = set ys" 
-  shows "sum_list ((map f xs)::nat list) = sum_list (map f ys)"
-proof -
-  have "mset xs = mset ys" using assms set_eq_iff_mset_eq_distinct by blast
-  hence "mset (map f xs) = mset (map f ys)" by simp
-  hence "fold (+) (map f xs) 0 = fold (+) (map f ys) 0"
-    apply -
-    apply (rule fold_permuted_eq[where P = "\<lambda>_. True"])
-       apply simp
-      apply simp
-     apply simp
-    by simp
-  moreover
-  have "foldr (+) (map f xs) 0 = fold (+) (map f xs) 0"
-    apply (subst foldr_fold)
-    by auto
-  moreover
-  have "foldr (+) (map f ys) 0 = fold (+) (map f ys) 0"
-    apply (subst foldr_fold)
-    by auto
-  ultimately
-  show ?thesis unfolding sum_list.eq_foldr by argo
-qed
 
 lemma partially_updated_locked_before_by_all_actions_is_locked_during: 
   "partially_updated_locked_before t p (length actions) = planning_sem.locked_during t p"
@@ -244,13 +205,6 @@ next
   apply (subst sum_list.eq_foldr[symmetric])
   by blast
 qed
-
-lemma foldr_assoc: "foldr (+) xs (n + 0::nat) = (foldr (+) xs 0) + n"
-  apply (induction xs)
-   apply simp
-  subgoal for x xs
-    by auto
-  done
 
 lemma partially_updated_locked_before_alt: 
   assumes "n < length actions"

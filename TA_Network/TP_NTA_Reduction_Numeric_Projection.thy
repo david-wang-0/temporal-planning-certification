@@ -1,5 +1,5 @@
-theory TP_NTA_Reduction_Correctness_Numeric_Projection
-  imports TP_NTA_Reduction_Correctness_Numeric_StepInfra
+theory TP_NTA_Reduction_Numeric_Projection
+  imports TP_NTA_Reduction_Numeric_Edges
 begin
 
 context numeric_tp_nta_reduction_correctness

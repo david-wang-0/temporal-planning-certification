@@ -64,17 +64,20 @@ session TP_NTA_Reduction in TA_Network = Temporal_Planning_Semantics +
     NTA_Temp_Planning_Sem
     TP_NTA_Reduction_Defs
     TP_NTA_Reduction_Model_Checking
-    TP_NTA_Reduction_Correctness_Prelims
-    TP_NTA_Reduction_Correctness_Edges
-    TP_NTA_Reduction_Correctness_Happenings
-    TP_NTA_Reduction_Correctness_Steps
+    TP_NTA_Reduction_Utils
+    TP_NTA_Reduction_Prelims
+    TP_NTA_Reduction_Edges
+    TP_NTA_Reduction_Happenings
+    TP_NTA_Reduction_Properties
+    TP_NTA_Reduction_Steps
     TP_NTA_Reduction_Correctness
-    TP_NTA_Reduction_Correctness_Numeric_Tracking
-    TP_NTA_Reduction_Correctness_Numeric_StepInfra
-    TP_NTA_Reduction_Correctness_Numeric_Projection
-    TP_NTA_Reduction_Correctness_Numeric_PhaseLifts
-    TP_NTA_Reduction_Correctness_Numeric_Happening
-    TP_NTA_Reduction_Correctness_Numeric_Plan
+    TP_NTA_Reduction_Numeric_Defs
+    TP_NTA_Reduction_Numeric_Model_Checking
+    TP_NTA_Reduction_Numeric_Prelims
+    TP_NTA_Reduction_Numeric_Edges
+    TP_NTA_Reduction_Numeric_Projection
+    TP_NTA_Reduction_Numeric_Steps
+    TP_NTA_Reduction_Correctness_Numeric
 
 session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp = TP_NTA_Reduction +
   sessions

@@ -1,9 +1,10 @@
-theory TP_NTA_Reduction_Correctness_Numeric_Happening
-  imports TP_NTA_Reduction_Correctness_Numeric_PhaseLifts
+theory TP_NTA_Reduction_Correctness_Numeric
+  imports TP_NTA_Reduction_Numeric_Steps
 begin
 
 context numeric_tp_nta_reduction_correctness
 begin
+
 
 text \<open>For the @{const num_edge_2} phase the entry guard's @{text sat_inv} obligation (the over_all
   comparisons of the just-started action @{term \<open>actions ! n\<close>}) is discharged at the running fold valuation
@@ -1645,6 +1646,1158 @@ proof -
 qed
 
 
-end
 
+
+text \<open>The propositional invariant transfers between consecutive happenings, extracted (config-generic)
+from @{thm [source] plan_steps_possible}'s cases. They thread the @{text planning_sem} bookkeeping
+across the index boundary; the numeric run-lifting reuses them verbatim and only adds the (identity)
+tracking transfer.\<close>
+lemma pp_post_imp_pre_pre_delay_Suc:
+  assumes ib: "i < length planning_sem.htpl - 1"
+      and post: "happening_post i (L, v, c)"
+  shows "happening_pre_pre_delay (Suc i) (L, v, c)"
+proof -
+  have ib1: "i < length planning_sem.htpl"
+    and ib2: "Suc i < length planning_sem.htpl" using ib by linarith+
+  note D = happening_post_dests[OF post HOL.refl]
+  have c2: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ (Suc i) p)"
+    using D(1) ib1 ib2 by (auto simp: prop_state_after_happ_def prop_state_before_happ_def planning_sem.state_seq_Suc_is_upd_state)
+  have c3: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index (Suc i)) p))"
+    using D(2) ib1 ib2 by (auto simp: planning_sem.locked_after_indexed_timepoint_is_locked_before_Suc[symmetric])
+  have c4: "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index (Suc i))))"
+    using D(3) ib1 ib2 by (auto simp: planning_sem.active_after_indexed_timepoint_is_active_before_Suc[symmetric])
+  have c5: "\<forall>j<length actions. planning_sem.open_active_count (planning_sem.time_index (Suc i)) (actions ! j) = 0 \<longrightarrow> L ! Suc j = off_loc"
+    using D(4) ib1 ib2 by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
+  have c6: "\<forall>j<length actions. planning_sem.open_active_count (planning_sem.time_index (Suc i)) (actions ! j) = 1 \<longrightarrow> L ! Suc j = running_loc"
+    using D(5) ib1 ib2 by (auto simp: planning_sem.closed_active_count_on_indexed_timepoint_is_open_active_count_Suc[symmetric])
+  have c7: "\<forall>j<length actions. act_clock_pre_happ (c \<oplus> get_delay (Suc i)) act_to_start_clock (actions ! j) (planning_sem.time_index (Suc i))"
+    apply (intro strip)
+    apply (subst act_clock_pre_happ_simps)
+    apply (subst planning_sem.updated_exec_time_and_next)
+    using D(6) ib1 ib2 by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
+  have c8: "\<forall>j<length actions. act_clock_pre_happ (c \<oplus> get_delay (Suc i)) act_to_end_clock (actions ! j) (planning_sem.time_index (Suc i))"
+    apply (intro strip)
+    apply (subst act_clock_pre_happ_simps)
+    apply (subst planning_sem.updated_exec_time_and_next)
+    using D(7) ib1 ib2 by (auto simp: planning_sem.time_index_def planning_sem.updated_exec_time_and_next of_rat_add cval_add_def get_delay_def)
+  show ?thesis by (rule happening_pre_pre_delayI[OF HOL.refl c2 c3 c4 c5 c6 c7 c8])
+qed
+
+lemma pp_init_imp_pre_pre_delay_0:
+  assumes hlen: "0 < length planning_sem.htpl"
+      and props': "init_planning_state_props' x"
+  shows "happening_pre_pre_delay 0 x"
+proof (rule init_planning_state_props'E[OF props'])
+  fix L v c
+  assume s: "x = (L, v, c)"
+    and va: "v acts_active = Some 0"
+    and Leq: "L = planning_loc # map (\<lambda>x. off_loc) actions"
+    and pv: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state (set init) p)"
+    and pl: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some 0"
+    and cs: "\<forall>i<length actions. c (act_to_start_clock (actions ! i)) = 0"
+    and ce: "\<forall>i<length actions. c (act_to_end_clock (actions ! i)) = 0"
+  have c2: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state_before_happ 0 p)"
+    using pv hlen by (auto simp: planning_sem.plan_state_seq_props prop_state_before_happ_def)
+  have c3: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some (int (planning_sem.locked_before (planning_sem.time_index 0) p))"
+    using pl by (auto simp: int_of_nat_def planning_sem.locked_before_initial_is_0)
+  have c4: "v acts_active = Some (int (planning_sem.active_before (planning_sem.time_index 0)))"
+    using va by (auto simp: int_of_nat_def planning_sem.active_before_initial_is_0)
+  have c5: "\<forall>i<length actions. planning_sem.open_active_count (planning_sem.time_index 0) (actions ! i) = 0 \<longrightarrow> L ! Suc i = off_loc"
+    using Leq by (auto simp: planning_sem.open_active_count_initial_is_0)
+  have c6: "\<forall>i<length actions. planning_sem.open_active_count (planning_sem.time_index 0) (actions ! i) = 1 \<longrightarrow> L ! Suc i = running_loc"
+    using Leq by (auto simp: planning_sem.open_active_count_initial_is_0)
+  have c7: "\<forall>i<length actions. act_clock_pre_happ (c \<oplus> get_delay 0) act_to_start_clock (actions ! i) (planning_sem.time_index 0)"
+    using cs hlen by (subst act_clock_pre_happ_simps cval_add_def planning_sem.exec_time_at_init)+
+      (auto simp: get_delay_def planning_sem.card_htps_len_htpl of_rat_add Rat.of_int_def)
+  have c8: "\<forall>i<length actions. act_clock_pre_happ (c \<oplus> get_delay 0) act_to_end_clock (actions ! i) (planning_sem.time_index 0)"
+    using ce hlen by (subst act_clock_pre_happ_simps cval_add_def planning_sem.exec_time_at_init)+
+      (auto simp: get_delay_def planning_sem.card_htps_len_htpl of_rat_add Rat.of_int_def)
+  show "happening_pre_pre_delay 0 x" by (rule happening_pre_pre_delayI[OF s c2 c3 c4 c5 c6 c7 c8])
+qed
+
+lemma pp_post_last_imp_goal_trans_pre:
+  assumes hlen: "0 < length planning_sem.htpl"
+      and lvp: "LvP x"
+      and post: "happening_post (length planning_sem.htpl - 1) x"
+  shows "goal_trans_pre x"
+proof -
+  obtain L v c where s: "x = (L, v, c)" by (rule prod_cases3)
+  have lv: "Lv_conds L v" using lvp unfolding s by simp
+  note D = happening_post_dests[OF post s]
+  have c3: "v acts_active = Some 0"
+    using D(3) by (subst (asm) planning_sem.active_after_final_is_0) simp
+  have c4: "L = planning_loc # map (\<lambda>x. off_loc) actions"
+  proof (subst list_eq_iff_nth_eq, intro conjI allI impI)
+    show "length L = length (planning_loc # map (\<lambda>x. off_loc) actions)"
+      using Lv_conds_dests(1)[OF lv] by simp
+  next
+    fix i assume i: "i < length L"
+    show "L ! i = (planning_loc # map (\<lambda>x. off_loc) actions) ! i"
+    proof (cases i)
+      case 0
+      thus ?thesis using Lv_conds_dests(2)[OF lv] by simp
+    next
+      case (Suc i')
+      hence i': "i' < length actions" using i Lv_conds_dests(1)[OF lv] by simp
+      have "planning_sem.closed_active_count (planning_sem.time_index (length planning_sem.htpl - 1)) (actions ! i') = 0"
+        by (rule planning_sem.closed_active_count_final_is_0[OF nth_mem[OF i']])
+      hence "L ! Suc i' = off_loc" using D(4) i' by blast
+      thus ?thesis using Suc i' by simp
+    qed
+  qed
+  have c5: "\<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state S p))"
+    apply (rule exI[of _ "planning_sem.upd_state (length planning_sem.htpl - 1)"])
+    using D(1) hlen
+    apply (subst planning_sem.state_seq_Suc_is_upd_state[symmetric], simp)+
+    apply (rule conjI)
+    using planning_sem.plan_state_seq_valid apply fastforce
+    apply (subst (asm) prop_state_after_happ_def, simp)
+    apply (subst (asm) planning_sem.state_seq_Suc_is_upd_state[symmetric], simp)+
+    by blast
+  have c6: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some 0"
+    using D(2) unfolding planning_sem.locked_after_final_is_0 int_of_nat_def by simp
+  show ?thesis by (rule goal_trans_preI[OF s c3 c4 c5 c6])
+qed
+
+lemma pp_init_imp_goal_trans_pre:
+  assumes hlen: "0 = length planning_sem.htpl"
+      and props': "init_planning_state_props' x"
+  shows "goal_trans_pre x"
+proof -
+  have init_is_goal: "set goal \<subseteq> set init"
+    using hlen planning_sem.valid_plan_state_seq by auto
+  show ?thesis
+    apply (rule init_planning_state_props'E[OF props'])
+    apply (rule goal_trans_preI)
+    using init_is_goal by auto
+qed
+
+text \<open>The numeric twins of the four transfers: each is its propositional counterpart plus the
+(essentially identity) tracking transfer at the matching index.\<close>
+lemma num_post_imp_pre_pre_delay_Suc:
+  assumes ib: "i < length planning_sem.htpl - 1"
+      and lvp: "num_LvP cfg"
+      and post: "num_happening_post M i cfg"
+  shows "num_happening_pre_pre_delay M (Suc i) cfg \<and> num_LvP cfg"
+proof -
+  obtain L v c where cfg: "cfg = (L, v, c)" by (rule prod_cases3)
+  have p: "happening_post i (L, v |` dom (map_of net_bounds), c)" using post[unfolded cfg] by (rule num_happening_post_propD)
+  have t: "num_tracks v (snd (M (Suc i)))" using post[unfolded cfg] by (rule num_happening_post_trackD)
+  have "num_happening_pre_pre_delay M (Suc i) cfg" unfolding cfg
+    by (rule num_happening_pre_pre_delayI[where M = M and i = "Suc i", OF pp_post_imp_pre_pre_delay_Suc[OF ib p] t])
+  thus ?thesis using lvp by blast
+qed
+
+lemma num_init_imp_pre_pre_delay_0:
+  assumes hlen: "0 < length planning_sem.htpl"
+      and lvp: "num_LvP cfg"
+      and props': "num_init_planning_state_props' M cfg"
+  shows "num_happening_pre_pre_delay M 0 cfg \<and> num_LvP cfg"
+proof -
+  obtain L v c where cfg: "cfg = (L, v, c)" by (rule prod_cases3)
+  have p: "init_planning_state_props' (L, v |` dom (map_of net_bounds), c)" using props'[unfolded cfg] by (rule num_init_planning_state_props'_propD)
+  have t: "num_tracks v (snd (M 0))" using props'[unfolded cfg] by (rule num_init_planning_state_props'_trackD)
+  have "num_happening_pre_pre_delay M 0 cfg" unfolding cfg
+    by (rule num_happening_pre_pre_delayI[where M = M and i = 0, OF pp_init_imp_pre_pre_delay_0[OF hlen p] t])
+  thus ?thesis using lvp by blast
+qed
+
+lemma num_post_last_imp_goal_trans_pre:
+  assumes hlen: "0 < length planning_sem.htpl"
+      and lvp: "num_LvP cfg"
+      and post: "num_happening_post M (length planning_sem.htpl - 1) cfg"
+  shows "num_goal_trans_pre M cfg"
+proof -
+  obtain L v c where cfg: "cfg = (L, v, c)" by (rule prod_cases3)
+  have lvpr: "LvP (L, v |` dom (map_of net_bounds), c)" using lvp[unfolded cfg] by (rule num_LvP_imp_LvP)
+  have p: "happening_post (length planning_sem.htpl - 1) (L, v |` dom (map_of net_bounds), c)" using post[unfolded cfg] by (rule num_happening_post_propD)
+  have t0: "num_tracks v (snd (M (Suc (length planning_sem.htpl - 1))))" using post[unfolded cfg] by (rule num_happening_post_trackD)
+  have suc_eq: "Suc (length planning_sem.htpl - 1) = length planning_sem.htpl" using hlen by simp
+  have t: "num_tracks v (snd (M (length planning_sem.htpl)))" using t0 unfolding suc_eq .
+  show ?thesis unfolding cfg
+    by (rule num_goal_trans_preI[where M = M, OF pp_post_last_imp_goal_trans_pre[OF hlen lvpr p] t])
+qed
+
+lemma num_init_imp_goal_trans_pre:
+  assumes hlen: "0 = length planning_sem.htpl"
+      and props': "num_init_planning_state_props' M cfg"
+  shows "num_goal_trans_pre M cfg"
+proof -
+  obtain L v c where cfg: "cfg = (L, v, c)" by (rule prod_cases3)
+  have p: "init_planning_state_props' (L, v |` dom (map_of net_bounds), c)" using props'[unfolded cfg] by (rule num_init_planning_state_props'_propD)
+  have t0: "num_tracks v (snd (M 0))" using props'[unfolded cfg] by (rule num_init_planning_state_props'_trackD)
+  have t: "num_tracks v (snd (M (length planning_sem.htpl)))" using t0 by (simp add: hlen[symmetric])
+  show ?thesis unfolding cfg
+    by (rule num_goal_trans_preI[where M = M, OF pp_init_imp_goal_trans_pre[OF hlen p] t])
+qed
+
+text \<open>The numeric plan run, existentially: from a combined initial config (propositional
+@{const init_planning_state_props'} plus tracking of @{term \<open>snd (M 0)\<close>}), the numeric net has a run
+reaching a @{const num_goal_trans_pre} config. Mirrors @{thm [source] plan_steps_possible} but threads
+the existential numeric run happening-by-happening (rather than via the @{const ext_seq'} combinator,
+since the numeric configs differ from the propositional ones): the inner @{text chain} runs happenings
+@{term j}..@{term \<open>length htpl - 1\<close>}, extending the run by @{thm [source] num_happening_steps_possible}
+and carrying @{const num_happening_post} to the next happening's @{const num_happening_pre_pre_delay}.\<close>
+lemma num_plan_steps_possible:
+  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and m0: "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
+      and lvp: "num_LvP cfg"
+      and pres: "num_init_planning_state_props' M cfg"
+  shows "\<exists>ms. num_graph_impl.steps (cfg # ms) \<and> num_goal_trans_pre M (last (cfg # ms))
+              \<and> num_LvP (last (cfg # ms))"
+proof (cases "length planning_sem.htpl = 0")
+  case True
+  have g: "num_goal_trans_pre M cfg" by (rule num_init_imp_goal_trans_pre[OF True[symmetric] pres])
+  show ?thesis
+  proof (intro exI[of _ "[]"] conjI)
+    show "num_graph_impl.steps (cfg # [])" by (rule num_graph_impl.steps.Single)
+    show "num_goal_trans_pre M (last (cfg # []))" using g by simp
+    show "num_LvP (last (cfg # []))" using lvp by simp
+  qed
+next
+  case False
+  hence hlen: "0 < length planning_sem.htpl" by simp
+  \<comment> \<open>@{const num_LvP} is threaded as a SEPARATE conjunct through the run, mirroring @{const LvP} in
+     @{thm [source] plan_steps_possible}: each step's @{thm [source] num_happening_steps_possible} both
+     consumes and re-produces it, and the transfer to the next happening passes it through unchanged
+     (same store).\<close>
+  have chain: "\<exists>ms. num_graph_impl.steps (cfg' # ms)
+                   \<and> num_happening_post M (length planning_sem.htpl - 1) (last (cfg' # ms))
+                   \<and> num_LvP (last (cfg' # ms))"
+    if "num_happening_pre_pre_delay M j cfg'" "num_LvP cfg'" "j < length planning_sem.htpl" for j cfg'
+    using that
+  proof (induction "length planning_sem.htpl - 1 - j" arbitrary: j cfg')
+    case 0
+    hence jeq: "j = length planning_sem.htpl - 1" using "0.prems"(3) by linarith
+    obtain ms where ms: "num_graph_impl.steps (cfg' # ms)"
+                        "num_happening_post M j (last (cfg' # ms))"
+                        "num_LvP (last (cfg' # ms))"
+      using num_happening_steps_possible[OF "0.prems"(3) vss m0 "0.prems"(2) "0.prems"(1)] by blast
+    show ?case using ms jeq by blast
+  next
+    case (Suc d)
+    have jlt1: "j < length planning_sem.htpl - 1" using Suc.hyps(2) by linarith
+    obtain ms1 where ms1: "num_graph_impl.steps (cfg' # ms1)"
+                          "num_happening_post M j (last (cfg' # ms1))"
+                          "num_LvP (last (cfg' # ms1))"
+      using num_happening_steps_possible[OF Suc.prems(3) vss m0 Suc.prems(2) Suc.prems(1)] by blast
+    have preSuc: "num_happening_pre_pre_delay M (Suc j) (last (cfg' # ms1))"
+      and lvpSuc: "num_LvP (last (cfg' # ms1))"
+      using num_post_imp_pre_pre_delay_Suc[OF jlt1 ms1(3) ms1(2)] by blast+
+    have meas: "d = length planning_sem.htpl - 1 - Suc j" using Suc.hyps(2) by linarith
+    have sucjlt: "Suc j < length planning_sem.htpl" using jlt1 by linarith
+    obtain ms2 where ms2: "num_graph_impl.steps (last (cfg' # ms1) # ms2)"
+                          "num_happening_post M (length planning_sem.htpl - 1) (last (last (cfg' # ms1) # ms2))"
+                          "num_LvP (last (last (cfg' # ms1) # ms2))"
+      using Suc.hyps(1)[OF meas preSuc lvpSuc sucjlt] by blast
+    have steps: "num_graph_impl.steps (cfg' # ms1 @ ms2)"
+      using num_graph_impl.steps_append[OF ms1(1) ms2(1)] by simp
+    have lasteq: "last (cfg' # ms1 @ ms2) = last (last (cfg' # ms1) # ms2)"
+      by (cases ms2) auto
+    have "num_happening_post M (length planning_sem.htpl - 1) (last (cfg' # ms1 @ ms2))"
+      and "num_LvP (last (cfg' # ms1 @ ms2))"
+      using ms2(2) ms2(3) lasteq by simp_all
+    thus ?case using steps by blast
+  qed
+  have pre0: "num_happening_pre_pre_delay M 0 cfg"
+    and lvp0: "num_LvP cfg"
+    using num_init_imp_pre_pre_delay_0[OF hlen lvp pres] by blast+
+  obtain ms where ms: "num_graph_impl.steps (cfg # ms)"
+                      "num_happening_post M (length planning_sem.htpl - 1) (last (cfg # ms))"
+                      "num_LvP (last (cfg # ms))"
+    using chain[OF pre0 lvp0 hlen] by blast
+  have "num_goal_trans_pre M (last (cfg # ms))"
+    by (rule num_post_last_imp_goal_trans_pre[OF hlen ms(3) ms(2)])
+  thus ?thesis using ms(1) ms(3) by blast
+qed
+
+
+text \<open>The numeric net's initial config, mirroring the propositional @{const a\<^sub>0}: the same locations
+@{const init_locs} and the zero clock valuation, with the numeric initial variable store
+@{const num_init_vars} (the propositional init vars plus each fluent variable at its lower bound; the
+init edge later writes @{term num_init}).\<close>
+
+text \<open>The store after firing the numeric init update @{const num_init_upd}: each fluent variable is set
+to the integer encoding of its initial value. The propositional variables are untouched (the numeric
+half writes only fluent variables), so this is exactly @{term v} overwritten on
+@{term \<open>fluent_to_var ` set nfluents\<close>}.\<close>
+lemma is_upds_num_init_upd_gen:
+  "is_upds v (map (\<lambda>f. (fluent_to_var f, exp.const (const_to_int (num_init f)))) xs)
+             (foldl (\<lambda>v f. v(fluent_to_var f \<mapsto> const_to_int (num_init f))) v xs)"
+proof (induction xs arbitrary: v)
+  case Nil
+  show ?case by (simp add: is_upds.intros(1))
+next
+  case (Cons x xs)
+  have hd: "is_upd v (fluent_to_var x, exp.const (const_to_int (num_init x)))
+                 (v(fluent_to_var x \<mapsto> const_to_int (num_init x)))"
+    by (simp add: is_upd_const_simp)
+  show ?case
+    apply (simp only: list.map foldl_Cons)
+    apply (rule is_upds.intros(2)[OF hd])
+    by (rule Cons.IH)
+qed
+
+lemma foldl_num_init_upd_unwritten:
+  assumes "x \<notin> fluent_to_var ` set xs"
+  shows "foldl (\<lambda>v f. v(fluent_to_var f \<mapsto> const_to_int (num_init f))) v xs x = v x"
+  using assms by (induction xs arbitrary: v) auto
+
+lemma foldl_num_init_upd_written:
+  assumes "g \<in> set xs"
+      and "inj_on fluent_to_var (set xs)"
+  shows "foldl (\<lambda>v f. v(fluent_to_var f \<mapsto> const_to_int (num_init f))) v xs (fluent_to_var g)
+           = Some (const_to_int (num_init g))"
+  using assms
+proof (induction xs arbitrary: v)
+  case Nil
+  thus ?case by simp
+next
+  case (Cons x xs)
+  show ?case
+  proof (cases "g \<in> set xs")
+    case True
+    thus ?thesis using Cons.IH Cons.prems(2) by (simp add: inj_on_Un)
+  next
+    case False
+    hence gx: "g = x" using Cons.prems(1) by simp
+    have nx: "fluent_to_var x \<notin> fluent_to_var ` set xs"
+      using Cons.prems(2) False gx by (auto simp: inj_on_def)
+    show ?thesis
+      unfolding gx
+      apply (subst foldl_Cons)
+      by (subst foldl_num_init_upd_unwritten[OF nx]) simp
+  qed
+qed
+
+text \<open>The numeric init-edge step, the BOTTOM rung of the numeric-net completeness ladder and the
+numeric analogue of @{thm [source] initial_step_possible}. The pre-init config @{const num_a\<^sub>0} sits at
+@{const init_loc} with @{const planning_lock} at its lower bound @{term 0} and each fluent variable at
+its lower bound, so it satisfies neither @{const num_LvP} (loc/lock) nor
+@{const num_init_planning_state_props'}. Firing the numeric init edge @{const num_main_auto_init_edge}
+moves loc @{term 0} to @{const planning_loc}, sets @{const planning_lock} to @{term 1}, records the
+initial propositions and -- via the appended @{const num_init_upd} -- writes @{term num_init} into each
+fluent variable, landing in a config that both structural invariants hold on.\<close>
+lemma num_initial_step_possible:
+  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and m0: "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
+  shows "\<exists>cfg1. num_graph_impl.steps [num_a\<^sub>0, cfg1]
+              \<and> num_LvP cfg1 \<and> num_init_planning_state_props' M cfg1"
+proof -
+  let ?vn = "map_of num_init_vars"
+  let ?c = "\<lambda>_::String.literal. 0::real"
+  let ?props = "map prop_to_var init"
+  let ?vn_mid = "?vn(planning_lock \<mapsto> 1, acts_active \<mapsto> 0, ?props [\<mapsto>] map (\<lambda>x. 1) ?props)"
+  let ?vn' = "foldl (\<lambda>v f. v(fluent_to_var f \<mapsto> const_to_int (num_init f))) ?vn_mid nfluents"
+  have prop_upds: "is_upds ?vn (permit_planning # set_active # map (set_prop_ab 1) init) ?vn_mid"
+    if "permit_planning = set_var 1 planning_lock" "set_active = set_var 0 acts_active"
+    for permit_planning set_active
+    unfolding that
+    apply (rule is_upds.intros)
+     apply (simp add: is_upd_const_simp)
+    apply (rule is_upds.intros)
+     apply (simp add: is_upd_const_simp)
+    unfolding set_prop_ab_def
+    apply (rule is_upds_set_vars_map)
+     apply (subst map_map[symmetric])
+     apply (rule HOL.refl)
+    by simp
+  have prop_upds': "is_upds ?vn (set_var 1 planning_lock # set_var 0 acts_active # map (set_prop_ab 1) init) ?vn_mid"
+    by (rule prop_upds) (rule HOL.refl)+
+  have num_upds: "is_upds ?vn_mid num_init_upd ?vn'"
+    unfolding num_init_upd_def
+    by (rule is_upds_num_init_upd_gen)
+  have niv_split: "num_init_vars = init_vars @ map (\<lambda>f. (fluent_to_var f, fluent_lo f)) nfluents"
+    unfolding num_init_vars_def num_all_vars_def init_vars_def num_fluent_vars_def
+    by (simp add: map_prod_def)
+  have proj: "?vn |` dom (map_of net_bounds) = map_of init_vars"
+  proof (rule ext)
+    fix x
+    show "(?vn |` dom (map_of net_bounds)) x = map_of init_vars x"
+    proof (cases "x \<in> dom (map_of net_bounds)")
+      case True
+      hence xdom: "x \<in> dom (map_of init_vars)"
+        using init_vars_bounded unfolding bounded_def by simp
+      have "?vn x = map_of init_vars x"
+        unfolding niv_split map_of_append
+      proof -
+        have "x \<notin> dom (map_of (map (\<lambda>f. (fluent_to_var f, fluent_lo f)) nfluents))"
+        proof
+          assume "x \<in> dom (map_of (map (\<lambda>f. (fluent_to_var f, fluent_lo f)) nfluents))"
+          hence "x \<in> fluent_to_var ` set nfluents"
+            by (simp add: dom_map_of_conv_image_fst image_image)
+          then obtain f where "f \<in> set nfluents" "x = fluent_to_var f" by auto
+          thus False using fluent_var_notin_net_bounds True by blast
+        qed
+        thus "(map_of (map (\<lambda>f. (fluent_to_var f, fluent_lo f)) nfluents) ++ map_of init_vars) x = map_of init_vars x"
+          by (simp add: map_add_dom_app_simps(3))
+      qed
+      thus ?thesis using True by (simp add: restrict_in)
+    next
+      case False
+      hence "map_of init_vars x = None"
+        using init_vars_bounded unfolding bounded_def by (auto simp: domIff)
+      thus ?thesis using False by (simp add: restrict_map_def)
+    qed
+  qed
+  have isp: "init_state_props (init_locs, map_of init_vars, ?c)"
+  proof (rule init_state_propsI)
+    show "(init_locs, map_of init_vars, ?c) = (init_locs, map_of init_vars, ?c)" ..
+    show "bounded (map_of net_bounds) (map_of init_vars)" by (rule init_vars_bounded)
+    show "init_locs = init_loc # map (\<lambda>x. off_loc) actions" by (simp add: init_locs_def)
+    show "map_of init_vars x = Some 0" if "x \<in> set (map fst net_bounds)" for x
+      using that
+      unfolding init_vars_alt
+      apply (rule_tac map_of_determ)
+       apply fastforce
+      by auto
+    show "map_of init_vars x = None" if "x \<notin> set (map fst net_bounds)" for x
+      using that
+      apply (subst map_of_eq_None_iff)
+      by (auto simp: init_vars_alt)
+    show "?c = (\<lambda>_. 0)" ..
+  qed
+  have vn_pl0: "?vn planning_lock = Some 0"
+  proof -
+    have pl_mem: "planning_lock \<in> set (map fst net_bounds)"
+      using map_of_net_bounds_planning_lock
+      by (simp add: dom_map_of_conv_image_fst[symmetric] domI)
+    have ivpl: "map_of init_vars planning_lock = Some 0"
+      by (rule init_state_props_dests(3)[OF isp HOL.refl pl_mem])
+    have "planning_lock \<in> dom (map_of net_bounds)" using map_of_net_bounds_planning_lock by blast
+    thus ?thesis using proj ivpl by (metis restrict_in)
+  qed
+  have tr': "num_tracks ?vn' (snd (M 0))"
+  proof (rule num_tracksI)
+    fix g
+    assume g: "g \<in> set nfluents"
+    have wg: "snd (M 0) g = Some (num_init g)" using m0 g by simp
+    have "?vn' (fluent_to_var g) = Some (const_to_int (num_init g))"
+      by (rule foldl_num_init_upd_written[OF g fluent_to_var_inj])
+    thus "\<exists>r. snd (M 0) g = Some r \<and> ?vn' (fluent_to_var g) = Some (const_to_int r)"
+      using wg by blast
+  qed
+  have fib: "fluent_in_bounds (snd (M 0))"
+    by (rule num_seq_fluent_in_bounds[OF vss m0]) simp
+  have dom_vn: "dom ?vn = dom (map_of num_net_bounds)"
+    unfolding num_init_vars_def
+    by (simp add: dom_map_of_conv_image_fst image_image map_prod_def case_prod_beta)
+  have midd: "dom ?vn_mid = dom (map_of num_net_bounds)"
+  proof -
+    have "acts_active \<in> dom ?vn" "planning_lock \<in> dom ?vn"
+      using dom_vn dom_map_of_num_net_bounds map_of_net_bounds_acts_active map_of_net_bounds_planning_lock
+      by (auto simp: domIff)
+    moreover
+    have "prop_to_var p \<in> dom ?vn" if "p \<in> set init" for p
+    proof -
+      have "map_of net_bounds (prop_to_var p) = Some (0, 1)"
+        using that by (intro map_of_net_bounds_init_goal) simp
+      hence "prop_to_var p \<in> dom (map_of net_bounds)" by blast
+      thus ?thesis using dom_vn dom_map_of_num_net_bounds by simp
+    qed
+    ultimately
+    have "dom ?vn_mid = dom ?vn" by (auto simp: domIff)
+    thus ?thesis using dom_vn by simp
+  qed
+  have vn'_dom: "dom ?vn' = dom (map_of num_net_bounds)"
+  proof -
+    have dfold: "dom (foldl (\<lambda>v f. v(fluent_to_var f \<mapsto> const_to_int (num_init f))) w xs)
+                   = dom w \<union> fluent_to_var ` set xs" for w xs
+      by (induction xs arbitrary: w) auto
+    have "fluent_to_var ` set nfluents \<subseteq> dom (map_of num_net_bounds)"
+      using dom_map_of_num_net_bounds by blast
+    thus ?thesis using dfold[of ?vn_mid nfluents] midd by auto
+  qed
+  let ?pv = "(map_of init_vars)(planning_lock \<mapsto> 1, acts_active \<mapsto> 0, ?props [\<mapsto>] map (\<lambda>x. 1) ?props)"
+  have proj': "?vn' |` dom (map_of net_bounds) = ?pv"
+  proof (rule ext)
+    fix x
+    show "(?vn' |` dom (map_of net_bounds)) x = ?pv x"
+    proof (cases "x \<in> dom (map_of net_bounds)")
+      case True
+      have xnf: "x \<notin> fluent_to_var ` set nfluents"
+        using True fluent_var_notin_net_bounds by blast
+      have "?vn' x = ?vn_mid x"
+        using foldl_num_init_upd_unwritten[OF xnf] by simp
+      also
+      have "\<dots> = ?pv x"
+      proof (cases "x \<in> set ?props")
+        case True
+        have "?vn_mid x = Some 1"
+          apply (rule map_upds_with_map[of x "?props" "?props" _ 1])
+          using True by simp_all
+        moreover
+        have "?pv x = Some 1"
+          apply (rule map_upds_with_map[of x "?props" "?props" _ 1])
+          using True by simp_all
+        ultimately
+        show ?thesis by simp
+      next
+        case False
+        have "?vn_mid x = (?vn(planning_lock \<mapsto> 1, acts_active \<mapsto> 0)) x"
+          using False by (simp add: map_upds_apply_nontin)
+        moreover
+        have "?pv x = ((map_of init_vars)(planning_lock \<mapsto> 1, acts_active \<mapsto> 0)) x"
+          using False by (simp add: map_upds_apply_nontin)
+        moreover
+        have "?vn x = map_of init_vars x"
+          using proj True by (metis restrict_in)
+        ultimately
+        show ?thesis by (cases "x = planning_lock"; cases "x = acts_active"; simp)
+      qed
+      finally
+      show ?thesis using True by (simp add: restrict_in)
+    next
+      case False
+      have "?pv x = None"
+      proof -
+        have x_notin_props: "x \<notin> set ?props"
+        proof
+          assume "x \<in> set ?props"
+          then obtain p where p: "p \<in> set init" "x = prop_to_var p" by auto
+          have "map_of net_bounds (prop_to_var p) = Some (0, 1)"
+            using p(1) by (intro map_of_net_bounds_init_goal) simp
+          hence "prop_to_var p \<in> dom (map_of net_bounds)" by blast
+          thus False using False p by simp
+        qed
+        moreover
+        have "x \<noteq> planning_lock" "x \<noteq> acts_active"
+          using False map_of_net_bounds_planning_lock map_of_net_bounds_acts_active by (auto simp: domIff)
+        moreover
+        have "map_of init_vars x = None"
+          using False init_vars_bounded unfolding bounded_def by (auto simp: domIff)
+        ultimately
+        show ?thesis by (simp add: map_upds_apply_nontin)
+      qed
+      thus ?thesis using False by (simp add: restrict_map_def)
+    qed
+  qed
+  have pv_bnd: "bounded (map_of net_bounds) ?pv"
+  proof -
+    have bv: "bounded (map_of net_bounds) (map_of init_vars)" by (rule init_vars_bounded)
+    have b1: "bounded (map_of net_bounds) ((map_of init_vars)(planning_lock \<mapsto> 1))"
+      by (rule single_upd_bounded[OF bv map_of_net_bounds_planning_lock]; simp)
+    have b2: "bounded (map_of net_bounds) ((map_of init_vars)(planning_lock \<mapsto> 1, acts_active \<mapsto> 0))"
+      by (rule single_upd_bounded[OF b1 map_of_net_bounds_acts_active]; simp)
+    show ?thesis
+    proof (rule upds_bounded[OF b2])
+      show "length ?props = length (map (\<lambda>x. 1) ?props)" by simp
+      show "\<forall>n<length ?props. \<exists>l u.
+          map_of net_bounds (?props ! n) = Some (l, u)
+          \<and> l \<le> map (\<lambda>x. 1) ?props ! n
+          \<and> map (\<lambda>x. 1) ?props ! n \<le> u"
+      proof (intro allI impI)
+        fix n
+        assume n: "n < length ?props"
+        have "?props ! n \<in> set (map prop_to_var init) \<union> set (map prop_to_var goal)"
+          using n by simp
+        hence "map_of net_bounds (?props ! n) = Some (0, 1)"
+          by (rule map_of_net_bounds_init_goal)
+        thus "\<exists>l u. map_of net_bounds (?props ! n) = Some (l, u)
+          \<and> l \<le> map (\<lambda>x. 1) ?props ! n
+          \<and> map (\<lambda>x. 1) ?props ! n \<le> u"
+          using n by simp
+      qed
+    qed
+  qed
+  have bnd': "bounded (map_of num_net_bounds) ?vn'"
+    by (rule num_tracks_bounded[OF vn'_dom _ tr' fib]) (unfold proj', rule pv_bnd)
+  let ?upds = "set_var 1 planning_lock # set_var 0 acts_active # map (set_prop_ab 1) init"
+  have all_upds: "is_upds ?vn (?upds @ num_init_upd) ?vn'"
+    by (rule is_upds_appendI[OF prop_upds' num_upds])
+  have guard: "check_bexp ?vn (bexp.and (var_is 0 planning_lock) bexp.true) True"
+    using vn_pl0 by (auto simp: check_bexp_simps is_val_simps)
+  let ?L' = "init_locs[0 := planning_loc]"
+  let ?cfg1 = "(?L', ?vn', ?c)"
+  have step: "num_net_impl.sem \<turnstile> \<langle>init_locs, ?vn, ?c\<rangle> \<rightarrow>\<^bsub>Internal (STR '''')\<^esub> \<langle>?L', ?vn', [[]\<rightarrow>0]?c\<rangle>"
+  proof (rule num_step_int_lift[where p = 0])
+    show "(0::nat) < length num_timed_automaton_net"
+      by (simp add: length_num_net_automata)
+    have edge_eq: "(init_loc, bexp.and (var_is 0 planning_lock) bexp.true, [], Sil (STR ''''), ?upds @ num_init_upd, [], planning_loc)
+            = num_main_auto_init_edge"
+      unfolding num_main_auto_init_edge_def augment_edge_def main_auto_init_edge_def Let_def prod.case
+      by simp
+    show "(init_loc, bexp.and (var_is 0 planning_lock) bexp.true, [], Sil (STR ''''), ?upds @ num_init_upd, [], planning_loc)
+            \<in> trans (automaton_of (num_timed_automaton_net ! 0))"
+      unfolding edge_eq num_main_auto_trans
+      by (rule insertI1)
+    show "check_bexp ?vn (bexp.and (var_is 0 planning_lock) bexp.true) True"
+      by (rule guard)
+    show "?c \<turnstile> conv_cc []" by simp
+    show "init_locs ! 0 = init_loc" by (simp add: init_locs_def)
+    show "length init_locs = length num_timed_automaton_net"
+      by (simp add: init_locs_def length_num_net_automata)
+    show "is_upds ?vn (?upds @ num_init_upd) ?vn'" by (rule all_upds)
+    show "bounded (map_of num_net_bounds) ?vn'" using bnd' .
+  qed
+  have niv_apply_gen: "map_of (map (map_prod id fst) ys) x = map_option fst (map_of ys x)" for ys :: "(String.literal \<times> int \<times> int) list" and x
+    by (induction ys) (auto simp: map_prod_def)
+  have niv_apply: "?vn x = map_option fst (map_of num_net_bounds x)" for x
+    unfolding num_init_vars_def
+    by (rule niv_apply_gen)
+  have bnd0_lu: "l \<le> u \<and> ?vn x = Some l"
+    if lu: "map_of num_net_bounds x = Some (l, u)" for x l u
+  proof -
+    have vnx: "?vn x = Some l" using niv_apply[of x] lu by simp
+    have lu_mem: "(x, l, u) \<in> set num_net_bounds" using lu by (rule map_of_SomeD)
+    have "l \<le> u"
+      using lu_mem
+      unfolding num_all_vars_def all_vars_def num_fluent_vars_def Let_def
+      using fluent_bounds_valid
+      by (auto split: if_splits)
+    thus ?thesis using vnx by simp
+  qed
+  have bnd0: "bounded (map_of num_net_bounds) ?vn"
+    unfolding Simple_Network_Language.bounded_def
+  proof (intro conjI ballI)
+    show "dom ?vn = dom (map_of num_net_bounds)" by (rule dom_vn)
+  next
+    fix x assume x: "x \<in> dom ?vn"
+    have "x \<in> dom (map_of num_net_bounds)" using x dom_vn by simp
+    then obtain l u where lu: "map_of num_net_bounds x = Some (l, u)"
+      by (metis domD surj_pair)
+    show "fst (the (map_of num_net_bounds x)) \<le> the (?vn x)" using bnd0_lu[OF lu] lu by simp
+  next
+    fix x assume x: "x \<in> dom ?vn"
+    have "x \<in> dom (map_of num_net_bounds)" using x dom_vn by simp
+    then obtain l u where lu: "map_of num_net_bounds x = Some (l, u)"
+      by (metis domD surj_pair)
+    show "the (?vn x) \<le> snd (the (map_of num_net_bounds x))" using bnd0_lu[OF lu] lu by simp
+  qed
+  have cc0: "([[]\<rightarrow>(0::real)]?c) = ?c" by simp
+  have step': "num_net_impl.sem \<turnstile> \<langle>init_locs, ?vn, ?c\<rangle> \<rightarrow> \<langle>?L', ?vn', ?c\<rangle>"
+  proof (rule num_non_t_step_intro)
+    show "num_net_impl.sem \<turnstile> \<langle>init_locs, ?vn, ?c\<rangle> \<rightarrow>\<^bsub>Internal (STR '''')\<^esub> \<langle>?L', ?vn', ?c\<rangle>"
+      using step cc0 by simp
+    show "Internal (STR '''') \<noteq> Simple_Network_Language.label.Del" by simp
+    show "bounded (map_of num_net_bounds) ?vn" by (rule bnd0)
+  qed
+  have steps: "num_graph_impl.steps [num_a\<^sub>0, ?cfg1]"
+    unfolding num_a\<^sub>0_def
+    apply (rule num_single_step_intro)
+    unfolding prod.case
+    by (rule step')
+  have pl1: "?vn' planning_lock = Some 1"
+  proof -
+    have "planning_lock \<notin> fluent_to_var ` set nfluents"
+      using fluent_var_notin_net_bounds map_of_net_bounds_planning_lock
+      by (force simp: domIff)
+    hence "?vn' planning_lock = ?vn_mid planning_lock"
+      by (rule foldl_num_init_upd_unwritten)
+    also
+    have "\<dots> = Some 1"
+      apply (subst map_upds_apply_nontin)
+      subgoal by (rule variable_sets_unique(12))
+      by (simp add: variables_unique)
+    finally
+    show ?thesis .
+  qed
+  have lvp: "num_LvP ?cfg1"
+    unfolding num_LvP.simps
+    apply (rule num_Lv_condsI)
+    subgoal by (simp add: init_locs_def)
+    subgoal by (simp add: init_locs_def nth_list_update planning_loc_def init_loc_def)
+    subgoal using bnd' .
+    subgoal by (rule pl1)
+    done
+  have props': "num_init_planning_state_props' M ?cfg1"
+  proof (rule num_init_planning_state_props'I)
+    show "num_tracks ?vn' (snd (M 0))" by (rule tr')
+    have isp_run: "init_planning_state_props' (last ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0]))"
+      using initial_step_possible by blast
+    have "(ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0] = [a\<^sub>0, main_auto_init_edge_effect a\<^sub>0]"
+      by (simp add: comp_def seq_apply_1 ext_seq_def)
+    hence "init_planning_state_props' (main_auto_init_edge_effect a\<^sub>0)"
+      using isp_run by simp
+    moreover
+    have "main_auto_init_edge_effect a\<^sub>0 = (?L', ?pv, ?c)"
+      unfolding a\<^sub>0_alt
+      by (simp add: main_auto_init_edge_effect_alt init_locs_def init_vars_alt)
+    ultimately
+    show "init_planning_state_props' (?L', ?vn' |` dom (map_of net_bounds), ?c)"
+      using proj' by simp
+  qed
+  show ?thesis using steps lvp props' by blast
+qed
+
+text \<open>The numeric goal self-loop stream, mirroring @{const goal_run}. The numeric config type coincides
+with the propositional one, so the coinductive shape is identical.\<close>
+primcorec num_goal_run::"
+  (nat list \<times>
+    (String.literal \<rightharpoonup> int) \<times>
+    (String.literal, real) cval)
+\<Rightarrow> (nat list \<times>
+    (String.literal \<rightharpoonup> int) \<times>
+    (String.literal, real) cval) stream" where
+"num_goal_run s = s ## (num_goal_run s)"
+
+text \<open>The numeric reached goal config, mirroring @{const goal_state_conds}: the numeric goal edge
+only flips location @{term 0} to @{const goal_loc} and @{const planning_lock} to @{term 2}, so every
+conjunct coincides with @{const goal_state_conds} except the boundedness, which is stated against the
+FULL numeric bounds @{const num_net_bounds} (the numeric store carries the fresh fluent variables).
+The propositional value/lock conjuncts are stated over @{term \<open>map_of net_bounds\<close>} (the numeric goal
+edge does not touch propositional variables beyond @{const planning_lock}).\<close>
+definition "num_goal_state_conds Lvc \<equiv>
+let
+  (L, v, c) = Lvc;
+  bounded = Simple_Network_Language.bounded (map_of num_net_bounds) v;
+
+  acts_active = v acts_active = Some 0;
+  planning_state = v planning_lock = Some 2;
+
+  locs = (L = goal_loc # map (\<lambda> x. off_loc) actions);
+  prop_state = (\<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state S p)));
+  lock_state = (\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some 0)
+
+in
+  bounded
+\<and> acts_active
+\<and> planning_state
+\<and> locs
+\<and> prop_state
+\<and> lock_state"
+
+lemma num_goal_state_condsI:
+  assumes "x = (L, v, c)"
+    "Simple_Network_Language.bounded (map_of num_net_bounds) v"
+    "v acts_active = Some 0"
+    "v planning_lock = Some 2"
+    "L = goal_loc # map (\<lambda> x. off_loc) actions"
+    "(\<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state S p)))"
+    "(\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some 0)"
+  shows "num_goal_state_conds x"
+  using assms by (auto simp: num_goal_state_conds_def)
+
+lemma num_goal_state_condsE:
+  assumes "num_goal_state_conds x"
+      and "\<And>L v c. x = (L, v, c)
+        \<Longrightarrow> Simple_Network_Language.bounded (map_of num_net_bounds) v
+        \<Longrightarrow> v acts_active = Some 0
+        \<Longrightarrow> v planning_lock = Some 2
+        \<Longrightarrow> L = goal_loc # map (\<lambda> x. off_loc) actions
+        \<Longrightarrow> L ! 0 = goal_loc
+        \<Longrightarrow> (\<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_var p) = Some (prop_state S p)))
+        \<Longrightarrow> (\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> v (prop_to_lock p) = Some 0)
+        \<Longrightarrow> thesis"
+    shows thesis
+  apply (cases x)
+  using assms unfolding num_goal_state_conds_def by simp
+
+lemma num_final_step_possible:
+  assumes gtp: "num_goal_trans_pre M cfg"
+      and lvp: "num_LvP cfg"
+      and goalsat: "sat_comps (snd (M (length planning_sem.htpl))) (set num_goal)"
+      and goalok: "\<forall>c \<in> set num_goal. comp_ok (snd (M (length planning_sem.htpl))) c"
+  shows "\<exists>cfg'. num_graph_impl.steps [cfg, cfg'] \<and> num_goal_state_conds cfg'"
+proof -
+  obtain L v c where cfg: "cfg = (L, v, c)" by (rule prod_cases3)
+  let ?w = "snd (M (length planning_sem.htpl))"
+  \<comment> \<open>The numeric structural invariant on the source config.\<close>
+  have nlv: "num_Lv_conds L v"
+    using lvp unfolding cfg by simp
+  have bnd: "Simple_Network_Language.bounded (map_of num_net_bounds) v"
+    by (rule num_Lv_conds_dests(3)[OF nlv])
+  have vpl1: "v planning_lock = Some 1"
+    by (rule num_Lv_conds_dests(4)[OF nlv])
+  have Llen: "length L = Suc (length actions)"
+    by (rule num_Lv_conds_dests(1)[OF nlv])
+  \<comment> \<open>The propositional goal-transition pre-conditions on the projected store, and the tracking fact.\<close>
+  have gtpp: "goal_trans_pre (L, v |` dom (map_of net_bounds), c)"
+    by (rule num_goal_trans_pre_propD[OF gtp[unfolded cfg]])
+  have tr: "num_tracks v ?w" by (rule num_goal_trans_pre_trackD[OF gtp[unfolded cfg]])
+  let ?vp = "v |` dom (map_of net_bounds)"
+  let ?xp = "(L, ?vp, c)"
+  have lvpp: "LvP ?xp" by (rule num_LvP_imp_LvP[OF lvp[unfolded cfg]])
+  \<comment> \<open>The propositional goal step and reached goal config, reused verbatim from @{thm [source] final_step_possible}
+      on the singleton list.\<close>
+  have "graph_impl.steps ((ext_seq \<circ> seq_apply) [main_auto_goal_edge_effect] [?xp])
+        \<and> goal_state_conds (last ((ext_seq \<circ> seq_apply) [main_auto_goal_edge_effect] [?xp]))"
+  proof (rule final_step_possible, intro conjI)
+    show "graph_impl.steps [?xp]" by (rule graph_impl.steps.Single)
+    show "goal_trans_pre (last [?xp])" using gtpp by simp
+    show "LvP (last [?xp])" using lvpp by simp
+  qed
+  hence pstep: "graph_impl.steps [?xp, main_auto_goal_edge_effect ?xp]"
+    and gsc: "goal_state_conds (main_auto_goal_edge_effect ?xp)"
+    by (simp_all add: comp_def ext_seq_def seq_apply_def)
+  \<comment> \<open>The propositional reached goal config; its store, from @{thm [source] main_auto_goal_edge_effect_alt}.\<close>
+  have g_eq: "main_auto_goal_edge_effect ?xp = (L[0 := goal_loc], ?vp(planning_lock \<mapsto> 2), c)"
+    by (rule main_auto_goal_edge_effect_alt)
+  \<comment> \<open>Extract the single propositional step from the two-element @{const graph_impl.steps} list.\<close>
+  have pstep': "net_impl.sem \<turnstile> \<langle>L, ?vp, c\<rangle> \<rightarrow> \<langle>L[0 := goal_loc], ?vp(planning_lock \<mapsto> 2), c\<rangle>"
+  proof (cases rule: graph_impl.steps.cases[OF pstep[unfolded g_eq]])
+    case (2 x y xs)
+    hence "x = (L, ?vp, c)" "y = (L[0 := goal_loc], ?vp(planning_lock \<mapsto> 2), c)"
+      by simp_all
+    thus ?thesis using 2(2) by simp
+  qed simp
+  have gsc': "goal_state_conds (L[0 := goal_loc], ?vp(planning_lock \<mapsto> 2), c)"
+    using gsc unfolding g_eq .
+  have Llen': "length L = length net_automata"
+    using Llen by (simp add: length_net_automata)
+  \<comment> \<open>The projected store is @{const net_bounds}-bounded, and @{term v} extends it.\<close>
+  have pbnd: "Simple_Network_Language.bounded (map_of net_bounds) ?vp"
+    by (rule prop_proj_bounded[OF bnd])
+  have le: "?vp \<subseteq>\<^sub>m v"
+    by (simp add: map_le_def)
+  \<comment> \<open>Split the propositional step into its (vacuous) delay and the internal goal-edge firing.\<close>
+  obtain Li vi ci aa where
+      del: "net_impl.sem \<turnstile> \<langle>L, ?vp, c\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>Li, vi, ci\<rangle>"
+    and aD: "aa \<noteq> Simple_Network_Language.label.Del"
+    and act: "net_impl.sem \<turnstile> \<langle>Li, vi, ci\<rangle> \<rightarrow>\<^bsub>aa\<^esub> \<langle>L[0 := goal_loc], ?vp(planning_lock \<mapsto> 2), c\<rangle>"
+    by (rule step_u'_elims[OF pstep']) blast
+  obtain broad N B where as: "net_impl.sem = (broad, N, B)"
+    by (cases net_impl.sem) auto
+  obtain t where Lieq: "Li = L" and vieq: "vi = ?vp" and cieq: "ci = c \<oplus> t"
+    apply (cases rule: step_u_elims(1)[OF del])
+    unfolding as unfolding TAG_def by auto
+  have actI: "net_impl.sem \<turnstile> \<langle>L, ?vp, c \<oplus> t\<rangle> \<rightarrow>\<^bsub>aa\<^esub> \<langle>L[0 := goal_loc], ?vp(planning_lock \<mapsto> 2), c\<rangle>"
+    using act unfolding Lieq vieq cieq .
+  obtain a where aInt: "aa = Internal a"
+    using prop_non_del_step_internal[OF actI aD Llen']
+    by blast
+  \<comment> \<open>Invert the internal step to recover the fired edge and pin it to @{const main_auto_goal_edge} at p=0.\<close>
+  obtain p l b g f r l' where
+      P: "p < length net_automata"
+    and E: "(l, b, g, Sil a, f, r, l') \<in> trans (automaton_of (net_automata ! p))"
+    and B: "check_bexp ?vp b True"
+    and G: "(c \<oplus> t) \<turnstile> conv_cc g"
+    and LOC: "L ! p = l"
+    and L'eq2: "L[0 := goal_loc] = L[p := l']"
+    and c'eq: "c = [r\<rightarrow>0](c \<oplus> t)"
+    and U: "is_upds ?vp f (?vp(planning_lock \<mapsto> 2))"
+    by (rule prop_int_step_invert[OF actI[unfolded aInt] Llen'])
+  \<comment> \<open>Pin @{term p} to @{term 0}: only position @{term 0} changed, to @{const goal_loc}.\<close>
+  have len0: "0 < length L"
+    using Llen by simp
+  have L0_pl: "L ! 0 = planning_loc"
+    by (rule num_Lv_conds_dests(2)[OF nlv])
+  have pl_ne_goal: "planning_loc \<noteq> goal_loc"
+    by (simp add: locations_unique)
+  have p0: "p = 0"
+  proof (rule ccontr)
+    assume "p \<noteq> 0"
+    hence "L[p := l'] ! 0 = L ! 0" by simp
+    hence "L[0 := goal_loc] ! 0 = planning_loc"
+      using L'eq2 L0_pl by simp
+    moreover
+    have "L[0 := goal_loc] ! 0 = goal_loc" using len0 by simp
+    ultimately
+    show False using pl_ne_goal by simp
+  qed
+  \<comment> \<open>The fired edge is @{const main_auto_goal_edge}; read off its components.\<close>
+  have l_pl: "l = planning_loc"
+    using LOC p0 L0_pl by simp
+  have Emem: "(l, b, g, Sil a, f, r, l') \<in> set [main_auto_init_edge, main_auto_goal_edge, main_auto_loop]"
+    using E unfolding p0 main_auto_trans by simp
+  have edge_goal: "(l, b, g, Sil a, f, r, l') = main_auto_goal_edge"
+    using Emem l_pl
+    by (auto simp: main_auto_init_edge_def main_auto_goal_edge_def main_auto_loop_def
+                   Let_def locations_unique)
+  note goal_parts = edge_goal[unfolded main_auto_goal_edge_def Let_def, simplified prod.inject]
+  have g_nil: "g = []"
+    and f_eq: "f = [set_var 2 planning_lock]"
+    and r_nil: "r = []"
+    and l'_goal: "l' = goal_loc"
+    using goal_parts by simp_all
+  \<comment> \<open>The numeric edge is the AUGMENTED @{const num_main_auto_goal_edge} at p=0.\<close>
+  have NE: "(l, bexp.and b num_goal_guard, g, Sil a, f @ [], r, l')
+              \<in> trans (automaton_of (num_timed_automaton_net ! p))"
+    unfolding p0 num_main_auto_trans
+    using edge_goal
+    unfolding num_main_auto_goal_edge_def augment_edge_def main_auto_goal_edge_def Let_def
+    by (simp add: prod.case)
+  \<comment> \<open>The combined guard fires on @{term v}: the propositional half by monotonicity, the numeric
+     @{const num_goal_guard} half by @{thm [source] check_bexp_comps_guard}.\<close>
+  have bvn: "check_bexp v b True"
+    by (rule check_bexp_is_val_mono(1)[OF B le])
+  have guard_num: "check_bexp v num_goal_guard True"
+    unfolding num_goal_guard_def
+    by (rule check_bexp_comps_guard[OF tr goalok goalsat])
+  have NB: "check_bexp v (bexp.and b num_goal_guard) True"
+    using check_bexp_is_val.intros(3)[OF bvn guard_num]
+    by simp
+  \<comment> \<open>The (empty-numeric) update fires on @{term v}, landing on @{term \<open>v(planning_lock \<mapsto> 2)\<close>}.\<close>
+  obtain vn' where
+      NU: "is_upds v (f @ []) vn'"
+    and LE: "?vp(planning_lock \<mapsto> 2) \<subseteq>\<^sub>m vn'"
+    and OFF: "\<And>x. x \<notin> fst ` set (f @ []) \<Longrightarrow> vn' x = v x"
+    using is_upds_map_le[OF U le]
+    by (metis append_Nil2)
+  \<comment> \<open>The update writes only @{const planning_lock} (a propositional variable, fresh of the fluents),
+     so @{term \<open>vn' = v(planning_lock \<mapsto> 2)\<close>} and tracking survives.\<close>
+  have fset_f: "fst ` set (f @ []) = {planning_lock}"
+    using f_eq by simp
+  have vn'_eq: "vn' = v(planning_lock \<mapsto> 2)"
+  proof (rule ext)
+    fix x
+    show "vn' x = (v(planning_lock \<mapsto> 2)) x"
+    proof (cases "x = planning_lock")
+      case True
+      have "vn' planning_lock = (?vp(planning_lock \<mapsto> 2)) planning_lock"
+        using LE by (auto simp: map_le_def)
+      thus ?thesis using True by simp
+    next
+      case False
+      hence "x \<notin> fst ` set (f @ [])" using fset_f by simp
+      thus ?thesis using OFF False by simp
+    qed
+  qed
+  have fresh: "fluent_to_var h \<notin> fst ` set (f @ [])" if h: "h \<in> set nfluents" for h
+  proof -
+    have "planning_lock \<in> dom (map_of net_bounds)" using map_of_net_bounds_planning_lock by blast
+    thus ?thesis using fset_f fluent_var_notin_net_bounds[OF h] by auto
+  qed
+  have TR: "num_tracks vn' ?w" by (rule num_tracks_pres_unwritten[OF tr NU fresh])
+  \<comment> \<open>Re-establish the @{const num_net_bounds} bound on @{term \<open>v(planning_lock \<mapsto> 2)\<close>}.\<close>
+  have plock_dom: "planning_lock \<in> dom (map_of net_bounds)" using map_of_net_bounds_planning_lock by blast
+  have plock_bnd: "map_of num_net_bounds planning_lock = Some (0, 2)"
+    using map_of_num_net_bounds_eq_on_props[OF plock_dom] map_of_net_bounds_planning_lock by simp
+  have BND: "Simple_Network_Language.bounded (map_of num_net_bounds) vn'"
+    unfolding vn'_eq
+    by (rule single_upd_bounded[OF bnd plock_bnd]; simp)
+  \<comment> \<open>Assemble the numeric step: vacuous delay + the lifted internal goal edge.\<close>
+  have numDel: "num_net_impl.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow>\<^bsub>Simple_Network_Language.label.Del\<^esub> \<langle>L, v, c \<oplus> t\<rangle>"
+    by (rule num_step_t_lift[OF del[unfolded Lieq vieq cieq] bnd])
+  have plen_num: "p < length num_timed_automaton_net"
+    using P by (simp add: timed_automaton_net_def num_timed_automaton_net_def)
+  have Llen_num: "length L = length num_timed_automaton_net"
+    using Llen' by (simp add: timed_automaton_net_def num_timed_automaton_net_def)
+  have numInt: "num_net_impl.sem \<turnstile> \<langle>L, v, c \<oplus> t\<rangle> \<rightarrow>\<^bsub>Internal a\<^esub> \<langle>L[p := l'], vn', [r\<rightarrow>0](c \<oplus> t)\<rangle>"
+    by (rule num_step_int_lift[OF plen_num NE NB G LOC Llen_num NU BND])
+  have Lupd_eq: "L[p := l'] = L[0 := goal_loc]" using p0 l'_goal by simp
+  have clk_eq: "[r\<rightarrow>0](c \<oplus> t) = c" using c'eq by simp
+  have numstep0: "num_net_impl.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow> \<langle>L[p := l'], vn', [r\<rightarrow>0](c \<oplus> t)\<rangle>"
+    by (rule step_u'.intros[OF numDel _ numInt]) simp
+  have numstep: "num_net_impl.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow> \<langle>L[0 := goal_loc], vn', c\<rangle>"
+    using numstep0 unfolding Lupd_eq clk_eq .
+  \<comment> \<open>The numeric reached goal config satisfies @{const num_goal_state_conds}: locations/props/locks
+     from @{const goal_state_conds} on the projection, boundedness from @{const num_net_bounds}.\<close>
+  let ?cfg' = "(L[0 := goal_loc], vn', c)"
+  have proj_eq: "?vp(planning_lock \<mapsto> 2) = vn' |` dom (map_of net_bounds)"
+  proof (rule ext)
+    fix x
+    show "(?vp(planning_lock \<mapsto> 2)) x = (vn' |` dom (map_of net_bounds)) x"
+    proof (cases "x \<in> dom (map_of net_bounds)")
+      case True
+      hence "(vn' |` dom (map_of net_bounds)) x = vn' x" by (simp add: restrict_in)
+      moreover
+      have "vn' x = (v(planning_lock \<mapsto> 2)) x" using vn'_eq by simp
+      moreover
+      have "(?vp(planning_lock \<mapsto> 2)) x = (v(planning_lock \<mapsto> 2)) x" using True by (simp add: restrict_in)
+      ultimately
+      show ?thesis by simp
+    next
+      case False
+      hence "(vn' |` dom (map_of net_bounds)) x = None" by (simp add: restrict_map_def)
+      moreover
+      have "x \<noteq> planning_lock" using False plock_dom by blast
+      hence "(?vp(planning_lock \<mapsto> 2)) x = ?vp x" by simp
+      moreover
+      have "?vp x = None" using False by (simp add: restrict_map_def)
+      ultimately
+      show ?thesis by simp
+    qed
+  qed
+  have gsc'': "goal_state_conds (L[0 := goal_loc], vn' |` dom (map_of net_bounds), c)"
+    using gsc' unfolding proj_eq .
+  have "num_goal_state_conds ?cfg'"
+  proof (rule goal_state_condsE[OF gsc''])
+    fix L'' vv'' c''
+    assume s: "(L[0 := goal_loc], vn' |` dom (map_of net_bounds), c) = (L'', vv'', c'')"
+      and va: "vv'' acts_active = Some 0"
+      and pl2: "vv'' planning_lock = Some 2"
+      and Leq: "L'' = goal_loc # map (\<lambda> x. off_loc) actions"
+      and pv: "\<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> vv'' (prop_to_var p) = Some (prop_state S p))"
+      and plk: "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> vv'' (prop_to_lock p) = Some 0"
+    have L''eq: "L'' = L[0 := goal_loc]"
+      and vv''eq: "vv'' = vn' |` dom (map_of net_bounds)"
+      using s by simp_all
+    show "num_goal_state_conds ?cfg'"
+    proof (rule num_goal_state_condsI[OF HOL.refl BND])
+      have "acts_active \<in> dom (map_of net_bounds)" using map_of_net_bounds_acts_active by blast
+      thus "vn' acts_active = Some 0" using va vv''eq by (simp add: restrict_in)
+      show "vn' planning_lock = Some 2" using vn'_eq by simp
+      show "L[0 := goal_loc] = goal_loc # map (\<lambda> x. off_loc) actions" using Leq L''eq by simp
+      show "\<exists>S. set goal \<subseteq> S \<and> (\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> vn' (prop_to_var p) = Some (prop_state S p))"
+        using pv vv''eq by (auto simp: restrict_in)
+      show "\<forall>p. p \<in> set props \<and> prop_to_lock p \<in> dom (map_of net_bounds) \<longrightarrow> vn' (prop_to_lock p) = Some 0"
+        using plk vv''eq by (auto simp: restrict_in)
+    qed
+  qed
+  moreover
+  have "num_graph_impl.steps [cfg, ?cfg']"
+    unfolding cfg
+    apply (rule num_graph_impl.steps.Cons[OF _ num_graph_impl.steps.Single])
+    using numstep by simp
+  ultimately
+  show ?thesis by blast
+qed
+
+
+text \<open>The numeric goal self-loop stream is a run of the numeric graph, mirroring @{thm [source]
+goal_run_is_run}. At @{const goal_loc} the main automaton fires the (un-augmented) @{const
+main_auto_loop} edge -- guard-free, empty update, empty reset -- so it self-loops on the numeric net.\<close>
+lemma num_goal_run_is_run:
+  assumes "num_goal_state_conds s"
+  shows "num_graph_impl.run (num_goal_run s)"
+proof -
+  have x: "num_goal_state_conds (shd (num_goal_run s))" using assms by simp
+  show ?thesis
+  proof (rule num_graph_impl.run.coinduct[where X = "\<lambda>x. num_goal_state_conds (shd x) \<and> x = num_goal_run (shd x)"], goal_cases)
+    case 1
+    show ?case using x by auto
+  next
+    case (2 x)
+    hence conds_x: "num_goal_state_conds (shd x)"
+      and xeq: "x = num_goal_run (shd x)" by auto
+    have ctr: "x = shd x ## shd x ## (num_goal_run (shd x))"
+    proof -
+      have "shd x ## (num_goal_run (shd x)) = (num_goal_run (shd x))"
+        by (subst (2) num_goal_run.ctr) simp
+      thus ?thesis using xeq by auto
+    qed
+    obtain L v c where Lvc: "shd x = (L, v, c)" using prod_cases3 by blast
+    hence conds: "num_goal_state_conds (L, v, c)" using conds_x by simp
+    \<comment> \<open>Read off the facts the self-step needs: the goal location, the location list, and boundedness.\<close>
+    have L0: "L ! 0 = goal_loc" using conds num_goal_state_condsE by force
+    have Lloc: "L = goal_loc # map (\<lambda>x. off_loc) actions" using conds num_goal_state_condsE by force
+    have bnd: "Simple_Network_Language.bounded (map_of num_net_bounds) v"
+      using conds num_goal_state_condsE by force
+    \<comment> \<open>The @{const main_auto_loop} edge lives at position @{term 0} of the numeric net.\<close>
+    have Emem: "main_auto_loop \<in> trans (automaton_of (num_timed_automaton_net ! 0))"
+      unfolding num_main_auto_trans main_auto_loop_def by simp
+    have edge: "(goal_loc, bexp.true, [], Sil (STR ''''), [], [], goal_loc)
+                  \<in> trans (automaton_of (num_timed_automaton_net ! 0))"
+      using Emem unfolding main_auto_loop_def .
+    have plen: "(0::nat) < length num_timed_automaton_net"
+      by (simp add: num_timed_automaton_net_def)
+    have Llen: "length L = length num_timed_automaton_net"
+      unfolding Lloc by (simp add: num_timed_automaton_net_def length_map)
+    have upds: "is_upds v [] v" by (rule is_upds.intros)
+    have step0: "num_net_impl.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow>\<^bsub>Internal (STR '''')\<^esub> \<langle>L[0 := goal_loc], v, [[]\<rightarrow>0]c\<rangle>"
+      by (rule num_step_int_lift[OF plen edge _ _ L0 Llen upds bnd]) (simp add: check_bexp_simps)+
+    have Leq: "L[0 := goal_loc] = L" using L0 by (cases L) (simp_all add: locations_unique)
+    have ceq: "[[]\<rightarrow>0]c = c" by simp
+    have trans: "num_net_impl.sem \<turnstile> \<langle>L, v, c\<rangle> \<rightarrow> \<langle>L, v, c\<rangle>"
+      by (rule num_non_t_step_intro[OF step0[unfolded Leq ceq] bnd]) simp
+    have conds': "num_goal_state_conds (shd (shd x ## num_goal_run (shd x)))"
+      using conds_x by simp
+    have ctr': "shd x ## (num_goal_run (shd x)) = num_goal_run (shd ((shd x) ## (num_goal_run (shd x))))"
+      using num_goal_run.ctr stream.sel by simp
+    show ?case
+      apply (intro exI conjI)
+        apply (rule ctr)
+       apply (subst Lvc)+
+      unfolding prod.case
+      using trans ctr' conds' by simp+
+  qed
+qed
+
+text \<open>The numeric-net completeness assembly, mirroring @{thm [source] valid_plan_imp_form_holds}:
+from a valid numeric state sequence, the strengthened @{thm [source] num_plan_steps_possible} yields a
+plan prefix ending at @{const num_goal_trans_pre} with @{const num_LvP} preserved; @{thm [source]
+num_final_step_possible} appends the goal edge to a @{const num_goal_state_conds} config; and the
+@{const num_goal_run} self-loop extends it to an infinite run whose goal location satisfies @{const
+reach_formula}.\<close>
+lemma num_valid_state_seq_imp_form_holds:
+  assumes vss:  "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and m0:   "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
+      and goalsat: "sat_comps (snd (M (length planning_sem.htpl))) (set num_goal)"
+      and goalok:  "\<forall>c \<in> set num_goal. comp_ok (snd (M (length planning_sem.htpl))) c"
+  shows "num_net_impl.sem, num_a\<^sub>0 \<Turnstile> reach_formula"
+proof -
+  \<comment> \<open>The init edge from @{const num_a\<^sub>0} to the post-init config @{term cfg1}.\<close>
+  obtain cfg1 where
+      init_steps: "num_graph_impl.steps [num_a\<^sub>0, cfg1]"
+    and lvp1: "num_LvP cfg1"
+    and pres1: "num_init_planning_state_props' M cfg1"
+    using num_initial_step_possible[OF vss m0] by blast
+  \<comment> \<open>The plan prefix from @{term cfg1} to a @{const num_goal_trans_pre} config.\<close>
+  obtain ms where
+      plan_steps: "num_graph_impl.steps (cfg1 # ms)"
+    and gtp_last: "num_goal_trans_pre M (last (cfg1 # ms))"
+    and lvp_last: "num_LvP (last (cfg1 # ms))"
+    using num_plan_steps_possible[OF vss m0 lvp1 pres1] by blast
+  \<comment> \<open>The final goal edge to a @{const num_goal_state_conds} config @{term cfg'}.\<close>
+  obtain cfg' where
+      final_steps: "num_graph_impl.steps [last (cfg1 # ms), cfg']"
+    and gsc: "num_goal_state_conds cfg'"
+    using num_final_step_possible[OF gtp_last lvp_last goalsat goalok] by blast
+  \<comment> \<open>Concatenate the three step lists into a single plan prefix.\<close>
+  have steps01: "num_graph_impl.steps (num_a\<^sub>0 # cfg1 # ms)"
+    using num_graph_impl.steps_append[OF init_steps plan_steps] by simp
+  have last01: "last (num_a\<^sub>0 # cfg1 # ms) = last (cfg1 # ms)" by simp
+  define stepsL where "stepsL = num_a\<^sub>0 # cfg1 # ms @ [cfg']"
+  have stepsL_eq: "stepsL = (num_a\<^sub>0 # cfg1 # ms) @ [cfg']"
+    unfolding stepsL_def by simp
+  have steps_all: "num_graph_impl.steps stepsL"
+    unfolding stepsL_eq
+    using num_graph_impl.steps_append[OF steps01 final_steps[unfolded last01[symmetric]]] by simp
+  have last_all: "last stepsL = cfg'" unfolding stepsL_def by simp
+  have stepsL_not_Nil: "stepsL \<noteq> []" unfolding stepsL_def by simp
+  \<comment> \<open>The infinite run: the plan prefix followed by the goal self-loop.\<close>
+  have run: "num_graph_impl.run (stepsL @- num_goal_run cfg')"
+  proof (rule num_graph_impl.extend_run')
+    show "num_graph_impl.steps stepsL" using steps_all .
+    show "num_graph_impl.run (num_goal_run cfg')" using num_goal_run_is_run[OF gsc] .
+    show "last stepsL = shd (num_goal_run cfg')" using last_all num_goal_run.simps(1) by simp
+    show "stepsL @- stl (num_goal_run cfg') = stepsL @- num_goal_run cfg'"
+      using num_goal_run.sel(2) by simp
+  qed
+  have run_alt: "num_a\<^sub>0 ## (stl (stepsL @- num_goal_run cfg')) = stepsL @- num_goal_run cfg'"
+    apply (subst shift_simps(2))
+    apply (subst if_not_P)
+     apply (rule stepsL_not_Nil)
+    apply (subst shift.simps(2)[symmetric])
+    using stepsL_def by simp
+  hence run': "num_graph_impl.run (num_a\<^sub>0 ## (stl (stepsL @- num_goal_run cfg')))"
+    using run by simp
+  \<comment> \<open>The goal location holds at the reached goal config.\<close>
+  have form_holds: "holds (\<lambda>(L, v, _). check_sexp (sexp.loc 0 goal_loc) L (the \<circ> v)) (num_goal_run cfg')"
+  proof -
+    obtain L v c where Lvc: "shd (num_goal_run cfg') = (L, v, c)"
+      using prod_cases3 by blast
+    hence "cfg' = (L, v, c)" using num_goal_run.simps(1) by simp
+    hence "num_goal_state_conds (L, v, c)" using gsc by simp
+    hence "L ! 0 = goal_loc" using num_goal_state_condsE by force
+    hence "check_sexp (sexp.loc 0 goal_loc) L (the \<circ> v)" by auto
+    thus ?thesis unfolding holds.simps Lvc by simp
+  qed
+  show ?thesis
+    unfolding reach_formula_def
+    unfolding models_def
+    unfolding formula.case
+    unfolding num_graph_impl.Ex_ev_def
+    unfolding Sequence_LTL.ev_alt_def
+    using run' run_alt form_holds by blast
+qed
+
+text \<open>The hypothesis-free numeric completeness capstone: the numeric net's Munta semantics reaches
+the goal formula from the pre-init config @{const num_a\<^sub>0}. Every hypothesis of
+@{thm [source] num_valid_state_seq_imp_form_holds} is discharged from the locale's own assumptions --
+the numeric plan validity @{thm [source] num_valid} witnesses the state sequence @{term M} (giving
+@{text vss}, @{text m0}, @{text goalsat} after the @{thm [source] rat_impl_htpl_eq} bridge), and
+the goal comparisons are @{const comp_ok} at the integer-valued final valuation by
+@{thm [source] num_goal_comp_ok} (its @{const num_val_ok} premise from the reachability invariant
+@{thm [source] num_seq_val_ok}).\<close>
+lemma num_valid_plan_imp_form_holds:
+  "num_net_impl.sem, num_a\<^sub>0 \<Turnstile> reach_formula"
+proof -
+  obtain M where
+      vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+    and m0: "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
+    and gsat: "sat_comps (snd (M (length rat_impl.htpl))) (set num_goal)"
+    using num_valid unfolding num_plan.num_rat_impl.num_valid_plan_def by blast
+  have goalsat: "sat_comps (snd (M (length planning_sem.htpl))) (set num_goal)"
+    using gsat unfolding rat_impl_htpl_eq .
+  have vok: "num_val_ok (snd (M (length planning_sem.htpl)))"
+    by (rule num_seq_val_ok[OF vss m0 order.refl])
+  have goalok: "\<forall>c \<in> set num_goal. comp_ok (snd (M (length planning_sem.htpl))) c"
+    by (rule num_goal_comp_ok[OF vok])
+  show ?thesis by (rule num_valid_state_seq_imp_form_holds[OF vss m0 goalsat goalok])
+qed
+
+
+end
 end

@@ -1,5 +1,5 @@
-theory TP_NTA_Reduction_Correctness_Numeric_PhaseLifts
-  imports TP_NTA_Reduction_Correctness_Numeric_Projection
+theory TP_NTA_Reduction_Numeric_Steps
+  imports TP_NTA_Reduction_Numeric_Projection
 begin
 
 context numeric_tp_nta_reduction_correctness

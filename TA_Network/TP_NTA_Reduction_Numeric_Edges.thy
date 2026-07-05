@@ -1,5 +1,5 @@
-theory TP_NTA_Reduction_Correctness_Numeric_StepInfra
-  imports TP_NTA_Reduction_Correctness_Numeric_Tracking
+theory TP_NTA_Reduction_Numeric_Edges
+  imports TP_NTA_Reduction_Numeric_Prelims
 begin
 
 context numeric_tp_nta_reduction_correctness
