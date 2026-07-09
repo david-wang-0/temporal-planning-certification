@@ -1,4 +1,132 @@
-# HANDOVER — semantics + positivity RE-POINT (active) · numeric run-lift (dormant appendix)
+# HANDOVER — numeric reduction is proved abstractly; NEXT = make it executable
+
+## CURRENT STATUS (2026-07-08) — read this first
+
+WP-B (the executable numeric layer) is underway, restructured as a **grounder-idiomatic locale ladder**
+(design locked; see [NUMERIC_EXEC_PLAN.md](NUMERIC_EXEC_PLAN.md) §3 "Locale architecture — the ladder"):
+
+- **Stage 1 DONE & green** — `Ground_PDDL_Problem_Defs.thy`: extracted `ground_ast_problem_core`
+  (the numeric-INCLUSIVE base = the 9 shared admission assumptions); `ground_ast_problem` is now
+  `core + no_functions` (classical leaf, **name unchanged**, so the whole propositional pipeline below
+  it is untouched). fully_processed + consolidated, 0 errors. (In the jEdit buffer; not yet saved/committed.)
+- **Stage 2 DONE & green** — `Ground_PDDL_Numeric_Problem_Defs.thy` (fully_processed + consolidated,
+  0 errors, 0 sorries): the top-level translation funs `nexp_of_pddl`/`num_comps`/`upd_of_ne`; the
+  `numeric_ground_ast_problem_defs` locale **DEFINING** the numeric data from P (`nfluents`/`n_pre`/
+  `n_inv`/`upds`/`num_goal`/`num_init`, via the translation over the FPS snaps/goal/init); and the leaf
+  `numeric_ground_ast_problem = numeric_ground_ast_problem_defs + ground_ast_problem_core + <numeric-fragment wf>`.
+  Fluent identity `'n := func` (bare name-wrapper — exact mirror of props' `'proposition := predicate`).
+  Only `fluent_lo`/`fluent_hi`/`fluent_to_var`/`const_to_int` stay parameters (the WP-E bounds plug + the
+  two encoding maps). The draft's 2 antiquotation errors are gone. NB two constructor-clash gotchas fixed:
+  `numeric_effect_op.Assign` (clashes with `form.Assign` from Approximation), and locale-local consts need
+  `@{text …}` not `@{const …}` in doc comments.
+- **Two findings baked into the design:** (a) the propositional snaps `at_start_spec`/`at_end_spec` carry
+  the numerics (`pre_spec`/`adds_spec` only *project them out*) ⇒ `upds`/`n_pre` are definable with **no
+  placeholder-lift**; on classical instances they are provably `[]` via `wf_ground_action_numeric_effects_Nil`.
+  (b) `upds_no_cross_read` is the sequential=simultaneous side-condition (`is_upds_num_upd`) — keep it
+  (mild, statically checkable, benchmark-trivial).
+- **DONE (Stage 3a):** `const_to_int` defined (`= floor`), `const_to_int_of_int` now a lemma; leaf down
+  to 3 params (`fluent_to_var`/`fluent_lo`/`fluent_hi`). Green, saved.
+- **NEXT — the core-rebase (gate for WP-A), fully scoped 2026-07-09.** WP-A must interpret
+  `numeric_tp_nta_reduction_correctness`, which reuses the propositional reduction `abstr_model_checking`
+  (`Ground_PDDL_Problem_Reduction.thy`) + the plan-carrying `red_corr`/`valid_ground_plan`
+  (`Ground_PDDL_Plan_Reduction.thy`/`Ground_PDDL_Plan_Defs.thy`) — but all of that is anchored in the
+  CLASSICAL leaf `ground_ast_problem` (has `no_functions`), so the numeric leaf can't reuse it. Fix
+  (chosen by David): re-base the propositional machinery onto `ground_ast_problem_core`. Precise spec:
+    - `Ground_PDDL_Problem_Defs.thy`: give `ground_ast_problem_core` a `begin…end` body holding **all**
+      current `ground_ast_problem`-body lemmas (809–1445, 43 of them) EXCEPT the `no_functions` cluster
+      `{no_functions_no_wf_func_assign (1406), init_wf_fmla_atoms (1422), init_in_props (1431)}`, which
+      stay in the `ground_ast_problem` body. (Checked: only those 3 touch `no_functions`; `goal_in_props`
+      and the ~40 others are `no_functions`-free. `init_wf_fmla_atoms` genuinely needs it — numeric init
+      carries `numericEqAtm` assignments, so "all init facts are `wf_fmla_atom`" is false with functions.)
+    - `Ground_PDDL_Problem_Reduction.thy`: `context ground_ast_problem` → `context ground_ast_problem_core`.
+      Its `abstr_model_checking` proof uses `init_in_props` at the `goal-⊆-init` and `action_consts` goals,
+      but both reduce to `goal_in_props` (goal_spec ⊆ props ⇒ the diff is ∅) + ex-falso — so **drop the
+      `using init_in_props`** there; that's the one proof repair.
+    - `Ground_PDDL_Plan_Defs.thy`: `context ground_ast_problem` (271–376, 2 `no_functions`-free lemmas)
+      → `context ground_ast_problem_core`.
+    - Downstream is unaffected by name: `ground_ast_problem` still re-exports core's lemmas by inheritance,
+      so `ground_ast_problem.X` / interpretations keep resolving. Re-verify the whole prop + numeric chain.
+      Needs a jEdit restart (disk edits) — `jedit-down` before the bulk edit, `jedit-up` after.
+- **THEN WP-A (blueprint ready).** New file `Ground_PDDL_Numeric_NTA_Reduction_Correctness.thy`: a numeric
+  plan-carrying locale extending `numeric_ground_ast_problem` + a plan π + `num_seq_in_bounds` (WP-E plug),
+  interpreting `numeric_tp_nta_reduction_correctness` (imports `TP_NTA_Reduction_Correctness_Numeric`) to
+  get `num_valid_plan_imp_form_holds : num_net_impl.sem, num_a\<^sub>0 \<Turnstile> reach_formula`; lift to a
+  `ground_ast_problem`-level corollary (twin of `num_valid_ground_plan_imp_form_holds:37`).
+- (`Ground_PDDL_Numeric_Problem_Defs` is already in `ROOT` under `PDDL_TP_Reduction`.)
+- **SEPARATE deep task (backlog #8) — numeric over-all redesign, fully specified in
+  [NUMERIC_OVERALL_REDESIGN.md](NUMERIC_OVERALL_REDESIGN.md).** David's design: drop the restrictive
+  `n_inv_eq`/`n_inv_readonly`/`n_inv_init_sat` static contract; instead a per-fluent invariant lock
+  (inc on edge_2/start, dec on edge_3/end) + a write-guard on the fluent-writing edges (`num_start_edge`/
+  `num_end_edge`) forbidding writes to a locked (active-invariant) fluent, discharged from a numeric
+  plan-validity non-interference condition — the numeric twin of the propositional "no delete while
+  active" lock. Over-all value checked once at start (edge_2, last+write-free, sees settled valuation);
+  no end re-check. A net-structure change to green `TA_Network`; NOT a WP-A→D blocker (benchmarks have no
+  numeric over-all). The redesign doc has all anchors + the ordered plan.
+- **Uncommitted, ON DISK & green:** the Stage-1 core split (`Ground_PDDL_Problem_Defs.thy`), the whole
+  Stage-2 numeric file, + these doc updates. Nothing committed.
+
+The 2026-07-06 status below (abstract numeric-net certificate proved & committed) still holds and is the
+substrate this builds on.
+
+## CURRENT STATUS (2026-07-06) — read this first
+
+The semantics/positivity re-point AND the numeric-net correctness ladder are **green and committed**;
+the `TA_Network` reduction has been reorganized (committed `11707ff`). The whole proof-side numeric
+reduction is done. **What remains is the EXECUTABLE numeric layer** — planned in
+[NUMERIC_EXEC_PLAN.md](NUMERIC_EXEC_PLAN.md).
+
+- **Proved & committed (abstract):** `num_valid_plan_imp_form_holds : num_net_impl.sem, num_a\<^sub>0 \<Turnstile>
+  reach_formula` (`TA_Network/TP_NTA_Reduction_Correctness_Numeric.thy:2784`), hypothesis-free in
+  `numeric_tp_nta_reduction_correctness`. The re-point (`Ground_PDDL_Problem_Defs` + `Plan_Defs`,
+  `temp_plan_valid`) is green and committed. **0 sorries** across `TA_Network/*.thy`.
+- **MISSING — Rung 4 over the numeric net.** The only Ground_PDDL numeric lemmas
+  (`Ground_PDDL_Exec_Imp/Ground_PDDL_NTA_Reduction_Correctness.thy:37,44`) certify over the
+  **propositional** `net_impl` via the additive-tracking shortcut
+  (`TP_NTA_Reduction_Correctness.thy:664`) — *not* over `num_net_impl`. (NUMERIC_EXEC_PLAN WP-A.)
+- **MISSING — the whole executable numeric net.** No `num_make_network_impl`, no numeric
+  `check_ground_problem`, no numeric `export_code`; the only live export
+  (`Check_Unsolvability.thy:1235`) is propositional. (NUMERIC_EXEC_PLAN WP-B/C/D.)
+- **RESERVED FOR HUMAN DESIGN — boundedness.** Discharging `num_seq_in_bounds`
+  (`TP_NTA_Reduction_Numeric_Model_Checking.thy:66`) + choosing `fluent_lo`/`fluent_hi` is
+  soundness-critical and left to David (candidate: the untracked `Numeric_Bound_Inference/` interval
+  AI). (NUMERIC_EXEC_PLAN WP-E — everything downstream is built against its interface.)
+- **Uncommitted on disk:** the doc updates (`HANDOVER.md`, `NUMERIC_PLAN.md`,
+  `ARCHITECTURE_dependencies.md`, `REFACTOR_SPEC.md`, `NUMERIC_EXEC_PLAN.md`), `Numeric_Bound_Inference/`,
+  and a stray `Ground_PDDL_Exec_Imp/Ground_PDDL_Problem_Defs.thy` change **David did not review** — leave
+  it, do not commit it.
+
+Everything below is historical detail (re-point endgame, numeric run-lift closure) kept for reference;
+it predates the 2026-07-05 reorg and refers to the OLD file names.
+
+---
+
+## FILE REORGANIZATION (2026-07-05) — DONE, green, committed (`11707ff`)
+
+The `TA_Network` reduction was restructured (see `REFACTOR_SPEC.md`, `ARCHITECTURE_dependencies.md`).
+Whole prop + numeric chain re-verified green (0 errors) after each seam. Summary:
+- **Naming:** `Correctness` infix dropped from stage files; it survives only on the two capstones
+  (`TP_NTA_Reduction_Correctness`, `TP_NTA_Reduction_Correctness_Numeric`). Stage files are
+  `TP_NTA_Reduction_[Numeric_]<Stage>`.
+- **Propositional kernel:** `Defs → Model_Checking → Utils → Prelims → Edges → Happenings →
+  Properties → Steps → Correctness`. `Happenings` is now conditions + I/E/D rules ONLY;
+  `Properties` (new) holds general automaton props + constraint-satisfaction lemmas + `steps_seq` +
+  invariant-maintenance; `Utils` (new) holds generic pure-HOL + Munta-global helpers; the
+  plan-stepping defs moved to `Steps`.
+- **Numeric layer:** `Numeric_Defs` (split from Defs) → `Numeric_Model_Checking` (locale + `num_a0`)
+  → `Numeric_Prelims` (was Tracking) → `Numeric_Edges` (was StepInfra) → `Numeric_Projection` →
+  `Numeric_Steps` (was PhaseLifts) → `Correctness_Numeric` (was Plan + merged Happening). The
+  numeric chain is a tightly-coupled lifting pipeline and was NOT re-layered like the kernel
+  (its conditions/step-props are consumed by numeric Edges/Projection).
+- **Folders:** kept flat in `TA_Network/` (single session). A `propositional/`+`numeric/` subfolder
+  split was tried and reverted — one-session subdirs break jEdit's session association (would need two
+  sessions); the `Numeric_` prefix already distinguishes the layers.
+- The `<todo: fill this in>` in `…_Correctness` was filled (points to `num_valid_plan_imp_form_holds`
+  in `TP_NTA_Reduction_Correctness_Numeric`).
+
+Everything below this section predates the reorg and refers to the OLD file names.
+
+---
+
 
 Living inventory + ordered next-steps for the RE-POINT of the development onto Formal-PDDL-Semantics (FPS)
 `Temporal_Planning` + the grounder's grounded/positive temporal locales (session `Grounding_Temporal_Common`,

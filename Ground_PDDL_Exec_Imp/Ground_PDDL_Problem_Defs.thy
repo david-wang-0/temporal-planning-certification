@@ -781,20 +781,31 @@ locale integer_duration_problem = wf_ast_temporal_problem P
   assumes no_functions: "functions D = []"
       and acts_no_func_dcs: "list_all act_no_func_dcs (actions D)"
       and acts_dcs_integers: "list_all act_dcs_integers (actions D)"
-locale ground_ast_problem = 
+
+locale ground_ast_problem_core =
     ground_ast_problem_defs P +
     wf_ast_temporal_problem P
   for P :: ast_temporal_problem +
   assumes positive_goal: "is_pos_conj (goal P)"
       and preds_no_args: "list_all pred_no_args (predicates D)"
       and acts_no_params: "list_all act_no_params (actions D)"
-      and acts_no_func_dcs: "list_all act_no_func_dcs (actions D)" 
+      and acts_no_func_dcs: "list_all act_no_func_dcs (actions D)"
       and acts_dcs_integers: "list_all act_dcs_integers (actions D)"
       and positive_act_pres: "list_all act_pres_pos (actions D)"
       and conds_no_args: "list_all act_conds_no_args (actions D)"
-      and no_functions: "functions D = []"
       and no_consts: "consts D = []"
       and init_no_args: "list_all form_preds_no_args (init P)"
+
+text \<open>Numeric-freeness is an \<^emph>\<open>orthogonal leaf\<close> off the shared @{text ground_ast_problem_core}
+  (grounder idiom: cf. the grounder's @{text numeric_free_problem}), \<^bold>\<open>not\<close> part of the core: the
+  classical admission bundle @{text ground_ast_problem} is \<open>core\<close> + @{text no_functions}; the numeric
+  admission bundle @{text numeric_ground_ast_problem} (in @{text Ground_PDDL_Numeric_Problem_Defs}) is
+  \<open>core\<close> + the numeric-fragment well-formedness. The core stays numeric-inclusive so both leaves share it.\<close>
+
+locale ground_ast_problem =
+    ground_ast_problem_core P
+  for P :: ast_temporal_problem +
+  assumes no_functions: "functions D = []"
 begin
 
 lemma acts_wf:
