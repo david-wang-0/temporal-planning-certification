@@ -70,6 +70,7 @@ locale numeric_tp_nta_reduction_correctness =
                \<Longrightarrow> fluent_in_bounds (snd (M i))"
       and num_goal_comp_ok:
             "\<And>w. num_val_ok w \<Longrightarrow> (\<forall>c \<in> set num_goal. comp_ok w c)"
+
 begin
 
 text \<open>The numeric network's Munta semantics, mirroring the propositional @{text net_impl}/@{text

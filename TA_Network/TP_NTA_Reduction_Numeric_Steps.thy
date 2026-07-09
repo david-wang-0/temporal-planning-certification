@@ -67,7 +67,7 @@ the edge list of @{const num_action_to_automaton}), so the numeric net contains 
 @{const edge_3} transition as the propositional net.\<close>
 lemma num_nth_auto_edge_3:
   assumes n: "n < length actions"
-  shows "edge_3 (actions ! n) \<in> trans (automaton_of (num_timed_automaton_net ! Suc n))"
+  shows "num_edge_3 (actions ! n) \<in> trans (automaton_of (num_timed_automaton_net ! Suc n))"
 proof -
   have "trans (automaton_of (num_timed_automaton_net ! Suc n))
           = trans (automaton_of (num_action_to_automaton (actions ! n)))"
@@ -160,11 +160,14 @@ lemma num_edge_3_step_lift:
       and L'eq: "L' = fst (edge_3_effect n (L, vp, c))"
       and pbnd': "Simple_Network_Language.bounded (map_of net_bounds) vp'"
       and fin: "fluent_in_bounds w"
+      and wok: "num_val_ok w"
+      and sat_inv: "sat_comps w (set (n_inv (actions ! n)))"
     shows "\<exists>vn'. num_net_impl.sem \<turnstile> \<langle>L, vn, c\<rangle> \<rightarrow> \<langle>L', vn', c'\<rangle> \<and> REL vp' vn' w"
 proof -
   have le: "vp \<subseteq>\<^sub>m vn" by (rule REL_leD[OF rel])
   have tr: "num_tracks vn w" by (rule REL_trD[OF rel])
   have bnd: "Simple_Network_Language.bounded (map_of num_net_bounds) vn" by (rule REL_bndD[OF rel])
+  have aMem: "actions ! n \<in> set actions" using n by simp
   have L'_eq: "L' = L[Suc n := ending_loc]"
     using L'eq by (simp add: edge_3_effect_alt)
   \<comment> \<open>Split the propositional step into its (vacuous) delay and the internal edge firing.\<close>
@@ -206,11 +209,26 @@ proof -
     by (rule prop_edge_3_pinned[OF P E LOC run n pSuc])
   \<comment> \<open>The fired edge's components, read off @{const edge_3}.\<close>
   note edge_parts = edge3[unfolded edge_3_def Let_def, simplified prod.inject]
-  \<comment> \<open>The numeric edge: @{const edge_3} verbatim, with the same guard and update.\<close>
-  have NE: "(l, b, g, Sil a, f, r, l') \<in> trans (automaton_of (num_timed_automaton_net ! p))"
-    unfolding pSuc edge3 by (rule num_nth_auto_edge_3[OF n])
-  \<comment> \<open>The numeric guard fires on the extended store; the update fires, preserving tracking.\<close>
-  have NB: "check_bexp vn b True" by (rule check_bexp_is_val_mono(1)[OF B le])
+  \<comment> \<open>The numeric edge: the AUGMENTED @{const num_edge_3}, with the conjoined @{const num_inv_guard}.\<close>
+  have NE: "num_edge_3 (actions ! n) \<in> trans (automaton_of (num_timed_automaton_net ! p))"
+    unfolding pSuc by (rule num_nth_auto_edge_3[OF n])
+  \<comment> \<open>The numeric edge's components, read off @{const num_edge_3}: same source/target/clocks/reset/update
+     as @{const edge_3}, with the guard conjoined with @{const num_inv_guard}.\<close>
+  have ne_eq: "num_edge_3 (actions ! n) = (l, bexp.and b (num_inv_guard (actions ! n)), g, Sil a, f, r, l')"
+    unfolding num_edge_3_def augment_edge_def edge3[symmetric] by simp
+  have NEassembled: "(l, bexp.and b (num_inv_guard (actions ! n)), g, Sil a, f, r, l')
+                       \<in> trans (automaton_of (num_timed_automaton_net ! p))"
+    using NE unfolding ne_eq .
+  \<comment> \<open>The combined numeric guard fires on the extended store: the propositional half by monotonicity,
+     the numeric over_all half by @{thm [source] check_bexp_comps_guard}.\<close>
+  have NBprop: "check_bexp vn b True" by (rule check_bexp_is_val_mono(1)[OF B le])
+  have inv_ok: "\<forall>cc \<in> set (n_inv (actions ! n)). comp_ok w cc"
+    using snap_inv_comp_ok aMem wok by blast
+  have NBinv: "check_bexp vn (num_inv_guard (actions ! n)) True"
+    unfolding num_inv_guard_def by (rule check_bexp_comps_guard[OF tr inv_ok sat_inv])
+  have NB: "check_bexp vn (bexp.and b (num_inv_guard (actions ! n))) True"
+    using check_bexp_is_val.intros(3)[OF NBprop NBinv] by simp
+  \<comment> \<open>The (propositional) update fires on the extended store, preserving tracking.\<close>
   obtain vn' where
       NU: "is_upds vn f vn'"
     and LE: "vp' \<subseteq>\<^sub>m vn'"
@@ -222,7 +240,6 @@ proof -
     using edge3 by (simp add: edge_3_def Let_def)
   have fst_f: "fst ` set f = prop_to_lock ` set (over_all (actions ! n))"
     unfolding f_eq set_map image_image inc_prop_lock_ab_def by (simp add: comp_def)
-  have aMem: "actions ! n \<in> set actions" using n by simp
   have fresh: "fluent_to_var h \<notin> fst ` set f" if h: "h \<in> set nfluents" for h
   proof
     assume "fluent_to_var h \<in> fst ` set f"
@@ -294,7 +311,7 @@ proof -
   have Llen_num: "length L = length num_timed_automaton_net"
     using Llen by (simp add: timed_automaton_net_def num_timed_automaton_net_def)
   have numInt: "num_net_impl.sem \<turnstile> \<langle>L, vn, c \<oplus> t\<rangle> \<rightarrow>\<^bsub>Internal a\<^esub> \<langle>L[p := l'], vn', [r\<rightarrow>0](c \<oplus> t)\<rangle>"
-    by (rule num_step_int_lift[OF plen_num NE NB G LOC Llen_num NU BND])
+    by (rule num_step_int_lift[OF plen_num NEassembled NB G LOC Llen_num NU BND])
   have "num_net_impl.sem \<turnstile> \<langle>L, vn, c\<rangle> \<rightarrow> \<langle>L', vn', c'\<rangle>"
     unfolding L'eq2 c'eq
     by (rule step_u'.intros[OF numDel _ numInt]) simp
@@ -1874,6 +1891,8 @@ lemma RLP_edge_3_single:
       and Llen: "length (fst s) = length net_automata"
       and pbnd': "Simple_Network_Language.bounded (map_of net_bounds) (fst (snd (edge_3_effect n s)))"
       and fin: "fluent_in_bounds w"
+      and wok: "num_val_ok w"
+      and sat_inv: "sat_comps w (set (n_inv (actions ! n)))"
     shows "RLP w [s, edge_3_effect n s]"
   unfolding RLP_def
 proof (intro conjI impI allI)
@@ -1898,7 +1917,7 @@ next
   obtain vn' where
       numstep: "num_net_impl.sem \<turnstile> \<langle>L, vn, c\<rangle> \<rightarrow> \<langle>L', vn', c'\<rangle>"
     and relE: "REL vp' vn' w"
-    using num_edge_3_step_lift[OF relS Llen2 run2 n step1 L'fst pbnd2 fin] by blast
+    using num_edge_3_step_lift[OF relS Llen2 run2 n step1 L'fst pbnd2 fin wok sat_inv] by blast
   have "num_graph_impl.steps [cn, (L', vn', c')]"
     unfolding cn Leq ceq by (rule num_single_step_intro) (use numstep in \<open>simp add: prod.case\<close>)
   moreover have "RELC (edge_3_effect n s) (L', vn', c') w"

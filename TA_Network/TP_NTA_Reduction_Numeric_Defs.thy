@@ -113,6 +113,7 @@ definition "num_start_edge a =
 definition "num_end_edge a =
   augment_edge (num_pre_guard (at_end a)) (num_upd (at_end a)) (end_edge a)"
 definition "num_edge_2 a = augment_edge (num_inv_guard a) [] (edge_2 a)"
+definition "num_edge_3 a = augment_edge (num_inv_guard a) [] (edge_3 a)"
 
 text \<open>One automaton per action: the start/end snaps carry numeric guards+updates and the running-entry
 edge \<open>edge_2\<close> carries the numeric \<open>over_all\<close> invariant. The duration edge \<open>edge_3\<close> and the
@@ -121,7 +122,7 @@ definition "num_action_to_automaton a =
 (let
   committed_locs = (Nil::nat list);
   urgent_locs = [starting_loc, ending_loc];
-  edges = [num_start_edge a, num_edge_2 a, edge_3 a, num_end_edge a, instant_trans_edge a];
+  edges = [num_start_edge a, num_edge_2 a, num_edge_3 a, num_end_edge a, instant_trans_edge a];
   invs = []::(nat \<times> (String.literal, int) acconstraint list) list
 in (committed_locs, urgent_locs, edges, invs))"
 
@@ -238,25 +239,14 @@ locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
             "\<forall>a \<in> set actions. fst ` set (upds (at_start a)) \<subseteq> set nfluents"
       and snap_writes_nfluents_end:
             "\<forall>a \<in> set actions. fst ` set (upds (at_end a)) \<subseteq> set nfluents"
-      \<comment> \<open>Numeric over_all invariants: the supported fragment restricts them to EQUALITIES
-         (@{term n_inv_eq}) whose fluents are never written by any snap (read-only, @{term n_inv_readonly}).
-         Then an over_all comparison's value is constant along every run, hence valuation-independent, so
-         @{const num_edge_2}'s entry check discharges directly from plan validity (the action's over_all
-         holds while it is active, which transfers verbatim to the start instant) -- the numeric mirror of
-         the propositional over_all lock, with "no update changes the value" in its strongest static form.\<close>
-      and n_inv_eq:
-            "\<forall>a \<in> set actions. \<forall>c \<in> set (n_inv a). \<exists>e1 e2. c = Comp Ceq e1 e2"
-      and n_inv_readonly:
-            "\<forall>a \<in> set actions. \<forall>b \<in> set actions.
-               (fst ` set (upds (at_start a)) \<union> fst ` set (upds (at_end a)))
-                 \<inter> (\<Union>c \<in> set (n_inv b). comp_fluents c) = {}"
-      \<comment> \<open>The over_all equalities hold at the INITIAL valuation. With @{term n_inv_readonly} (the
-         over_all fluents never change along any run) this makes the over_all hold at EVERY reachable
-         valuation, so @{const num_edge_2}'s entry guard discharges without a per-action "active at i'"
-         witness. Vacuous when @{term \<open>n_inv a = []\<close>} (the benchmark case); for equality over_all it is
-         exactly what the grounder certifies -- the invariant holds throughout the plan, hence at init.\<close>
-      and n_inv_init_sat:
-            "\<forall>a \<in> set actions.
-               sat_comps (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None) (set (n_inv a))"
+      \<comment> \<open>Numeric over_all invariants: the OLD static contract -- @{text n_inv_eq} (equalities only) +
+         @{text n_inv_readonly} (over_all fluents never written by any snap) + @{text n_inv_init_sat}
+         (over_all hold at the initial valuation), discharged via a "read-only \<Rightarrow> constant = initial value"
+         shortcut -- has been DROPPED (backlog #8, the lock-based over_all redesign; see
+         \<open>NUMERIC_OVERALL_REDESIGN.md\<close>). The general over_all fragment is now GENERAL (arbitrary
+         while-active comparisons), and the @{text num_edge_2} (start) and @{text num_edge_3} (end)
+         over_all guards are discharged from plan validity's active clause via
+         @{text starting_index_active_Suc} / @{text ending_index_inv_sat} -- a sound over-approximation
+         (no lock, no write-guard).\<close>
 
 end

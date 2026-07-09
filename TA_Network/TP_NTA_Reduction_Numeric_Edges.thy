@@ -152,8 +152,9 @@ schematic_goal num_action_auto_urg:
 text \<open>The numeric edge-effect config transformers reuse the @{emph \<open>generic\<close>} @{const edge_effect}
 (it applies an edge's updates/location/reset, with no guard check) at the @{const augment_edge}'d
 edges, so each fires the propositional @{emph \<open>and\<close>} the numeric updates. The duration edge
-@{const edge_3} and the instant edge @{const instant_trans_edge} carry no numeric data, so their
-propositional effects @{const edge_3_effect} / @{const instant_trans_edge_effect} are reused unchanged.\<close>
+@{const num_edge_3} carries the numeric over_all guard but @{emph \<open>no numeric update\<close>}, and the instant
+edge @{const instant_trans_edge} carries no numeric data at all, so their propositional effects
+@{const edge_3_effect} / @{const instant_trans_edge_effect} are reused unchanged.\<close>
 definition "num_start_edge_effect n = edge_effect (Suc n) (num_start_edge (actions ! n))"
 definition "num_end_edge_effect n = edge_effect (Suc n) (num_end_edge (actions ! n))"
 definition "num_edge_2_effect n = edge_effect (Suc n) (num_edge_2 (actions ! n))"
@@ -427,9 +428,9 @@ qed
 
 text \<open>Discharging the @{term num_data} provider for an edge with @{emph \<open>no numeric update\<close>}
 (@{term \<open>fu = f\<close>}): the unchanged edges that appear verbatim in @{const num_timed_automaton_net}
-(@{const edge_3} / @{const instant_trans_edge} / @{const main_auto_loop}) and the guard-only augmented
-edges (@{const num_edge_2} / @{const num_main_auto_goal_edge}, whose @{const augment_edge} appends the
-empty update list). The propositional update sequence @{term f} fires on the extended store via @{thm
+(@{const instant_trans_edge} / @{const main_auto_loop}) and the guard-only augmented
+edges (@{const num_edge_2} / @{const num_edge_3} / @{const num_main_auto_goal_edge}, whose
+@{const augment_edge} appends the empty update list). The propositional update sequence @{term f} fires on the extended store via @{thm
 [source] is_upds_map_le}, and -- writing no fluent variable -- preserves tracking by @{thm [source]
 num_tracks_pres_unwritten}. The caller supplies the assembled (combined) guard
 @{term \<open>check_bexp vn bg True\<close>}, the numeric edge's membership, the freshness of @{term f}, and

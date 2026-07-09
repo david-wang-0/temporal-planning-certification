@@ -6,36 +6,6 @@ context numeric_tp_nta_reduction_correctness
 begin
 
 
-text \<open>For the @{const num_edge_2} phase the entry guard's @{text sat_inv} obligation (the over_all
-  comparisons of the just-started action @{term \<open>actions ! n\<close>}) is discharged at the running fold valuation
-  @{term \<open>num_plan.num_rat_impl.happening_num_update ys (snd (M i))\<close>}: the over_all fluents are READ-ONLY along
-  the run, so the fold (@{thm [source] happening_num_update_inv_unchanged}) and the state sequence
-  (@{thm [source] num_seq_inv_const}) both pin them to the INITIAL valuation, where @{text n_inv_init_sat}
-  certifies the over_all hold.\<close>
-lemma inv_sat_at_fold:
-  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
-      and m0: "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
-      and i: "i \<le> length planning_sem.htpl"
-      and a: "a \<in> set actions"
-      and ysmem: "\<And>s. s \<in> set ys \<Longrightarrow> \<exists>b \<in> set actions. s = at_start b \<or> s = at_end b"
-    shows "sat_comps (num_plan.num_rat_impl.happening_num_update ys (snd (M i))) (set (n_inv a))"
-proof -
-  have agree: "num_plan.num_rat_impl.happening_num_update ys (snd (M i)) g = snd (M 0) g"
-    if c: "c \<in> set (n_inv a)" and f: "g \<in> comp_fluents c" for c g
-  proof -
-    have ginv: "g \<in> (\<Union>a \<in> set actions. \<Union>c \<in> set (n_inv a). comp_fluents c)"
-      using a c f by blast
-    have "num_plan.num_rat_impl.happening_num_update ys (snd (M i)) g = snd (M i) g"
-      by (rule happening_num_update_inv_unchanged[OF ginv ysmem])
-    also have "\<dots> = snd (M 0) g" by (rule num_seq_inv_const[OF vss i ginv])
-    finally show ?thesis .
-  qed
-  have "sat_comps (num_plan.num_rat_impl.happening_num_update ys (snd (M i))) (set (n_inv a))
-          = sat_comps (snd (M 0)) (set (n_inv a))"
-    by (rule sat_comps_cong) (use agree in blast)
-  thus ?thesis unfolding m0 using n_inv_init_sat a by simp
-qed
-
 text \<open>The propositional @{const net_impl.sem} carries @{const net_bounds}-boundedness of the store as a
   PREMISE on the @{const Simple_Network_Language.label.Del} half of every @{const step_u'} (the
   @{thm [source] step_u_elims} extraction), so the HEAD store of any @{const graph_impl.steps} run that has
@@ -1056,6 +1026,13 @@ proof -
     let ?run3 = "h1 # seq_apply (map edge_3_effect ?SE) h1"
     have fin3: "fluent_in_bounds (snd (M i))"
       using i by (intro num_seq_fluent_in_bounds[OF vss m0]) simp
+    have wok3: "num_val_ok (snd (M i))" by (rule fluent_in_bounds_imp_num_val_ok[OF fin3])
+    \<comment> \<open>The over_all invariants hold at @{term \<open>snd (M i)\<close>} for every ending-index action (from plan
+       validity's active clause, @{thm [source] ending_index_inv_sat}): the deferred @{text sat_inv}
+       the augmented @{const num_edge_3} guard demands.\<close>
+    have sat3: "sat_comps (snd (M i)) (set (n_inv (actions ! n)))"
+      if n: "n < length actions" and iend: "is_ending_index ?t n" for n
+      by (rule ending_index_inv_sat[OF vss i n iend])
     \<comment> \<open>The @{const edge_3} effect only re-targets the FIRED automaton location, so the location at any
        not-yet-fired position is preserved along the @{const seq_apply} run (induct on the run position).\<close>
     have loc_pres: "fst (?run3 ! k) ! Suc q = fst h1 ! Suc q"
@@ -1151,9 +1128,10 @@ proof -
                       (fst (snd (edge_3_effect (?SE ! j) s)))"
         using struct3[OF j] unfolding Pj by simp_all
       have nk_act: "?SE ! j < length actions"
-        using SE_mem[OF nth_mem[OF j]] by simp
+        and nk_end: "is_ending_index ?t (?SE ! j)"
+        using SE_mem[OF nth_mem[OF j]] by simp_all
       have rlp_single: "RLP (snd (M i)) [s, edge_3_effect (?SE ! j) s]"
-        by (rule RLP_edge_3_single[OF src nk_act len pbnd fin3])
+        by (rule RLP_edge_3_single[OF src nk_act len pbnd fin3 wok3 sat3[OF nk_act nk_end]])
       show "(\<lambda>j s. s = ?run3 ! Suc j) j (edge_3_effect (?SE ! j) s)
             \<and> RLP (snd (M i)) [s, edge_3_effect (?SE ! j) s]"
         using nxt rlp_single by simp
@@ -1198,11 +1176,18 @@ proof -
     have ys5_act: "\<exists>a \<in> set actions. s = at_start a \<or> s = at_end a"
       if "s \<in> set (snaps_inst @ snaps_start @ snaps_end)" for s
       using that snaps_inst_act snaps_start_act snaps_end_act by auto
-    have sat5: "sat_comps ?w5 (set (n_inv (actions ! n)))" if n: "n < length actions" for n
+    \<comment> \<open>The terminal fold equality @{term \<open>?w5 = snd (M (Suc i))\<close>}: re-derived here (mirror of
+       @{text term_fold} below), so the honest edge_2 over_all discharge @{thm [source]
+       starting_index_active_Suc} -- scoped to a just-started (hence active) action -- applies.\<close>
+    have term_fold5: "?w5 = snd (M (Suc i))"
+      using run_order_fold_eq_happening_num_update_set[OF i vss ros_dist[unfolded ros_eq[symmetric]] ros_set[unfolded ros_eq[symmetric]]]
+      unfolding ros_eq[symmetric] .
+    have sat5: "sat_comps ?w5 (set (n_inv (actions ! n)))"
+      if n: "n < length actions" and ist: "is_starting_index ?t n" for n
     proof -
-      have ile: "i \<le> length planning_sem.htpl" using i by simp
-      have aMem: "actions ! n \<in> set actions" using n by simp
-      show ?thesis by (rule inv_sat_at_fold[OF vss m0 ile aMem ys5_act])
+      have "sat_comps (snd (M (Suc i))) (set (n_inv (actions ! n)))"
+        by (rule starting_index_active_Suc(2)[OF vss i n ist])
+      thus ?thesis using term_fold5 by simp
     qed
     \<comment> \<open>Per-position structural facts for the @{const edge_2} exit run (mirror of @{thm [source]
        start_phase_struct}): source @{const starting_loc} (via TARGET-pinning, only @{const edge_2}
@@ -1271,9 +1256,10 @@ proof -
                       (fst (snd (edge_2_effect (?SS ! j) s)))"
         using struct5[OF j] unfolding Pj by simp_all
       have nk_act: "?SS ! j < length actions"
-        using SS_mem[OF nth_mem[OF j]] by simp
+        and nk_ist: "is_starting_index ?t (?SS ! j)"
+        using SS_mem[OF nth_mem[OF j]] by simp_all
       have rlp_single: "RLP ?w5 [s, edge_2_effect (?SS ! j) s]"
-        by (rule RLP_edge_2_single[OF src nk_act len pbnd fin5 wok5 sat5[OF nk_act]])
+        by (rule RLP_edge_2_single[OF src nk_act len pbnd fin5 wok5 sat5[OF nk_act nk_ist]])
       show "(\<lambda>j s. s = ?run5 ! Suc j) j (edge_2_effect (?SS ! j) s)
             \<and> RLP ?w5 [s, edge_2_effect (?SS ! j) s]"
         using nxt rlp_single by simp

@@ -501,57 +501,11 @@ proof (rule sat_comps_cong)
     by (rule happening_num_update_unwritten) (rule unwr)
 qed
 
-lemma happening_num_update_inv_unchanged:
-  assumes g: "g \<in> (\<Union>a \<in> set actions. \<Union>c \<in> set (n_inv a). comp_fluents c)"
-      and ys: "\<And>s. s \<in> set ys \<Longrightarrow> \<exists>a \<in> set actions. s = at_start a \<or> s = at_end a"
-    shows "num_plan.num_rat_impl.happening_num_update ys w g = w g"
-proof (rule happening_num_update_unwritten)
-  fix s assume s: "s \<in> set ys"
-  obtain b c where b: "b \<in> set actions" and c: "c \<in> set (n_inv b)" and gc: "g \<in> comp_fluents c"
-    using g by blast
-  have ginv_b: "g \<in> (\<Union>c \<in> set (n_inv b). comp_fluents c)" using c gc by blast
-  obtain a where a: "a \<in> set actions" and sa: "s = at_start a \<or> s = at_end a"
-    using ys[OF s] by blast
-  have "(fst ` set (upds (at_start a)) \<union> fst ` set (upds (at_end a)))
-          \<inter> (\<Union>c \<in> set (n_inv b). comp_fluents c) = {}"
-    using n_inv_readonly a b by blast
-  hence "g \<notin> fst ` set (upds (at_start a))" and "g \<notin> fst ` set (upds (at_end a))"
-    using ginv_b by auto
-  thus "g \<notin> fst ` (set \<circ> upds) s" using sa by (auto simp: comp_def)
-qed
-
-lemma num_seq_inv_const:
-  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
-      and i: "i \<le> length planning_sem.htpl"
-      and g: "g \<in> (\<Union>a \<in> set actions. \<Union>c \<in> set (n_inv a). comp_fluents c)"
-    shows "snd (M i) g = snd (M 0) g"
-  using i
-proof (induction i)
-  case 0
-  show ?case by simp
-next
-  case (Suc i')
-  have i'H: "i' < length planning_sem.htpl" using Suc.prems by simp
-  let ?S = "planning_sem.happ_at planning_sem.plan_happ_seq (planning_sem.time_index i')"
-  obtain xs where dist: "distinct xs" and setxs: "set xs = ?S"
-    using finite_distinct_list[OF happening_finite] by blast
-  have fold_post: "num_plan.num_rat_impl.happening_num_update xs (snd (M i')) = snd (M (Suc i'))"
-    by (rule run_order_fold_eq_happening_num_update_set[OF i'H vss dist setxs])
-  have ys: "\<exists>a \<in> set actions. s = at_start a \<or> s = at_end a" if s: "s \<in> set xs" for s
-  proof -
-    have "s \<in> at_start ` { actions ! j | j. j < length actions
-              \<and> (is_starting_index (planning_sem.time_index i') j \<or> is_instant_index (planning_sem.time_index i') j) }
-            \<union> at_end ` { actions ! j | j. j < length actions
-              \<and> (is_ending_index (planning_sem.time_index i') j \<or> is_instant_index (planning_sem.time_index i') j) }"
-      using s setxs by (simp only: happ_at_index_decomp)
-    thus ?thesis by (auto simp: set_nthI)
-  qed
-  have "num_plan.num_rat_impl.happening_num_update xs (snd (M i')) g = snd (M i') g"
-    by (rule happening_num_update_inv_unchanged[OF g ys])
-  hence "snd (M (Suc i')) g = snd (M i') g" using fold_post by simp
-  thus ?case using Suc.IH Suc.prems by simp
-qed
-
+\<comment> \<open>@{text happening_num_update_inv_unchanged} and @{text num_seq_inv_const} (the old "over_all fluents
+  are read-only \<Rightarrow> constant = initial value" shortcut, which consumed the dropped @{text n_inv_readonly})
+  were DELETED with the static over_all contract (backlog #8, the lock-based over_all redesign). The
+  surviving @{text active_action_inv_sat} (below) + @{text num_inv_guard_sat_at} are the
+  keepers for the Stage-2 lock-based @{text num_edge_2} discharge.\<close>
 lemma active_action_inv_sat:
   assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
       and i: "i < length planning_sem.htpl"
@@ -582,6 +536,69 @@ proof -
     thus "w f = snd (M i') f" by (rule wagree)
   qed
   thus ?thesis using sat by simp
+qed
+
+lemma ending_index_inv_sat:
+  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and i: "i < length planning_sem.htpl"
+      and n: "n < length actions"
+      and iend: "is_ending_index (planning_sem.time_index i) n"
+    shows "sat_comps (snd (M i)) (set (n_inv (actions ! n)))"
+proof -
+  let ?a = "actions ! n"
+  let ?t = "planning_sem.time_index i"
+  have aset: "?a \<in> set actions" using n by simp
+  have ea: "planning_sem.is_ending_action ?t ?a"
+    using iend by (rule index_case_dests(3))
+  obtain ta da where
+    tada: "(?a, ta, da) \<in> ran \<pi>_sem"
+    and ta: "ta < ?t"
+    and teq: "?t = ta + da"
+    using planning_sem.is_ending_action_planE[OF ea aset] by blast
+  have le: "?t \<le> ta + da" using teq by simp
+  have aact: "?a \<in> num_plan.num_rat_impl.active_actions (rat_impl.time_index i)"
+    unfolding num_plan.num_rat_impl.active_actions_def rat_impl_time_index_eq
+    using tada ta le by (fastforce simp: \<pi>_sem_def)
+  show ?thesis by (rule active_action_inv_sat[OF vss i aact])
+qed
+
+lemma starting_index_active_Suc:
+  assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and i: "i < length planning_sem.htpl"
+      and n: "n < length actions"
+      and ist: "is_starting_index (planning_sem.time_index i) n"
+    shows "Suc i < length planning_sem.htpl"
+      and "sat_comps (snd (M (Suc i))) (set (n_inv (actions ! n)))"
+proof -
+  let ?a = "actions ! n"
+  let ?t = "planning_sem.time_index i"
+  have aset: "?a \<in> set actions" using n by simp
+  have sa: "planning_sem.is_starting_action ?t ?a"
+    using ist by (rule index_case_dests(2))
+  obtain da where
+    tada: "(?a, ?t, da) \<in> ran \<pi>_sem"
+    and da: "0 < da"
+    using planning_sem.is_starting_action_plan_exD[OF sa aset] by blast
+  \<comment> \<open>The action's end time @{term \<open>?t + da\<close>} is a happening time, so it carries a happening index @{term j}.\<close>
+  have endin: "?t + da \<in> set planning_sem.htpl"
+    using planning_sem.htpsI(2)[OF tada] planning_sem.htps_set_htpl by simp
+  obtain j where
+    j: "j < length planning_sem.htpl"
+    and tj: "planning_sem.time_index j = ?t + da"
+    using planning_sem.time_indexI_htpl[OF endin] by blast
+  have tlt: "?t < planning_sem.time_index j" using tj da by simp
+  have ij: "i < j" using planning_sem.time_index_strict_sorted_list'[OF i tlt] .
+  hence Sij: "Suc i \<le> j" by simp
+  show Si: "Suc i < length planning_sem.htpl" using Sij j by simp
+  have t_lt_Su: "?t < planning_sem.time_index (Suc i)"
+    using planning_sem.time_index_strict_sorted_list[OF _ Si] by simp
+  have Su_le: "planning_sem.time_index (Suc i) \<le> ?t + da"
+    using planning_sem.time_index_sorted_list[OF Sij j] tj by simp
+  have aact: "?a \<in> num_plan.num_rat_impl.active_actions (rat_impl.time_index (Suc i))"
+    unfolding num_plan.num_rat_impl.active_actions_def rat_impl_time_index_eq
+    using tada t_lt_Su Su_le by (fastforce simp: \<pi>_sem_def)
+  show "sat_comps (snd (M (Suc i))) (set (n_inv (actions ! n)))"
+    by (rule active_action_inv_sat[OF vss Si aact])
 qed
 
 text \<open>The bridge to the propositional structural invariant: the projection of a

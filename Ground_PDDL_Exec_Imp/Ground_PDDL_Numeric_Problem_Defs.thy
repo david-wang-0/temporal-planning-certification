@@ -164,7 +164,13 @@ locale numeric_ground_ast_problem =
       and num_init_val_ok:          "\<forall>f \<in> set nfluents. num_init f \<in> \<int>"
       and snap_writes_nfluents_start:"\<forall>a \<in> set actions_spec. fst ` set (upds (at_start_spec a)) \<subseteq> set nfluents"
       and snap_writes_nfluents_end:  "\<forall>a \<in> set actions_spec. fst ` set (upds (at_end_spec a)) \<subseteq> set nfluents"
-  \<comment> \<open>(4) Numeric over_all restricted to read-only equalities holding at the initial valuation.\<close>
+  \<comment> \<open>(4) TO BE DROPPED in Stage 2 (backlog #8, the lock-based over_all redesign; see
+      NUMERIC_OVERALL_REDESIGN.md): the OLD static over_all contract -- n_inv_eq (equalities only) +
+      n_inv_readonly (over_all fluents never written by any snap) + n_inv_init_sat (hold at the initial
+      valuation). The abstract locale numeric_tp_nta_reduction has ALREADY dropped these (Stage 1); they
+      are kept here only until Stage 2 replaces them with the per-fluent invariant lock + a plan-validity
+      non-interference assumption (no snap writes a fluent of an active action's over_all invariant),
+      generalising to arbitrary while-active over_all comparisons.\<close>
       and n_inv_eq:
             "\<forall>a \<in> set actions_spec. \<forall>c \<in> set (n_inv a). \<exists>e1 e2. c = Comp Ceq e1 e2"
       and n_inv_readonly:

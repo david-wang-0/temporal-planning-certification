@@ -1,4 +1,69 @@
-# Numeric over-all invariant redesign (backlog task #8)
+# DECISION (2026-07-09): implement B (sound over-approximation), NOT the lock design (A) below
+
+Stage 1 (drop the 3 static assumptions; park the edge_2 discharge on `tmp_num_inv_discharge`) is **done
+and green**. For Stage 2 the lock-based design specified in §1-§7 below (call it **A**) was reconsidered
+against the reduction's actual guarantee and **rejected in favour of a leaner design B**. Decision (David
++ Claude, 2026-07-09):
+
+- The reduction is a **forward-only unsolvability certifier**: `valid plan ==> net reaches goal`, and the
+  guarantee is the contrapositive `net-unreachable ==> unsolvable`. Soundness of THAT needs the net to
+  **over-approximate** the solvable set (`net-reachable ⊇ solvable`).
+- **A (lock + write-guard) is an UNDER-approximation.** The write-guard rejects runs where a snap writes a
+  currently-active-invariant fluent — but a *valid* plan may legitimately do that and keep the invariant
+  true (e.g. inequality `x <= 10` with `x := 8`). So A proves only `valid AND non-interfering ==> reachable`;
+  `net-unreachable` then rules out only non-interfering plans, NOT unsolvability. A is exact/sound only on
+  the non-interfering plan class. NB this is a *semantic* over-approximation restriction — categorically
+  unlike the existing *syntactic* no-disjunctions-in-invariants restriction (which is a fine, exact
+  under-approximation); A would silently drop valid interfering plans.
+- **B (CHOSEN): discharge the edge_2 over-all guard directly from validity's active clause.** No lock, no
+  write-guard, no count-tracking, no non-interference assumption, no `REL` changes. `active_action_inv_sat`
+  (validity's `num_valid_state_sequence` already guarantees `sat_comps (snd (M i)) (n_inv a)` at every
+  active index) discharges the edge_2 check at the settled post-happening valuation `?w5 = snd (M (Suc i))`,
+  where the just-started durative action is active. B keeps the net EXACTLY as tight as today's committed
+  net, generalises the admitted fragment from read-only equalities to arbitrary while-active over-all
+  comparisons, and stays a sound over-approximation. Cost: small.
+
+## Optional SOUND tightening — also check the invariant at edge_3 (end)
+B checks the over-all only at edge_2 (start). A *sound* way to tighten (still an over-approximation, NO
+write-guard) is to ALSO check it at edge_3 (the `running -> ending` duration edge), mirroring edge_2:
+- `num_edge_3 a = augment_edge (num_inv_guard a) [] (edge_3 a)`, swapped into `num_action_to_automaton`
+  in place of the bare `edge_3 a`.
+- Discharge: the ending durative action is STILL active at its end happening (`active_actions` uses
+  `tt < t <= tt+d`; at the end instant `t = tt+d`, so `<=` holds), so `active_action_inv_sat` at the end
+  index gives `sat_comps (snd (M i)) (n_inv a)`. edge_3 fires FIRST in the happening (§3 order), so its
+  pre-valuation is `snd (M i)` — the invariant holds there directly (no `?w5` fold needed).
+- Work: a `num_edge_3_step_lift` mirroring `num_edge_2_step_lift`, and converting the edge_3 phase of the
+  numeric run-lift from a propositional pass-through (edge_3 is currently reused verbatim) into a
+  guard-discharging lift. Moderate; same shape as edge_2. Sound because it is a NECESSARY-condition guard
+  (the invariant genuinely holds at end for valid plans), so it only removes non-valid-plan runs.
+
+## How to do A (the lock design) if net-enforced non-interference is ever wanted
+The full recipe is §1-§7 below (kept verbatim). Key cost, confirmed by survey (2026-07-09): `REL`
+(`TP_NTA_Reduction_Numeric_Steps.thy:16`) bundles `bounded (map_of num_net_bounds) vn`, so putting the
+`fluent_inv_lock` counter in `num_net_bounds` forces every step-lift to re-establish the lock's range
+`[0, length actions]`, which needs the count-tracking invariant (`v (fluent_inv_lock f) =
+num_locked_during t f`, mirroring the propositional `locked_during`/`updated_locked_during`) threaded
+through `REL`/`RELC`/`RLP` and all their consumers, plus per-phase maintenance lemmas — comparable in
+depth to the whole propositional lock proof. Only pursue A if the goal shifts to a plan-existence /
+solvability certifier over the non-interfering fragment (the opposite direction from this development).
+
+---
+
+# ⛔ ARCHIVED DESIGN "A" — SUPERSEDED, DO NOT IMPLEMENT
+
+> **STOP.** Everything below this line (§1-§7) is the ORIGINAL lock-based design **A**. It was
+> **rejected** (see the DECISION at the top of this file) because it makes the reduction an
+> **under-approximation**, which is *unsound* for the unsolvability certifier this development is. It is
+> kept **only as a historical record** and as a recipe for the hypothetical *opposite* goal (a
+> solvability / plan-existence certifier over the non-interfering fragment).
+>
+> **Do NOT start implementing §1-§7.** The active task (backlog #8, Stage 2) is design **B** — the small,
+> sound edge_2 discharge described at the top of this file; there is no lock var, no write-guard, no
+> count-tracking, no `REL` change. If you are an agent picking this up: implement B, not A. The ordered
+> "Implementation plan" in §5 below is the A plan and is **obsolete** — following it would be a large,
+> wrong, multi-day effort in the wrong direction. Confirm with the human before ever reviving A.
+
+# (archived) Numeric over-all invariant redesign — the lock-based design "A"
 
 **Goal.** Replace the current *restrictive, static* numeric over-all contract
 (`n_inv_eq` + `n_inv_readonly` + `n_inv_init_sat`, discharged via a "read-only ⇒ constant = initial
@@ -142,7 +207,7 @@ premise (`TP_NTA_Reduction_Numeric_Steps.thy:2133–2141`) → `num_edge_2_step_
 
 ---
 
-## 5. Implementation plan (ordered)
+## 5. Implementation plan (ordered) — ⛔ OBSOLETE (this is the rejected design A; do NOT execute)
 
 1. **Lock + edges** (`TP_NTA_Reduction_Numeric_Defs.thy`): define `fluent_inv_lock` naming + the lock
    variable(s) in the numeric var list (`num_fluent_vars`/`num_all_vars` neighborhood, `:47–50`);
