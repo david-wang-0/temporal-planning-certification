@@ -2,6 +2,7 @@ theory TP_NTA_Reduction_Numeric_Model_Checking
   imports TP_NTA_Reduction_Correctness TP_NTA_Reduction_Numeric_Defs
 begin
 
+
 section \<open>Numeric reduction correctness (Layer B)\<close>
 
 text \<open>The numeric correctness locale merges three layers at the @{emph \<open>same\<close>} propositional
@@ -21,7 +22,7 @@ locale numeric_tp_nta_reduction_correctness =
     init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name +
   numeric_tp_nta_reduction
     init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
-    n_pre n_inv upds num_init num_goal nfluents fluent_to_var fluent_lo fluent_hi const_to_int +
+    n_pre n_inv upds num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int +
   num_plan: numeric_temp_plan_for_problem_list_impl_int
     at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>
     "set o n_pre" "set o n_inv" "set o upds"
@@ -48,7 +49,7 @@ locale numeric_tp_nta_reduction_correctness =
     and num_init :: "'n \<Rightarrow> 'r"
     and num_goal :: "('n, 'r) comp list"
     and nfluents :: "'n list"
-    and fluent_to_var :: "'n \<Rightarrow> String.literal"
+    and fluent_to_name :: "'n \<Rightarrow> String.literal"
     and fluent_lo :: "'n \<Rightarrow> int"
     and fluent_hi :: "'n \<Rightarrow> int"
     and const_to_int :: "'r \<Rightarrow> int" +

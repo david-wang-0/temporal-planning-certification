@@ -31,10 +31,13 @@ text \<open>The \<^emph>\<open>numeric leaf\<close> of the grounder-idiomatic la
     \<^item> @{text num_seq_in_bounds} -- the range-boundedness reachability invariant (the \<^bold>\<open>boundedness plug
       (WP-E)\<close>, reserved for human design).
 
-  \<^bold>\<open>Remaining parameters.\<close> Only @{text fluent_to_var} (fresh Munta-name map), @{text fluent_lo}/
-  @{text fluent_hi} (the WP-E bounds plug) and @{text const_to_int} (rat->int decode) stay parameters.
-  Defining @{text const_to_int}/@{text fluent_to_var} later turns @{text const_to_int_of_int}/
-  @{text fluent_to_var_inj}/@{text fluent_vars_fresh} into lemmas.\<close>
+  \<^bold>\<open>Remaining parameters.\<close> Only @{text fluent_lo}/@{text fluent_hi} (the WP-E bounds plug) stay
+  parameters. The fluent Munta-name map is now DEFINED (mirroring @{text prop_to_var}): the abstract
+  @{text ndefs.fluent_to_var} is built off the fixed @{text fluent_to_name}, concretised here as
+  @{text \<open>fluent_to_name_spec \<equiv> func.name\<close>}, so @{text fluent_to_var_inj}/@{text fluent_vars_fresh}
+  become abstract lemmas (the injectivity obligation is discharged from
+  @{text fluent_to_name_spec_inj}); @{text const_to_int} is likewise DEFINED, turning
+  @{text const_to_int_of_int} into a lemma.\<close>
 
 subsection \<open>FPS -> project numeric boundary translation\<close>
 
@@ -95,6 +98,15 @@ begin
 definition nfluents :: "func list" where
   "nfluents \<equiv> map function_decl.func (functions D)"
 
+text \<open>The fluent's abstract name is its bare @{typ name} (mirror of @{text \<open>prop_to_name_spec \<equiv> predicate.name\<close>}
+  in @{locale ground_ast_problem_defs}); the concrete fluent Munta-variable name prefixes it with
+  @{text \<open>''fluent_''\<close>} -- a computable ground-level twin of the abstract @{text ndefs.fluent_to_var},
+  proved equal to it in WP-C.\<close>
+
+definition "fluent_to_name_spec \<equiv> func.name"
+
+definition "fluent_to_var_spec f \<equiv> STR ''fluent_'' + fluent_to_name_spec f"
+
 definition n_pre :: "ground_action \<Rightarrow> (func, rat) comp list" where
   "n_pre g \<equiv> remdups (num_comps (ground_action.precondition g))"
 
@@ -136,9 +148,8 @@ locale numeric_ground_ast_problem =
     ndefs: numeric_tp_nta_reduction_defs
       init_spec goal_spec at_start_spec at_end_spec over_all_spec lower_spec upper_spec
       pre_spec adds_spec dels_spec 0 props_spec actions_spec act_to_name_spec prop_to_name_spec
-      n_pre n_inv upds num_init num_goal nfluents fluent_to_var fluent_lo fluent_hi const_to_int
+      n_pre n_inv upds num_init num_goal nfluents fluent_to_name_spec fluent_lo fluent_hi const_to_int
   for P :: ast_temporal_problem
-    and fluent_to_var :: "func \<Rightarrow> String.literal"
     and fluent_lo :: "func \<Rightarrow> int"
     and fluent_hi :: "func \<Rightarrow> int" +
   \<comment> \<open>(2) Numeric well-formedness (mirror @{text numeric_tp_nta_reduction}, over the DEFINED ground data):
@@ -148,8 +159,6 @@ locale numeric_ground_ast_problem =
       and upds_no_cross_read_start: "\<forall>a \<in> set actions_spec. upds_no_cross_read_list (upds (at_start_spec a))"
       and upds_no_cross_read_end:   "\<forall>a \<in> set actions_spec. upds_no_cross_read_list (upds (at_end_spec a))"
       and fluent_bounds_valid:      "\<forall>f \<in> set nfluents. fluent_lo f \<le> fluent_hi f"
-      and fluent_to_var_inj:        "inj_on fluent_to_var (set nfluents)"
-      and fluent_vars_fresh:        "\<forall>f \<in> set nfluents. fluent_to_var f \<notin> fst ` set ndefs.all_vars"
   \<comment> \<open>(3) Integer-encoding faithfulness on the discrete fragment (grounder-match).\<close>
       and snap_upds_nexp_ok_start:
             "\<forall>a \<in> set actions_spec. \<forall>w. ndefs.num_val_ok w \<longrightarrow> (\<forall>(f, e) \<in> set (upds (at_start_spec a)). ndefs.nexp_ok w e)"
@@ -175,6 +184,25 @@ locale numeric_ground_ast_problem =
       are added by the plan-carrying sub-locale (WP-A), NOT here.\<close>
       and num_goal_comp_ok:    "\<And>w. ndefs.num_val_ok w \<Longrightarrow> (\<forall>c \<in> set num_goal. ndefs.comp_ok w c)"
 begin
+
+text \<open>The fluent abstract-name map is injective on the declared fluents (the @{text fluent_names}
+  @{locale unique_names} obligation of @{locale numeric_tp_nta_reduction}): the domain signature makes
+  the declared functions distinct, hence their @{typ func} name wrappers distinct.  Mirror of the
+  propositional @{text \<open>inj_on prop_to_name_spec (set props_spec)\<close>} discharge
+  (@{text Ground_PDDL_Problem_Reduction}).\<close>
+
+lemma fluent_to_name_spec_inj: "inj_on fluent_to_name_spec (set nfluents)"
+proof -
+  have "distinct (map function_decl.func (functions D))"
+    using wf_domain_signature unfolding wf_domain_signature_def by auto
+  hence "distinct (map func.name (map function_decl.func (functions D)))"
+    apply (rule distinct_inj_map)
+    apply (rule injI)
+    using func.expand by simp
+  thus ?thesis
+    unfolding fluent_to_name_spec_def nfluents_def
+    unfolding distinct_map by blast
+qed
 
 text \<open>\<^bold>\<open>Next (NUMERIC_EXEC_PLAN WP-A/WP-C).\<close> The plan-carrying locale attaches a numeric plan \<open>\<pi>\<close> and
   the boundedness plug @{text num_seq_in_bounds}, then interprets @{text numeric_tp_nta_reduction_correctness}

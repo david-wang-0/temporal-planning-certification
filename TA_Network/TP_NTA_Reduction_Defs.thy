@@ -54,6 +54,23 @@ fun comp_to_bexp :: "('n \<Rightarrow> String.literal) \<Rightarrow> ('r \<Right
 | "comp_to_bexp fv ci (Comp Cge a b) = bexp.ge (nexp_to_exp fv ci a) (nexp_to_exp fv ci b)"
 | "comp_to_bexp fv ci (Comp Clt a b) = bexp.lt (nexp_to_exp fv ci a) (nexp_to_exp fv ci b)"
 | "comp_to_bexp fv ci (Comp Cgt a b) = bexp.gt (nexp_to_exp fv ci a) (nexp_to_exp fv ci b)"
+
+locale type_naming =
+  fixes mem_to_name:: "'ty \<Rightarrow> String.literal"
+
+locale unique_names = type_naming mem_to_name 
+  for mem_to_name:: "'ty \<Rightarrow> String.literal" +
+  fixes S::   "'ty set"
+  assumes a: "inj_on mem_to_name S"
+begin
+lemma b:
+  "n \<in> S \<Longrightarrow> m \<in> S \<Longrightarrow> n \<noteq> m \<Longrightarrow> mem_to_name n \<noteq> mem_to_name m"
+  "n \<in> S \<Longrightarrow> m \<in> S \<Longrightarrow> mem_to_name n = mem_to_name m \<Longrightarrow> n = m"
+  using a unfolding inj_on_def by blast+ 
+
+lemmas names_unique = a b
+end
+
 locale tp_nta_reduction_defs = temp_planning_problem_list_impl_int
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
   for init :: "'proposition list"

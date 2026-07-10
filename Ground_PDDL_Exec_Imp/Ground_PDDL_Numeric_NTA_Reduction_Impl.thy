@@ -10,9 +10,10 @@ text \<open>\<^bold>\<open>NUMERIC_EXEC_PLAN WP-C\<close> -- the \<^emph>\<open>
   net is a thin \<^emph>\<open>augmentation\<close> of the propositional net (@{text augment_edge}: conjoin a numeric
   @{typ \<open>(String.literal, int) bexp\<close>} guard + append numeric @{typ \<open>(String.literal, int) exp\<close>} updates
   to each propositional edge; @{text \<open>num_all_vars = all_vars @ num_fluent_vars\<close>}), so the refinement
-  lifts the existing propositional @{text \<open>*_refine\<close>} lemmas through the augmentation. The boundedness
-  parameters @{text fluent_lo}/@{text fluent_hi} (and encoding @{text fluent_to_var}) are the WP-E plug,
-  carried as inputs -- the refinement is parametric in them. Body to be filled (WP-C).\<close>
+  lifts the existing propositional @{text \<open>*_refine\<close>} lemmas through the augmentation. Only the
+  boundedness parameters @{text fluent_lo}/@{text fluent_hi} (the WP-E plug) are carried as inputs; the
+  fluent encoding is the DEFINED @{const numeric_ground_ast_problem_defs.fluent_to_var_spec}, proved
+  equal to the abstract @{text ndefs.fluent_to_var} by @{text fluent_to_var_spec_eq}.\<close>
 
 subsection \<open>Executable numeric constructors\<close>
 
@@ -22,8 +23,9 @@ text \<open>The numeric net is a thin augmentation of the propositional executab
   numeric data (@{const numeric_ground_ast_problem_defs.n_pre} / @{const numeric_ground_ast_problem_defs.upds}
   / @{const numeric_ground_ast_problem_defs.num_goal} / @{const numeric_ground_ast_problem_defs.num_init}
   / @{const numeric_ground_ast_problem_defs.nfluents} / @{const numeric_ground_ast_problem_defs.const_to_int})
-  is DEFINED from @{term P} in @{locale numeric_ground_ast_problem_defs}; only the fluent naming/bounds
-  @{text fluent_to_var}/@{text fluent_lo}/@{text fluent_hi} stay explicit definition arguments.\<close>
+  is DEFINED from @{term P} in @{locale numeric_ground_ast_problem_defs} -- including the fluent naming
+  @{const numeric_ground_ast_problem_defs.fluent_to_var_spec}; only the bounds
+  @{text fluent_lo}/@{text fluent_hi} stay explicit definition arguments.\<close>
 
 text \<open>The augmentation operation is a pure global function, so it is code-exportable and can be
   proved equal to the abstract, locale-local @{text numeric_tp_nta_reduction_defs.augment_edge}.\<close>
@@ -34,62 +36,62 @@ definition augment_edge_impl where
 context numeric_ground_ast_problem_defs
 begin
 
-definition "num_pre_guard' fv s =
-  bexp_and_all (map (comp_to_bexp fv const_to_int) (n_pre s))"
+definition "num_pre_guard' s =
+  bexp_and_all (map (comp_to_bexp fluent_to_var_spec const_to_int) (n_pre s))"
 
-definition "num_inv_guard' fv a =
-  bexp_and_all (map (comp_to_bexp fv const_to_int) (n_inv a))"
+definition "num_inv_guard' a =
+  bexp_and_all (map (comp_to_bexp fluent_to_var_spec const_to_int) (n_inv a))"
 
-definition "num_goal_guard' fv =
-  bexp_and_all (map (comp_to_bexp fv const_to_int) num_goal)"
+definition "num_goal_guard' =
+  bexp_and_all (map (comp_to_bexp fluent_to_var_spec const_to_int) num_goal)"
 
-definition "num_upd' fv s =
-  map (\<lambda>(f, e). (fv f, nexp_to_exp fv const_to_int e)) (upds s)"
+definition "num_upd' s =
+  map (\<lambda>(f, e). (fluent_to_var_spec f, nexp_to_exp fluent_to_var_spec const_to_int e)) (upds s)"
 
-definition "num_init_upd' fv =
-  map (\<lambda>f. (fv f, exp.const (const_to_int (num_init f)))) nfluents"
+definition "num_init_upd' =
+  map (\<lambda>f. (fluent_to_var_spec f, exp.const (const_to_int (num_init f)))) nfluents"
 
-definition "num_fluent_vars' fv lo hi =
-  map (\<lambda>f. (fv f, lo f, hi f)) nfluents"
+definition "num_fluent_vars' lo hi =
+  map (\<lambda>f. (fluent_to_var_spec f, lo f, hi f)) nfluents"
 
-definition "num_start_edge' fv a =
-  augment_edge_impl (num_pre_guard' fv (at_start_spec a)) (num_upd' fv (at_start_spec a)) (start_edge' a)"
+definition "num_start_edge' a =
+  augment_edge_impl (num_pre_guard' (at_start_spec a)) (num_upd' (at_start_spec a)) (start_edge' a)"
 
-definition "num_end_edge' fv a =
-  augment_edge_impl (num_pre_guard' fv (at_end_spec a)) (num_upd' fv (at_end_spec a)) (end_edge' a)"
+definition "num_end_edge' a =
+  augment_edge_impl (num_pre_guard' (at_end_spec a)) (num_upd' (at_end_spec a)) (end_edge' a)"
 
-definition "num_edge_2' fv a = augment_edge_impl (num_inv_guard' fv a) [] (edge_2' a)"
+definition "num_edge_2' a = augment_edge_impl (num_inv_guard' a) [] (edge_2' a)"
 
-definition "num_edge_3' fv a = augment_edge_impl (num_inv_guard' fv a) [] (edge_3' a)"
+definition "num_edge_3' a = augment_edge_impl (num_inv_guard' a) [] (edge_3' a)"
 
-definition "num_action_to_automaton' fv a =
+definition "num_action_to_automaton' a =
 (let
   committed_locs = (Nil::nat list);
   urgent_locs = [starting_loc_impl, ending_loc_impl];
-  edges = [num_start_edge' fv a, num_edge_2' fv a, num_edge_3' fv a, num_end_edge' fv a, instant_trans_edge' a];
+  edges = [num_start_edge' a, num_edge_2' a, num_edge_3' a, num_end_edge' a, instant_trans_edge' a];
   invs = []::(nat \<times> (String.literal, int) acconstraint list) list
 in (committed_locs, urgent_locs, edges, invs))"
 
-definition "num_main_auto_init_edge' fv = augment_edge_impl bexp.true (num_init_upd' fv) main_auto_init_edge'"
+definition "num_main_auto_init_edge' = augment_edge_impl bexp.true num_init_upd' main_auto_init_edge'"
 
-definition "num_main_auto_goal_edge' fv = augment_edge_impl (num_goal_guard' fv) [] main_auto_goal_edge'"
+definition "num_main_auto_goal_edge' = augment_edge_impl num_goal_guard' [] main_auto_goal_edge'"
 
-definition "num_main_auto' fv =
+definition "num_main_auto' =
 (let
   committed_locs = [];
   urgent_locs = [init_loc_impl, goal_loc_impl];
-  edges = [num_main_auto_init_edge' fv, num_main_auto_goal_edge' fv, main_auto_loop_impl];
+  edges = [num_main_auto_init_edge', num_main_auto_goal_edge', main_auto_loop_impl];
   invs = []
 in (committed_locs, urgent_locs, edges, invs))"
 
-definition "num_net_automata' fv =
-  num_main_auto' fv # map (num_action_to_automaton' fv) actions_spec"
+definition "num_net_automata' =
+  num_main_auto' # map num_action_to_automaton' actions_spec"
 
-definition "num_net_bounds' fv lo hi = net_bounds' @ num_fluent_vars' fv lo hi"
+definition "num_net_bounds' lo hi = net_bounds' @ num_fluent_vars' lo hi"
 
 definition "num_init_locs' = init_locs'"
 
-definition "num_init_vars' fv lo hi = map (map_prod id fst) (num_net_bounds' fv lo hi)"
+definition "num_init_vars' lo hi = map (map_prod id fst) (num_net_bounds' lo hi)"
 
 definition "num_reach_formula' = reach_formula'"
 
@@ -104,25 +106,31 @@ text \<open>The pure augmentation operation coincides with the abstract, locale-
 lemma augment_edge_impl_eq: "augment_edge_impl = ndefs.augment_edge"
   unfolding augment_edge_impl_def ndefs.augment_edge_def ..
 
+text \<open>The computable ground-level fluent-var map coincides with the abstract @{text ndefs.fluent_to_var}:
+  both prefix @{text \<open>''fluent_''\<close>} onto the fluent name @{term \<open>func.name\<close>} (@{text ndefs}'s
+  @{text fluent_to_name} slot is instantiated by @{const fluent_to_name_spec}).\<close>
+lemma fluent_to_var_spec_eq: "fluent_to_var_spec = ndefs.fluent_to_var"
+  unfolding fluent_to_var_spec_def ndefs.fluent_to_var_def ..
+
 text \<open>The computable numeric guards/updates coincide with the abstract @{text ndefs} ones: same numeric
   data, same encoders.\<close>
-lemma num_pre_guard_refine: "num_pre_guard' fluent_to_var s = ndefs.num_pre_guard s"
-  unfolding num_pre_guard'_def ndefs.num_pre_guard_def ..
+lemma num_pre_guard_refine: "num_pre_guard' s = ndefs.num_pre_guard s"
+  unfolding num_pre_guard'_def ndefs.num_pre_guard_def fluent_to_var_spec_eq ..
 
-lemma num_inv_guard_refine: "num_inv_guard' fluent_to_var a = ndefs.num_inv_guard a"
-  unfolding num_inv_guard'_def ndefs.num_inv_guard_def ..
+lemma num_inv_guard_refine: "num_inv_guard' a = ndefs.num_inv_guard a"
+  unfolding num_inv_guard'_def ndefs.num_inv_guard_def fluent_to_var_spec_eq ..
 
-lemma num_goal_guard_refine: "num_goal_guard' fluent_to_var = ndefs.num_goal_guard"
-  unfolding num_goal_guard'_def ndefs.num_goal_guard_def ..
+lemma num_goal_guard_refine: "num_goal_guard' = ndefs.num_goal_guard"
+  unfolding num_goal_guard'_def ndefs.num_goal_guard_def fluent_to_var_spec_eq ..
 
-lemma num_upd_refine: "num_upd' fluent_to_var s = ndefs.num_upd s"
-  unfolding num_upd'_def ndefs.num_upd_def ..
+lemma num_upd_refine: "num_upd' s = ndefs.num_upd s"
+  unfolding num_upd'_def ndefs.num_upd_def fluent_to_var_spec_eq ..
 
-lemma num_init_upd_refine: "num_init_upd' fluent_to_var = ndefs.num_init_upd"
-  unfolding num_init_upd'_def ndefs.num_init_upd_def ..
+lemma num_init_upd_refine: "num_init_upd' = ndefs.num_init_upd"
+  unfolding num_init_upd'_def ndefs.num_init_upd_def fluent_to_var_spec_eq ..
 
-lemma num_fluent_vars_refine: "num_fluent_vars' fluent_to_var fluent_lo fluent_hi = ndefs.num_fluent_vars"
-  unfolding num_fluent_vars'_def ndefs.num_fluent_vars_def ..
+lemma num_fluent_vars_refine: "num_fluent_vars' fluent_lo fluent_hi = ndefs.num_fluent_vars"
+  unfolding num_fluent_vars'_def ndefs.num_fluent_vars_def fluent_to_var_spec_eq ..
 
 text \<open>Atomic refines: the abstract @{text ndefs} propositional constants coincide with the executable
   impl constants. (Same proofs as the propositional @{text ground_ast_problem} atomic refines, but for
@@ -310,47 +318,47 @@ text \<open>Each executable numeric edge = the abstract @{text ndefs} numeric ed
   (@{thm augment_edge_impl_eq}), same numeric guard/update (the guard/update refines above), and the
   underlying executable propositional edge equals the abstract one (the propositional edge refines).\<close>
 
-lemma num_start_edge_refine: "num_start_edge' fluent_to_var a = ndefs.num_start_edge a"
+lemma num_start_edge_refine: "num_start_edge' a = ndefs.num_start_edge a"
   unfolding num_start_edge'_def ndefs.num_start_edge_def
   unfolding augment_edge_impl_eq num_pre_guard_refine num_upd_refine ndefs_start_edge_refine ..
 
-lemma num_end_edge_refine: "num_end_edge' fluent_to_var a = ndefs.num_end_edge a"
+lemma num_end_edge_refine: "num_end_edge' a = ndefs.num_end_edge a"
   unfolding num_end_edge'_def ndefs.num_end_edge_def
   unfolding augment_edge_impl_eq num_pre_guard_refine num_upd_refine ndefs_end_edge_refine ..
 
-lemma num_edge_2_refine: "num_edge_2' fluent_to_var a = ndefs.num_edge_2 a"
+lemma num_edge_2_refine: "num_edge_2' a = ndefs.num_edge_2 a"
   unfolding num_edge_2'_def ndefs.num_edge_2_def
   unfolding augment_edge_impl_eq num_inv_guard_refine ndefs_edge_2_refine ..
 
-lemma num_edge_3_refine: "num_edge_3' fluent_to_var a = ndefs.num_edge_3 a"
+lemma num_edge_3_refine: "num_edge_3' a = ndefs.num_edge_3 a"
   unfolding num_edge_3'_def ndefs.num_edge_3_def
   unfolding augment_edge_impl_eq num_inv_guard_refine ndefs_edge_3_refine ..
 
 lemma num_action_to_automaton_refine:
-  "num_action_to_automaton' fluent_to_var a = ndefs.num_action_to_automaton a"
+  "num_action_to_automaton' a = ndefs.num_action_to_automaton a"
   unfolding num_action_to_automaton'_def ndefs.num_action_to_automaton_def Let_def
   unfolding num_start_edge_refine num_edge_2_refine num_edge_3_refine num_end_edge_refine
   unfolding ndefs_instant_trans_edge_refine
   unfolding ndefs_starting_loc ndefs_ending_loc ..
 
 lemma num_main_auto_init_edge_refine:
-  "num_main_auto_init_edge' fluent_to_var = ndefs.num_main_auto_init_edge"
+  "num_main_auto_init_edge' = ndefs.num_main_auto_init_edge"
   unfolding num_main_auto_init_edge'_def ndefs.num_main_auto_init_edge_def
   unfolding augment_edge_impl_eq num_init_upd_refine ndefs_main_auto_init_edge_refine ..
 
 lemma num_main_auto_goal_edge_refine:
-  "num_main_auto_goal_edge' fluent_to_var = ndefs.num_main_auto_goal_edge"
+  "num_main_auto_goal_edge' = ndefs.num_main_auto_goal_edge"
   unfolding num_main_auto_goal_edge'_def ndefs.num_main_auto_goal_edge_def
   unfolding augment_edge_impl_eq num_goal_guard_refine ndefs_main_auto_goal_edge_refine ..
 
-lemma num_main_auto_refine: "num_main_auto' fluent_to_var = ndefs.num_main_auto"
+lemma num_main_auto_refine: "num_main_auto' = ndefs.num_main_auto"
   unfolding num_main_auto'_def ndefs.num_main_auto_def Let_def
   unfolding num_main_auto_init_edge_refine num_main_auto_goal_edge_refine
   unfolding ndefs_main_auto_loop_refine
   unfolding ndefs_init_loc ndefs_goal_loc ..
 
 lemma num_net_automata_refine:
-  "num_net_automata' fluent_to_var = ndefs.num_timed_automaton_net"
+  "num_net_automata' = ndefs.num_timed_automaton_net"
   unfolding num_net_automata'_def ndefs.num_timed_automaton_net_def
   unfolding num_main_auto_refine
   using num_action_to_automaton_refine by simp
@@ -402,7 +410,7 @@ text \<open>The numeric variable bounds, initial locations/variables and reachab
   to the propositional bounds, and the locations/formula are unchanged.\<close>
 
 lemma num_net_bounds_refine:
-  "num_net_bounds' fluent_to_var fluent_lo fluent_hi = ndefs.num_net_bounds"
+  "num_net_bounds' fluent_lo fluent_hi = ndefs.num_net_bounds"
   unfolding num_net_bounds'_def ndefs.num_all_vars_def
   unfolding ndefs_net_bounds_refine num_fluent_vars_refine ..
 
@@ -410,7 +418,7 @@ lemma num_init_locs_refine: "num_init_locs' = ndefs.init_locs"
   unfolding num_init_locs'_def ndefs_init_locs_refine ..
 
 lemma num_init_vars_refine:
-  "num_init_vars' fluent_to_var fluent_lo fluent_hi = ndefs.num_init_vars"
+  "num_init_vars' fluent_lo fluent_hi = ndefs.num_init_vars"
   unfolding num_init_vars'_def ndefs.num_init_vars_def
   unfolding num_net_bounds_refine ..
 
@@ -427,11 +435,11 @@ text \<open>The numeric twin of @{thm [source] ground_ast_problem.model_checking
   @{thm [source] num_net_form_not_sat_imp_no_valid_ground_plan}.\<close>
 
 lemma num_model_checking_problem_refine:
-  "\<not> Simple_Network_Impl.sem (num_net_automata' fluent_to_var) ndefs.net_broadcast
-        (num_net_bounds' fluent_to_var fluent_lo fluent_hi),
-      (num_init_locs', map_of (num_init_vars' fluent_to_var fluent_lo fluent_hi), (\<lambda>_. 0))
+  "\<not> Simple_Network_Impl.sem num_net_automata' ndefs.net_broadcast
+        (num_net_bounds' fluent_lo fluent_hi),
+      (num_init_locs', map_of (num_init_vars' fluent_lo fluent_hi), (\<lambda>_. 0))
       \<Turnstile> num_reach_formula'
-   \<Longrightarrow> \<not>(\<exists>\<pi>. numeric_valid_ground_plan P fluent_to_var fluent_lo fluent_hi \<pi>)"
+   \<Longrightarrow> \<not>(\<exists>\<pi>. numeric_valid_ground_plan P fluent_lo fluent_hi \<pi>)"
   using num_net_form_not_sat_imp_no_valid_ground_plan
   unfolding num_net_automata_refine num_net_bounds_refine
   unfolding num_init_locs_refine num_init_vars_refine num_reach_formula_refine

@@ -35,11 +35,17 @@ locale numeric_tp_nta_reduction_defs = tp_nta_reduction_defs
     and num_init :: "'n \<Rightarrow> 'r"
     and num_goal :: "('n, 'r) comp list"
     and nfluents :: "'n list"
-    and fluent_to_var :: "'n \<Rightarrow> String.literal"
+    and fluent_to_name :: "'n \<Rightarrow> String.literal"
     and fluent_lo :: "'n \<Rightarrow> int"
     and fluent_hi :: "'n \<Rightarrow> int"
     and const_to_int :: "'r \<Rightarrow> int"
 begin
+
+text \<open>The fluent variable name is a DEFINED constant (mirroring the propositional \<open>prop_to_var\<close>),
+prefixing the fluent's abstract name with \<open>''fluent_''\<close>. The \<open>''fluent_''\<close> prefix is disjoint from
+the propositional prefixes (\<open>''var_''\<close>/\<open>''lock_''\<close>) and from \<open>acts_active\<close>/\<open>planning_lock\<close>, which is
+what makes the fluent variables fresh (NUMERIC_PLAN A.6).\<close>
+definition "fluent_to_var f \<equiv> STR ''fluent_'' + fluent_to_name f"
 
 text \<open>One bounded \<open>int\<close> variable per declared numeric fluent, appended to the propositional
 \<open>all_vars\<close> (NUMERIC_PLAN A.5).\<close>
@@ -173,14 +179,15 @@ lemma upds_no_cross_read_listD:
     shows "g = f"
   using assms unfolding upds_no_cross_read_list_def by fast
 
-text \<open>The numeric reduction proper: the spec locale plus well-formedness. \<open>upds\<close> is functional (one
+text \<open>The numeric reduction propeItr: the spec locale plus well-formedness. \<open>upds\<close> is functional (one
 assignment per fluent, from the grounder's combination-normalisation) and cross-read-free; per-fluent
 bounds are valid; the fluent variable names are injective and FRESH (disjoint from the propositional
 variable names, so numeric variables never gate a propositional edge -- the keystone of the
 additive-tracking architecture, NUMERIC_PLAN A.6/5.5).\<close>
 locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
-  n_pre n_inv upds num_init num_goal nfluents fluent_to_var fluent_lo fluent_hi const_to_int
+  n_pre n_inv upds num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int +
+  fluent_names: unique_names fluent_to_name "set nfluents"
   for init :: "'proposition list"
     and goal :: "'proposition list"
     and at_start :: "'action \<Rightarrow> 'snap_action"
@@ -202,7 +209,7 @@ locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
     and num_init :: "'n \<Rightarrow> 'r"
     and num_goal :: "('n, 'r) comp list"
     and nfluents :: "'n list"
-    and fluent_to_var :: "'n \<Rightarrow> String.literal"
+    and fluent_to_name :: "'n \<Rightarrow> String.literal"
     and fluent_lo :: "'n \<Rightarrow> int"
     and fluent_hi :: "'n \<Rightarrow> int"
     and const_to_int :: "'r \<Rightarrow> int" +
@@ -211,8 +218,6 @@ locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
       and upds_no_cross_read_start: "\<forall>a \<in> set actions. upds_no_cross_read_list (upds (at_start a))"
       and upds_no_cross_read_end:   "\<forall>a \<in> set actions. upds_no_cross_read_list (upds (at_end a))"
       and fluent_bounds_valid:      "\<forall>f \<in> set nfluents. fluent_lo f \<le> fluent_hi f"
-      and fluent_to_var_inj:        "inj_on fluent_to_var (set nfluents)"
-      and fluent_vars_fresh:        "\<forall>f \<in> set nfluents. fluent_to_var f \<notin> fst ` set all_vars"
       \<comment> \<open>Integer-encoding faithfulness, the grounder-match contract for the discrete fragment
          (NUMERIC_PLAN A.3): on any integer-valued (@{const num_val_ok}) valuation every snap's update
          RHS and pre/over_all comparison is @{const nexp_ok}/@{const comp_ok} (declared integer reads,
@@ -248,5 +253,26 @@ locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
          over_all guards are discharged from plan validity's active clause via
          @{text starting_index_active_Suc} / @{text ending_index_inv_sat} -- a sound over-approximation
          (no lock, no write-guard).\<close>
+
+begin
+
+text \<open>The fluent variable names are injective on the declared fluents (now a LEMMA off the defined
+\<open>fluent_to_var\<close>: the \<open>''fluent_''\<close> prefix is injective, and \<open>fluent_to_name\<close> is injective on
+\<open>nfluents\<close> by the \<open>fluent_names\<close> sublocale). Mirrors \<open>variables_inj\<close>.\<close>
+lemma fluent_to_var_inj: "inj_on fluent_to_var (set nfluents)"
+  unfolding fluent_to_var_def inj_on_def
+  by (intro ballI impI, (subst (asm) String.add_literal_code String.Literal_eq_iff)+,
+      use fluent_names.names_unique in blast)
+
+text \<open>The fluent variable names are FRESH: disjoint from every propositional variable name in
+\<open>all_vars\<close>. Pure prefix disjointness -- \<open>''fluent_''\<close> differs at char 0 from \<open>''lock_''\<close>/\<open>''var_''\<close>
+(the \<open>prop_to_lock\<close>/\<open>prop_to_var\<close> images) and from \<open>''acts_active''\<close>/\<open>''planning_lock''\<close>. Mirrors the
+prefix-disjointness of \<open>variables_unique\<close>.\<close>
+lemma fluent_vars_fresh: "\<forall>f \<in> set nfluents. fluent_to_var f \<notin> fst ` set all_vars"
+  unfolding all_vars_def fluent_to_var_def prop_to_var_def prop_to_lock_def
+            acts_active_def planning_lock_def
+  by (auto simp: Let_def String.add_literal_code)
+
+end
 
 end

@@ -2,22 +2,6 @@ theory TP_NTA_Reduction_Model_Checking
   imports TP_NTA_Reduction_Defs
 begin
 
-locale type_naming =
-  fixes mem_to_name:: "'ty \<Rightarrow> String.literal"
-
-locale unique_names = type_naming mem_to_name 
-  for mem_to_name:: "'ty \<Rightarrow> String.literal" +
-  fixes S::   "'ty set"
-  assumes a: "inj_on mem_to_name S"
-begin
-lemma b:
-  "n \<in> S \<Longrightarrow> m \<in> S \<Longrightarrow> n \<noteq> m \<Longrightarrow> mem_to_name n \<noteq> mem_to_name m"
-  "n \<in> S \<Longrightarrow> m \<in> S \<Longrightarrow> mem_to_name n = mem_to_name m \<Longrightarrow> n = m"
-  using a unfolding inj_on_def by blast+ 
-
-lemmas names_unique = a b
-end
-
 locale tp_nta_reduction_model_checking = tp_nta_reduction_defs
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name +
   action_names: unique_names act_to_name "set actions" +

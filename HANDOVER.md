@@ -60,6 +60,15 @@ the `ast_cont_*` namespace. Full detail in memory `numeric-exec-impl-layer-statu
   augments the RAW net — so the agent re-proved the propositional refine stack at RAW/`ndefs` level
   (~40 `ndefs_*` lemmas). CLEANUP flagged: a shared RAW-level refine stack in `ground_ast_problem_core`
   would dedup this (see memory `numeric-exec-impl-layer-status.md`).
+- **`fluent_to_var` refactor — DONE & green (2026-07-10, backlog #1), UNCOMMITTED (on top of `fef6bc9`).**
+  `fluent_to_var` is now a DEFINED constant off a new `fluent_to_name` parameter (exact mirror of
+  `prop_to_var`/`prop_to_name`): `numeric_tp_nta_reduction_defs` fixes `fluent_to_name` + defines
+  `fluent_to_var f = STR ''fluent_'' + fluent_to_name f`; `numeric_tp_nta_reduction` gains
+  `fluent_names: unique_names fluent_to_name "set nfluents"` (the generic `type_naming`/`unique_names`
+  helpers MOVED from `Model_Checking` down to `Defs`), so `fluent_to_var_inj`/`fluent_vars_fresh` are now
+  LEMMAS. Ground: `fluent_to_name_spec = func.name`, inj from `wf_domain_signature`'s distinct functions.
+  The `fluent_to_var` param is DROPPED from leaf/WP-A/WP-C; ONLY `fluent_lo`/`fluent_hi` (WP-E) remain
+  parameters. 7 files (4 TA_Network + 3 Ground_PDDL). Full detail: memory `numeric-exec-ladder-design.md` #1.
 - **NEXT = WP-D** = re-derive the isolated propositional export machinery + its NUMERIC twins
   (`check_numeric_ground_problem`, `num_make_network_impl`) + `export_code`. (The numeric admission-check +
   assembly, once nominally WP-C, are folded into WP-D alongside the propositional export repair.)

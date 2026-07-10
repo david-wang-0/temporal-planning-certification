@@ -35,15 +35,14 @@ begin
 sublocale nred: numeric_tp_nta_reduction
   init_spec goal_spec at_start_spec at_end_spec over_all_spec lower_spec upper_spec
   pre_spec adds_spec dels_spec 0 props_spec actions_spec act_to_name_spec prop_to_name_spec
-  n_pre n_inv upds num_init num_goal nfluents fluent_to_var fluent_lo fluent_hi const_to_int
+  n_pre n_inv upds num_init num_goal nfluents fluent_to_name_spec fluent_lo fluent_hi const_to_int
   apply unfold_locales
+  subgoal using fluent_to_name_spec_inj .
   subgoal using upds_functional_start .
   subgoal using upds_functional_end .
   subgoal using upds_no_cross_read_start .
   subgoal using upds_no_cross_read_end .
   subgoal using fluent_bounds_valid .
-  subgoal using fluent_to_var_inj .
-  subgoal using fluent_vars_fresh .
   subgoal using snap_upds_nexp_ok_start .
   subgoal using snap_upds_nexp_ok_end .
   subgoal using snap_pre_comp_ok_start .
@@ -88,14 +87,13 @@ text \<open>The numeric twin of @{locale valid_ground_plan}: the numeric admissi
   hypothesis, exactly as @{text valid_ground_plan} supplies propositional validity.\<close>
 
 locale numeric_valid_ground_plan =
-    numeric_ground_ast_problem P fluent_to_var fluent_lo fluent_hi +
+    numeric_ground_ast_problem P fluent_lo fluent_hi +
     num_plan: numeric_temp_plan_for_problem_list_impl_int
       at_start_spec at_end_spec over_all_spec lower_spec upper_spec
       pre_spec adds_spec dels_spec init_spec goal_spec 0 props_spec actions_spec \<pi>
       "set o n_pre" "set o n_inv" "set o upds"
       "\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None" "set num_goal"
   for P :: ast_temporal_problem
-    and fluent_to_var :: "func \<Rightarrow> String.literal"
     and fluent_lo :: "func \<Rightarrow> int"
     and fluent_hi :: "func \<Rightarrow> int"
     and \<pi> :: "(nat, ast_temporal_action_schema, int) temp_plan" +
@@ -120,7 +118,7 @@ text \<open>Interpret the abstract numeric correctness locale @{locale numeric_t
 sublocale ncorr: numeric_tp_nta_reduction_correctness
   init_spec goal_spec at_start_spec at_end_spec over_all_spec lower_spec upper_spec
   pre_spec adds_spec dels_spec 0 props_spec actions_spec \<pi> act_to_name_spec prop_to_name_spec
-  n_pre n_inv upds num_init num_goal nfluents fluent_to_var fluent_lo fluent_hi const_to_int
+  n_pre n_inv upds num_init num_goal nfluents fluent_to_name_spec fluent_lo fluent_hi const_to_int
   apply unfold_locales
   subgoal using num_valid_plan .
   subgoal using const_to_int_of_int .
@@ -151,12 +149,12 @@ text \<open>The numeric twin of @{thm [source] ground_ast_problem.valid_ground_p
   (see @{locale numeric_valid_ground_plan}).\<close>
 
 lemma num_valid_ground_plan_imp_num_form_holds:
-  assumes "\<exists>\<pi>. numeric_valid_ground_plan P fluent_to_var fluent_lo fluent_hi \<pi>"
+  assumes "\<exists>\<pi>. numeric_valid_ground_plan P fluent_lo fluent_hi \<pi>"
   shows "num_net_impl.sem, num_a\<^sub>0 \<Turnstile> ndefs.reach_formula"
 proof -
-  obtain \<pi> where "numeric_valid_ground_plan P fluent_to_var fluent_lo fluent_hi \<pi>"
+  obtain \<pi> where "numeric_valid_ground_plan P fluent_lo fluent_hi \<pi>"
     using assms by blast
-  then interpret x: numeric_valid_ground_plan P fluent_to_var fluent_lo fluent_hi \<pi> .
+  then interpret x: numeric_valid_ground_plan P fluent_lo fluent_hi \<pi> .
   show ?thesis
     using x.num_valid_plan_imp_form_holds
     unfolding num_a\<^sub>0_def x.ncorr.num_a\<^sub>0_def by simp
@@ -164,7 +162,7 @@ qed
 
 corollary num_net_form_not_sat_imp_no_valid_ground_plan:
   assumes "\<not>(num_net_impl.sem, num_a\<^sub>0 \<Turnstile> ndefs.reach_formula)"
-  shows "\<not>(\<exists>\<pi>. numeric_valid_ground_plan P fluent_to_var fluent_lo fluent_hi \<pi>)"
+  shows "\<not>(\<exists>\<pi>. numeric_valid_ground_plan P fluent_lo fluent_hi \<pi>)"
   using num_valid_ground_plan_imp_num_form_holds assms by blast
 
 end
