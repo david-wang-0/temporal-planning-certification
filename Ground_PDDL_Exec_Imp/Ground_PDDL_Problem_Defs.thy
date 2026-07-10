@@ -796,16 +796,6 @@ locale ground_ast_problem_core =
       and no_consts: "consts D = []"
       and init_no_args: "list_all form_preds_no_args (init P)"
 
-text \<open>Numeric-freeness is an \<^emph>\<open>orthogonal leaf\<close> off the shared @{text ground_ast_problem_core}
-  (grounder idiom: cf. the grounder's @{text numeric_free_problem}), \<^bold>\<open>not\<close> part of the core: the
-  classical admission bundle @{text ground_ast_problem} is \<open>core\<close> + @{text no_functions}; the numeric
-  admission bundle @{text numeric_ground_ast_problem} (in @{text Ground_PDDL_Numeric_Problem_Defs}) is
-  \<open>core\<close> + the numeric-fragment well-formedness. The core stays numeric-inclusive so both leaves share it.\<close>
-
-locale ground_ast_problem =
-    ground_ast_problem_core P
-  for P :: ast_temporal_problem +
-  assumes no_functions: "functions D = []"
 begin
 
 lemma acts_wf:
@@ -1397,7 +1387,38 @@ proof (rule wf_ground_action_adds_in_props[simplified comp_def])
     using end_snaps_wf assms by blast
 qed
 
-text \<open>The initial state and goal are in the props\<close>
+text \<open>The goal is in the props. This is @{text no_functions}-free (it needs only @{text positive_goal}
+  + well-formedness), so it stays in the shared @{text ground_ast_problem_core}, unlike the initial-state
+  facts below (which need @{text no_functions} to exclude function-assignment init facts).\<close>
+
+lemma goal_in_props: "set goal_spec \<subseteq> set props_spec"
+proof -
+  have "wf_fmla objT (goal P)"
+    using wf_temporal_problem unfolding wf_temporal_problem_def
+    unfolding props_spec_def goal_spec_def by auto
+  hence "list_all (wf_fmla_atom objT) (to_literals (goal P))"
+    using wf_pos_conj_fmla_imp_wf_atoms positive_goal by auto
+  hence "set (map to_predicate (to_literals (goal P))) \<subseteq> set props_spec"
+    using wf_fmla_atom_in_props unfolding set_map list_all_iff by auto
+  thus ?thesis using goal_spec_def by auto
+qed
+
+end (* locale ground_ast_problem_core *)
+
+
+text \<open>Numeric-freeness is an \<^emph>\<open>orthogonal leaf\<close> off the shared @{text ground_ast_problem_core}
+  (grounder idiom: cf. the grounder's @{text numeric_free_problem}), \<^bold>\<open>not\<close> part of the core: the
+  classical admission bundle @{text ground_ast_problem} is \<open>core\<close> + @{text no_functions}; the numeric
+  admission bundle @{text numeric_ground_ast_problem} (in @{text Ground_PDDL_Numeric_Problem_Defs}) is
+  \<open>core\<close> + the numeric-fragment well-formedness. The core stays numeric-inclusive so both leaves share it.\<close>
+
+locale ground_ast_problem =
+    ground_ast_problem_core P
+  for P :: ast_temporal_problem +
+  assumes no_functions: "functions D = []"
+begin
+
+text \<open>The initial state facts are in the props.\<close>
 
 text \<open>In the numeric-free setting the domain declares no functions, so the function signature is
   empty and no initialisation fact can be a (well-formed) function assignment. Hence the
@@ -1431,17 +1452,5 @@ qed
 lemma init_in_props: "set init_spec \<subseteq> set props_spec"
   using init_wf_fmla_atoms wf_fmla_atom_in_props init_spec_def by auto
 
-
-lemma goal_in_props: "set goal_spec \<subseteq> set props_spec"
-proof -
-  have "wf_fmla objT (goal P)"
-    using wf_temporal_problem unfolding wf_temporal_problem_def
-    unfolding props_spec_def goal_spec_def by auto
-  hence "list_all (wf_fmla_atom objT) (to_literals (goal P))" 
-    using wf_pos_conj_fmla_imp_wf_atoms positive_goal by auto
-  hence "set (map to_predicate (to_literals (goal P))) \<subseteq> set props_spec"
-    using wf_fmla_atom_in_props unfolding set_map list_all_iff by auto
-  thus ?thesis using goal_spec_def by auto
-qed
 end (* locale ground_ast_problem *)
 end

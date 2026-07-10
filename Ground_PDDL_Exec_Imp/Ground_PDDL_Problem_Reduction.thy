@@ -2,10 +2,10 @@ theory Ground_PDDL_Problem_Reduction
   imports Ground_PDDL_Problem_Defs
 begin
 
-context ground_ast_problem
+context ground_ast_problem_core
 begin
 
-sublocale abstr_model_checking: tp_nta_reduction_model_checking' 
+sublocale abstr_model_checking: tp_nta_reduction_model_checking'
   init_spec goal_spec at_start_spec at_end_spec 
   over_all_spec 
   lower_spec upper_spec 
@@ -28,7 +28,9 @@ proof
   show "\<forall>a\<in>set actions_spec. distinct (over_all_spec a)"
     by (simp add: pre_spec_alt)
   show "set goal_spec - set props_spec \<subseteq> set init_spec - set props_spec"
-    using init_in_props goal_in_props by auto
+    \<comment> \<open>@{text goal_in_props} makes the LHS empty; @{text init_in_props} is no longer needed (and is a
+        @{text no_functions}-leaf lemma, unavailable in @{text ground_ast_problem_core}).\<close>
+    using goal_in_props by auto
   show "\<forall>a\<in>set actions_spec. action_and_prop_set.act_mod_props at_start_spec at_end_spec (set \<circ> adds_spec) (set \<circ> dels_spec) (set props_spec) a"
   proof (rule ballI)
     fix a
@@ -68,7 +70,7 @@ proof
       case 3
       then show ?thesis using a_in_acts over_all_in_props by auto
     qed
-    thus "x \<in> set init_spec - set props_spec" using init_in_props by blast
+    thus "x \<in> set init_spec - set props_spec" by simp \<comment> \<open>ex-falso from @{text \<open>x \<in> {}\<close>}\<close>
   qed
   show "inj_on act_to_name_spec (set actions_spec)"
   proof -

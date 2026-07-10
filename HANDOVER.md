@@ -1,5 +1,83 @@
 # HANDOVER — numeric reduction is proved abstractly; NEXT = make it executable
 
+## CURRENT STATUS (2026-07-09) — read this first
+
+**Backlog #8 (numeric over-all invariant redesign) is DONE and committed (`d809a59`, branch
+`numeric-conditions-effects`; whole numeric chain green, 0 sorries).** Implemented as design **B** (a sound
+over-approximation), NOT the lock design in `NUMERIC_OVERALL_REDESIGN.md` — design **A** was reconsidered
+and REJECTED as an unsound *under*-approximation for this forward-only unsolvability certifier (its
+write-guard would reject valid interfering plans); that doc now carries a big DO-NOT-IMPLEMENT-A banner.
+The static `n_inv_eq`/`n_inv_readonly`/`n_inv_init_sat` contract is gone; the over-all fragment is now
+GENERAL (arbitrary while-active comparisons); the guard is discharged from validity's active clause at BOTH
+`num_edge_2` (start) and the new `num_edge_3` (end) check, via bridge lemmas `starting_index_active_Suc` /
+`ending_index_inv_sat` (`TA_Network/TP_NTA_Reduction_Numeric_Projection.thy`). Full detail is in the memory
+`numeric-overall-redesign-decisions.md`. Side effect: `numeric_tp_nta_reduction_correctness` now has FEWER
+assumptions + a broader fragment, so WP-A's interpretation is easier and more general.
+
+**The core-rebase AND WP-A are now DONE & green (2026-07-09, UNCOMMITTED on disk).**
+- **Core-rebase (gate) — done.** `ground_ast_problem_core` was given the body (all former
+  `ground_ast_problem` body-lemmas + `goal_in_props`, which is `no_functions`-free, relocated into core);
+  `ground_ast_problem = core + no_functions` keeps only the 3-lemma `no_functions` cluster
+  (`no_functions_no_wf_func_assign`/`init_wf_fmla_atoms`/`init_in_props`). `Ground_PDDL_Problem_Reduction.thy`
+  + `Ground_PDDL_Plan_Defs.thy:271` re-pointed to `context ground_ast_problem_core`; the two `init_in_props`
+  uses in the reduction were dropped (goal⊆props ⇒ LHS empty via `goal_in_props`; ex-falso from `x∈{}`).
+- **Leaf reconciled to design B.** `Ground_PDDL_Numeric_Problem_Defs.thy`: the 3 now-dead over-all
+  assumptions (`n_inv_eq`/`n_inv_readonly`/`n_inv_init_sat`) were removed from `numeric_ground_ast_problem`
+  (the abstract `numeric_tp_nta_reduction` dropped them in #8), stale design-A comment replaced.
+- **WP-A — done.** New `Ground_PDDL_Exec_Imp/Ground_PDDL_Numeric_NTA_Reduction_Correctness.thy` (registered
+  in `ROOT`, fully_processed + consolidated, 0 errors/sorries): `sublocale nred: numeric_tp_nta_reduction`
+  in the leaf (15 static assumptions discharged one-for-one) + hoisted plan-free `num_net_impl`/`num_a\<^sub>0`;
+  a plan-carrying `locale numeric_valid_ground_plan` (twin of `valid_ground_plan`) that `sublocale ncorr:
+  numeric_tp_nta_reduction_correctness`; and the Rung-4 lemmas
+  `num_valid_ground_plan_imp_num_form_holds` (`\<exists>\<pi>. numeric_valid_ground_plan \<dots> \<pi> \<Longrightarrow>
+  num_net_impl.sem, num_a\<^sub>0 \<Turnstile> reach_formula`, over the NUMERIC net) + contrapositive
+  `num_net_form_not_sat_imp_no_valid_ground_plan`.
+- **DESIGN DEVIATION from NUMERIC_EXEC_PLAN.md WP-A (deliberate, sound):** the plan doc stated the
+  hypothesis as `\<exists>\<pi>. numeric_plan_for_problem \<pi>`, but that (PRIMED) numeric-plan abbreviation is
+  fixes-only / carries ONLY propositional validity — the numeric-net capstone genuinely needs `num_valid`
+  (numeric plan validity). So the honest hypothesis is `\<exists>\<pi>. numeric_valid_ground_plan \<dots> \<pi>`, a plan
+  predicate bundling propositional validity + `num_valid` + the WP-E plug `num_seq_in_bounds` (carried as an
+  explicit, commented locale assumption — NOT discharged; reserved for David).
+
+**WP-C/D underway (2026-07-10) — a big prerequisite was discovered + fixed first.** Starting WP-C surfaced
+that the propositional EXECUTABLE + EXPORT layer (`Ground_PDDL_NTA_Reduction_Impl.thy`, imported by
+`Check_Unsolvability.thy`) had been **committed-BROKEN since the FPS re-point** (WIP commit `31a9e17`, 90
+errors) — latent because only the PROOF chain was ever reprocessed. Fixed (David: "repair, defer export
+tail"): `Ground_PDDL_NTA_Reduction_Impl.thy` is now GREEN (net constructors + `*_refine` +
+`model_checking_problem_refine`) — the action-schema TYPE change (`ast_action_schema` ->
+`ast_temporal_action_schema`), `wf_problem` -> `wf_temporal_problem`. **ISOLATED for WP-D** (commented,
+`text \<open>WP-D ISOLATION\<close>`): the code-gen typeclass block (`proper_interval`/`Abs_literal`/`derive`,
+broken by the new `String.literal` repr), `check_ground_problem`(+`_return_iff`), `make_network_impl`
+(+`check_and_make_network`+soundness), and the `value`/`export_code` tail — all need re-derivation against
+the `ast_cont_*` namespace. Full detail in memory `numeric-exec-impl-layer-status.md`.
+- **WP-C (numeric net + refinement) — DONE & green (2026-07-10)**: new
+  `Ground_PDDL_Exec_Imp/Ground_PDDL_Numeric_NTA_Reduction_Impl.thy` (in ROOT; fully_processed, 0 errors/
+  sorries — the `consolidated` flag lags on these big nodes, see the memory). Executable `num_net_*'`
+  constructors (augment the propositional `net_*'`) + numeric `*_refine` lemmas + the capstone
+  `num_model_checking_problem_refine` (executable numeric net unreachable ==> no valid numeric plan, over
+  the REAL `num_net_impl`). Load-bearing finding: the propositional `*_refine` lemmas are gated behind
+  `no_functions` (in `ground_ast_problem`, not core) AND target the REFINED net, while the numeric net
+  augments the RAW net — so the agent re-proved the propositional refine stack at RAW/`ndefs` level
+  (~40 `ndefs_*` lemmas). CLEANUP flagged: a shared RAW-level refine stack in `ground_ast_problem_core`
+  would dedup this (see memory `numeric-exec-impl-layer-status.md`).
+- **NEXT = WP-D** = re-derive the isolated propositional export machinery + its NUMERIC twins
+  (`check_numeric_ground_problem`, `num_make_network_impl`) + `export_code`. (The numeric admission-check +
+  assembly, once nominally WP-C, are folded into WP-D alongside the propositional export repair.)
+  **David's WP-D scope decision (2026-07-10): do the ASSEMBLY** — `check_numeric_ground_problem` +
+  `num_make_network_impl` + `check_and_make_numeric_network` (the soundness assembly) — **but DEFER the
+  actual `export_code` / `String.literal` code-gen instances** if that block (the isolated `proper_interval`/
+  `Abs_literal` typeclass instances) turns into a rabbit hole. Watch out: `check_numeric_ground_problem`'s
+  executable admission check must turn the leaf's `\<forall>w. num_val_ok w \<longrightarrow> nexp_ok w e` /
+  `comp_ok` universals into decidable STRUCTURAL sufficient conditions (exact-`NDiv`-only etc.), then prove
+  structural \<Longrightarrow> the universal.
+- **WP-E** (boundedness: discharge `num_seq_in_bounds`, choose `fluent_lo`/`fluent_hi`; candidate
+  `Numeric_Bound_Inference/`) stays RESERVED FOR DAVID — the soundness-critical plug WP-A/WP-C carry as an
+  assumption/parameter.
+Uncommitted docs on disk (ARCHITECTURE_pipeline.md, NUMERIC_PLAN.md, SEMANTICS_REPOINT_PLAN.md,
+Numeric_Bound_Inference/, ...) predate #8 and were left untouched.
+
+---
+
 ## CURRENT STATUS (2026-07-08) — read this first
 
 WP-B (the executable numeric layer) is underway, restructured as a **grounder-idiomatic locale ladder**

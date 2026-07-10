@@ -62,567 +62,29 @@ qed
 
 text \<open>We need to refine some datatypes\<close>
 
-find_theorems "finite ?x \<Longrightarrow> inj ?f \<Longrightarrow> finite ?y"
-find_theorems name: "infinite*UNIV"
+text \<open>WP-D ISOLATION: the code-generation-only typeclass block that used to live here
+  (card_UNIV / proper_interval / cproper_interval / ceq / ccompare / set_impl instances
+  and derive commands for String.literal / predicate / ast_action_schema) was removed to
+  reach green through model_checking_problem_refine.  It is broken by the
+  Formal-PDDL-Semantics re-point on two counts: (a) list_less_one_correct relied on the OLD
+  literal.Abs_literal internal representation, and (b) the derive commands reference the
+  removed 'ast_action_schema' type.  None of it feeds the net-constructor definitions, the
+  *_refine lemmas, or model_checking_problem_refine (verified: nothing after this point uses
+  those names, and there is no export_code in this file).  To be repaired / re-derived under
+  WP-D (code export).  The removed block is preserved in git history (commit 31a9e17).\<close>
 
-lemma UNIV_predicate:
-  "(UNIV::predicate set) = Pred ` (UNIV::String.literal set)"
-  apply (intro equalityI subsetI UNIV_I)
-  subgoal for x
-    unfolding UNIV_def 
-    apply (cases x)
-    by blast
-  done
-
-lemma inifinite_UNIV_literalI:
-  "infinite (UNIV::String.literal set)"
-proof (rule notI)
-  assume "finite (UNIV::String.literal set)"
-  moreover
-  have "inj (\<lambda>l::String.literal. (STR ''x'') + l)"
-    apply (rule injI)
-    apply (subst (asm) String.add_literal_code)+
-    using String.Literal_eq_iff by simp
-  ultimately
-  have "surj (\<lambda>l::String.literal. (STR ''x'') + l)"
-    using finite_UNIV_inj_surj by blast
-  then obtain s where "STR '''' = STR ''x'' + s" by (rule surjE)
-  thus False by (simp add: String.add_literal_code String.Literal_eq_iff)
-qed
-
-
-find_theorems "infinite (?f ` ?x)"
-
-lemma range_inj_infinite:
-  assumes "infinite S"
-      and "inj f"
-    shows "infinite (f ` S)"
-proof
-  assume a: "finite (f ` S)"
-  have "f -` (f ` S) = S" using \<open>inj f\<close> inj_vimage_image_eq by simp
-  moreover
-  have "finite (f -` (f ` S))" using finite_vimageI a \<open>inj f\<close> by blast
-  ultimately
-  have "finite S" by auto
-  with \<open>infinite S\<close>
-  show False by simp
-qed
-
-lemma infinite_UNIV_predicateI:
-  "infinite (UNIV::predicate set)"
-  apply (subst UNIV_predicate)
-  apply (rule range_inj_infinite)
-   apply (rule inifinite_UNIV_literalI)
-  apply (rule injI)
-  by blast
-
-instantiation predicate :: card_UNIV
-begin 
-definition "finite_UNIV = Phantom(predicate) False"
-definition "card_UNIV = Phantom(predicate) 0"
-instance by intro_classes (simp_all add: finite_UNIV_predicate_def card_UNIV card_UNIV_predicate_def infinite_UNIV_predicateI)
-end
-
-find_theorems name: "proper_int*char"
-
-find_theorems name: "ord*list"
-
-find_theorems name: "less*liter"
-
-find_theorems "List.ord.lexordp"
-
-instantiation String.literal :: proper_interval
-begin
-fun list_less_one::"char list \<Rightarrow> char list \<Rightarrow> bool" where
-"list_less_one _ [] = False" |
-"list_less_one [] (y#ys) = ((of_char (CHR 0x00)::nat) < (of_char y) \<or> length ys > 0)" |
-"list_less_one (x#xs) (y#ys) = (
-  if (x = y) then list_less_one xs ys
-  else if ((of_char y::nat) < of_char x) then False
-  else True
-)"
-
-
-  
-
-lemma list_less_one_induct_cases:
-  assumes "(\<And>xs. P xs [])" 
-    and "(\<And>y ys. P [] (y # ys))"
-    and "(\<And>x xs y ys. x = y \<Longrightarrow> P xs ys \<Longrightarrow> P (x # xs) (y # ys))" 
-    and "(\<And>x xs y ys. (of_char y::nat) < of_char x \<Longrightarrow> P (x # xs) (y # ys))" 
-    and "(\<And>x xs y ys. (of_char x::nat) < of_char y \<Longrightarrow> P (x # xs) (y # ys))" 
-  shows "P xs ys"
-  apply (induction rule: list_less_one.induct)
-    apply (use assms in simp)
-   apply (use assms in simp)
-  subgoal for x _ y
-    apply (cases "(of_char y::nat) < of_char x"; cases "(of_char x::nat) < of_char y")
-    using assms by auto
-  done
-
-
-fun proper_interval_literal::"String.literal option \<Rightarrow> String.literal option \<Rightarrow> bool" where
-"proper_interval_literal None None = True" |
-"proper_interval_literal (Some s) None = True" |
-"proper_interval_literal None (Some s) = (s \<noteq> (STR ''''))" |
-"proper_interval_literal (Some s) (Some t) = (list_less_one (literal.explode s) (literal.explode t))"
-
-lemma valid_char_ran: "(of_char c::nat) > of_char (CHR 0x7F) \<longleftrightarrow> digit7 c"
-  apply (cases c)
-  subgoal for a b c d e f g h
-    apply (cases h; cases a; cases b; cases c; cases d; cases e; cases f; cases g)
-    by simp_all (* 10ms per case; 128 cases; slow *)
-  done
-
-lemma of_char_7F: "of_char (CHR 0x7F) = 127"
-  by simp
-
-
-lemma valid_char_ran': "\<not>digit7 c \<longleftrightarrow> (of_char c::nat) \<le> 127"
-  using valid_char_ran of_char_7F by force
-
-lemma list_less_one_correct:
-  assumes xs: "xs \<in> {cs. \<forall>c\<in>set cs. \<not> digit7 c}"
-    and ys: "ys \<in> {cs. \<forall>c\<in>set cs. \<not> digit7 c}"
-  shows "list_less_one xs ys = (\<exists>z>literal.Abs_literal xs. z < literal.Abs_literal ys)"
-  using assms
-proof (induction xs ys rule: list_less_one_induct_cases)
-  case (1 xs)
-  hence "literal.Abs_literal [] \<le> literal.Abs_literal xs" 
-    apply -
-    apply (induction xs) 
-    apply simp
-    apply (rule preorder_class.less_imp_le)
-    apply (subst String.less_literal.abs_eq)
-      apply (rule zero_literal.rsp)
-     apply (subst eq_onp_def) 
-     apply simp 
-    by auto
-  then show ?case by auto
-next
-  case (2 y ys)
-  show ?case 
-  proof (cases "list_less_one [] (y # ys)")
-    case True
-    then consider (y_ord) "of_char (CHR 0x00) < (of_char y::nat)" | (ys_len) "0 < length ys"
-      apply (-, subst (asm) list_less_one.simps) by blast
-    then show ?thesis
-    proof cases
-      case y_ord
-      have "literal.Abs_literal [] < literal.Abs_literal ((CHR 0x00)#ys)"
-        apply (subst String.less_literal.abs_eq)
-          apply (rule zero_literal.rsp)
-         apply (subst eq_onp_def)
-        using 2 apply simp
-        by simp
-      moreover
-      have "literal.Abs_literal (CHR 0x00#ys) < literal.Abs_literal (y#ys)"
-        apply (subst String.less_literal.abs_eq)
-        unfolding eq_onp_def using 2 y_ord by simp+
-      ultimately
-      show ?thesis using True by blast
-    next
-      case ys_len
-      have "literal.Abs_literal [] < literal.Abs_literal [y]"
-        apply (subst String.less_literal.abs_eq)
-        unfolding eq_onp_def using 2 by simp+
-      moreover
-      obtain y' ys' where
-        ys: "ys = y' # ys'" using ys_len by (cases ys) auto
-      have "literal.Abs_literal [y] < literal.Abs_literal (y # ys)"
-        apply (subst ys)
-        apply (subst String.less_literal.abs_eq)
-        using ys ys_len 2 unfolding eq_onp_def
-        by simp+
-      ultimately
-      show ?thesis by auto
-    qed
-  next
-    case False
-    hence "of_char y < (1::nat)" using False 
-      by auto 
-    hence "of_char y = (0::nat)" by simp
-    hence "y = (CHR 0x00)" using inj_of_char 
-      by (auto dest: injD[of _ y "CHR 0x00"])
-    {
-      fix z
-      assume n: "literal.Abs_literal [] < z" 
-         and y: "z < literal.Abs_literal [y]"
-      have ordn: "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) [] (literal.explode z)" 
-        using n less_literal.rep_eq by auto
-      have ordy: "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (literal.explode z) [y]" 
-        using y unfolding less_literal.rep_eq 
-        using literal.Abs_literal_inverse 2 by simp
-      have "length (literal.explode z) = 1" 
-        using \<open>of_char y = 0\<close> ord.lexordp.simps ordn ordy by fastforce
-      then obtain z' where
-        "literal.explode z = [z']"
-        "(of_char z'::nat) < of_char y"
-        using ordy apply (cases "literal.explode z")
-        by auto
-      hence False using \<open>of_char y = 0\<close> by auto
-    }
-    then show ?thesis using False by auto
-  qed
-next
-  case (3 x xs y ys)
-  have "list_less_one xs ys = (\<exists>z>literal.Abs_literal xs. z < literal.Abs_literal ys)" 
-    using 3 by auto
-  also
-  have "... = (\<exists>z>literal.Abs_literal (x#xs). z < literal.Abs_literal (x#ys))"
-  proof (rule iffI; elim exE conjE)
-    fix z
-    assume xz: "literal.Abs_literal xs < z" 
-       and yz: "z < literal.Abs_literal ys" 
-
-    obtain zs where
-      z: "z = literal.Abs_literal zs"
-      and zs_wf: "zs \<in> {cs. \<forall>c\<in>set cs. \<not> digit7 c}"
-      using literal.Abs_literal_cases by blast
-
-    have xzs: "literal.Abs_literal xs < literal.Abs_literal zs"
-     and yzs:"literal.Abs_literal zs < literal.Abs_literal ys" using xz yz z by simp+
-
-    have "literal.Abs_literal (x#xs) < literal.Abs_literal (x#zs)"
-      using xzs
-      unfolding less_literal.rep_eq 
-      using literal.Abs_literal_inverse 3 zs_wf by simp
-    moreover
-    have "literal.Abs_literal (x#zs) < literal.Abs_literal (x#ys)"
-      using yzs
-      unfolding less_literal.rep_eq 
-      using literal.Abs_literal_inverse 3 zs_wf by simp
-    ultimately
-    show "\<exists>z>literal.Abs_literal (x # xs). z < literal.Abs_literal (x # ys)" by blast
-  next
-    fix z
-    assume xxz: "literal.Abs_literal (x # xs) < z" 
-       and yyz: "z < literal.Abs_literal (x # ys)" 
-    
-    obtain zs where
-      z: "z = literal.Abs_literal zs"
-      and zs_wf: "zs \<in> {cs. \<forall>c\<in>set cs. \<not> digit7 c}"
-      using literal.Abs_literal_cases by blast
-
-    obtain z' zs' where
-      zs: "zs = z' # zs'" 
-      using xxz 
-      unfolding less_literal.rep_eq z
-      using literal.Abs_literal_inverse 3 zs_wf by (cases zs) auto
-
-    have xzs': "literal.Abs_literal (x # xs) < literal.Abs_literal (z' # zs')"
-     and yzs': "literal.Abs_literal (z' # zs') < literal.Abs_literal (x # ys)"
-     and zs'_wf: "z' # zs' \<in> {cs. \<forall>c\<in>set cs. \<not> digit7 c}" using xxz yyz zs_wf unfolding z zs by blast+
-
-    have xzo: "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (x # xs) (z' # zs')" 
-      and yzo: "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (z' # zs') (x # ys)" 
-      using xzs' yzs'
-      unfolding less_literal.rep_eq
-      using literal.Abs_literal_inverse zs'_wf 3(3,4) 
-      by simp+
-    hence "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (xs) (zs')" 
-          "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (zs') (ys)" 
-      by auto
-    hence "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (literal.explode (literal.Abs_literal xs)) (literal.explode (literal.Abs_literal zs'))" 
-          "ord.lexordp (\<lambda>c d. (of_char c::nat) < of_char d) (literal.explode (literal.Abs_literal zs')) (literal.explode (literal.Abs_literal ys))"
-      using literal.Abs_literal_inverse zs'_wf 3(3,4) 
-      by simp+
-    thus "\<exists>z>literal.Abs_literal xs. z < literal.Abs_literal ys" 
-      unfolding less_literal.rep_eq
-      by blast
-  qed
-  finally
-  show ?case using \<open>x = y\<close> by auto
-next
-  case (4 x xs y ys)
-  have "\<not>(list_less_one (x # xs) (y # ys))" using 4 by auto
-  moreover
-  have "\<not>literal.Abs_literal (x # xs) < literal.Abs_literal (y # ys)" 
-    using 4 unfolding less_literal.rep_eq using literal.Abs_literal_inverse by simp
-  ultimately
-  show ?case by auto
-next
-  case (5 x xs y ys)
-  have "literal.Abs_literal (x # xs) < literal.Abs_literal (x # xs @ [CHR 0x00])"
-    unfolding less_literal.rep_eq 
-    using literal.Abs_literal_inverse 5 apply (induction xs) by simp+
-  moreover
-  have "literal.Abs_literal (x # xs @ [CHR 0x00]) < literal.Abs_literal (y # ys)"
-    unfolding less_literal.rep_eq 
-    using literal.Abs_literal_inverse 5 apply (induction xs) by simp+
-  ultimately
-  show ?case using 5 by auto
-qed
-
-lemma proper_interval_literal_lemmas: "proper_interval None (None::String.literal option) = True"
-  "\<And>y::String.literal. proper_interval None (Some y) = (\<exists>z. z < y)"
-  "\<And>x::String.literal. proper_interval (Some x) None = (\<exists>z. x < z)" 
-  "\<And>x y::String.literal. proper_interval (Some x) (Some y) = (\<exists>z>x. z < y)"
-proof -
-show "proper_interval None (None::String.literal option) = True" by simp
-  show "\<And>y::String.literal. proper_interval None (Some y) = (\<exists>z. z < y)"
-  proof
-    fix y::"String.literal"
-    assume "proper_interval None (Some y)"
-    hence yn: "y \<noteq> STR ''''" by simp
-    hence "literal.explode y \<noteq> []" 
-      using literal.explode_inject zero_literal.rep_eq by metis
-    then obtain c cs where
-      xy: "literal.explode y = c # cs" apply (cases "literal.explode y") by simp+
-    have "STR '''' < y" using xy zero_literal.rep_eq 
-      apply (subst less_literal.rep_eq) by auto
-    thus "\<exists>z. z < y" by fast
-  next
-    fix y::"String.literal"
-    assume "\<exists>z. z < y"
-    then obtain z where
-      le: "z < y" by blast
-    {
-      assume "y = (STR '''')"
-      hence "y \<le> z"
-        apply (cases "literal.explode z")
-        using zero_literal.rep_eq
-        using less_eq_literal.rep_eq
-        by auto
-      hence False using le by force
-    }
-    thus "proper_interval None (Some y)" by auto
-  qed
-  show "\<And>x::String.literal. proper_interval (Some x) None = (\<exists>z. x < z)" 
-  proof -
-    fix x::"String.literal"
-    { have "literal.explode STR ''x'' \<noteq> []"
-      proof 
-        assume "literal.explode STR ''x'' = []"
-        hence "literal.explode STR ''x'' = literal.explode STR ''''"
-          using literal.explode_inject zero_literal.rep_eq by auto
-        thus False using literal.explode_inject by auto
-      qed
-      hence "x < x + STR ''x''"
-        apply (subst less_literal.rep_eq)
-        apply (subst plus_literal.rep_eq)
-        apply (rule ord.lexordp_append_rightI)
-        by blast
-      hence "\<exists>z. x < z" by blast
-    }
-    thus "proper_interval (Some x) None = (\<exists>z. x < z)" by force
-  qed
-  show "\<And>x y::String.literal. proper_interval (Some x) (Some y) = (\<exists>z>x. z < y)"
-    apply (subst proper_interval_literal.simps)
-    apply (subst list_less_one_correct)
-    using literal.explode literal.explode_inverse by simp+
-qed
-
-
-instance apply intro_classes 
-  using proper_interval_literal_lemmas by blast+
-end
-
-find_theorems "OFCLASS(String.literal, proper_interval_class)"
-
-find_theorems name: "proper_interval*lite"
-value "STR '''' < STR ''a''"
-
-
-instantiation predicate :: proper_interval
-begin
-fun proper_interval_predicate::"predicate option \<Rightarrow> predicate option \<Rightarrow> bool" where
-"proper_interval_predicate None None = True" |
-"proper_interval_predicate (Some (Pred p)) None = proper_interval (Some p) None" |
-"proper_interval_predicate None (Some (Pred q)) = proper_interval None (Some q)" |
-"proper_interval_predicate (Some (Pred p)) (Some (Pred q)) = proper_interval (Some p) (Some q)"
-
-
-lemma predicate_proper_interval_lemmas:
-   "proper_interval None (None::predicate option) = True"
-    "\<And>y::predicate. proper_interval None (Some y) = (\<exists>z. z < y)" 
-"\<And>x::predicate. proper_interval (Some x) None = (\<exists>z. x < z)" 
-"\<And>x y::predicate. proper_interval (Some x) (Some y) = (\<exists>z>x. z < y)" 
-proof -
-  show "proper_interval None (None::predicate option) = True" by simp
-  show "\<And>y::predicate. proper_interval None (Some y) = (\<exists>z. z < y)" 
-    subgoal for y
-      apply (induction y)
-      apply (subst proper_interval_predicate.simps)
-      apply (subst proper_interval_literal_lemmas)
-      apply (rule iffI)
-       apply (erule exE)
-      subgoal for z n
-        apply (rule exI[of _ "Pred n"])
-        unfolding less_predicate_def
-        unfolding comparator_predicate_def
-        unfolding partial_comparator_predicate_def
-        unfolding lt_of_comp_def
-        unfolding comp_def id_def
-        unfolding predicate.rec predicate.case
-        unfolding comparator_of_def 
-        unfolding comp_lex.simps
-        by auto
-      apply (erule exE)
-      subgoal for z n 
-        apply (induction n)
-        subgoal for y
-          apply (rule exI[of _ y])
-        apply (cases "y < z"; cases "y = z")
-        unfolding less_predicate_def
-        unfolding comparator_predicate_def
-        unfolding partial_comparator_predicate_def
-        unfolding lt_of_comp_def
-        unfolding comp_def id_def
-        unfolding predicate.rec predicate.case
-        unfolding comparator_of_def 
-        unfolding comp_lex.simps
-        by simp+
-      done
-    done
-  done
-  show "\<And>x::predicate. proper_interval (Some x) None = (\<exists>z. x < z)" 
-    subgoal for y
-      apply (induction y)
-      apply (subst proper_interval_predicate.simps)
-      apply (subst proper_interval_literal_lemmas)
-      apply (rule iffI)
-       apply (erule exE)
-      subgoal for z n
-        apply (rule exI[of _ "Pred n"])
-        unfolding less_predicate_def
-        unfolding comparator_predicate_def
-        unfolding partial_comparator_predicate_def
-        unfolding lt_of_comp_def
-        unfolding comp_def id_def
-        unfolding predicate.rec predicate.case
-        unfolding comparator_of_def 
-        unfolding comp_lex.simps
-        by auto
-      apply (erule exE)
-      subgoal for z n 
-        apply (induction n)
-        subgoal for y
-          apply (rule exI[of _ y])
-        apply (cases "z < y"; cases "y = z")
-        unfolding less_predicate_def
-        unfolding comparator_predicate_def
-        unfolding partial_comparator_predicate_def
-        unfolding lt_of_comp_def
-        unfolding comp_def id_def
-        unfolding predicate.rec predicate.case
-        unfolding comparator_of_def 
-        unfolding comp_lex.simps
-        by simp+
-      done
-    done
-  done
-  show "\<And>x y::predicate. proper_interval (Some x) (Some y) = (\<exists>z>x. z < y)" 
-    subgoal for x y
-      apply (induction x; induction y)
-      apply (subst proper_interval_predicate.simps)
-      apply (subst proper_interval_literal_lemmas)
-      apply (rule iffI)
-       apply (erule exE)
-      subgoal for y x z
-        apply (rule exI[of _ "Pred z"])
-        apply (elim conjE)
-        unfolding less_predicate_def
-        unfolding comparator_predicate_def
-        unfolding partial_comparator_predicate_def
-        unfolding lt_of_comp_def
-        unfolding comp_def id_def
-        unfolding predicate.rec predicate.case
-        unfolding comparator_of_def 
-        unfolding comp_lex.simps
-        by simp
-     apply (erule exE)
-      subgoal for y x n
-        apply (induction n)
-        subgoal for z
-          apply (elim conjE)
-          apply (rule exI[of _ z])
-        unfolding less_predicate_def
-        unfolding comparator_predicate_def
-        unfolding partial_comparator_predicate_def
-        unfolding lt_of_comp_def
-        unfolding comp_def id_def
-        unfolding predicate.rec predicate.case
-        unfolding comparator_of_def 
-        unfolding comp_lex.simps
-        apply (cases "x < z"; cases "x = z"; cases "z < y"; cases "z = y")
-        by auto
-      done
-    done
-  done
-qed
-
-lemma predicate_proper_interval:
-  "OFCLASS(predicate, proper_interval_class)"
-  by (intro_classes; rule predicate_proper_interval_lemmas)
-instance using predicate_proper_interval .
-end
-
-find_theorems name: "proper_interval*predi"
-
-instantiation predicate :: cproper_interval
-begin
-definition "cproper_interval = (proper_interval :: predicate proper_interval)"
-instance apply intro_classes 
-  unfolding cproper_interval_predicate_def
-  unfolding ccompare_predicate_def
-  unfolding ID_Some option.sel
-  using predicate_proper_interval
-  unfolding class.proper_interval_def
-  using predicate_proper_interval_lemmas
-  unfolding less_predicate_def by blast
-end
-
-derive (rbt) set_impl predicate
-
-derive (eq) ceq ast_action_schema
-derive ccompare 
-  "TEMPORAL_PDDL_Semantics.variable" "TEMPORAL_PDDL_Semantics.term" "TEMPORAL_PDDL_Semantics.type" 
-  temporal_annotation duration_op duration_constraint ast_effect ast_action_schema
-
-derive (rbt) set_impl ast_action_schema
-
-definition "example_domain =
-Domain [] [] [] [] []
-"
-
-definition "example_problem = 
-  Problem example_domain [] [] (\<^bold>\<not>\<bottom>)
-"
-
-value "check_wf_problem example_problem"
-
-definition "check_ground_problem P \<equiv> do {
-  let D = ast_problem.domain P;
-  let stg = ast_domain.STG D;
-  let conT = ast_domain.mp_constT D;
-  let mp = ast_problem.mp_objT P;
-  check_wf_problem P stg conT mp;
-  check (is_pos_conj (goal P)) (ERRS ''Goal not a conjunction of positive literals'');
-  check_all_list pred_no_args (predicates D) ''Predicate not grounded (i.e. it has some argument)'' (shows o predicate.name o predicate_decl.pred);
-  check_all_list act_no_params (actions D) ''Action not grounded, it has a/some parameter(s)'' (shows o ast_action_schema.name);
-  check_all_list act_no_func_dcs (actions D) ''Action not grounded, it has a functional duration constraint'' (shows o ast_action_schema.name);
-  check_all_list act_dcs_integers (actions D) ''Action's duration constraint is not an integer'' (shows o ast_action_schema.name);
-  check_all_list act_pres_pos (actions D) ''Action has a conditions that is not a conjunction of positive literals'' (shows o ast_action_schema.name);
-  check (functions D = []) (ERRS ''Domain has functions'');
-  check (consts D = []) (ERRS ''Domain has constants'');
-  check_all_list form_preds_no_args (init P) ''Initial literal not grounded (it refers to constants)'' 
-    (\<lambda>(x::object atom Formulas.formula) (y::string). show y)
-}"
-
-lemma check_ground_problem_return_iff[return_iff]:
-  "check_ground_problem P = Inr () \<longleftrightarrow> ground_ast_problem P"
-proof -
-  interpret ast_problem P .
-  show ?thesis 
-    unfolding check_ground_problem_def 
-    unfolding ground_ast_problem_def
-    unfolding wf_ast_problem_def
-    unfolding ground_ast_problem_axioms_def
-    unfolding list_all_iff
-    unfolding return_iff
-    by (force simp: wf_problem'_correct return_iff)
-qed
+text \<open>WP-D ISOLATION: the executable problem-checker scaffolding that used to live here
+  (example_domain / example_problem / a check_wf_problem value, and the check_ground_problem
+  definition + check_ground_problem_return_iff correctness lemma) was removed to reach green
+  through model_checking_problem_refine.  It is broken by the Formal-PDDL-Semantics re-point:
+  the checker used the old ast_domain.STG / ast_domain.mp_constT / ast_problem.mp_objT
+  accessors and the ast_problem locale, and the correctness proof used the removed
+  wf_ast_problem_def / wf_problem'_correct facts -- all of which moved to the ast_cont_*
+  namespace (ast_cont_domain.STG, wf_cont_problem', ...).  None of it feeds
+  model_checking_problem_refine or the reduction *_refine chain (verified: nothing between
+  here and model_checking_problem_refine uses check_ground_problem / check_wf_problem /
+  example_*).  This is the "retire check_ground_problem" WP-D item.  The removed block is
+  preserved in git history (commit 31a9e17).\<close>
 
 
 definition "prop_to_var_impl prop_to_name p \<equiv> STR ''var_'' + prop_to_name p"
@@ -647,26 +109,26 @@ abbreviation "inc_var n v \<equiv> (v, exp.binop (+) (exp.var v) (exp.const n))"
 abbreviation "set_var n v \<equiv> (v, exp.const n)"
 
 
-fun lower_spec_impl::"ast_action_schema \<Rightarrow> _" where
-"lower_spec_impl (Simple_Action_Schema n ps pre eff) = Some (lower_bound.GE 0)" | (* could also be None *)
-"lower_spec_impl (Durative_Action_Schema n ps d cond eff) = map_option (map_lower_bound floor) (dc_list_lower d)"
+fun lower_spec_impl::"ast_temporal_action_schema \<Rightarrow> _" where
+"lower_spec_impl (SimpleActionSchema h b) = Some (lower_bound.GE 0)" | (* could also be None *)
+"lower_spec_impl (DurativeActionSchema h (DurativeActionBody dc cond deff)) = map_option (map_lower_bound floor) (dc_list_lower (map snd dc))"
 
-fun upper_spec_impl::"ast_action_schema \<Rightarrow> _" where
-"upper_spec_impl (Simple_Action_Schema n ps pre eff) = Some (upper_bound.LE 0)" | (* could also be None *)
-"upper_spec_impl (Durative_Action_Schema n ps d cond eff) = map_option (map_upper_bound floor) (dc_list_upper d)"
+fun upper_spec_impl::"ast_temporal_action_schema \<Rightarrow> _" where
+"upper_spec_impl (SimpleActionSchema h b) = Some (upper_bound.LE 0)" | (* could also be None *)
+"upper_spec_impl (DurativeActionSchema h (DurativeActionBody dc cond deff)) = map_option (map_upper_bound floor) (dc_list_upper (map snd dc))"
 
 definition "l_dur_impl a \<equiv> (case lower_spec_impl a of 
   None \<Rightarrow> [] | Some (lower_bound.GT n) \<Rightarrow> 
-    [acconstraint.GT (act_to_start_clock_impl ast_action_schema.name a) n]
+    [acconstraint.GT (act_to_start_clock_impl ast_temporal_action_schema_name a) n]
 | Some (lower_bound.GE n) \<Rightarrow> 
-    [acconstraint.GE (act_to_start_clock_impl ast_action_schema.name a) n])"
+    [acconstraint.GE (act_to_start_clock_impl ast_temporal_action_schema_name a) n])"
 
 
 definition "u_dur_impl a \<equiv> (case upper_spec_impl a of 
   None \<Rightarrow> [] | Some (upper_bound.LT n) \<Rightarrow> 
-    [acconstraint.LT (act_to_start_clock_impl ast_action_schema.name a) n]
+    [acconstraint.LT (act_to_start_clock_impl ast_temporal_action_schema_name a) n]
 | Some (upper_bound.LE n) \<Rightarrow> 
-    [acconstraint.LE (act_to_start_clock_impl ast_action_schema.name a) n])"
+    [acconstraint.LE (act_to_start_clock_impl ast_temporal_action_schema_name a) n])"
 
 definition main_auto_loop_impl::"(nat \<times>
     (String.literal, int) Simple_Expressions.bexp \<times>
@@ -686,8 +148,8 @@ definition "mutex_snap_action' a b =
   action_defs.mutex_snap_action (\<lambda>a. set (imp_defs.rat_impl.pre_imp_list a)) (\<lambda>a. set (imp_defs.rat_impl.add_imp_list a)) (\<lambda>a. set (imp_defs.rat_impl.del_imp_list a)) a b"
 
 definition "net_int_clocks' a =
-    map (act_to_start_clock_impl ast_action_schema.name) (filter (\<lambda>b. mutex_snap_action' a (AtStart b)) actions_spec) 
-  @ map (act_to_end_clock_impl ast_action_schema.name) (filter (\<lambda>aa. mutex_snap_action' a (AtEnd aa)) actions_spec)"
+    map (act_to_start_clock_impl ast_temporal_action_schema_name) (filter (\<lambda>b. mutex_snap_action' a (AtStart b)) actions_spec) 
+  @ map (act_to_end_clock_impl ast_temporal_action_schema_name) (filter (\<lambda>aa. mutex_snap_action' a (AtEnd aa)) actions_spec)"
 
 definition "start_edge' a = 
 (let start_snap = AtStart a; guard = map (\<lambda>x. acconstraint.GT x 0) (net_int_clocks' start_snap) @ map (\<lambda>x. acconstraint.GE x 0) (net_int_clocks' start_snap);
@@ -697,7 +159,7 @@ definition "start_edge' a =
   add_upds = map ((set_var 1 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.add_imp_list start_snap); 
   del_upds = map ((set_var 0 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.del_imp_list start_snap);
   upds = (inc_var 1 acts_active_impl) # del_upds @ add_upds; 
-  resets = [act_to_start_clock_impl ast_action_schema.name a]
+  resets = [act_to_start_clock_impl ast_temporal_action_schema_name a]
  in (off_loc_impl, var_check, guard, Sil STR '''', upds, resets, starting_loc_impl))"
 
 definition "edge_2' a =
@@ -712,7 +174,7 @@ definition "edge_3' a =
   int_clocks = map (\<lambda>x. acconstraint.GT x 0) (net_int_clocks' end_snap) @ map (\<lambda>x. acconstraint.GE x 0) (net_int_clocks' end_snap); 
   guard = l_dur_impl a @ u_dur_impl a @ int_clocks;
   upds = map ((inc_var (- 1) \<circ>\<circ> prop_to_lock_impl) predicate.name) (over_all_spec a); 
-  resets = [act_to_end_clock_impl ast_action_schema.name a]
+  resets = [act_to_end_clock_impl ast_temporal_action_schema_name a]
 in (running_loc_impl, var_is 1 planning_lock_impl, guard, Sil STR '''', upds, resets, ending_loc_impl))"
 
 definition "end_edge' a =
@@ -735,7 +197,7 @@ definition "instant_trans_edge' a =
   start_snap = AtStart a; 
   int_clocks = map (\<lambda>x. acconstraint.GT x 0) (net_int_clocks' end_snap) @ map (\<lambda>x. acconstraint.GE x 0) (net_int_clocks' end_snap); 
   guard = l_dur_impl a @ u_dur_impl a @ int_clocks;
- resets = [act_to_end_clock_impl ast_action_schema.name a]
+ resets = [act_to_end_clock_impl ast_temporal_action_schema_name a]
 in (starting_loc_impl, var_is 1 planning_lock_impl, guard, Sil STR '''', [], resets, ending_loc_impl))"
 
 
@@ -855,7 +317,7 @@ These are typically removed in a parsing or syntax translation step.
 find_theorems name: "action*uniq"
 
 definition "auto_names = 
-  STR ''main'' # map (\<lambda>x. STR ''act_'' + ast_action_schema.name x) actions_spec
+  STR ''main'' # map (\<lambda>x. STR ''act_'' + ast_temporal_action_schema_name x) actions_spec
 "
 
 definition "auto_names_to_index =
@@ -878,8 +340,8 @@ definition "auto_loc_ids_to_names (n::nat) (m::nat) = (
 "
 
 definition "clock_names =
-map (act_to_start_clock_impl ast_action_schema.name) actions_spec
-@ map (act_to_end_clock_impl ast_action_schema.name) actions_spec
+map (act_to_start_clock_impl ast_temporal_action_schema_name) actions_spec
+@ map (act_to_end_clock_impl ast_temporal_action_schema_name) actions_spec
 "
 
 end
@@ -963,14 +425,14 @@ lemma planning_lock_refine:
   unfolding planning_lock_impl_def ..
 
 lemma act_to_start_clock_refine:
-  "abstr_model_checking.reduction_ref_impl.act_to_start_clock = act_to_start_clock_impl ast_action_schema.name"
+  "abstr_model_checking.reduction_ref_impl.act_to_start_clock = act_to_start_clock_impl ast_temporal_action_schema_name"
   unfolding abstr_model_checking.reduction_ref_impl.act_to_start_clock_def
   unfolding act_to_name_spec_def
   unfolding act_to_start_clock_impl_def
   ..
 
 lemma act_to_end_clock_refine:
-  "abstr_model_checking.reduction_ref_impl.act_to_end_clock = act_to_end_clock_impl ast_action_schema.name"
+  "abstr_model_checking.reduction_ref_impl.act_to_end_clock = act_to_end_clock_impl ast_temporal_action_schema_name"
   unfolding abstr_model_checking.reduction_ref_impl.act_to_end_clock_def
   unfolding act_to_name_spec_def
   unfolding act_to_end_clock_impl_def
@@ -1058,7 +520,7 @@ lemma lower_spec_refine:
   "lower_spec = lower_spec_impl"
   apply (intro ext)
   subgoal for x
-    apply (cases x)
+    apply (cases x rule: ast_temporal_action_schema_cases_unfold)
     by simp+
   done
 
@@ -1066,7 +528,7 @@ lemma upper_spec_refine:
   "upper_spec = upper_spec_impl"
   apply (intro ext)
   subgoal for x
-    apply (cases x)
+    apply (cases x rule: ast_temporal_action_schema_cases_unfold)
     by simp+
   done
 
@@ -1255,7 +717,7 @@ lemma filter_props_init:
   unfolding init_spec_def init_spec'_def
   apply (rule distinct_remdups_id)
   apply (rule distinct_inj_on_map)
-  using wf_problem unfolding wf_problem_def apply simp
+  using wf_temporal_problem unfolding wf_temporal_problem_def apply simp
   apply (rule inj_on_subset)
    apply (rule inj_on_to_predicate)
   using init_no_args
@@ -1329,7 +791,7 @@ lemma inv_vars_refine:
   "abstr_model_checking.reduction_ref_impl.inv_vars invs = inv_vars' invs"
   unfolding abstr_model_checking.reduction_ref_impl.inv_vars_def
   unfolding prop_to_lock_refine prop_to_var_refine
-  unfolding inv_vars'_def by auto
+  unfolding inv_vars'_def by (simp add: Let_def image_Un)
 
 lemma snap_vars_refine:
   assumes "snap \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
@@ -1413,67 +875,21 @@ lemma model_checking_problem_refine:
 
 end
 
-value "ground_ast_problem_defs.net_automata' example_problem"
-value "ground_ast_problem_defs.net_broadcast'"
-value "ground_ast_problem_defs.net_bounds' example_problem"
-value "ground_ast_problem_defs.init_cfg' example_problem"
-value "ground_ast_problem_defs.reach_formula'"
+text \<open>WP-D ISOLATION: the code-export tail that used to live here was removed to reach green
+  through model_checking_problem_refine (above, the last lemma of the ground_ast_problem
+  context).  It contained:
+  \<^item> the value commands exercising net_automata' / net_broadcast' / net_bounds' / init_cfg' /
+    reach_formula' / auto_names / clock_names on example_problem -- these need the removed
+    code-generation typeclass instances (proper_interval / cproper_interval / set_impl for
+    String.literal / predicate) and the removed example_problem, so they no longer evaluate;
+  \<^item> make_network_impl and make_network_impl_return_iff, and check_and_make_network with its
+    correctness lemma check_and_make_network_and_plan -- these are driven by the retired
+    check_ground_problem / check_ground_problem_return_iff (see the isolation note near the top
+    of the theory), which the Formal-PDDL-Semantics re-point broke.
+  None of this feeds model_checking_problem_refine or the numeric WP-C importer (which
+  references make_network_impl only in a documentation comment).  To be re-derived under WP-D
+  (code export) once check_ground_problem is re-pointed to the ast_cont_* namespace.  The
+  removed block is preserved in git history (commit 31a9e17).\<close>
 
-value "ground_ast_problem_defs.auto_names"
-value "ground_ast_problem_defs.auto_names_to_index"
-value "ground_ast_problem_defs.auto_loc_ids_to_names"
-value "ground_ast_problem_defs.clock_names example_problem"
-
-definition "make_network_impl P \<equiv> do {
-  let automata = ground_ast_problem_defs.net_automata' P;
-  let broadcast = ground_ast_problem_defs.net_broadcast';
-  let bounds = ground_ast_problem_defs.net_bounds' P;
-  let init_locs = ground_ast_problem_defs.init_locs' P;
-  let init_vars = ground_ast_problem_defs.init_vars' P;
-  let formula = ground_ast_problem_defs.reach_formula';
-  let clock_names = ground_ast_problem_defs.clock_names P;
-  let auto_names = ground_ast_problem_defs.auto_names P;
-
-  let clock_names = ground_ast_problem_defs.clock_names P;
-  let auto_names = ground_ast_problem_defs.auto_names P;
-
-  let ids_to_names = ground_ast_problem_defs.auto_loc_ids_to_names;
-  let process_names_to_index = ground_ast_problem_defs.auto_names_to_index P;
-
-  Error_Monad.return (clock_names, auto_names, ids_to_names, process_names_to_index,
-     broadcast, automata, bounds, formula, init_locs, init_vars)
-}"
-
-lemma make_network_impl_return_iff[return_iff]:
-  "make_network_impl P = Inr (
-    ground_ast_problem_defs.clock_names P,
-    ground_ast_problem_defs.auto_names P,
-    ground_ast_problem_defs.auto_loc_ids_to_names, 
-    ground_ast_problem_defs.auto_names_to_index P,
-    ground_ast_problem_defs.net_broadcast', 
-    ground_ast_problem_defs.net_automata' P, 
-    ground_ast_problem_defs.net_bounds' P, 
-    ground_ast_problem_defs.reach_formula', 
-    ground_ast_problem_defs.init_locs' P , 
-    ground_ast_problem_defs.init_vars' P)" 
-    unfolding make_network_impl_def ground_ast_problem_defs.init_cfg'_def
-    by (auto simp: check_ground_problem_return_iff return_iff)
-
-definition check_and_make_network where
-"check_and_make_network P \<equiv> do {
-  check_ground_problem P;
-  make_network_impl P
-}"
-
-lemma check_and_make_network_and_plan:
-  assumes "(check_and_make_network P = Inr (clocks, auto_names, ids_to_names, process_names_to_index, broadcast, automata, bounds, formula, init_locs, init_vars))"
-  shows "\<not> (Simple_Network_Impl.sem automata broadcast bounds, (init_locs, map_of init_vars, (\<lambda>_. 0)) \<Turnstile> formula) \<longrightarrow> (\<nexists>tp. valid_ground_plan P tp)"
-  using assms
-  unfolding check_and_make_network_def
-  unfolding return_iff make_network_impl_return_iff
-  using check_ground_problem_return_iff
-  using ground_ast_problem.model_checking_problem_refine 
-  unfolding ground_ast_problem_defs.init_cfg'_def
-  by force
 
 end

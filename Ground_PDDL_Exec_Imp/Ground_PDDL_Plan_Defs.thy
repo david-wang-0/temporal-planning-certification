@@ -268,7 +268,7 @@ lemma list_pairwise_acts_distinctD:
 
 end
 
-context ground_ast_problem
+context ground_ast_problem_core
 begin
 
 lemma wf_acts_of_temporal_plan_at:

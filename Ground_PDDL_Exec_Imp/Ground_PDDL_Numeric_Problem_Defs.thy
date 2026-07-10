@@ -164,22 +164,12 @@ locale numeric_ground_ast_problem =
       and num_init_val_ok:          "\<forall>f \<in> set nfluents. num_init f \<in> \<int>"
       and snap_writes_nfluents_start:"\<forall>a \<in> set actions_spec. fst ` set (upds (at_start_spec a)) \<subseteq> set nfluents"
       and snap_writes_nfluents_end:  "\<forall>a \<in> set actions_spec. fst ` set (upds (at_end_spec a)) \<subseteq> set nfluents"
-  \<comment> \<open>(4) TO BE DROPPED in Stage 2 (backlog #8, the lock-based over_all redesign; see
-      NUMERIC_OVERALL_REDESIGN.md): the OLD static over_all contract -- n_inv_eq (equalities only) +
-      n_inv_readonly (over_all fluents never written by any snap) + n_inv_init_sat (hold at the initial
-      valuation). The abstract locale numeric_tp_nta_reduction has ALREADY dropped these (Stage 1); they
-      are kept here only until Stage 2 replaces them with the per-fluent invariant lock + a plan-validity
-      non-interference assumption (no snap writes a fluent of an active action's over_all invariant),
-      generalising to arbitrary while-active over_all comparisons.\<close>
-      and n_inv_eq:
-            "\<forall>a \<in> set actions_spec. \<forall>c \<in> set (n_inv a). \<exists>e1 e2. c = Comp Ceq e1 e2"
-      and n_inv_readonly:
-            "\<forall>a \<in> set actions_spec. \<forall>b \<in> set actions_spec.
-               (fst ` set (upds (at_start_spec a)) \<union> fst ` set (upds (at_end_spec a)))
-                 \<inter> (\<Union>c \<in> set (n_inv b). comp_fluents c) = {}"
-      and n_inv_init_sat:
-            "\<forall>a \<in> set actions_spec.
-               sat_comps (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None) (set (n_inv a))"
+  \<comment> \<open>(4) The OLD static over_all contract (@{text n_inv_eq} / @{text n_inv_readonly} /
+      @{text n_inv_init_sat}) has been \<^bold>\<open>removed\<close>: the abstract @{text numeric_tp_nta_reduction} dropped
+      it (backlog #8, \<^emph>\<open>design B\<close> in NUMERIC_OVERALL_REDESIGN.md). The over_all fragment is now general
+      (arbitrary while-active comparisons); the guard is discharged from plan validity's active clause at
+      @{text num_edge_2} (start) and @{text num_edge_3} (end) -- a sound over-approximation, no lock and
+      no write-guard -- so the numeric leaf no longer restricts over_all to equalities/read-only.\<close>
   \<comment> \<open>(5) Numeric-goal faithfulness (plan-free half). @{text const_to_int_of_int} is now a lemma of
       the defs locale, no longer assumed; the plan-scoped @{text num_valid}/@{text num_seq_in_bounds}
       are added by the plan-carrying sub-locale (WP-A), NOT here.\<close>
