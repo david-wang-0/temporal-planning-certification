@@ -78,6 +78,7 @@ session TP_NTA_Reduction in TA_Network = Temporal_Planning_Semantics +
     TP_NTA_Reduction_Numeric_Projection
     TP_NTA_Reduction_Numeric_Steps
     TP_NTA_Reduction_Correctness_Numeric
+    TP_NTA_Reduction_Numeric_Bounds
 
 session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp = TP_NTA_Reduction +
   sessions
@@ -104,3 +105,15 @@ session PDDL_TP_Reduction_Index = PDDL_TP_Reduction +
   document_files (in "document")
     "root.tex"
     "root.bib"
+
+session Numeric_Bound_Inference in Numeric_Bound_Inference = "HOL-IMP" +
+  description \<open>Numeric-fluent bound inference (threshold interval abstract interpretation). Standalone
+    on the HOL-IMP heap -- it CANNOT share the reduction's Temporal_Planning_Base heap (HOL-IMP's
+    Abs_Int0 option-lattice arity clashes with the Munta/FPS tower), so it is a separate session and the
+    inferred box crosses to the reduction as plain data. It COMPUTES a per-fluent box (possibly with
+    infinite endpoints); the executable pipeline rejects any problem whose box has an infinite endpoint
+    ("bound-inference failed") since the reduction's fluent_lo/hi are finite int.\<close>
+  theories
+    Numeric_Bound_Inference
+    Numeric_Bound_Inference_Threshold
+    Numeric_Bound_Inference_Guards

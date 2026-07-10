@@ -37,13 +37,13 @@ Legend: **[done]** proven/in-tree today · **[planned]** designed in the plans, 
 | Stage | Session / theory | Status |
 | --- | --- | --- |
 | Abstract temporal plan semantics (snap actions, happenings, invariants) | `Temporal_Planning_Semantics/Temporal_Plans.thy` (`temp_planning_problem`, `temp_plan_defs`) | **[done]** (1 `sorry`, see HANDOVER) |
-| NTA reduction spec / model-checking / correctness | `TA_Network/TP_NTA_Reduction_{Spec,Model_Checking,Correctness}.thy` (`tp_nta_reduction_correctness`) | **[done]** Thm 1 `valid_plan_imp_form_holds` |
+| NTA reduction defs / model-checking / correctness | `TA_Network/TP_NTA_Reduction_*.thy` (`tp_nta_reduction_correctness`; reorg'd 2026-07-05) | **[done]** Thm 1 `valid_plan_imp_form_holds`; numeric twin `num_valid_plan_imp_form_holds` (`TP_NTA_Reduction_Correctness_Numeric.thy`) |
 | Ground PDDL problem defs + reduction impl | `Ground_PDDL_Exec_Imp/Ground_PDDL_{Problem,Plan}_*.thy` (`ground_ast_problem`) | **[done]** numeric-free, positive-precondition |
 | Executable certificate check (capstone) | `Ground_PDDL_Exec_Imp/Check_Unsolvability.thy` (`check_and_cert_pddl_problem_okay`, `make_certified_net_okay`) | **[done]** |
 | Code export → SML certifier | `Ground_PDDL_Exec_Imp/Unsolvability_Code_*.thy`, `ML/` | **[done]** plans MatchCellar-impossible instances |
-| PDDL semantics | Formal-PDDL-Semantics `Temporal_Planning` (new) ⟵ migrating off old `Temporal_AI_Planning_Languages_Semantics` | **[planned P0]** re-point |
+| PDDL semantics | Formal-PDDL-Semantics `Temporal_Planning` (new) ⟵ migrated off old `Temporal_AI_Planning_Languages_Semantics` | **[done]** re-point green + committed (through `7329a1b`) |
 | Datalog grounding front-end (lifted → ground) | `Ground_Temporal_PDDL/*` (new) reusing `Isabelle-PDDL-Grounding` | **[planned]** see GROUNDING_PLAN |
-| Numeric conditions / effects (semantics + reduction) | Layers A/B/C across the above | **[planned]** see [NUMERIC_PLAN.md](NUMERIC_PLAN.md) |
+| Numeric conditions / effects (semantics + reduction) | Layers A/B/C across the above | **[abstract done; exec planned]** numeric net certified (`num_valid_plan_imp_form_holds`); executable layer in [NUMERIC_EXEC_PLAN.md](NUMERIC_EXEC_PLAN.md) |
 
 ## Trust story
 

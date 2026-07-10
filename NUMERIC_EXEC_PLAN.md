@@ -126,9 +126,20 @@ the numeric twin of `to_literals`/`to_predicate`:
 - **Only plug left:** `fluent_lo`/`fluent_hi` (WP-E) — the reachability bounds, soundness-critical,
   not a structural accessor on `P`.
 
-### WP-E (USER-OWNED design) — the boundedness plug  ⟵ *design this first; everything keys off its interface*
+### WP-E (USER-OWNED design) — the boundedness plug  ⟵ *NEXT: now sequenced concretely, before WP-D*
 
-**This is the piece reserved for human design.** The abstract numeric locale assumes
+**Status (2026-07-10): IN PROGRESS — backbone green, interval check drafted.** The soundness backbone is
+proved: `TA_Network/TP_NTA_Reduction_Numeric_Bounds.thy` defines the plain-`int` certificate `num_bound_inv`
+and the locale `numeric_tp_nta_reduction_bounds` (assumes `num_bound_inv` instead of `num_seq_in_bounds`),
+and the **bridge `num_seq_in_bounds_derived` is GREEN**, so a `sublocale numeric_tp_nta_reduction_correctness`
+re-derives everything from the certificate. The eval-decidable interval check `is_gbound_inv'` +
+`is_gbound_inv' ⟹ num_bound_inv` is DRAFTED (3 sorries). Structure: `is_gbound_inv' ⟹ num_bound_inv ⟹
+num_seq_in_bounds`. Two facts are now LOCKED and supersede parts of this section: **(i) HOL-IMP cannot be
+imported into the reduction** (`option`-arity clash), so the interval check is inline `int` on the reduction
+heap and the analysis stays a separate `Numeric_Bound_Inference = "HOL-IMP"` session (now in the main ROOT),
+the box crossing as data; **(ii) `int` is forced** (Munta `Simple_Network_Impl`). Full current detail:
+`../HANDOVER.md` (2026-07-10 status) + `Numeric_Bound_Inference/BOUND_INFERENCE_PLAN.md` §0'. The original
+plug-interface framing below is retained for context. The abstract numeric locale assumes
 `num_seq_in_bounds` (`TA_Network/TP_NTA_Reduction_Numeric_Model_Checking.thy:66`): along every valid
 numeric state sequence, each fluent stays within `[fluent_lo f, fluent_hi f]`
 (`TP_NTA_Reduction_Numeric_Defs.thy:39,40`). To *instantiate* the locale on a concrete problem this
@@ -221,32 +232,80 @@ tying the executable numeric net to the abstract `num_net_impl`
 `model_checking_problem_refine:1400`) composing WP-A. New file:
 `Ground_PDDL_Numeric_NTA_Reduction_Impl.thy`.
 
-### WP-D (exec) — numeric export
+### WP-D (exec) — numeric export  ⟵ *DEFERRED behind WP-E (see §4)*
 
 Numeric entry point `check_and_cert_numeric_pddl_problem[_no_return]` + `num_check_and_make_network_opt`
 (mirror `Check_Unsolvability.thy:1103,1193,1033`), wired to the **same** `make_certified_net` /
 `Munta_Certificate_Checker` (fragment-agnostic — no numeric work there). `export_code` the numeric
 constants (extend `Check_Unsolvability.thy:1235`, or a sibling `Check_Unsolvability_Numeric.thy`).
-Register in `ROOT` under `PDDL_TP_Reduction`.
+Register in `ROOT` under `PDDL_TP_Reduction`. **WP-D also repairs the propositional export tail**
+(`check_ground_problem`, `make_network_impl`, `check_and_make_network` — the isolated blocks in
+`Ground_PDDL_NTA_Reduction_Impl.thy`) and adds the numeric twins (`check_numeric_ground_problem`,
+`num_make_network_impl`, `check_and_make_numeric_network`). **Scope decision (2026-07-10): do the
+ASSEMBLY, DEFER the `export_code` / `String.literal` code-gen typeclass instances** if that block is a
+rabbit hole.
+
+**WP-D scouting result (2026-07-10), recorded for resume:**
+- The propositional wf half — the linchpin — is SOLVED. Route the temporal well-formedness check through
+  the *continuous* checker at the translated problem:
+  ```
+  definition "check_wf_temporal_problem P \<equiv> check_wf_cont_problem (temporal_to_continuous_problem P)"
+  lemma check_wf_temporal_problem_return_iff[return_iff]:
+    "check_wf_temporal_problem P = Inr () \<longleftrightarrow> wf_ast_temporal_problem P"
+    <proof> interpret ast_temporal_problem P;
+      unfolding check_wf_temporal_problem_def check_wf_problem_return_iff
+      using wf_ast_cont_problem_equiv wf_ast_temporal_problem_def by simp
+  ```
+  `check_wf_cont_problem` / `check_wf_problem_return_iff` / `temporal_to_continuous_problem` /
+  `wf_ast_cont_problem_equiv` all live in `Temporal_Planning.Temporal_PDDL_Checker_Explicit`, already
+  imported by the Impl file. (NB `check_wf_problem_return_iff` yields `ast_cont_problem.wf_cont_problem`
+  as the *0-ary sublocale* constant in the `ast_temporal_problem P` context — do NOT re-apply it to the
+  translated problem.)
+- `check_ground_problem` = that wf check + the nine `ground_ast_problem_core` structural checks via
+  `check_all_list` (now INCLUDING the new `act_conds_no_args` — the eqAtm-free side condition added by the
+  positivity re-point) + `functions D = []` + `consts D = []` + init check. Accessors changed by the
+  re-point: `ast_temporal_action_schema_name` (not `ast_action_schema.name`), `D = ast_problem.domain P`.
+  `check_ground_problem_return_iff` unfolds `ground_ast_problem_def`/`_axioms_def` +
+  `ground_ast_problem_core_def`/`_axioms_def` + `list_all_iff` + `return_iff` (there is **no**
+  `ground_ast_problem_defs_def` — the pure-import defs locale has no predicate `_def`); the leftover
+  `ast_temporal_problem P` conjunct on the RHS needs a supplied fact (`by unfold_locales` did not close it
+  — obtain it via `interpret ast_temporal_problem P` and thread it in).
+- Numeric admission check `check_numeric_ground_problem` must (per HANDOVER) turn the leaf's
+  `\<forall>w. num_val_ok w \<longrightarrow> nexp_ok w e` / `comp_ok` universals into a decidable STRUCTURAL sufficient
+  condition and prove structural \<Longrightarrow> universal. The nexps come from `nexp_of_pddl` (NConst/NVar/NAdd/NSub/
+  NMul/NDiv). A sound structural predicate: `NConst c \<Rightarrow> c \<in> \<int>`, `NVar f \<Rightarrow> f \<in> set nfluents`,
+  Add/Sub/Mul recurse, `NDiv \<Rightarrow> False` (exact-division cannot be guaranteed structurally — the benchmarks
+  have no NDiv). This gives only the FORWARD direction (`check = Inr () \<Longrightarrow> numeric_ground_ast_problem P`),
+  which is exactly what the soundness assembly `check_and_make_numeric_network_and_plan` needs — NOT a full
+  iff.
 
 ## 4. Dependency graph / ordering
 
+**Ordering update (2026-07-10): WP-E is now sequenced CONCRETELY BEFORE WP-D**, not merely as a stubbed
+interface. WP-A and WP-C are done carrying `fluent_lo`/`fluent_hi` as parameters and `num_seq_in_bounds`
+as an assumption — that is sound for the *proof* chain, but WP-D produces a *runnable* checker whose
+`num_net_bounds'` is built from `fluent_lo`/`fluent_hi` and whose admission must discharge
+`num_seq_in_bounds`. A runnable checker cannot leave those abstract, so the real boundedness plug must land
+before the export assembly.
+
 ```
-WP-E interface (signature + soundness statement; body deferred to human)
-      │
-      ▼
-WP-B  numeric admission check + numeric_ground_ast_problem locale
+WP-B  numeric admission check + numeric_ground_ast_problem locale         [DONE]
       │                        │
       ▼                        ▼
-WP-A  rung-4 over num net     WP-C  num_make_network_impl + refinement
+WP-A  rung-4 over num net     WP-C  num_make_network_impl + refinement     [DONE, bounds abstract]
       │                        │
       └───────────┬────────────┘
+                  ▼
+WP-E  bound inference: DEFINE fluent_lo/fluent_hi from P, DISCHARGE num_seq_in_bounds   ⟵ NEXT
+      (Numeric_Bound_Inference/ interval AI; infer_fluent_bounds + infer_fluent_bounds_sound)
+                  │
                   ▼
 WP-D  numeric export_code + certificate wiring   (Munta cert checker reused UNCHANGED)
 ```
 
-- Build WP-A..D against a **stubbed** `infer_fluent_bounds` (WP-E) so the numeric pipeline is
-  end-to-end verifiable before the interval analysis is designed; swap in the real plug last.
+- WP-A/WP-C were built against **abstract** `fluent_lo`/`fluent_hi` + a carried `num_seq_in_bounds`, so the
+  numeric proof chain is end-to-end verifiable already. WP-E swaps the abstract plug for one DEFINED from
+  `P`; WP-D then consumes the concrete bounds.
 - The certificate checker and `reach_formula` need **zero** numeric changes.
 
 ## 5. Verification / scope

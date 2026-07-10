@@ -49,6 +49,7 @@ sublocale nred: numeric_tp_nta_reduction
   subgoal using snap_pre_comp_ok_end .
   subgoal using snap_inv_comp_ok .
   subgoal using num_init_val_ok .
+  subgoal using const_to_int_of_int .
   subgoal using snap_writes_nfluents_start .
   subgoal using snap_writes_nfluents_end .
   done
@@ -111,9 +112,10 @@ text \<open>Interpret the abstract numeric correctness locale @{locale numeric_t
   at the raw ground parameters + the numeric plan \<open>\<pi>\<close>.  Its three ancestor layers are already present:
   @{locale numeric_tp_nta_reduction} (via @{text nred}), the UNPRIMED numeric plan locale (via
   @{text num_plan}), and the UNPRIMED @{locale tp_nta_reduction_correctness} (the propositional plan +
-  the leaf's @{text unique_names} discharges).  Its four assumptions are @{text num_valid} (from
-  @{thm num_valid_plan}), @{text const_to_int_of_int} (a leaf lemma), @{text num_seq_in_bounds}
-  (the WP-E plug), and @{text num_goal_comp_ok} (a leaf assumption).\<close>
+  the leaf's @{text unique_names} discharges).  Its three own assumptions are @{text num_valid} (from
+  @{thm num_valid_plan}), @{text num_seq_in_bounds} (the WP-E plug), and @{text num_goal_comp_ok}
+  (a leaf assumption); @{text const_to_int_of_int} (a leaf lemma) is now inherited from the base
+  @{locale numeric_tp_nta_reduction} and already discharged there via @{text nred}.\<close>
 
 sublocale ncorr: numeric_tp_nta_reduction_correctness
   init_spec goal_spec at_start_spec at_end_spec over_all_spec lower_spec upper_spec
@@ -121,7 +123,6 @@ sublocale ncorr: numeric_tp_nta_reduction_correctness
   n_pre n_inv upds num_init num_goal nfluents fluent_to_name_spec fluent_lo fluent_hi const_to_int
   apply unfold_locales
   subgoal using num_valid_plan .
-  subgoal using const_to_int_of_int .
   subgoal using num_seq_in_bounds .
   subgoal using num_goal_comp_ok .
   done

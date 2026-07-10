@@ -1,5 +1,11 @@
 # Plan: Retire the `temporal-pddl-semantics` submodule; re-point onto Formal-PDDL-Semantics `Temporal_Planning`
 
+> **DONE (2026-07-06).** The re-point is **green and committed** (`Ground_PDDL_Problem_Defs` +
+> `Plan_Defs`, `temp_plan_valid`, invariant soundness — commits through `7329a1b`), and the numeric-net
+> correctness ladder is closed (`num_valid_plan_imp_form_holds`, committed). The "ORDERED NEXT STEPS"
+> below are historical. The remaining forward work is the **executable numeric layer** —
+> [NUMERIC_EXEC_PLAN.md](NUMERIC_EXEC_PLAN.md).
+
 Status: draft (2026-06-25). This is **P0** (`GROUNDING_PLAN.md` §3). Companions:
 [GROUNDING_PLAN.md](GROUNDING_PLAN.md) (links here from §3), [NUMERIC_PLAN.md](NUMERIC_PLAN.md)
 (§5 expanded). The ROOT files remain authoritative.

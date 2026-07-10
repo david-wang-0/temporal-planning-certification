@@ -54,7 +54,8 @@ locale numeric_tp_nta_reduction_correctness =
     and fluent_hi :: "'n \<Rightarrow> int"
     and const_to_int :: "'r \<Rightarrow> int" +
   assumes num_valid: "num_plan.num_rat_impl.num_valid_plan"
-      and const_to_int_of_int: "const_to_int (Int.of_int m) = m"
+      \<comment> \<open>(@{text const_to_int_of_int} — the integer-encoding faithfulness fact — is now inherited from
+         the base @{locale numeric_tp_nta_reduction}, so it is no longer restated here.)\<close>
       \<comment> \<open>The range-boundedness reachability invariant (grounder-match contract, complementing the
          static integrality assumptions in @{locale numeric_tp_nta_reduction}): along any valid numeric
          state sequence the per-happening valuations stay within the declared fluent variable bounds.
