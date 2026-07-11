@@ -135,6 +135,189 @@ lemma comp_struct_ok_sound:
 
 end
 
+subsection \<open>The executable numeric admission check\<close>
+
+text \<open>An @{const isOK}-form bridge for @{const check_all_list}: needed so the monadic \<open>do\<close>-block
+  binds (whose intermediate results are discarded, collapsing to @{const isOK}) rewrite to the
+  element-level universals under simp (mirror of @{thm [source] isOK_check_ground_problem_core}).\<close>
+lemma isOK_check_all_list[simp]:
+  "isOK (check_all_list P l msg msgf) \<longleftrightarrow> (\<forall>x\<in>set l. P x)"
+proof -
+  have "isOK (check_all_list P l msg msgf) \<longleftrightarrow> check_all_list P l msg msgf = Inr ()"
+    by (cases "check_all_list P l msg msgf") (auto simp: isOK_def)
+  thus ?thesis by (simp add: check_all_list_return_iff)
+qed
+
+text \<open>The numeric twin of the propositional @{const check_ground_problem}: run the propositional core
+  admission check @{const check_ground_problem_core}, then one decidable @{const check} / @{const check_all_list} per
+  numeric leaf assumption of @{locale numeric_ground_ast_problem}. The valuation-quantified
+  encoding-faithfulness assumptions are discharged through the DECIDABLE, valuation-free structural
+  sufficient conditions @{const nexp_struct_ok} / @{const comp_struct_ok} (soundness:
+  @{thm [source] numeric_tp_nta_reduction_defs.nexp_struct_ok_sound} /
+  @{thm [source] numeric_tp_nta_reduction_defs.comp_struct_ok_sound}). This gives the FORWARD direction
+  (check succeeds \<Longrightarrow> the numeric leaf holds), which is exactly what the soundness assembly needs.\<close>
+
+context numeric_ground_ast_problem_defs
+begin
+
+definition "check_numeric_ground_problem fluent_lo fluent_hi \<equiv> do {
+  check_ground_problem_core P;
+  check (distinct (map at_start_spec actions_spec)
+         \<and> distinct (map at_end_spec actions_spec)
+         \<and> set (map at_start_spec actions_spec) \<inter> set (map at_end_spec actions_spec) = {})
+    (ERRS ''Ground snaps are not pairwise disjoint (start/end snap collision or duplicate snap)'');
+  check_all_list (\<lambda>a. upds_functional_list (upds (at_start_spec a))) actions_spec
+    ''Start-snap numeric updates are not functional (a fluent is written twice)'' (shows o ast_temporal_action_schema_name);
+  check_all_list (\<lambda>a. upds_functional_list (upds (at_end_spec a))) actions_spec
+    ''End-snap numeric updates are not functional (a fluent is written twice)'' (shows o ast_temporal_action_schema_name);
+  check_all_list (\<lambda>a. upds_no_cross_read_list (upds (at_start_spec a))) actions_spec
+    ''Start-snap numeric updates cross-read a co-written fluent'' (shows o ast_temporal_action_schema_name);
+  check_all_list (\<lambda>a. upds_no_cross_read_list (upds (at_end_spec a))) actions_spec
+    ''End-snap numeric updates cross-read a co-written fluent'' (shows o ast_temporal_action_schema_name);
+  check_all_list (\<lambda>f. fluent_lo f \<le> fluent_hi f) nfluents
+    ''Numeric fluent has an empty bound interval (lo > hi)'' (shows o func.name);
+  check_all_list (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_start_spec a))) actions_spec
+    ''Start-snap numeric update RHS is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
+  check_all_list (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_end_spec a))) actions_spec
+    ''End-snap numeric update RHS is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
+  check_all_list (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_start_spec a))) actions_spec
+    ''Start-snap numeric precondition is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
+  check_all_list (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_end_spec a))) actions_spec
+    ''End-snap numeric precondition is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
+  check_all_list (\<lambda>a. list_all (comp_struct_ok nfluents) (n_inv a)) actions_spec
+    ''Numeric over-all invariant is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
+  check_all_list (\<lambda>f. num_init f \<in> \<int>) nfluents
+    ''Numeric fluent has a non-integer initial value'' (shows o func.name);
+  check_all_list (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_start_spec a))) actions_spec
+    ''Start-snap numeric update writes an undeclared fluent'' (shows o ast_temporal_action_schema_name);
+  check_all_list (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_end_spec a))) actions_spec
+    ''End-snap numeric update writes an undeclared fluent'' (shows o ast_temporal_action_schema_name);
+  check (list_all (comp_struct_ok nfluents) num_goal)
+    (ERRS ''Numeric goal is not structurally integer-faithful'')
+}"
+
+lemma check_numeric_ground_problem_return_iff:
+  "check_numeric_ground_problem fluent_lo fluent_hi = Inr ()
+   \<longleftrightarrow> ground_ast_problem_core P
+     \<and> (distinct (map at_start_spec actions_spec)
+        \<and> distinct (map at_end_spec actions_spec)
+        \<and> set (map at_start_spec actions_spec) \<inter> set (map at_end_spec actions_spec) = {})
+     \<and> (\<forall>a\<in>set actions_spec. upds_functional_list (upds (at_start_spec a)))
+     \<and> (\<forall>a\<in>set actions_spec. upds_functional_list (upds (at_end_spec a)))
+     \<and> (\<forall>a\<in>set actions_spec. upds_no_cross_read_list (upds (at_start_spec a)))
+     \<and> (\<forall>a\<in>set actions_spec. upds_no_cross_read_list (upds (at_end_spec a)))
+     \<and> (\<forall>f\<in>set nfluents. fluent_lo f \<le> fluent_hi f)
+     \<and> (\<forall>a\<in>set actions_spec. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_start_spec a)))
+     \<and> (\<forall>a\<in>set actions_spec. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_end_spec a)))
+     \<and> (\<forall>a\<in>set actions_spec. list_all (comp_struct_ok nfluents) (n_pre (at_start_spec a)))
+     \<and> (\<forall>a\<in>set actions_spec. list_all (comp_struct_ok nfluents) (n_pre (at_end_spec a)))
+     \<and> (\<forall>a\<in>set actions_spec. list_all (comp_struct_ok nfluents) (n_inv a))
+     \<and> (\<forall>f\<in>set nfluents. num_init f \<in> \<int>)
+     \<and> (\<forall>a\<in>set actions_spec. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_start_spec a)))
+     \<and> (\<forall>a\<in>set actions_spec. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_end_spec a)))
+     \<and> list_all (comp_struct_ok nfluents) num_goal"
+  unfolding check_numeric_ground_problem_def
+  by (simp add: return_iff isOK_check_ground_problem_core check_ground_problem_core_return_iff)
+
+end
+
+text \<open>FORWARD soundness: the executable numeric admission check succeeding implies the numeric
+  admission leaf @{locale numeric_ground_ast_problem} holds. This is the numeric twin of
+  @{thm [source] check_ground_problem_return_iff} (forward half only). The decidable side-conditions
+  transfer verbatim; the valuation-quantified faithfulness assumptions follow from the structural
+  checks by @{thm [source] numeric_tp_nta_reduction_defs.nexp_struct_ok_sound} /
+  @{thm [source] numeric_tp_nta_reduction_defs.comp_struct_ok_sound}.\<close>
+
+lemma check_numeric_ground_problem_sound:
+  "numeric_ground_ast_problem_defs.check_numeric_ground_problem P fluent_lo fluent_hi = Inr ()
+     \<Longrightarrow> numeric_ground_ast_problem P fluent_lo fluent_hi"
+proof -
+  assume h: "numeric_ground_ast_problem_defs.check_numeric_ground_problem P fluent_lo fluent_hi = Inr ()"
+  interpret D: numeric_ground_ast_problem_defs P .
+  from h have "D.check_numeric_ground_problem fluent_lo fluent_hi = Inr ()" by simp
+  note C = this[unfolded D.check_numeric_ground_problem_return_iff]
+  from C have core: "ground_ast_problem_core P" by simp
+  from C have sd: "distinct (map D.at_start_spec D.actions_spec)"
+      and se: "distinct (map D.at_end_spec D.actions_spec)"
+      and sde: "set (map D.at_start_spec D.actions_spec) \<inter> set (map D.at_end_spec D.actions_spec) = {}"
+    by simp+
+  from C have
+      uf_s: "\<forall>a\<in>set D.actions_spec. upds_functional_list (D.upds (D.at_start_spec a))"
+      and uf_e: "\<forall>a\<in>set D.actions_spec. upds_functional_list (D.upds (D.at_end_spec a))"
+      and ncr_s: "\<forall>a\<in>set D.actions_spec. upds_no_cross_read_list (D.upds (D.at_start_spec a))"
+      and ncr_e: "\<forall>a\<in>set D.actions_spec. upds_no_cross_read_list (D.upds (D.at_end_spec a))"
+      and fb: "\<forall>f\<in>set D.nfluents. fluent_lo f \<le> fluent_hi f"
+      and ne_s: "\<forall>a\<in>set D.actions_spec. list_all (\<lambda>(f, e). nexp_struct_ok D.nfluents e) (D.upds (D.at_start_spec a))"
+      and ne_e: "\<forall>a\<in>set D.actions_spec. list_all (\<lambda>(f, e). nexp_struct_ok D.nfluents e) (D.upds (D.at_end_spec a))"
+      and cp_s: "\<forall>a\<in>set D.actions_spec. list_all (comp_struct_ok D.nfluents) (D.n_pre (D.at_start_spec a))"
+      and cp_e: "\<forall>a\<in>set D.actions_spec. list_all (comp_struct_ok D.nfluents) (D.n_pre (D.at_end_spec a))"
+      and ci: "\<forall>a\<in>set D.actions_spec. list_all (comp_struct_ok D.nfluents) (D.n_inv a)"
+      and niv: "\<forall>f\<in>set D.nfluents. D.num_init f \<in> \<int>"
+      and sw_s: "\<forall>a\<in>set D.actions_spec. list_all (\<lambda>(f, e). f \<in> set D.nfluents) (D.upds (D.at_start_spec a))"
+      and sw_e: "\<forall>a\<in>set D.actions_spec. list_all (\<lambda>(f, e). f \<in> set D.nfluents) (D.upds (D.at_end_spec a))"
+      and cg: "list_all (comp_struct_ok D.nfluents) D.num_goal"
+    by simp+
+  interpret core: ground_ast_problem_core P by (rule core)
+  interpret ndefs: numeric_tp_nta_reduction_defs
+    D.init_spec D.goal_spec D.at_start_spec D.at_end_spec D.over_all_spec
+    D.lower_spec D.upper_spec D.pre_spec D.adds_spec D.dels_spec 0
+    D.props_spec D.actions_spec D.act_to_name_spec D.prop_to_name_spec
+    D.n_pre D.n_inv D.upds D.num_init D.num_goal D.nfluents D.fluent_to_name_spec
+    fluent_lo fluent_hi D.const_to_int
+    apply unfold_locales
+    subgoal using core.wf_domain_signature[unfolded D.wf_domain_signature_def] by (simp add: D.props_spec_def)
+    subgoal using core.distinct_act_names distinct_map by blast
+    subgoal by (simp add: D.pre_spec_alt)
+    subgoal
+      unfolding D.imp_defs.rat_impl.set_impl.snaps_disj_on_def
+      using sd se sde by (auto simp: distinct_map)
+    subgoal
+    proof (rule subsetI)
+      fix x assume "x \<in> set D.init_spec"
+      then obtain y where y: "y \<in> set (init P)" "is_predAtom y" "x = to_predicate y"
+        unfolding D.init_spec_def by auto
+      have nfa: "\<not> D.wf_func_assign y"
+        using y(2) by (cases y rule: D.wf_func_assign.cases) auto
+      have "D.wf_fmla_atom D.objT y \<or> D.wf_func_assign y"
+        using y(1) core.wf_temporal_problem unfolding D.wf_temporal_problem_def by blast
+      hence "D.wf_fmla_atom D.objT y" using nfa by blast
+      thus "x \<in> set D.props_spec"
+        using core.wf_fmla_atom_in_props y(3) by simp
+    qed
+    subgoal using core.goal_in_props .
+    subgoal
+      unfolding D.imp_defs.rat_impl.set_impl.act_ref_props_def
+                D.imp_defs.rat_impl.set_impl.snap_ref_props_def
+      using core.start_pre_in_props core.start_adds_in_props core.start_dels_in_props
+            core.end_pre_in_props core.end_adds_in_props core.end_dels_in_props
+            core.over_all_in_props
+      by (simp add: comp_def)
+    done
+  have ne_ok: "\<forall>w. ndefs.num_val_ok w \<longrightarrow> (\<forall>(f, e)\<in>set us. ndefs.nexp_ok w e)"
+    if "list_all (\<lambda>(f, e). nexp_struct_ok D.nfluents e) us" for us :: "(func \<times> (func, rat) nexp) list"
+    using that by (auto simp: list_all_iff intro: ndefs.nexp_struct_ok_sound)
+  have cp_ok: "\<forall>w. ndefs.num_val_ok w \<longrightarrow> (\<forall>c\<in>set cs. ndefs.comp_ok w c)"
+    if "list_all (comp_struct_ok D.nfluents) cs" for cs :: "(func, rat) comp list"
+    using that by (auto simp: list_all_iff intro: ndefs.comp_struct_ok_sound)
+  show "numeric_ground_ast_problem P fluent_lo fluent_hi"
+    apply unfold_locales
+    subgoal using uf_s .
+    subgoal using uf_e .
+    subgoal using ncr_s .
+    subgoal using ncr_e .
+    subgoal using fb .
+    subgoal by (rule ballI, rule ne_ok) (rule bspec[OF ne_s])
+    subgoal by (rule ballI, rule ne_ok) (rule bspec[OF ne_e])
+    subgoal by (rule ballI, rule cp_ok) (rule bspec[OF cp_s])
+    subgoal by (rule ballI, rule cp_ok) (rule bspec[OF cp_e])
+    subgoal by (rule ballI, rule cp_ok) (rule bspec[OF ci])
+    subgoal using niv .
+    subgoal using sw_s by (fastforce simp: list_all_iff)
+    subgoal using sw_e by (fastforce simp: list_all_iff)
+    subgoal using cp_ok[OF cg] by blast
+    done
+qed
+
 subsection \<open>Refinement of the numeric constructors to the abstract numeric net\<close>
 
 context numeric_ground_ast_problem

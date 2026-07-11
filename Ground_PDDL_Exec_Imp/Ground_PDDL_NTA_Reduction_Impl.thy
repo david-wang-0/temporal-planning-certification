@@ -904,7 +904,7 @@ text \<open>The static admission check for the classical (numeric-free) ground l
   nine @{locale ground_ast_problem_core} structural side-conditions (including the positivity-re-point's
   @{const act_conds_no_args}) plus @{text \<open>functions D = []\<close>} (the @{locale ground_ast_problem} leaf).\<close>
 
-definition "check_ground_problem P \<equiv> do {
+definition "check_ground_problem_core P \<equiv> do {
   let D = ast_problem.domain P;
   check_wf_temporal_problem P;
   check (is_pos_conj (goal P)) (ERRS ''Goal not a conjunction of positive literals'');
@@ -915,21 +915,39 @@ definition "check_ground_problem P \<equiv> do {
   check_all_list act_pres_pos (actions D) ''Action has a condition that is not a conjunction of positive literals'' (shows o ast_temporal_action_schema_name);
   check_all_list act_conds_no_args (actions D) ''Action condition is not argument-free (numeric/eqAtm atoms with arguments)'' (shows o ast_temporal_action_schema_name);
   check (consts D = []) (ERRS ''Domain has constants'');
-  check (functions D = []) (ERRS ''Domain has functions'');
   check_all_list form_preds_no_args (init P) ''Initial literal not grounded (it refers to constants)''
     (\<lambda>(x::object atom Formulas.formula) (y::string). show y)
 }"
 
-lemma check_ground_problem_return_iff[return_iff]:
-  "check_ground_problem P = Inr () \<longleftrightarrow> ground_ast_problem P"
+lemma check_ground_problem_core_return_iff[return_iff]:
+  "check_ground_problem_core P = Inr () \<longleftrightarrow> ground_ast_problem_core P"
 proof -
   interpret ast_temporal_problem P .
   show ?thesis
-    unfolding check_ground_problem_def
-    unfolding ground_ast_problem_def ground_ast_problem_axioms_def
+    unfolding check_ground_problem_core_def
     unfolding ground_ast_problem_core_def ground_ast_problem_core_axioms_def
     by (auto simp: return_iff list_all_iff)
 qed
+
+lemma isOK_check_ground_problem_core[simp]:
+  "isOK (check_ground_problem_core P) \<longleftrightarrow> ground_ast_problem_core P"
+proof -
+  have "isOK (check_ground_problem_core P) \<longleftrightarrow> check_ground_problem_core P = Inr ()"
+    by (cases "check_ground_problem_core P") (auto simp: isOK_def)
+  thus ?thesis by (simp add: check_ground_problem_core_return_iff)
+qed
+
+text \<open>The classical (numeric-free) leaf @{locale ground_ast_problem} is the core plus @{text \<open>functions D = []\<close>}.\<close>
+
+definition "check_ground_problem P \<equiv> do {
+  check_ground_problem_core P;
+  check (functions (ast_problem.domain P) = []) (ERRS ''Domain has functions'')
+}"
+
+lemma check_ground_problem_return_iff[return_iff]:
+  "check_ground_problem P = Inr () \<longleftrightarrow> ground_ast_problem P"
+  unfolding check_ground_problem_def ground_ast_problem_def ground_ast_problem_axioms_def
+  by (auto simp: return_iff)
 
 text \<open>The pure network builder: assemble the concrete Munta NTA from the refined constructors.\<close>
 
