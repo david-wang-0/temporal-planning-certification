@@ -668,3 +668,88 @@ lemma num_model_checking_problem_refine:
   by blast
 
 end
+
+
+section \<open>WP-D: the numeric network assembly\<close>
+
+text \<open>The numeric twin of @{const make_network_impl} / @{const check_and_make_network} (theory
+  @{text Ground_PDDL_NTA_Reduction_Impl}): the pure builder assembles the concrete Munta NTA from the
+  executable numeric constructors, and @{term check_and_make_numeric_network} runs the numeric admission
+  check @{const numeric_ground_ast_problem_defs.check_numeric_ground_problem} first.  Soundness fires the
+  WP-C capstone @{thm [source] numeric_ground_ast_problem.num_model_checking_problem_refine} at the
+  admitted leaf: if the executable numeric net cannot reach the goal, the ground problem has no valid,
+  bounded numeric plan.\<close>
+
+definition "num_make_network_impl P fluent_lo fluent_hi \<equiv> do {
+  let automata = numeric_ground_ast_problem_defs.num_net_automata' P;
+  let broadcast = ground_ast_problem_defs.net_broadcast';
+  let bounds = numeric_ground_ast_problem_defs.num_net_bounds' P fluent_lo fluent_hi;
+  let init_locs = numeric_ground_ast_problem_defs.num_init_locs' P;
+  let init_vars = numeric_ground_ast_problem_defs.num_init_vars' P fluent_lo fluent_hi;
+  let formula = numeric_ground_ast_problem_defs.num_reach_formula';
+  let clock_names = ground_ast_problem_defs.clock_names P;
+  let auto_names = ground_ast_problem_defs.auto_names P;
+  let ids_to_names = ground_ast_problem_defs.auto_loc_ids_to_names;
+  let process_names_to_index = ground_ast_problem_defs.auto_names_to_index P;
+  Error_Monad.return (clock_names, auto_names, ids_to_names, process_names_to_index,
+     broadcast, automata, bounds, formula, init_locs, init_vars)
+}"
+
+lemma num_make_network_impl_return_iff[return_iff]:
+  "num_make_network_impl P fluent_lo fluent_hi = Inr (
+    ground_ast_problem_defs.clock_names P,
+    ground_ast_problem_defs.auto_names P,
+    ground_ast_problem_defs.auto_loc_ids_to_names,
+    ground_ast_problem_defs.auto_names_to_index P,
+    ground_ast_problem_defs.net_broadcast',
+    numeric_ground_ast_problem_defs.num_net_automata' P,
+    numeric_ground_ast_problem_defs.num_net_bounds' P fluent_lo fluent_hi,
+    numeric_ground_ast_problem_defs.num_reach_formula',
+    numeric_ground_ast_problem_defs.num_init_locs' P,
+    numeric_ground_ast_problem_defs.num_init_vars' P fluent_lo fluent_hi)"
+  unfolding num_make_network_impl_def by (simp add: return_iff)
+
+definition "check_and_make_numeric_network P fluent_lo fluent_hi \<equiv> do {
+  numeric_ground_ast_problem_defs.check_numeric_ground_problem P fluent_lo fluent_hi;
+  num_make_network_impl P fluent_lo fluent_hi
+}"
+
+lemma check_and_make_numeric_network_and_plan:
+  assumes A: "check_and_make_numeric_network P fluent_lo fluent_hi
+       = Inr (clocks, autos, ids_to_names, process_names_to_index,
+              broadcast, automata, bounds, formula, init_locs, init_vars)"
+  shows "\<not> (Simple_Network_Impl.sem automata broadcast bounds,
+             (init_locs, map_of init_vars, (\<lambda>_. 0)) \<Turnstile> formula)
+         \<longrightarrow> \<not>(\<exists>\<pi>. numeric_valid_ground_plan P fluent_lo fluent_hi \<pi>)"
+proof -
+  have chk: "numeric_ground_ast_problem_defs.check_numeric_ground_problem P fluent_lo fluent_hi = Inr ()"
+  proof (cases "numeric_ground_ast_problem_defs.check_numeric_ground_problem P fluent_lo fluent_hi")
+    case (Inl e)
+    hence "check_and_make_numeric_network P fluent_lo fluent_hi = Inl e"
+      unfolding check_and_make_numeric_network_def by simp
+    thus ?thesis using A by simp
+  next
+    case (Inr u) thus ?thesis by simp
+  qed
+  have leaf: "numeric_ground_ast_problem P fluent_lo fluent_hi"
+    using chk by (rule check_numeric_ground_problem_sound)
+  have cdef: "check_and_make_numeric_network P fluent_lo fluent_hi = num_make_network_impl P fluent_lo fluent_hi"
+    unfolding check_and_make_numeric_network_def chk by simp
+  note mk = A[unfolded cdef]
+  have eqs: "automata = numeric_ground_ast_problem_defs.num_net_automata' P"
+      "broadcast = ground_ast_problem_defs.net_broadcast'"
+      "bounds = numeric_ground_ast_problem_defs.num_net_bounds' P fluent_lo fluent_hi"
+      "formula = numeric_ground_ast_problem_defs.num_reach_formula'"
+      "init_locs = numeric_ground_ast_problem_defs.num_init_locs' P"
+      "init_vars = numeric_ground_ast_problem_defs.num_init_vars' P fluent_lo fluent_hi"
+    using mk by (simp_all add: num_make_network_impl_return_iff)
+  interpret leaf_i: numeric_ground_ast_problem P fluent_lo fluent_hi by (rule leaf)
+  have bc: "ground_ast_problem_defs.net_broadcast' = tp_nta_reduction_defs.net_broadcast"
+    unfolding ground_ast_problem_defs.net_broadcast'_def leaf_i.ndefs.net_broadcast_def ..
+  show ?thesis
+    unfolding eqs bc
+    using numeric_ground_ast_problem.num_model_checking_problem_refine[OF leaf]
+    by blast
+qed
+
+end
