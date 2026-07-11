@@ -875,21 +875,109 @@ lemma model_checking_problem_refine:
 
 end
 
-text \<open>WP-D ISOLATION: the code-export tail that used to live here was removed to reach green
-  through model_checking_problem_refine (above, the last lemma of the ground_ast_problem
-  context).  It contained:
-  \<^item> the value commands exercising net_automata' / net_broadcast' / net_bounds' / init_cfg' /
-    reach_formula' / auto_names / clock_names on example_problem -- these need the removed
-    code-generation typeclass instances (proper_interval / cproper_interval / set_impl for
-    String.literal / predicate) and the removed example_problem, so they no longer evaluate;
-  \<^item> make_network_impl and make_network_impl_return_iff, and check_and_make_network with its
-    correctness lemma check_and_make_network_and_plan -- these are driven by the retired
-    check_ground_problem / check_ground_problem_return_iff (see the isolation note near the top
-    of the theory), which the Formal-PDDL-Semantics re-point broke.
-  None of this feeds model_checking_problem_refine or the numeric WP-C importer (which
-  references make_network_impl only in a documentation comment).  To be re-derived under WP-D
-  (code export) once check_ground_problem is re-pointed to the ast_cont_* namespace.  The
-  removed block is preserved in git history (commit 31a9e17).\<close>
+section \<open>WP-D: the executable admission check + network assembly (re-derived, ast_cont_* namespace)\<close>
+
+text \<open>The temporal well-formedness check routes through the \<^emph>\<open>continuous\<close> checker at the translated
+  problem (@{const temporal_to_continuous_problem}); its @{text return_iff} composes
+  @{thm check_wf_problem_return_iff} with @{thm ast_temporal_problem.wf_ast_cont_problem_equiv}.\<close>
+
+definition "check_wf_temporal_problem P \<equiv> check_wf_cont_problem (temporal_to_continuous_problem P)"
+
+lemma check_wf_temporal_problem_return_iff[return_iff]:
+  "check_wf_temporal_problem P = Inr () \<longleftrightarrow> wf_ast_temporal_problem P"
+proof -
+  interpret ast_temporal_problem P .
+  show ?thesis
+    unfolding check_wf_temporal_problem_def check_wf_problem_return_iff
+    using wf_ast_cont_problem_equiv wf_ast_temporal_problem_def by simp
+qed
+
+lemma isOK_check_wf_temporal_problem[simp]:
+  "isOK (check_wf_temporal_problem P) \<longleftrightarrow> wf_ast_temporal_problem P"
+proof -
+  have "isOK (check_wf_temporal_problem P) \<longleftrightarrow> check_wf_temporal_problem P = Inr ()"
+    by (cases "check_wf_temporal_problem P") (auto simp: isOK_def)
+  thus ?thesis by (simp add: check_wf_temporal_problem_return_iff)
+qed
+
+text \<open>The static admission check for the classical (numeric-free) ground leaf: the wf check plus the
+  nine @{locale ground_ast_problem_core} structural side-conditions (including the positivity-re-point's
+  @{const act_conds_no_args}) plus @{text \<open>functions D = []\<close>} (the @{locale ground_ast_problem} leaf).\<close>
+
+definition "check_ground_problem P \<equiv> do {
+  let D = ast_problem.domain P;
+  check_wf_temporal_problem P;
+  check (is_pos_conj (goal P)) (ERRS ''Goal not a conjunction of positive literals'');
+  check_all_list pred_no_args (predicates D) ''Predicate not grounded (i.e. it has some argument)'' (shows o predicate.name o predicate_decl.pred);
+  check_all_list act_no_params (actions D) ''Action not grounded, it has a/some parameter(s)'' (shows o ast_temporal_action_schema_name);
+  check_all_list act_no_func_dcs (actions D) ''Action not grounded, it has a functional duration constraint'' (shows o ast_temporal_action_schema_name);
+  check_all_list act_dcs_integers (actions D) ''Action's duration constraint is not an integer'' (shows o ast_temporal_action_schema_name);
+  check_all_list act_pres_pos (actions D) ''Action has a condition that is not a conjunction of positive literals'' (shows o ast_temporal_action_schema_name);
+  check_all_list act_conds_no_args (actions D) ''Action condition is not argument-free (numeric/eqAtm atoms with arguments)'' (shows o ast_temporal_action_schema_name);
+  check (consts D = []) (ERRS ''Domain has constants'');
+  check (functions D = []) (ERRS ''Domain has functions'');
+  check_all_list form_preds_no_args (init P) ''Initial literal not grounded (it refers to constants)''
+    (\<lambda>(x::object atom Formulas.formula) (y::string). show y)
+}"
+
+lemma check_ground_problem_return_iff[return_iff]:
+  "check_ground_problem P = Inr () \<longleftrightarrow> ground_ast_problem P"
+proof -
+  interpret ast_temporal_problem P .
+  show ?thesis
+    unfolding check_ground_problem_def
+    unfolding ground_ast_problem_def ground_ast_problem_axioms_def
+    unfolding ground_ast_problem_core_def ground_ast_problem_core_axioms_def
+    by (auto simp: return_iff list_all_iff)
+qed
+
+text \<open>The pure network builder: assemble the concrete Munta NTA from the refined constructors.\<close>
+
+definition "make_network_impl P \<equiv> do {
+  let automata = ground_ast_problem_defs.net_automata' P;
+  let broadcast = ground_ast_problem_defs.net_broadcast';
+  let bounds = ground_ast_problem_defs.net_bounds' P;
+  let init_locs = ground_ast_problem_defs.init_locs' P;
+  let init_vars = ground_ast_problem_defs.init_vars' P;
+  let formula = ground_ast_problem_defs.reach_formula';
+  let clock_names = ground_ast_problem_defs.clock_names P;
+  let auto_names = ground_ast_problem_defs.auto_names P;
+  let ids_to_names = ground_ast_problem_defs.auto_loc_ids_to_names;
+  let process_names_to_index = ground_ast_problem_defs.auto_names_to_index P;
+  Error_Monad.return (clock_names, auto_names, ids_to_names, process_names_to_index,
+     broadcast, automata, bounds, formula, init_locs, init_vars)
+}"
+
+lemma make_network_impl_return_iff[return_iff]:
+  "make_network_impl P = Inr (
+    ground_ast_problem_defs.clock_names P,
+    ground_ast_problem_defs.auto_names P,
+    ground_ast_problem_defs.auto_loc_ids_to_names,
+    ground_ast_problem_defs.auto_names_to_index P,
+    ground_ast_problem_defs.net_broadcast',
+    ground_ast_problem_defs.net_automata' P,
+    ground_ast_problem_defs.net_bounds' P,
+    ground_ast_problem_defs.reach_formula',
+    ground_ast_problem_defs.init_locs' P,
+    ground_ast_problem_defs.init_vars' P)"
+  unfolding make_network_impl_def by (auto simp: return_iff)
+
+definition check_and_make_network where
+"check_and_make_network P \<equiv> do {
+  check_ground_problem P;
+  make_network_impl P
+}"
+
+lemma check_and_make_network_and_plan:
+  assumes "(check_and_make_network P = Inr (clocks, auto_names, ids_to_names, process_names_to_index, broadcast, automata, bounds, formula, init_locs, init_vars))"
+  shows "\<not> (Simple_Network_Impl.sem automata broadcast bounds, (init_locs, map_of init_vars, (\<lambda>_. 0)) \<Turnstile> formula) \<longrightarrow> (\<nexists>tp. valid_ground_plan P tp)"
+  using assms
+  unfolding check_and_make_network_def
+  unfolding return_iff make_network_impl_return_iff
+  using check_ground_problem_return_iff
+  using ground_ast_problem.model_checking_problem_refine
+  unfolding ground_ast_problem_defs.init_cfg'_def
+  by force
 
 
 end

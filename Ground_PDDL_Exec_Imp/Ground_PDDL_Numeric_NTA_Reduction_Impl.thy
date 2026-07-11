@@ -97,6 +97,44 @@ definition "num_reach_formula' = reach_formula'"
 
 end
 
+subsection \<open>Structural (valuation-free) sufficient conditions for the encoding-faithfulness universals\<close>
+
+text \<open>The numeric leaf's faithfulness assumptions are universals over ALL integer valuations
+  (@{term \<open>\<forall>w. num_val_ok w \<longrightarrow> nexp_ok w e\<close>}); an executable admission check needs a DECIDABLE,
+  valuation-free sufficient condition. @{const numeric_tp_nta_reduction_defs.nexp_ok} depends on
+  @{term w} only through @{const NVar} (the read must be a declared, integer fluent -- guaranteed by
+  @{const numeric_tp_nta_reduction_defs.num_val_ok}) and @{const NDiv} (exact division cannot be
+  guaranteed structurally). So the structural condition is: constants integral, reads declared,
+  arithmetic recurses, division rejected (fail-closed; the benchmark fragment has no @{const NDiv}).
+  This gives only the FORWARD direction (@{text \<open>structural \<Longrightarrow> universal\<close>}), which is exactly what the
+  soundness assembly needs.\<close>
+
+fun nexp_struct_ok :: "'n list \<Rightarrow> ('n, 'r::ring_1) nexp \<Rightarrow> bool" where
+  "nexp_struct_ok fs (NConst c) \<longleftrightarrow> c \<in> \<int>"
+| "nexp_struct_ok fs (NVar f)   \<longleftrightarrow> f \<in> set fs"
+| "nexp_struct_ok fs (NAdd a b) \<longleftrightarrow> nexp_struct_ok fs a \<and> nexp_struct_ok fs b"
+| "nexp_struct_ok fs (NSub a b) \<longleftrightarrow> nexp_struct_ok fs a \<and> nexp_struct_ok fs b"
+| "nexp_struct_ok fs (NMul a b) \<longleftrightarrow> nexp_struct_ok fs a \<and> nexp_struct_ok fs b"
+| "nexp_struct_ok fs (NDiv a b) \<longleftrightarrow> False"
+
+fun comp_struct_ok :: "'n list \<Rightarrow> ('n, 'r::ring_1) comp \<Rightarrow> bool" where
+  "comp_struct_ok fs (Comp p a b) \<longleftrightarrow> nexp_struct_ok fs a \<and> nexp_struct_ok fs b"
+
+context numeric_tp_nta_reduction_defs
+begin
+
+text \<open>Soundness: the structural condition implies the leaf's valuation-quantified faithfulness.\<close>
+
+lemma nexp_struct_ok_sound:
+  "nexp_struct_ok nfluents e \<Longrightarrow> num_val_ok w \<Longrightarrow> nexp_ok w e"
+  by (induction e) (auto simp: num_val_ok_def)
+
+lemma comp_struct_ok_sound:
+  "comp_struct_ok nfluents c \<Longrightarrow> num_val_ok w \<Longrightarrow> comp_ok w c"
+  by (cases c) (auto intro: nexp_struct_ok_sound)
+
+end
+
 subsection \<open>Refinement of the numeric constructors to the abstract numeric net\<close>
 
 context numeric_ground_ast_problem

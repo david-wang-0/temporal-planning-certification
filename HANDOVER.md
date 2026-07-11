@@ -26,22 +26,56 @@ truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NU
      tight `thr_set` + NEW `Numeric_Bound_Inference_Extract.thy`: `infer_fluent_bounds` (`ginfer_thr` `eint` box →
      finite `int` box, `None` = "bound-inference failed" on any ∞) + `infer_fluent_bounds_sound`; `value` demos
      `Some (0,1)` / `None`. **TERMINATION proof SKIPPED** (by design).
-   - **NEXT = WP-D INTEGRATION** (reduction files; needs a Temporal_Planning_Base jEdit): a locale stacked on
-     `numeric_ground_ast_problem` supplying the inferred finite `fluent_lo/hi` + `is_gbound_inv'` (checked by
-     eval) ⇒ `is_gbound_inv'_imp_num_bound_inv` discharges the cert at ground ⇒ the numeric-net capstone. The
-     EXECUTABLE end-to-end (running the analysis on a concrete problem) needs a reduction-snaps → draft-gactions
-     translation via EXPORTED ML — cannot be one theory (arity clash) — so that part rides with WP-D export.
+   - **WP-D INTEGRATION (proof-side) — DONE & GREEN (2026-07-11), UNCOMMITTED.** New file
+     `Ground_PDDL_Exec_Imp/Ground_PDDL_Numeric_NTA_Reduction_Bounds.thy` (in ROOT after `…_Numeric_NTA_Reduction_Impl`;
+     fully_processed + consolidated, 0 errors/sorries; 1 benign ambiguous-parse warning on the
+     `sem, a\<^sub>0 \<Turnstile> formula` notation — identical to the committed WP-A file's). Structure (mirrors the WP-A file
+     `…_Numeric_NTA_Reduction_Correctness.thy`, swapping the per-plan `num_seq_in_bounds` for the static cert):
+       - plan-free `locale numeric_ground_ast_problem_cert = numeric_ground_ast_problem + assumes nred.is_gbound_inv'`;
+         `lemma num_bound_inv: nred.num_bound_inv` via `nred.is_gbound_inv'_imp_num_bound_inv`;
+       - plan-carrying `locale numeric_valid_ground_plan_cert` (twin of `numeric_valid_ground_plan`, WITHOUT the
+         `num_seq_in_bounds` assumption) `sublocale nbnd: numeric_tp_nta_reduction_bounds` (3 subgoals: `num_valid`,
+         `num_bound_inv`, `num_goal_comp_ok`), re-deriving the numeric-net capstone from the cert;
+       - `num_valid_ground_plan_imp_num_form_holds` + contrapositive `num_net_form_not_sat_imp_no_valid_ground_plan`
+         over `num_net_impl.sem` — boundedness now discharged, NOT a per-plan assumption. `fluent_lo/hi` stay
+         parameters (a concrete instance fixes them to the inferred box).
+   - **NEXT = WP-D EXECUTABLE end-to-end** (rides with the export tail): actually *computing* `fluent_lo/hi` from
+     `P` (`infer_fluent_bounds`) and *eval-checking* `nred.is_gbound_inv'` needs a reduction-snaps → draft-gactions
+     translation via EXPORTED ML — cannot be one theory (HOL-IMP `option`-arity clash). Folds into WP-D §2 below.
    - **Facts locked (don't re-litigate):** HOL-IMP not importable into the reduction (`option`-arity clash);
      `int` is FORCED (Munta `Simple_Network_Impl`, `Simple_Network_Language_Impl.thy:186`); **rebuild the clean
      base heap** (`isabelle build -b Temporal_Planning_Base`, drops the stale `Abs_Int3` bake) before relying on
      it locally. Cleanup: hoist the duplicated base-locale `const_to_int_*`/`nexp_ok_*` twins; delete stray
      `.thy~`. Detail: `NUMERIC_EXEC_PLAN.md` §WP-E + `Numeric_Bound_Inference/BOUND_INFERENCE_PLAN.md` §0' +
      memory `numeric-bound-inference-draft`.
-2. **WP-D — executable export / assembly (after WP-E).** `check_numeric_ground_problem` +
-   `num_make_network_impl` + `check_and_make_numeric_network` (soundness assembly). DEFER the actual
-   `export_code` / `String.literal` code-gen instances if the isolated `proper_interval`/`Abs_literal`
-   typeclass block rabbit-holes. Prop wf-check routing already scouted (2026-07-09 log below). The `check_*`
-   must turn the leaf's `nexp_ok`/`comp_ok` universals into decidable STRUCTURAL sufficient conditions.
+2. **WP-D — executable export / assembly. PARTIALLY DONE (2026-07-11), UNCOMMITTED.**
+   - **Propositional export tail RE-DERIVED & green** in `Ground_PDDL_NTA_Reduction_Impl.thy` (bottom, new
+     `section` at global scope, ast_cont_* namespace): `check_wf_temporal_problem` (+`_return_iff` +
+     `isOK_check_wf_temporal_problem[simp]` bridge), `check_ground_problem` (+`_return_iff` \<longleftrightarrow>
+     `ground_ast_problem P`; proof = `interpret ast_temporal_problem P` then unfold
+     `ground_ast_problem_def`/`_axioms_def`/`ground_ast_problem_core_def`/`_axioms_def` then
+     `by (auto simp: return_iff list_all_iff)` — return_iff as SIMP, not `unfolding`, else the do-block binds
+     don't fire), `make_network_impl` (+`_return_iff`), `check_and_make_network` (+`check_and_make_network_and_plan`
+     via `ground_ast_problem.model_checking_problem_refine`). Net constructors unchanged since the OLD template
+     (`ground_ast_problem_defs.net_automata' P` etc.). The two TOP `WP-D ISOLATION` text notes + the bottom one
+     are now STALE (code re-derived) — update in a cleanup pass (editing them reprocesses ~900 cmds).
+   - **Numeric structural-faithfulness CORE done & green** in `Ground_PDDL_Numeric_NTA_Reduction_Impl.thy`
+     (new subsection after the constructors context): global `nexp_struct_ok`/`comp_struct_ok`
+     (`NConst\<Rightarrow>\<in>\<int>`, `NVar\<Rightarrow>\<in>fs`, +/-/* recurse, `NDiv\<Rightarrow>False`) + `context numeric_tp_nta_reduction_defs`
+     lemmas `nexp_struct_ok_sound`/`comp_struct_ok_sound` (`struct \<Longrightarrow> \<forall>w. num_val_ok w \<longrightarrow> nexp_ok/comp_ok`;
+     `by (induction e) (auto simp: num_val_ok_def)` / `by (cases c) (auto intro: nexp_struct_ok_sound)`). This is
+     the HARD linchpin the plan flagged.
+   - **REMAINING:** (a) refactor prop `check_ground_problem` \<Rightarrow> `check_ground_problem_core` (9 checks, NO
+     `functions=[]`) + `check_ground_problem = core + no_functions`, so the numeric side can reuse the core
+     (numeric problems HAVE functions); (b) `check_numeric_ground_problem P fluent_lo fluent_hi` = core + the
+     decidable leaf checks (`upds_functional_list`/`upds_no_cross_read_list`/writes\<subseteq>nfluents/`fluent_lo\<le>fluent_hi`/
+     `num_init\<in>\<int>`) + the structural nexp/comp checks, proving FORWARD `= Inr () \<Longrightarrow> numeric_ground_ast_problem
+     P fluent_lo fluent_hi` (use `nexp_struct_ok_sound`/`comp_struct_ok_sound` for the universals); (c)
+     `num_make_network_impl` (num_net_automata'/num_net_bounds' lo hi/... from the WP-C constructors) +
+     `check_and_make_numeric_network` + soundness via the WP-D bounds capstone
+     `numeric_ground_ast_problem_cert.num_net_form_not_sat_imp_no_valid_ground_plan` (so the checker file must
+     import `…_Numeric_NTA_Reduction_Bounds`, i.e. sit AFTER it in ROOT — a NEW file or Check_Unsolvability).
+     DEFER `export_code` / `String.literal` code-gen instances (`proper_interval`/`Abs_literal`) per David.
 
 ### OPTIONAL / completeness (not a WP blocker)
 - **#9 — replace the over-approximating numeric mutex with the CORRECT (FPS `acts_non_intrf`) condition.**
@@ -86,20 +120,20 @@ truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NU
 - **#8** numeric over-all redesign (design **B**, a sound over-approximation; design A rejected as unsound) —
   `d809a59`. See `numeric-overall-redesign-decisions` memory + `NUMERIC_OVERALL_REDESIGN.md` (DO-NOT-IMPL-A banner).
 
-### UNCOMMITTED (WP-E code + docs)
-**WP-E code (green except the 3 intended interval-layer sorries):**
-- NEW `TA_Network/TP_NTA_Reduction_Numeric_Bounds.thy` (the bridge + interval-check draft; in `ROOT`).
-- `TA_Network/TP_NTA_Reduction_Numeric_Defs.thy` (+`const_to_int_of_int` in base locale),
-  `TA_Network/TP_NTA_Reduction_Numeric_Model_Checking.thy` (−its copy),
-  `Ground_PDDL_Exec_Imp/Ground_PDDL_Numeric_NTA_Reduction_Correctness.thy` (`nred` sublocale +1 discharge).
-- `ROOT` (added `TP_NTA_Reduction_Numeric_Bounds` to `TP_NTA_Reduction`; added `session Numeric_Bound_Inference
-  = "HOL-IMP"`; the temporary HOL-IMP bake in `Temporal_Planning_Base` was reverted — but the on-disk BASE HEAP
-  still has it, so `isabelle build -b Temporal_Planning_Base` before commit).
-- `Numeric_Bound_Inference/ROOT` DELETED (session moved to main `ROOT`); `Numeric_Bound_Inference/*.thy`
-  untracked (green; tight-threshold `thr_set` extraction added).
+### COMMITTED since (supersedes the old "UNCOMMITTED (WP-E code)" list)
+- **WP-E — numeric bound inference COMPLETE** (`aeaba18`, on top of `ea1e9e1`): reduction interval check
+  (`TP_NTA_Reduction_Numeric_Bounds.thy`, 0 sorries) + compute-side extract/reject (`Numeric_Bound_Inference/`).
+  The base heap was rebuilt clean **before** that commit — `isabelle build -n Temporal_Planning_Base` reports
+  up-to-date, and the reduction chain loads green on it in jEdit (no `option`-arity clash). No rebuild needed now.
+- The git tree is **CLEAN** as of `aeaba18`; the old per-file "uncommitted" enumeration below is stale.
 
-**Docs:** `ARCHITECTURE_pipeline.md`, `NUMERIC_PLAN.md`, `NUMERIC_EXEC_PLAN.md`, `SEMANTICS_REPOINT_PLAN.md`,
-`HANDOVER.md`, `Numeric_Bound_Inference/BOUND_INFERENCE_PLAN.md` (§0'). Untracked docs:
+### UNCOMMITTED (WP-D INTEGRATION + docs)
+- NEW `Ground_PDDL_Exec_Imp/Ground_PDDL_Numeric_NTA_Reduction_Bounds.thy` (green; in `ROOT` after
+  `…_Numeric_NTA_Reduction_Impl`) — the proof-side WP-D integration (see TODO item 1).
+- `ROOT` (one line added). `HANDOVER.md` (this update).
+
+**Docs (pre-existing, from the WP-E cycle):** `ARCHITECTURE_pipeline.md`, `NUMERIC_PLAN.md`, `NUMERIC_EXEC_PLAN.md`,
+`SEMANTICS_REPOINT_PLAN.md`, `Numeric_Bound_Inference/BOUND_INFERENCE_PLAN.md` (§0'). Untracked docs:
 `ARCHITECTURE_dependencies.md`, `REFACTOR_SPEC.md`.
 
 ### CLEANUP flagged (do not silently skip — per project preference)
@@ -108,7 +142,15 @@ truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NU
   `ground_ast_problem_core` would dedup. Memory `numeric-exec-impl-layer-status`.
 - **Stray `find_theorems "inst_of_plan_action"`** in `Ground_PDDL_Plan_Defs.thy` (~line 1527, green territory).
 - **Stray `.thy~` editor backups** (in no ROOT) in `TA_Network/` (many) + `Ground_PDDL_Exec_Imp/` — delete in a
-  housekeeping pass.
+  housekeeping pass. (Also `Numeric_Bound_Inference/*.thy~`.)
+- **Stale `SORRY (WP-E)` doc comments** in `TA_Network/TP_NTA_Reduction_Numeric_Bounds.thy` (the `text` blocks
+  above `aeval_sound` ~line 723, `refine_box_sound` ~993, `is_gbound_inv'_imp_num_bound_inv` ~1014) still read
+  "\<^bold>SORRY (WP-E)" though those lemmas are now fully proved (no `sorry` tokens; `aeaba18` closed them).
+- **Stale Isabelle component registration** (`~/.isabelle/Isabelle2025-2/etc/components`): the retired
+  `/home/david/work/verified-classical-sat-based-pddl-planner` (+ its `Isabelle-Graph-Library` submodule) is
+  still listed — de-submoduled per memory `dependency-layout`, so every `isabelle` invocation warns "Missing
+  Isabelle component". Also `~/stuff/AutoCorrode/isabelle-assistant`, `hugo-0.152.0`. Non-blocking; prune the
+  dead lines.
 - **Hoist the `_bnd` S-property lemmas.** The bridge (`TP_NTA_Reduction_Numeric_Bounds.thy`) re-derived
   `happening_finite_bnd`/`happening_subseteq_all_snaps`/`happening_num_noninterfere_bnd`/… because their
   `_correctness` twins sit in the sublocale it establishes; hoist the plan-derived S-property lemmas to a shared

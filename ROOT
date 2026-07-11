@@ -95,6 +95,7 @@ session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp = TP_NTA_Reduction +
     Ground_PDDL_Numeric_Problem_Defs
     Ground_PDDL_Numeric_NTA_Reduction_Correctness
     Ground_PDDL_Numeric_NTA_Reduction_Impl
+    Ground_PDDL_Numeric_NTA_Reduction_Bounds
     Check_Unsolvability
     Unsolvability_Code_Compile
   export_files (in "../") [1]
