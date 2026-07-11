@@ -12,29 +12,31 @@ The canonical task list. `#N` labels are the ones referenced in commits/memory; 
 truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NUMERIC_EXEC_PLAN.md`.
 
 ### IN PROGRESS / NEXT (ordered)
-1. **WP-E — numeric bound inference (soundness-critical). BACKBONE GREEN; interval check DRAFTED (3 sorries).**
-   All UNCOMMITTED. Structure (David's Option 1): **`is_gbound_inv' ⟹ num_bound_inv ⟹ num_seq_in_bounds`**.
-   - **Reduction side — `TA_Network/TP_NTA_Reduction_Numeric_Bounds.thy` (in ROOT):** `num_bound_inv` cert
-     (init-in-box + step-preserves-box; `_initD`/`_stepD`/`_I` rules). Locale `numeric_tp_nta_reduction_bounds`
-     swaps the `num_seq_in_bounds` assumption for the checkable `num_bound_inv`; **bridge `num_seq_in_bounds_derived`
-     is GREEN** (kernel `happening_preserves_fib` + induction on `i`) ⇒ `sublocale numeric_tp_nta_reduction_correctness`
-     re-derives every numeric-net fact from the cert (`_correctness` UNTOUCHED). `const_to_int_of_int` moved DOWN
-     into base `numeric_tp_nta_reduction` (`TP_NTA_Reduction_Numeric_Defs.thy:244`; 4 files green). **DRAFTED, 3
-     sorries:** `aeval` (finite `int×int`; NMul 4-corner; NDiv straddle-0→None), `refine_box` (var-vs-const guards),
-     `is_gbound_inv'` (eval-decidable) + `aeval_sound`/`refine_box_sound`/`is_gbound_inv'_imp_num_bound_inv`.
-   - **Compute side — `Numeric_Bound_Inference/`** is now `session Numeric_Bound_Inference = "HOL-IMP"` IN THE
-     MAIN ROOT (its standalone ROOT deleted). Separate heap (can't co-import — `option`-arity clash); box crosses
-     as DATA. Only the THRESHOLD version (base plain-∞ `infer` superseded); **TERMINATION proof SKIPPED**. TODO:
-     an `infer_fluent_bounds`/extract theory: `eint` box → finite `int` box, `None` = "bound-inference failed"
-     if ANY endpoint is ∞.
-   - **NEXT:** (a) fill the 3 sorries; (b) the extract/∞-reject theory; (c) WP-D: a locale stacked on
-     `numeric_ground_ast_problem` (or a carried assumption) supplying inferred finite `fluent_lo/hi` +
-     `is_gbound_inv'` ⇒ `is_gbound_inv'_imp_num_bound_inv` discharges the cert ⇒ numeric-net capstone.
+1. **WP-E — numeric bound inference (soundness-critical). BOTH SIDES DONE & GREEN** (committed). Structure
+   (David's Option 1): **`is_gbound_inv' ⟹ num_bound_inv ⟹ num_seq_in_bounds`**.
+   - **Reduction check — `TA_Network/TP_NTA_Reduction_Numeric_Bounds.thy` (in ROOT): 0 sorries.** `num_bound_inv`
+     cert (init+step; `_initD`/`_stepD`/`_I` rules); locale `numeric_tp_nta_reduction_bounds` swaps
+     `num_seq_in_bounds` for the checkable `num_bound_inv`; bridge `num_seq_in_bounds_derived` GREEN (kernel
+     `happening_preserves_fib` + induction on `i`) ⇒ `sublocale numeric_tp_nta_reduction_correctness` re-derives
+     the numeric-net capstone from the cert (`_correctness` UNTOUCHED). Inline finite-`int` interval check
+     `aeval`/`refine_box`/`is_gbound_inv'` + `aeval_sound`/`refine_box_sound`/`is_gbound_inv'_imp_num_bound_inv`
+     all PROVED (NDiv `None`'d = fail-closed; `refine_box_sound` carries a guard-const-integrality hyp).
+     `const_to_int_of_int` moved DOWN into base `numeric_tp_nta_reduction` (`TP_NTA_Reduction_Numeric_Defs.thy:244`).
+   - **Compute — `Numeric_Bound_Inference/` (session `= "HOL-IMP"` in main ROOT): green.** Threshold analysis +
+     tight `thr_set` + NEW `Numeric_Bound_Inference_Extract.thy`: `infer_fluent_bounds` (`ginfer_thr` `eint` box →
+     finite `int` box, `None` = "bound-inference failed" on any ∞) + `infer_fluent_bounds_sound`; `value` demos
+     `Some (0,1)` / `None`. **TERMINATION proof SKIPPED** (by design).
+   - **NEXT = WP-D INTEGRATION** (reduction files; needs a Temporal_Planning_Base jEdit): a locale stacked on
+     `numeric_ground_ast_problem` supplying the inferred finite `fluent_lo/hi` + `is_gbound_inv'` (checked by
+     eval) ⇒ `is_gbound_inv'_imp_num_bound_inv` discharges the cert at ground ⇒ the numeric-net capstone. The
+     EXECUTABLE end-to-end (running the analysis on a concrete problem) needs a reduction-snaps → draft-gactions
+     translation via EXPORTED ML — cannot be one theory (arity clash) — so that part rides with WP-D export.
    - **Facts locked (don't re-litigate):** HOL-IMP not importable into the reduction (`option`-arity clash);
      `int` is FORCED (Munta `Simple_Network_Impl`, `Simple_Network_Language_Impl.thy:186`); **rebuild the clean
-     base heap** (`isabelle build -b Temporal_Planning_Base`, drops the stale `Abs_Int3` bake) before commit.
-     Detail: `NUMERIC_EXEC_PLAN.md` §WP-E + `Numeric_Bound_Inference/BOUND_INFERENCE_PLAN.md` §0' + memory
-     `numeric-bound-inference-draft`.
+     base heap** (`isabelle build -b Temporal_Planning_Base`, drops the stale `Abs_Int3` bake) before relying on
+     it locally. Cleanup: hoist the duplicated base-locale `const_to_int_*`/`nexp_ok_*` twins; delete stray
+     `.thy~`. Detail: `NUMERIC_EXEC_PLAN.md` §WP-E + `Numeric_Bound_Inference/BOUND_INFERENCE_PLAN.md` §0' +
+     memory `numeric-bound-inference-draft`.
 2. **WP-D — executable export / assembly (after WP-E).** `check_numeric_ground_problem` +
    `num_make_network_impl` + `check_and_make_numeric_network` (soundness assembly). DEFER the actual
    `export_code` / `String.literal` code-gen instances if the isolated `proper_interval`/`Abs_literal`

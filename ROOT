@@ -117,3 +117,4 @@ session Numeric_Bound_Inference in Numeric_Bound_Inference = "HOL-IMP" +
     Numeric_Bound_Inference
     Numeric_Bound_Inference_Threshold
     Numeric_Bound_Inference_Guards
+    Numeric_Bound_Inference_Extract

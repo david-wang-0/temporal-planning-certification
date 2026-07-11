@@ -521,12 +521,11 @@ fun aeval :: "('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n, 'r) nexp \<
 | "aeval B (NMul a b) = map_ibnd2 (\<lambda>(al, ah) (bl, bh).
        let ps = [al * bl, al * bh, ah * bl, ah * bh] in (Min (set ps), Max (set ps)))
        (aeval B a) (aeval B b)"
-| "aeval B (NDiv a b) = (case (aeval B a, aeval B b) of
-       (Some (al, ah), Some (bl, bh)) \<Rightarrow>
-         (if 0 < bl \<or> bh < 0
-          then let ps = [al div bl, al div bh, ah div bl, ah div bh] in Some (Min (set ps), Max (set ps))
-          else None)
-     | _ \<Rightarrow> None)"
+| "aeval B (NDiv a b) = None"
+  \<comment> \<open>Fail-closed on division: @{term None} means \"cannot bound\", which forces the certificate check
+     to reject any tracked-effect RHS containing an @{term NDiv} (sound; the benchmark fragment has
+     none). Dropping the integer-division interval branch keeps @{text aeval_sound} vacuous on
+     @{term NDiv} rather than requiring the truncating-division interval bound.\<close>
 
 text \<open>Guard refinement: tighten the box by the var-vs-const numeric preconditions (where threshold caps
   land); all other comparison shapes are ignored -- sound, just a wider box.\<close>
@@ -556,6 +555,171 @@ definition is_gbound_inv' :: bool where
           None \<Rightarrow> False
         | Some (al, ah) \<Rightarrow> fluent_lo f \<le> al \<and> ah \<le> fluent_hi f)"
 
+text \<open>@{term const_to_int} round-trips on integers: it inverts @{term of_int} there.\<close>
+lemma const_to_int_round_trip:
+  assumes "x \<in> \<int>"
+  shows "of_int (const_to_int x) = x"
+proof -
+  obtain k where "x = of_int k" using assms by (auto elim: Ints_cases)
+  thus ?thesis by (simp add: const_to_int_of_int)
+qed
+
+text \<open>On integers @{term const_to_int} is additive / commutes with @{text \<open>-\<close>}, @{text \<open>*\<close>}.\<close>
+lemma const_to_int_add:
+  assumes "x \<in> \<int>" and "y \<in> \<int>"
+  shows "const_to_int (x + y) = const_to_int x + const_to_int y"
+proof -
+  obtain a where a: "x = of_int a" using assms(1) by (auto elim: Ints_cases)
+  obtain b where b: "y = of_int b" using assms(2) by (auto elim: Ints_cases)
+  show ?thesis by (simp add: a b const_to_int_of_int flip: of_int_add)
+qed
+
+lemma const_to_int_diff:
+  assumes "x \<in> \<int>" and "y \<in> \<int>"
+  shows "const_to_int (x - y) = const_to_int x - const_to_int y"
+proof -
+  obtain a where a: "x = of_int a" using assms(1) by (auto elim: Ints_cases)
+  obtain b where b: "y = of_int b" using assms(2) by (auto elim: Ints_cases)
+  show ?thesis by (simp add: a b const_to_int_of_int flip: of_int_diff)
+qed
+
+lemma const_to_int_mult:
+  assumes "x \<in> \<int>" and "y \<in> \<int>"
+  shows "const_to_int (x * y) = const_to_int x * const_to_int y"
+proof -
+  obtain a where a: "x = of_int a" using assms(1) by (auto elim: Ints_cases)
+  obtain b where b: "y = of_int b" using assms(2) by (auto elim: Ints_cases)
+  show ?thesis by (simp add: a b const_to_int_of_int flip: of_int_mult)
+qed
+
+text \<open>@{term const_to_int} is monotone on integers.\<close>
+lemma const_to_int_mono:
+  assumes "x \<in> \<int>" and "y \<in> \<int>" and "x \<le> y"
+  shows "const_to_int x \<le> const_to_int y"
+proof -
+  obtain a where a: "x = of_int a" using assms(1) by (auto elim: Ints_cases)
+  obtain b where b: "y = of_int b" using assms(2) by (auto elim: Ints_cases)
+  from assms(3) have "of_int a \<le> (of_int b :: 'r)" using a b by simp
+  hence "a \<le> b" by simp
+  thus ?thesis using a b by (simp add: const_to_int_of_int)
+qed
+
+
+text \<open>A one-sided monotone bound: multiplying an @{typ int} @{term x} in @{term \<open>[p, q]\<close>} by a fixed
+  @{term c} keeps @{term \<open>c * x\<close>} between the two endpoints @{term \<open>c * p\<close>} and @{term \<open>c * q\<close>}
+  (which end is the lower one depends on the sign of @{term c}, hence @{term min}/@{term max}).\<close>
+lemma mult_between:
+  fixes c p q x :: int
+  assumes "p \<le> x" and "x \<le> q"
+  shows "min (c * p) (c * q) \<le> c * x \<and> c * x \<le> max (c * p) (c * q)"
+proof (cases "0 \<le> c")
+  case True
+  have "c * p \<le> c * x" using assms(1) True by (rule mult_left_mono)
+  moreover have "c * x \<le> c * q" using assms(2) True by (rule mult_left_mono)
+  ultimately show ?thesis by (simp add: min_def max_def)
+next
+  case False
+  hence c: "c \<le> 0" by simp
+  have "c * x \<le> c * p" using assms(1) c by (simp add: mult_left_mono_neg)
+  moreover have "c * q \<le> c * x" using assms(2) c by (simp add: mult_left_mono_neg)
+  ultimately show ?thesis by (simp add: min_def max_def)
+qed
+
+text \<open>Interval multiplication over @{typ int}: the product of two ranged values lands between the
+  minimum and maximum of the four corner products.\<close>
+lemma mult_in_corners:
+  fixes xa xb la ha lb hb :: int
+  assumes "la \<le> xa" and "xa \<le> ha" and "lb \<le> xb" and "xb \<le> hb"
+  shows "min (min (la * lb) (la * hb)) (min (ha * lb) (ha * hb)) \<le> xa * xb"
+    and "xa * xb \<le> max (max (la * lb) (la * hb)) (max (ha * lb) (ha * hb))"
+proof -
+  \<comment> \<open>bound @{term \<open>xa * xb\<close>} between @{term \<open>xa * lb\<close>} and @{term \<open>xa * hb\<close>} (fix @{term xa}, vary @{term xb})\<close>
+  have b1: "min (xa * lb) (xa * hb) \<le> xa * xb"
+    and b2: "xa * xb \<le> max (xa * lb) (xa * hb)"
+    using mult_between[OF assms(3,4), of xa] by (simp_all add: mult.commute)
+  \<comment> \<open>and each of @{term \<open>xa * lb\<close>}, @{term \<open>xa * hb\<close>} between its own two corners (fix the constant, vary @{term xa})\<close>
+  have lbc: "min (la * lb) (ha * lb) \<le> xa * lb"
+    and lbc': "xa * lb \<le> max (la * lb) (ha * lb)"
+    using mult_between[OF assms(1,2), of lb] by (simp_all add: mult.commute)
+  have hbc: "min (la * hb) (ha * hb) \<le> xa * hb"
+    and hbc': "xa * hb \<le> max (la * hb) (ha * hb)"
+    using mult_between[OF assms(1,2), of hb] by (simp_all add: mult.commute)
+  show "min (min (la * lb) (la * hb)) (min (ha * lb) (ha * hb)) \<le> xa * xb"
+    using b1 lbc hbc by (simp add: min_le_iff_disj) linarith
+  show "xa * xb \<le> max (max (la * lb) (la * hb)) (max (ha * lb) (ha * hb))"
+    using b2 lbc' hbc' by (simp add: le_max_iff_disj) linarith
+qed
+
+
+text \<open>Exact division on integers stays integer-valued (base-locale twin of the correctness-locale
+  @{text Ints_div_exact}, which is only available above the tracking layer in the ancestor).\<close>
+lemma Ints_div_exact_bnd:
+  assumes "a \<in> \<int>" and "b \<in> \<int>" and "b \<noteq> 0"
+      and "const_to_int b dvd const_to_int a"
+    shows "a / b \<in> \<int>"
+proof -
+  obtain ma where a: "a = Int.of_int ma" using assms(1) by (auto elim: Ints_cases)
+  obtain mb where b: "b = Int.of_int mb" using assms(2) by (auto elim: Ints_cases)
+  have mb0: "mb \<noteq> 0" using assms(3) b by auto
+  have "mb dvd ma" using assms(4) a b const_to_int_of_int by simp
+  then obtain q where "ma = mb * q" by blast
+  hence "a / b = Int.of_int q" using a b mb0 by simp
+  thus ?thesis by simp
+qed
+
+text \<open>Base-locale twin of @{text nexp_ok_eval}: an @{const nexp_ok} expression evaluates to a defined,
+  integer-valued result (needed here since @{text nexp_ok_eval} lives in the correctness locale).\<close>
+lemma nexp_ok_eval_bnd:
+  assumes "nexp_ok w e"
+  shows "\<exists>r. eval_nexp w e = Some r \<and> r \<in> \<int>"
+  using assms
+proof (induction e)
+  case (NConst c)
+  thus ?case by auto
+next
+  case (NVar f)
+  thus ?case by auto
+next
+  case (NAdd a b)
+  then obtain ra rb where
+      a: "eval_nexp w a = Some ra" "ra \<in> \<int>"
+    and b: "eval_nexp w b = Some rb" "rb \<in> \<int>"
+    by auto
+  thus ?case by auto
+next
+  case (NSub a b)
+  then obtain ra rb where
+      a: "eval_nexp w a = Some ra" "ra \<in> \<int>"
+    and b: "eval_nexp w b = Some rb" "rb \<in> \<int>"
+    by auto
+  thus ?case by auto
+next
+  case (NMul a b)
+  then obtain ra rb where
+      a: "eval_nexp w a = Some ra" "ra \<in> \<int>"
+    and b: "eval_nexp w b = Some rb" "rb \<in> \<int>"
+    by auto
+  thus ?case by auto
+next
+  case (NDiv a b)
+  then obtain ra rb where
+      a: "eval_nexp w a = Some ra" "ra \<in> \<int>"
+    and b: "eval_nexp w b = Some rb" "rb \<in> \<int>"
+    by auto
+  have nz: "rb \<noteq> 0" and dvd: "const_to_int rb dvd const_to_int ra"
+    using NDiv.prems a(1) b(1) by auto
+  have ev: "eval_nexp w (NDiv a b) = Some (ra / rb)" using a(1) b(1) nz by simp
+  have iv: "ra / rb \<in> \<int>" by (rule Ints_div_exact_bnd[OF a(2) b(2) nz dvd])
+  thus ?case using ev by blast
+qed
+
+text \<open>Base-locale twin of @{text nexp_ok_fluents}: an @{const nexp_ok} expression reads only declared
+  fluents.\<close>
+lemma nexp_ok_fluents_bnd:
+  assumes "nexp_ok w e"
+  shows "nexp_fluents e \<subseteq> set nfluents"
+  using assms by (induction e) auto
+
 text \<open>\<^bold>\<open>SORRY (WP-E).\<close> The interval eval over-approximates the concrete @{const eval_nexp} on the
   @{const nexp_ok} fragment: induction on @{term e}, using @{text const_to_int} commutation on integers
   (derivable from @{text const_to_int_of_int} + integrality) and interval-arithmetic monotonicity. Stated
@@ -567,15 +731,285 @@ lemma aeval_sound:
       and "nexp_ok w e"
       and "aeval B e = Some (al, ah)"
     shows "\<exists>r. eval_nexp w e = Some r \<and> r \<in> \<int> \<and> al \<le> const_to_int r \<and> const_to_int r \<le> ah"
-  sorry
+  using assms
+proof (induction e arbitrary: al ah)
+  case (NConst c)
+  have ci: "c \<in> \<int>" using NConst.prems(2) by simp
+  have "al = const_to_int c" and "ah = const_to_int c" using NConst.prems(3) by simp_all
+  thus ?case using ci by simp
+next
+  case (NVar f)
+  have box: "\<exists>r. w f = Some r \<and> r \<in> \<int> \<and> fst (B f) \<le> const_to_int r \<and> const_to_int r \<le> snd (B f)"
+    using NVar.prems(1) by simp
+  have alah: "al = fst (B f)" "ah = snd (B f)" using NVar.prems(3) by (auto simp: prod_eq_iff)
+  show ?case using box alah by auto
+next
+  case (NAdd a b)
+  obtain al1 ah1 al2 ah2 where
+      ea: "aeval B a = Some (al1, ah1)"
+    and eb: "aeval B b = Some (al2, ah2)"
+    and albd: "al = al1 + al2" and ahbd: "ah = ah1 + ah2"
+    using NAdd.prems(3) by (auto simp: map_ibnd2_def split: option.splits)
+  have oka: "nexp_ok w a" and okb: "nexp_ok w b" using NAdd.prems(2) by simp_all
+  have ra: "\<exists>r. eval_nexp w a = Some r \<and> r \<in> \<int> \<and> al1 \<le> const_to_int r \<and> const_to_int r \<le> ah1"
+    by (rule NAdd.IH(1)) (use NAdd.prems(1) oka ea in auto)
+  have rb: "\<exists>r. eval_nexp w b = Some r \<and> r \<in> \<int> \<and> al2 \<le> const_to_int r \<and> const_to_int r \<le> ah2"
+    by (rule NAdd.IH(2)) (use NAdd.prems(1) okb eb in auto)
+  obtain ra' where a: "eval_nexp w a = Some ra'" "ra' \<in> \<int>" "al1 \<le> const_to_int ra'" "const_to_int ra' \<le> ah1"
+    using ra by blast
+  obtain rb' where b: "eval_nexp w b = Some rb'" "rb' \<in> \<int>" "al2 \<le> const_to_int rb'" "const_to_int rb' \<le> ah2"
+    using rb by blast
+  have ev: "eval_nexp w (NAdd a b) = Some (ra' + rb')" using a(1) b(1) by simp
+  have int: "ra' + rb' \<in> \<int>" using a(2) b(2) by (rule Ints_add)
+  have cti: "const_to_int (ra' + rb') = const_to_int ra' + const_to_int rb'"
+    by (rule const_to_int_add[OF a(2) b(2)])
+  show ?case using ev int cti a(3,4) b(3,4) albd ahbd by auto
+next
+  case (NSub a b)
+  obtain al1 ah1 al2 ah2 where
+      ea: "aeval B a = Some (al1, ah1)"
+    and eb: "aeval B b = Some (al2, ah2)"
+    and albd: "al = al1 - ah2" and ahbd: "ah = ah1 - al2"
+    using NSub.prems(3) by (auto simp: map_ibnd2_def split: option.splits)
+  have oka: "nexp_ok w a" and okb: "nexp_ok w b" using NSub.prems(2) by simp_all
+  have ra: "\<exists>r. eval_nexp w a = Some r \<and> r \<in> \<int> \<and> al1 \<le> const_to_int r \<and> const_to_int r \<le> ah1"
+    by (rule NSub.IH(1)) (use NSub.prems(1) oka ea in auto)
+  have rb: "\<exists>r. eval_nexp w b = Some r \<and> r \<in> \<int> \<and> al2 \<le> const_to_int r \<and> const_to_int r \<le> ah2"
+    by (rule NSub.IH(2)) (use NSub.prems(1) okb eb in auto)
+  obtain ra' where a: "eval_nexp w a = Some ra'" "ra' \<in> \<int>" "al1 \<le> const_to_int ra'" "const_to_int ra' \<le> ah1"
+    using ra by blast
+  obtain rb' where b: "eval_nexp w b = Some rb'" "rb' \<in> \<int>" "al2 \<le> const_to_int rb'" "const_to_int rb' \<le> ah2"
+    using rb by blast
+  have ev: "eval_nexp w (NSub a b) = Some (ra' - rb')" using a(1) b(1) by simp
+  have int: "ra' - rb' \<in> \<int>" using a(2) b(2) by (rule Ints_diff)
+  have cti: "const_to_int (ra' - rb') = const_to_int ra' - const_to_int rb'"
+    by (rule const_to_int_diff[OF a(2) b(2)])
+  show ?case using ev int cti a(3,4) b(3,4) albd ahbd by auto
+next
+  case (NMul a b)
+  obtain al1 ah1 al2 ah2 where
+      ea: "aeval B a = Some (al1, ah1)"
+    and eb: "aeval B b = Some (al2, ah2)"
+    and albd: "al = Min (set [al1 * al2, al1 * ah2, ah1 * al2, ah1 * ah2])"
+    and ahbd: "ah = Max (set [al1 * al2, al1 * ah2, ah1 * al2, ah1 * ah2])"
+    using NMul.prems(3) by (auto simp: map_ibnd2_def Let_def split: option.splits)
+  have oka: "nexp_ok w a" and okb: "nexp_ok w b" using NMul.prems(2) by simp_all
+  have ra: "\<exists>r. eval_nexp w a = Some r \<and> r \<in> \<int> \<and> al1 \<le> const_to_int r \<and> const_to_int r \<le> ah1"
+    by (rule NMul.IH(1)) (use NMul.prems(1) oka ea in auto)
+  have rb: "\<exists>r. eval_nexp w b = Some r \<and> r \<in> \<int> \<and> al2 \<le> const_to_int r \<and> const_to_int r \<le> ah2"
+    by (rule NMul.IH(2)) (use NMul.prems(1) okb eb in auto)
+  obtain ra' where a: "eval_nexp w a = Some ra'" "ra' \<in> \<int>" "al1 \<le> const_to_int ra'" "const_to_int ra' \<le> ah1"
+    using ra by blast
+  obtain rb' where b: "eval_nexp w b = Some rb'" "rb' \<in> \<int>" "al2 \<le> const_to_int rb'" "const_to_int rb' \<le> ah2"
+    using rb by blast
+  have ev: "eval_nexp w (NMul a b) = Some (ra' * rb')" using a(1) b(1) by simp
+  have int: "ra' * rb' \<in> \<int>" using a(2) b(2) by (rule Ints_mult)
+  have cti: "const_to_int (ra' * rb') = const_to_int ra' * const_to_int rb'"
+    by (rule const_to_int_mult[OF a(2) b(2)])
+  \<comment> \<open>the product's encoding lands between the corner min and max\<close>
+  have corners1:
+      "min (min (al1 * al2) (al1 * ah2)) (min (ah1 * al2) (ah1 * ah2))
+         \<le> const_to_int ra' * const_to_int rb'"
+    and corners2:
+      "const_to_int ra' * const_to_int rb'
+         \<le> max (max (al1 * al2) (al1 * ah2)) (max (ah1 * al2) (ah1 * ah2))"
+    using mult_in_corners[OF a(3) a(4) b(3) b(4)] by simp_all
+  have lo: "al \<le> const_to_int (ra' * rb')" using corners1 cti albd by simp
+  have hi: "const_to_int (ra' * rb') \<le> ah" using corners2 cti ahbd by simp
+  show ?case using ev int lo hi by blast
+next
+  case (NDiv a b)
+  \<comment> \<open>@{term aeval} on @{term NDiv} is @{term None} (fail-closed), so the premise is vacuous.\<close>
+  have "aeval B (NDiv a b) = None" by simp
+  thus ?case using NDiv.prems(3) by simp
+qed
+
+
+text \<open>Abbreviation for the fold invariant of @{const refine_box}: for a fixed valuation @{term w},
+  every declared fluent's integer encoding lies inside the running box @{term B}.\<close>
+definition in_refine_box :: "('n \<rightharpoonup> 'r) \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> bool" where
+  "in_refine_box w B \<longleftrightarrow> (\<forall>h \<in> set nfluents. \<exists>r. w h = Some r \<and> r \<in> \<int>
+       \<and> fst (B h) \<le> const_to_int r \<and> const_to_int r \<le> snd (B h))"
+
+text \<open>A single guard refinement preserves the fold invariant: @{const refine_comp} only shrinks the
+  bound of a var-vs-const comparison @{term \<open>Comp cmp (NVar f) (NConst k)\<close>} towards a value that
+  @{term \<open>sat_comp w c\<close>} already forces, and leaves every other fluent's box untouched. The
+  guard-constant integrality @{term \<open>k \<in> \<int>\<close>} comes from @{term \<open>comp_ok w c\<close>} (its @{term NConst}
+  clause forces the constant to be an integer, independently of @{term w}).\<close>
+lemma refine_comp_pres:
+  assumes "in_refine_box w B"
+      and "sat_comp w c"
+      and "comp_ok w c"
+    shows "in_refine_box w (refine_comp c B)"
+proof -
+  have base: "\<exists>r. w h = Some r \<and> r \<in> \<int>
+                  \<and> fst (refine_comp c B h) \<le> const_to_int r \<and> const_to_int r \<le> snd (refine_comp c B h)"
+    if h: "h \<in> set nfluents" for h
+  proof -
+    \<comment> \<open>the invariant already holds for @{term h} in the pre-refinement box @{term B}\<close>
+    obtain rh where rh: "w h = Some rh" "rh \<in> \<int>"
+      and hlo: "fst (B h) \<le> const_to_int rh" and hhi: "const_to_int rh \<le> snd (B h)"
+      using assms(1) h unfolding in_refine_box_def by blast
+    \<comment> \<open>whenever @{term \<open>refine_comp c B\<close>} does not touch @{term h}, the invariant is inherited\<close>
+    have unchanged: "?thesis" if "refine_comp c B h = B h"
+      using rh hlo hhi that by auto
+    obtain p a b where c: "c = Comp p a b" by (cases c)
+    show ?thesis
+    proof (cases a)
+      case (NVar f)
+      show ?thesis
+      proof (cases b)
+        case (NConst k)
+        have kint: "k \<in> \<int>" using assms(3) unfolding c NVar NConst by simp
+        show ?thesis
+        proof (cases "h = f")
+          case hf: True
+          \<comment> \<open>the refined fluent: its box shrinks toward a value the guard forces\<close>
+          have wf: "w f = Some rh" using rh(1) hf by simp
+          note bounds = rh hlo hhi
+          show ?thesis
+          proof (cases p)
+            case Cle
+            have "rh \<le> k" using assms(2) wf unfolding c NVar NConst Cle by simp
+            hence "const_to_int rh \<le> const_to_int k" by (rule const_to_int_mono[OF rh(2) kint])
+            hence "const_to_int rh \<le> min (snd (B f)) (const_to_int k)" using hhi hf by simp
+            thus ?thesis using rh hlo hf unfolding c NVar NConst Cle by simp
+          next
+            case Cge
+            have "k \<le> rh" using assms(2) wf unfolding c NVar NConst Cge by simp
+            hence "const_to_int k \<le> const_to_int rh" by (rule const_to_int_mono[OF kint rh(2)])
+            hence "max (fst (B f)) (const_to_int k) \<le> const_to_int rh" using hlo hf by simp
+            thus ?thesis using rh hhi hf unfolding c NVar NConst Cge by simp
+          next
+            case Ceq
+            have "rh = k" using assms(2) wf unfolding c NVar NConst Ceq by simp
+            hence "const_to_int rh = const_to_int k" by simp
+            thus ?thesis using rh hlo hhi hf unfolding c NVar NConst Ceq by simp
+          next
+            case Clt
+            have lt: "rh < k" using assms(2) wf unfolding c NVar NConst Clt by simp
+            hence "rh \<le> k" by simp
+            hence le: "const_to_int rh \<le> const_to_int k" by (rule const_to_int_mono[OF rh(2) kint])
+            have "const_to_int rh \<noteq> const_to_int k"
+            proof
+              assume "const_to_int rh = const_to_int k"
+              hence "of_int (const_to_int rh) = (of_int (const_to_int k) :: 'r)" by simp
+              hence "rh = k"
+                using const_to_int_round_trip[OF rh(2)] const_to_int_round_trip[OF kint] by simp
+              thus False using lt by simp
+            qed
+            hence "const_to_int rh \<le> const_to_int k - 1" using le by simp
+            hence "const_to_int rh \<le> min (snd (B f)) (const_to_int k - 1)" using hhi hf by simp
+            thus ?thesis using rh hlo hf unfolding c NVar NConst Clt by simp
+          next
+            case Cgt
+            have gt: "k < rh" using assms(2) wf unfolding c NVar NConst Cgt by simp
+            hence "k \<le> rh" by simp
+            hence ge: "const_to_int k \<le> const_to_int rh" by (rule const_to_int_mono[OF kint rh(2)])
+            have "const_to_int k \<noteq> const_to_int rh"
+            proof
+              assume "const_to_int k = const_to_int rh"
+              hence "of_int (const_to_int k) = (of_int (const_to_int rh) :: 'r)" by simp
+              hence "k = rh"
+                using const_to_int_round_trip[OF rh(2)] const_to_int_round_trip[OF kint] by simp
+              thus False using gt by simp
+            qed
+            hence "const_to_int k + 1 \<le> const_to_int rh" using ge by simp
+            hence "max (fst (B f)) (const_to_int k + 1) \<le> const_to_int rh" using hlo hf by simp
+            thus ?thesis using rh hhi hf unfolding c NVar NConst Cgt by simp
+          qed
+        next
+          case False
+          \<comment> \<open>a different fluent than the one refined: its box is untouched\<close>
+          have "refine_comp c B h = B h"
+            unfolding c NVar NConst using False by (cases p) simp_all
+          thus ?thesis by (rule unchanged)
+        qed
+      next
+        case (NVar g)  \<comment> \<open>RHS is not a constant: @{const refine_comp} is the identity\<close>
+        have "refine_comp c B h = B h" unfolding c NVar \<open>b = NVar g\<close> by (cases p) simp_all
+        thus ?thesis by (rule unchanged)
+      next
+        case (NAdd b1 b2)
+        have "refine_comp c B h = B h" unfolding c NVar \<open>b = NAdd b1 b2\<close> by (cases p) simp_all
+        thus ?thesis by (rule unchanged)
+      next
+        case (NSub b1 b2)
+        have "refine_comp c B h = B h" unfolding c NVar \<open>b = NSub b1 b2\<close> by (cases p) simp_all
+        thus ?thesis by (rule unchanged)
+      next
+        case (NMul b1 b2)
+        have "refine_comp c B h = B h" unfolding c NVar \<open>b = NMul b1 b2\<close> by (cases p) simp_all
+        thus ?thesis by (rule unchanged)
+      next
+        case (NDiv b1 b2)
+        have "refine_comp c B h = B h" unfolding c NVar \<open>b = NDiv b1 b2\<close> by (cases p) simp_all
+        thus ?thesis by (rule unchanged)
+      qed
+    next
+      case (NConst k)  \<comment> \<open>LHS is not a variable: @{const refine_comp} is the identity\<close>
+      have "refine_comp c B h = B h" unfolding c \<open>a = NConst k\<close> by (cases p; cases b) simp_all
+      thus ?thesis by (rule unchanged)
+    next
+      case (NAdd a1 a2)
+      have "refine_comp c B h = B h" unfolding c \<open>a = NAdd a1 a2\<close> by (cases p; cases b) simp_all
+      thus ?thesis by (rule unchanged)
+    next
+      case (NSub a1 a2)
+      have "refine_comp c B h = B h" unfolding c \<open>a = NSub a1 a2\<close> by (cases p; cases b) simp_all
+      thus ?thesis by (rule unchanged)
+    next
+      case (NMul a1 a2)
+      have "refine_comp c B h = B h" unfolding c \<open>a = NMul a1 a2\<close> by (cases p; cases b) simp_all
+      thus ?thesis by (rule unchanged)
+    next
+      case (NDiv a1 a2)
+      have "refine_comp c B h = B h" unfolding c \<open>a = NDiv a1 a2\<close> by (cases p; cases b) simp_all
+      thus ?thesis by (rule unchanged)
+    qed
+  qed
+  show ?thesis unfolding in_refine_box_def using base by blast
+qed
+
+text \<open>Folding all guard refinements preserves the invariant.\<close>
+lemma refine_box_fold_pres:
+  assumes "in_refine_box w B"
+      and "\<forall>c \<in> set cs. sat_comp w c"
+      and "\<forall>c \<in> set cs. comp_ok w c"
+    shows "in_refine_box w (fold refine_comp cs B)"
+  using assms
+proof (induction cs arbitrary: B)
+  case Nil
+  thus ?case by simp
+next
+  case (Cons c cs)
+  have "in_refine_box w (refine_comp c B)"
+    by (rule refine_comp_pres[OF Cons.prems(1)]) (use Cons.prems(2,3) in auto)
+  hence "in_refine_box w (fold refine_comp cs (refine_comp c B))"
+    by (rule Cons.IH) (use Cons.prems(2,3) in auto)
+  thus ?case by simp
+qed
 
 text \<open>\<^bold>\<open>SORRY (WP-E).\<close> An in-box valuation satisfying the guards inhabits the guard-refined box (each
   @{const refine_comp} only shrinks a bound to a value the guard already forces).\<close>
 lemma refine_box_sound:
-  assumes "fluent_in_bounds w" and "sat_comps w (set cs)" and "g \<in> set nfluents"
+  assumes "fluent_in_bounds w" and "sat_comps w (set cs)"
+      and "\<forall>c \<in> set cs. comp_ok w c"
+      and "g \<in> set nfluents"
     shows "\<exists>r. w g = Some r \<and> r \<in> \<int>
                \<and> fst (refine_box cs box g) \<le> const_to_int r \<and> const_to_int r \<le> snd (refine_box cs box g)"
-  sorry
+proof -
+  \<comment> \<open>the starting box @{const box} contains @{term w} (that is exactly @{const fluent_in_bounds})\<close>
+  have "in_refine_box w box"
+    unfolding in_refine_box_def box_def
+    using assms(1) unfolding fluent_in_bounds_def by simp
+  \<comment> \<open>folding all guards keeps @{term w} inside the box\<close>
+  hence "in_refine_box w (fold refine_comp cs box)"
+    by (rule refine_box_fold_pres)
+       (use assms(2) assms(3) in \<open>auto simp: sat_comps_def\<close>)
+  thus ?thesis
+    unfolding refine_box_def in_refine_box_def using assms(4) by blast
+qed
 
 text \<open>\<^bold>\<open>SORRY (WP-E).\<close> The eval-decidable certificate implies the semantic certificate -- so a
   threshold-computed box, once @{const is_gbound_inv'} checks by evaluation, discharges @{const num_bound_inv}
@@ -586,7 +1020,69 @@ text \<open>\<^bold>\<open>SORRY (WP-E).\<close> The eval-decidable certificate 
 theorem is_gbound_inv'_imp_num_bound_inv:
   assumes "is_gbound_inv'"
   shows "num_bound_inv"
-  sorry
+proof (rule num_bound_invI)
+  \<comment> \<open>INIT: the initial box-membership is the first conjunct of the eval-decidable certificate.\<close>
+  fix f assume "f \<in> set nfluents"
+  thus "fluent_lo f \<le> const_to_int (num_init f) \<and> const_to_int (num_init f) \<le> fluent_hi f"
+    using assms unfolding is_gbound_inv'_def by blast
+next
+  \<comment> \<open>STEP: on any in-bounds valuation satisfying the snap guard, the update RHS lands in bounds.\<close>
+  fix s f e w
+  assume sAll: "s \<in> all_snaps"
+     and fe: "(f, e) \<in> set (upds s)"
+     and wfib: "fluent_in_bounds w"
+     and wpre: "sat_comps w (set (n_pre s))"
+  have wok: "num_val_ok w" using wfib by (rule fluent_in_bounds_imp_num_val_ok)
+  \<comment> \<open>the certificate's step conjunct, specialised to this snap and update, gives a bounding box.\<close>
+  have "case aeval (refine_box (n_pre s) box) e of None \<Rightarrow> False
+        | Some (al, ah) \<Rightarrow> fluent_lo f \<le> al \<and> ah \<le> fluent_hi f"
+    using assms sAll fe unfolding is_gbound_inv'_def by fastforce
+  then obtain al ah where
+      aev: "aeval (refine_box (n_pre s) box) e = Some (al, ah)"
+    and flo: "fluent_lo f \<le> al" and fhi: "ah \<le> fluent_hi f"
+    by (cases "aeval (refine_box (n_pre s) box) e") auto
+  \<comment> \<open>@{const nexp_ok} of the RHS and @{const comp_ok} of the guards, from the grounder-match contract.\<close>
+  have okE: "nexp_ok w e" and preOk: "\<forall>c \<in> set (n_pre s). comp_ok w c"
+  proof -
+    from sAll obtain a where a: "a \<in> set actions"
+      and s: "s = at_start a \<or> s = at_end a"
+      unfolding all_snaps_def by blast
+    from s show "nexp_ok w e"
+    proof
+      assume "s = at_start a"
+      thus ?thesis using snap_upds_nexp_ok_start a wok fe by fastforce
+    next
+      assume "s = at_end a"
+      thus ?thesis using snap_upds_nexp_ok_end a wok fe by fastforce
+    qed
+    from s show "\<forall>c \<in> set (n_pre s). comp_ok w c"
+    proof
+      assume "s = at_start a"
+      thus ?thesis using snap_pre_comp_ok_start a wok by fastforce
+    next
+      assume "s = at_end a"
+      thus ?thesis using snap_pre_comp_ok_end a wok by fastforce
+    qed
+  qed
+  \<comment> \<open>each read fluent of @{term e} sits inside the guard-refined box (via @{thm refine_box_sound}).\<close>
+  have boxmem: "\<exists>r. w g = Some r \<and> r \<in> \<int>
+                    \<and> fst (refine_box (n_pre s) box g) \<le> const_to_int r
+                    \<and> const_to_int r \<le> snd (refine_box (n_pre s) box g)"
+    if "g \<in> nexp_fluents e" for g
+  proof -
+    have "g \<in> set nfluents" using nexp_ok_fluents_bnd[OF okE] that by blast
+    thus ?thesis using refine_box_sound[OF wfib wpre preOk] by blast
+  qed
+  \<comment> \<open>soundness of the interval eval lands @{term \<open>const_to_int r\<close>} in @{term \<open>[al, ah]\<close>}.\<close>
+  obtain r where r: "eval_nexp w e = Some r" "r \<in> \<int>"
+    and rlo: "al \<le> const_to_int r" and rhi: "const_to_int r \<le> ah"
+    using aeval_sound[OF boxmem okE aev] by blast
+  have "fluent_lo f \<le> const_to_int r" using flo rlo by simp
+  moreover have "const_to_int r \<le> fluent_hi f" using fhi rhi by simp
+  ultimately show "\<exists>r. eval_nexp w e = Some r \<and> r \<in> \<int>
+                       \<and> fluent_lo f \<le> const_to_int r \<and> const_to_int r \<le> fluent_hi f"
+    using r by blast
+qed
 
 end
 
