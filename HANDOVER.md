@@ -48,7 +48,16 @@ truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NU
      it locally. Cleanup: hoist the duplicated base-locale `const_to_int_*`/`nexp_ok_*` twins; delete stray
      `.thy~`. Detail: `NUMERIC_EXEC_PLAN.md` §WP-E + `Numeric_Bound_Inference/BOUND_INFERENCE_PLAN.md` §0' +
      memory `numeric-bound-inference-draft`.
-2. **WP-D — executable export / assembly. PARTIALLY DONE (2026-07-11), UNCOMMITTED.**
+2. **WP-D — executable admission-check + network assembly. DONE & COMMITTED (2026-07-11).** Commits
+   `cf3c0f0` (bounds-discharge integration + prop export tail + numeric structural core), `998170e`
+   (`check_ground_problem_core` refactor + `check_numeric_ground_problem` forward soundness),
+   `3b14aa8` (`num_make_network_impl` + `check_and_make_numeric_network` soundness + missing-theory-end fix).
+   **NOT YET DONE (the runnable tail, per David deferrable):** the actual `export_code` / `String.literal`
+   code-gen typeclass instances (`proper_interval`/`Abs_literal`), and the bound-computation ML bridge that
+   *computes* `fluent_lo/hi` from `P` (`infer_fluent_bounds`, cross-session HOL-IMP) + *eval-checks*
+   `nred.is_gbound_inv'` so `check_and_make_numeric_network`'s soundness upgrades from the per-plan
+   `numeric_valid_ground_plan` conclusion to the bounds-discharged `numeric_valid_ground_plan_cert` capstone.
+   Detail of what landed below (kept for the recipes).
    - **Propositional export tail RE-DERIVED & green** in `Ground_PDDL_NTA_Reduction_Impl.thy` (bottom, new
      `section` at global scope, ast_cont_* namespace): `check_wf_temporal_problem` (+`_return_iff` +
      `isOK_check_wf_temporal_problem[simp]` bridge), `check_ground_problem` (+`_return_iff` \<longleftrightarrow>
@@ -65,17 +74,30 @@ truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NU
      lemmas `nexp_struct_ok_sound`/`comp_struct_ok_sound` (`struct \<Longrightarrow> \<forall>w. num_val_ok w \<longrightarrow> nexp_ok/comp_ok`;
      `by (induction e) (auto simp: num_val_ok_def)` / `by (cases c) (auto intro: nexp_struct_ok_sound)`). This is
      the HARD linchpin the plan flagged.
-   - **REMAINING:** (a) refactor prop `check_ground_problem` \<Rightarrow> `check_ground_problem_core` (9 checks, NO
-     `functions=[]`) + `check_ground_problem = core + no_functions`, so the numeric side can reuse the core
-     (numeric problems HAVE functions); (b) `check_numeric_ground_problem P fluent_lo fluent_hi` = core + the
-     decidable leaf checks (`upds_functional_list`/`upds_no_cross_read_list`/writes\<subseteq>nfluents/`fluent_lo\<le>fluent_hi`/
-     `num_init\<in>\<int>`) + the structural nexp/comp checks, proving FORWARD `= Inr () \<Longrightarrow> numeric_ground_ast_problem
-     P fluent_lo fluent_hi` (use `nexp_struct_ok_sound`/`comp_struct_ok_sound` for the universals); (c)
-     `num_make_network_impl` (num_net_automata'/num_net_bounds' lo hi/... from the WP-C constructors) +
-     `check_and_make_numeric_network` + soundness via the WP-D bounds capstone
-     `numeric_ground_ast_problem_cert.num_net_form_not_sat_imp_no_valid_ground_plan` (so the checker file must
-     import `…_Numeric_NTA_Reduction_Bounds`, i.e. sit AFTER it in ROOT — a NEW file or Check_Unsolvability).
-     DEFER `export_code` / `String.literal` code-gen instances (`proper_interval`/`Abs_literal`) per David.
+   - **(a) DONE** — prop `check_ground_problem_core` (9 checks, ⟷ `ground_ast_problem_core P`) + `isOK` bridge
+     `isOK_check_ground_problem_core[simp]` + `check_ground_problem = core + no_functions`. In `…_NTA_Reduction_Impl.thy`.
+   - **(b) DONE** — `check_numeric_ground_problem fluent_lo fluent_hi` (`context numeric_ground_ast_problem_defs`):
+     core + decidable leaf checks + structural nexp/comp + a fail-closed snaps-disjointness check; forward
+     soundness `check_numeric_ground_problem_sound : = Inr () ⟹ numeric_ground_ast_problem P fluent_lo fluent_hi`
+     (`isOK_check_all_list[simp]` helper; structural universals via `nexp_struct_ok_sound`/`comp_struct_ok_sound`).
+     \<^bold>\<open>ADMISSION RESTRICTION discovered\<close>: the numeric `ndefs` inherits the UNPRIMED
+     `temp_planning_problem_list_impl_int`, which requires `snaps_disj` (distinct raw start/end ground snaps) — the
+     propositional side uses the PRIMED variant to tolerate snap non-injectivity, but the numeric layer does not.
+     So the check verifies snap-disjointness fail-closed (sound; mild for the numeric fragment — durative schemas
+     with distinct bodies pass, ≥2 simple/instantaneous schemas are rejected since `at_end_spec` collapses them to
+     `ground_non_action`). Lifting it = re-base the numeric reduction on labelled snaps (a design change, not a fix).
+   - **(c) DONE** — `num_make_network_impl` + `_return_iff`, `check_and_make_numeric_network` +
+     `check_and_make_numeric_network_and_plan` (net unreachable ⟹ ¬∃π. `numeric_valid_ground_plan` — the WP-C
+     `num_model_checking_problem_refine`, PER-PLAN bounds). Broadcast bridge needs the leaf interpretation
+     (`interpret leaf_i; unfolding leaf_i.ndefs.net_broadcast_def` — the abstract/exec broadcasts are both `[]` but
+     the constant is a parameterized locale-def). Also fixed a pre-existing MISSING theory-`end` in this file
+     (never consolidated; batch-build would reject; nothing imports it so latent).
+   - **NEXT (the runnable tail):** upgrade `check_and_make_numeric_network` soundness to the bounds-discharged
+     `numeric_valid_ground_plan_cert` capstone (`…_Numeric_NTA_Reduction_Bounds`) by ALSO eval-checking
+     `nred.is_gbound_inv'` on the (ML-computed) `fluent_lo/hi` — needs an executable `is_gbound_inv'` +
+     the `infer_fluent_bounds` cross-session ML bridge; then `export_code` (DEFER the `proper_interval`/`Abs_literal`
+     String.literal code-gen instances per David if they rabbit-hole). Checker file for the cert-upgrade must sit
+     AFTER `…_Numeric_NTA_Reduction_Bounds` in ROOT.
 
 ### OPTIONAL / completeness (not a WP blocker)
 - **#9 — replace the over-approximating numeric mutex with the CORRECT (FPS `acts_non_intrf`) condition.**
