@@ -1,6 +1,6 @@
 theory Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
   imports
-    Ground_PDDL_Numeric_NTA_Reduction_Impl
+    "PDDL_TP_Reduction.Ground_PDDL_Numeric_NTA_Reduction_Impl"
     Ground_PDDL_Numeric_NTA_Reduction_Bounds
 begin
 
@@ -15,7 +15,7 @@ text \<open>\<^bold>\<open>WP-D (no per-plan bounds).\<close> Compose the execut
 
   The two ingredients live in separate theories (the exec net + its refines in
   @{theory PDDL_TP_Reduction.Ground_PDDL_Numeric_NTA_Reduction_Impl}; the cert locale + capstone in
-  @{theory PDDL_TP_Reduction.Ground_PDDL_Numeric_NTA_Reduction_Bounds}); this theory imports both.\<close>
+  @{theory bound_inference.Ground_PDDL_Numeric_NTA_Reduction_Bounds}); this theory imports both.\<close>
 
 subsection \<open>The cert-level model-checking refinement\<close>
 

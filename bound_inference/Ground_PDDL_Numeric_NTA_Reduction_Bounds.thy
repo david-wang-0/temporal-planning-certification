@@ -1,6 +1,6 @@
 theory Ground_PDDL_Numeric_NTA_Reduction_Bounds
   imports
-    Ground_PDDL_Numeric_NTA_Reduction_Correctness
+    "PDDL_TP_Reduction.Ground_PDDL_Numeric_NTA_Reduction_Correctness"
     "TP_NTA_Reduction.TP_NTA_Reduction_Numeric_Bounds"
 begin
 

@@ -1,6 +1,6 @@
 theory Check_Unsolvability
   imports
-    "PDDL_TP_Reduction.Ground_PDDL_NTA_Reduction_Impl"
+    Ground_PDDL_NTA_Reduction_Impl
     "Show.Shows_Literal"
     Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code
 begin

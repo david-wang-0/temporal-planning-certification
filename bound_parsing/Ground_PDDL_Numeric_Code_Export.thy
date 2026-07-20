@@ -1,5 +1,5 @@
 theory Ground_PDDL_Numeric_Code_Export
-  imports Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
+  imports "bound_inference.Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl"
 begin
 
 section \<open>Deliverable (1): executable @{text is_gbound_inv'} code equation\<close>

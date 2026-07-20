@@ -93,23 +93,27 @@ session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp = TP_NTA_Reduction +
     Ground_PDDL_Numeric_Problem_Defs
     Ground_PDDL_Numeric_NTA_Reduction_Correctness
     Ground_PDDL_Numeric_NTA_Reduction_Impl
-    Ground_PDDL_Numeric_NTA_Reduction_Bounds
-    Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
-    Ground_PDDL_Numeric_Code_Export
-
-session PDDL_TP_Unsolvability in Unsolvability_Export = PDDL_TP_Reduction +
-  description \<open>The executable-export capstone: the unified in-process certifier
-    (check_and_cert_pddl_problem, parameterized by an arbitrary SML certificate-producing function)
-    + its soundness (check_and_cert_pddl_problem_okay) against Munta's verified certificate checker,
-    plus the code compile/export.  Split into its own top-level session so the (heavy) reduction
-    library below heaps once and this capstone iterates fast.\<close>
-  theories
     Check_Unsolvability
     Unsolvability_Code_Compile
   export_files (in "../") [1]
-    "PDDL_TP_Unsolvability.Unsolvability_Code_Compile:ML/Check_Unsolvability.ML"
+    "PDDL_TP_Reduction.Unsolvability_Code_Compile:ML/Check_Unsolvability.ML"
 
-session PDDL_TP_Reduction_Index = PDDL_TP_Reduction +
+session bound_inference in bound_inference = PDDL_TP_Reduction +
+  description \<open>Numeric bound machinery: discharge the num_seq_in_bounds locale assumption from
+    the static is_gbound_inv' certificate (Bounds), and compose it with the executable numeric net
+    refinement into the cert-level executable soundness (Cert_Impl).\<close>
+  theories
+    Ground_PDDL_Numeric_NTA_Reduction_Bounds
+    Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
+
+session bound_parsing in bound_parsing = bound_inference +
+  description \<open>Bound-parsing / projection glue: the neutral INT-ified snap-draft projection
+    (numeric_draft_actions) that feeds the external interval bound-inference, and the executable
+    boundedness re-check (is_gbound_inv_exec / check_gbounds_opt) on the inferred box.\<close>
+  theories
+    Ground_PDDL_Numeric_Code_Export
+
+session PDDL_TP_Reduction_Index = bound_parsing +
   theories Index
   document_files (in "document")
     "root.tex"
