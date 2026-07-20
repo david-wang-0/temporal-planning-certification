@@ -1,6 +1,6 @@
 theory Ground_PDDL_NTA_Reduction_Impl
   imports Ground_PDDL_NTA_Reduction_Correctness
-    "Temporal_Planning.Temporal_PDDL_Checker_Explicit"
+    Temporal_Continuous_Reduction_Free
 begin
 
 

@@ -33,6 +33,28 @@ definition augment_edge_impl where
 "augment_edge_impl g u e =
   (let (src, b, ac, act, upd, rst, tgt) = e in (src, bexp.and b g, ac, act, upd @ u, rst, tgt))"
 
+text \<open>Executable integrality test on @{typ rat}: a rational in lowest terms is an integer iff its
+  denominator is @{term 1}.  @{const quotient_of} yields the coprime-normalised @{term \<open>(num, den)\<close>}
+  pair, so @{term \<open>snd (quotient_of r) = 1\<close>} is a decidable, code-generatable stand-in for the
+  non-constructive @{term \<open>r \<in> \<int>\<close>}.\<close>
+definition is_int_rat :: "rat \<Rightarrow> bool" where
+  "is_int_rat r \<longleftrightarrow> snd (quotient_of r) = 1"
+
+lemma is_int_rat_iff_Ints: "is_int_rat r \<longleftrightarrow> r \<in> \<int>"
+proof
+  assume "is_int_rat r"
+  then have sd: "snd (quotient_of r) = 1" unfolding is_int_rat_def .
+  obtain a b where ab: "quotient_of r = (a, b)" by (cases "quotient_of r")
+  have "r = of_int a / of_int b" using quotient_of_div[OF ab] by simp
+  moreover have "b = 1" using ab sd by simp
+  ultimately have "r = of_int a" by simp
+  then show "r \<in> \<int>" by (simp add: Ints_of_int)
+next
+  assume "r \<in> \<int>"
+  then obtain n where "r = rat_of_int n" by (auto elim: Ints_cases)
+  thus "is_int_rat r" unfolding is_int_rat_def by (simp add: quotient_of_rat_of_int)
+qed
+
 context numeric_ground_ast_problem_defs
 begin
 
@@ -96,6 +118,39 @@ definition "num_init_vars' lo hi = map (map_prod id fst) (num_net_bounds' lo hi)
 definition "num_reach_formula' = reach_formula'"
 
 end
+
+text \<open>Code equations for the numeric net constructors (numeric twin of the classical
+  @{thm [source] ground_ast_problem_code}).  Isabelle does not auto-generate code equations for
+  locale constants, so we wire the numeric-net constructor @{text \<open>_def\<close>}s (and the locale-local
+  fluent naming @{const numeric_ground_ast_problem_defs.fluent_to_var_spec}) as @{text \<open>[code]\<close>}.
+  All the propositional edge helpers they augment (@{text start_edge'}/@{text net_bounds'}/... ),
+  the numeric ground-data accessors (@{text n_pre}/@{text upds}/... ), and the pure augmentation
+  @{const augment_edge_impl} are already @{text \<open>[code]\<close>} (classical @{text ground_ast_problem_code}
+  bundle / numeric @{text numeric_ground_data_code} bundle / top-level definition).\<close>
+
+lemmas numeric_ground_net_code[code] =
+  numeric_ground_ast_problem_defs.fluent_to_var_spec_def
+  numeric_ground_ast_problem_defs.num_pre_guard'_def
+  numeric_ground_ast_problem_defs.num_inv_guard'_def
+  numeric_ground_ast_problem_defs.num_goal_guard'_def
+  numeric_ground_ast_problem_defs.num_upd'_def
+  numeric_ground_ast_problem_defs.num_init_upd'_def
+  numeric_ground_ast_problem_defs.num_fluent_vars'_def
+  numeric_ground_ast_problem_defs.num_start_edge'_def
+  numeric_ground_ast_problem_defs.num_end_edge'_def
+  numeric_ground_ast_problem_defs.num_edge_2'_def
+  numeric_ground_ast_problem_defs.num_edge_3'_def
+  numeric_ground_ast_problem_defs.num_action_to_automaton'_def
+  numeric_ground_ast_problem_defs.num_main_auto_init_edge'_def
+  numeric_ground_ast_problem_defs.num_main_auto_goal_edge'_def
+  numeric_ground_ast_problem_defs.num_main_auto'_def
+  numeric_ground_ast_problem_defs.num_net_automata'_def
+  numeric_ground_ast_problem_defs.num_net_bounds'_def
+  numeric_ground_ast_problem_defs.num_init_locs'_def
+  numeric_ground_ast_problem_defs.num_init_vars'_def
+  numeric_ground_ast_problem_defs.num_reach_formula'_def
+
+declare numeric_ground_net_code[code]
 
 subsection \<open>Structural (valuation-free) sufficient conditions for the encoding-faithfulness universals\<close>
 
@@ -186,7 +241,7 @@ definition "check_numeric_ground_problem fluent_lo fluent_hi \<equiv> do {
     ''End-snap numeric precondition is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
   check_all_list (\<lambda>a. list_all (comp_struct_ok nfluents) (n_inv a)) actions_spec
     ''Numeric over-all invariant is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
-  check_all_list (\<lambda>f. num_init f \<in> \<int>) nfluents
+  check_all_list (\<lambda>f. is_int_rat (num_init f)) nfluents
     ''Numeric fluent has a non-integer initial value'' (shows o func.name);
   check_all_list (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_start_spec a))) actions_spec
     ''Start-snap numeric update writes an undeclared fluent'' (shows o ast_temporal_action_schema_name);
@@ -217,7 +272,8 @@ lemma check_numeric_ground_problem_return_iff:
      \<and> (\<forall>a\<in>set actions_spec. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_end_spec a)))
      \<and> list_all (comp_struct_ok nfluents) num_goal"
   unfolding check_numeric_ground_problem_def
-  by (simp add: return_iff isOK_check_ground_problem_core check_ground_problem_core_return_iff)
+  by (simp add: return_iff isOK_check_ground_problem_core check_ground_problem_core_return_iff
+                is_int_rat_iff_Ints)
 
 end
 

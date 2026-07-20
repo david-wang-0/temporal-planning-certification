@@ -1,9 +1,14 @@
 theory Check_Unsolvability
-  imports 
-    Ground_PDDL_NTA_Reduction_Impl 
+  imports
+    "PDDL_TP_Reduction.Ground_PDDL_NTA_Reduction_Impl"
     "Show.Shows_Literal"
     Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code
 begin
+
+text \<open>Re-suppress the FPS \<open>Syntax_Utils.app\<close> \<open>|>\<close> notation: importing the vendored Analysis-free
+  wf-checker (through \<open>Ground_PDDL_NTA_Reduction_Impl\<close>) re-introduces it alongside Munta's
+  \<open>Error_List_Monad.app\<close> \<open>|>\<close>, making \<open>|>\<close> ambiguous here -- same fix as \<open>Ground_PDDL_Plan_Defs\<close>.\<close>
+no_notation Syntax_Utils.app (infixl "|>" 59)
 
 lemma set_foldl_append: "(set (foldl (@) xs ys)) = \<Union>(set ` (insert xs (set ys)))"
   apply (induction ys arbitrary: xs)
@@ -816,10 +821,6 @@ find_theorems name: "Error_List*case"
 
 thm return_cons_rule
 
-find_theorems "?P \<Longrightarrow>\<^sub>A ?R ?x"
-
-thm return_cons_rule
-
 (* This made things really hard *)
 lemma Error_List_Monad_result_case_rule:
   assumes "\<And>x. result = Result x \<Longrightarrow> <P> Heap_Monad.return x <R>"
@@ -992,41 +993,7 @@ next
     by auto
 qed 
 
-instantiation predicate::"show"
-begin
-definition "shows_prec p (x::predicate) \<equiv> \<lambda>y. show ''Pred'' @ show (predicate.name x) @ y"
-definition "shows_list (x::predicate list) = showsp_list shows_prec 0 x"
-instance
-  by standard (simp_all add: shows_prec_predicate_def shows_list_predicate_def show_law_simps)
-end
-
-instantiation func::"show"
-begin
-definition "shows_prec p (x::func) \<equiv> \<lambda>y. show ''Func'' @ show (func.name x) @ y"
-definition "shows_list (x::func list) = showsp_list shows_prec 0 x"
-instance
-  by standard (simp_all add: shows_prec_func_def shows_list_func_def show_law_simps)
-end
-
-instantiation atom::("show") "show"
-begin
-
-fun showf_atom where
-"showf_atom (predAtm n as) y = show ''('' @ show n @ show as @ show '')'' @ y" |
-"showf_atom (eqAtm a b) y = show ''('' @ show a @ show ''='' @ show b @ show '')'' @ y"
-
-definition "shows_prec p (x::('a::show) atom) \<equiv> \<lambda>y. showf_atom x y"
-definition "shows_list (x::('a::show) atom list) = showsp_list shows_prec 0 x"
-instance
-  apply standard 
-  subgoal for _ x apply (cases x) by (simp add: shows_prec_atom_def shows_list_atom_def show_law_simps)+
-  unfolding shows_prec_atom_def shows_list_atom_def
-  apply (rule showsp_list_append)
-  apply (intro ballI)
-  subgoal for _ _ _ _ _ _ x  
-    apply (cases x) by (simp add: shows_prec_atom_def shows_list_atom_def show_law_simps)+
-  done
-end
+(* [vendored-checker] show instances for predicate/func/atom are now provided by the vendored PDDL_Checker_Common (derive "show" ...); the duplicate manual instantiations here were removed to avoid conflicting instances. *)
 
 
 
@@ -1229,10 +1196,76 @@ code_printing
   constant list_of_set' \<rightharpoonup> (SML) "listofsetreplacethiswhilecompiling"
 
 text \<open>Uncomment the next line to avoid error\<close>
-declare certificate_checker3_def[code del] 
+declare certificate_checker3_def[code del]
+
+text \<open>Delete the \<open>Collections.Diff_Array\<close> \<open>STArray\<close>/\<open>FArray\<close> code modules, which are generated but
+  unused and otherwise cause SML compilation errors (same as FPS' checker-export setup).\<close>
+code_printing code_module "STArray" \<rightharpoonup> (SML) \<open>\<close>
+code_printing code_module "FArray" \<rightharpoonup> (SML) \<open>\<close>
+
+text \<open>Containers-framework instances for the FPS AST types, needed by the executable wf-checker's
+  Mapping/set code (e.g. \<open>ast_cont_domain.mp_constT = Mapping.of_alist\<close> over \<open>object\<close> requires
+  \<open>object :: ccompare\<close>).  Mirrors the derive block of the Analysis-tainted
+  \<open>Temporal_PDDL_Checker_Explicit_Export\<close> that the re-based tower no longer imports, dropping
+  \<open>interval_or_point\<close> (ODE-checker only, not in this tower).\<close>
+derive (linorder) compare rat
+derive (eq) ceq predicate atom formula primitive_numeric_expression
+derive linorder predicate func object "object primitive_numeric_expression" "object numeric_expression" atom "object atom formula"
+derive ccompare predicate atom formula object primitive_numeric_expression
+derive (eq) ceq variable "term"
+derive linorder variable "term"
+derive ccompare variable "term"
+derive (eq) ceq func object numeric_expression
+text \<open>Use DList (ceq-based) set impls for the AST types: the reduction nests predicate-sets
+  (\<open>'a set set\<close>), and nested RBT sets would additionally require \<open>cproper_interval\<close>/\<open>card_UNIV\<close>;
+  DList nesting only needs \<open>ceq\<close> (Containers Userguide S3.5).\<close>
+derive (dlist) set_impl predicate func variable formula atom object primitive_numeric_expression numeric_expression "term"
+derive (rbt) mapping_impl object primitive_numeric_expression
+derive (no) cenum formula primitive_numeric_expression atom object numeric_expression
+
+text \<open>Containers instances for the temporal-AST datatype tree (the network builder puts action
+  schemas etc. into sets), bottom-up.\<close>
+derive (eq) ceq "type" duration_op temporal_annotation numeric_effect_op continuous_effect_op
+derive linorder "type" duration_op temporal_annotation numeric_effect_op continuous_effect_op
+derive ccompare "type" duration_op temporal_annotation numeric_effect_op continuous_effect_op
+derive (eq) ceq numeric_effect ast_effect ast_continuous_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
+derive linorder numeric_effect ast_effect ast_continuous_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
+derive ccompare numeric_effect ast_effect ast_continuous_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
+derive (dlist) set_impl "type" duration_op temporal_annotation numeric_effect_op continuous_effect_op numeric_effect ast_effect ast_continuous_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
+
+text \<open>card_UNIV / cproper_interval for the AST types used in NESTED sets (the reduction's
+  mutex_snap_action' builds \<open>predicate set set\<close>): required inherently by nested Containers sets
+  (Userguide S3.6-3.7); not \<open>derive\<close>-able, so instantiated manually (all AST types are infinite,
+  injecting from the infinite \<^type>\<open>String.literal\<close> name).\<close>
+lemma infinite_UNIV_predicate: "infinite (UNIV :: predicate set)"
+proof
+  assume "finite (UNIV :: predicate set)"
+  hence "finite (Pred ` (UNIV :: name set))" by (blast intro: finite_subset)
+  moreover have "inj_on Pred (UNIV :: name set)" by (simp add: inj_on_def)
+  ultimately have "finite (UNIV :: name set)" by (rule finite_imageD)
+  thus False using infinite_literal by simp
+qed
+
+instantiation predicate :: card_UNIV begin
+definition "finite_UNIV = Phantom(predicate) False"
+definition "card_UNIV = Phantom(predicate) 0"
+instance by intro_classes (simp_all add: finite_UNIV_predicate_def card_UNIV_predicate_def infinite_UNIV_predicate)
+end
+
+instantiation predicate :: cproper_interval begin
+definition cproper_interval_predicate :: "predicate proper_interval" where "cproper_interval_predicate _ _ = undefined"
+instance by intro_classes (simp add: infinite_UNIV_predicate)
+end
+
+text \<open>Re-add the wf-checker [code] equations that were in the trimmed-away \<open>check_code_common\<close>
+  bundle of the vendored PDDL_Checker_Common (they are on the check_wf_cont_problem path, not
+  plan-validation).\<close>
+declare ast_cont_problem.mp_objT_def[code]
+declare ast_cont_problem.wf_fmla_atom2'_def[code]
+declare ast_cont_problem.wf_func_assign'.simps[code]
 
 (* Ask what is going on with Typerep and Integer *)
-export_code              
+export_code
   check_and_cert_pddl_problem_no_return check_and_make_network_opt
   parse_convert_run (* For model checking *)
   rbt_to_list
@@ -1248,10 +1281,11 @@ export_code
   act.In act.Out act.Sil
   Inl Inr Rat.Fract Rat.of_int rat_of_digits_pair
   predAtm eqAtm predicate Pred Func Either Var Obj PredDecl FuncDecl BigAnd BigOr
-  formula.Not formula.Bot Effect No_Const Time_Const Func_Const duration_op.LEQ duration_op.EQ duration_op.GEQ
-  Simple_Action_Schema Durative_Action_Schema At_Start At_End Over_All
-  map_atom Domain Problem Simple_Plan_Action Durative_Plan_Action
+  formula.Not formula.Bot Effect duration_op.LEQ duration_op.EQ duration_op.GEQ
+  At_Start At_End Over_All
+  map_atom Domain Problem
   term.CONST term.VAR (* I want to export the entire type, but I can only export the constructor because term is already an isabelle keyword. *)
+  PNE ConstantExpr DurationExpr FunctionExpr DurationConstraint ActionHead SimpleActionSchema DurativeActionSchema SimpleActionBody DurativeActionBody
   String.explode String.implode 
   in Eval module_name Converter file_prefix Check_Unsolvability
 (* To do:

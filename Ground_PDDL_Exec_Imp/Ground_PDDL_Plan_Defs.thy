@@ -1,7 +1,7 @@
 theory Ground_PDDL_Plan_Defs
   imports
     Ground_PDDL_Problem_Defs
-    "Temporal_Planning.Temporal_State_Sequence_Semantics"
+    "Temporal_Planning_Discrete.Temporal_State_Sequence_Semantics"
 begin
 
 text \<open>The new \<open>Temporal_State_Sequence_Semantics\<close> import re-introduces the duplicate

@@ -1,14 +1,17 @@
-session Temporal_Munta_Base in Temporal_Munta_Base = Continuous_Planning +
+session Temporal_Munta_Base in Temporal_Munta_Base = Temporal_Planning_Discrete +
   description \<open>Stable, expensive base layer: the Munta model checker + verified certificate
-    checker and List-Index, re-elaborated ONCE on top of the Formal-PDDL-Semantics
-    Continuous_Planning heap (which carries the heavy HOL-Analysis / ODE / algebraic-numbers tower,
-    inherited from its cached image). This heap does NOT depend on the temporal PDDL semantics
-    session (Temporal_Planning), so editing the temporal / state-sequence theories does not
-    invalidate it -- only the thin Temporal_Planning_Base layer above is rebuilt. Contains no
-    project-local theories.\<close>
+    checker, List-Index and Containers, re-elaborated ONCE on top of the Analysis-FREE
+    Formal-PDDL-Semantics Temporal_Planning_Discrete heap (the temporal state-sequence semantics and
+    well-formedness, with NO HOL-Analysis / ODE / Product_Order tower). Dropping Product_Order leaves
+    Munta's Product_Lexorder as the sole prod::ord instance, so the certificate-checker code
+    (Simple_Network_Language_Certificate_Code) co-imports with the net builder with no arity clash --
+    this is what makes the unified export (a) possible. The temporal discrete semantics sit BELOW
+    this heap as a frozen external FPS image, so editing project theories above does not rebuild
+    Munta. Contains no project-local theories.\<close>
   options [timeout = 7200]
   sessions
     "List-Index"
+    "Containers"
     "Munta_Certificate_Checker"
   theories [document = false]
     "List-Index.List_Index"
@@ -22,28 +25,19 @@ session Temporal_Munta_Base in Temporal_Munta_Base = Continuous_Planning +
     "Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code"
 
 session Temporal_Planning_Base in Temporal_Planning_Base = Temporal_Munta_Base +
-  description \<open>Thin layer loading the Formal-PDDL-Semantics temporal PDDL semantics (session
-    Temporal_Planning) plus the grounder's temporal normalization locales (session
+  description \<open>Thin layer loading the grounder's temporal normalization locales (session
     Grounding_Temporal_Common: grounded_temporal_problem / positive_temporal_problem) on top of the
-    stable Munta heap. Because Munta lives BELOW this layer, an edit to the temporal / state-sequence
-    semantics only re-elaborates these light FPS / grounder theories (~minutes) instead of the whole
-    Munta tower. The whole development is built on top of this heap in jEdit. Contains no
-    project-local theories (FPS + grounder externals only).\<close>
+    stable Analysis-free Munta heap. The FPS temporal discrete semantics / well-formedness now live in
+    Temporal_Planning_Discrete BELOW the Munta heap, so they are already in the base image and are not
+    reloaded here; the Analysis-tainted FPS checkers (Temporal_PDDL_Checker_*, the continuous
+    reduction) are dropped entirely -- the net builder uses an in-repo Analysis-free wf-checker. The
+    whole development is built on top of this heap in jEdit. Contains no project-local theories (FPS +
+    grounder externals only).\<close>
   options [timeout = 7200]
   sessions
     "Utils"
-    "Temporal_Planning"
     "Grounding_Temporal_Common"
   theories [document = false]
-    "Temporal_Planning.Temporal_Abstract_Syntax"
-    "Temporal_Planning.Temporal_Utils"
-    "Temporal_Planning.Temporal_Well_Formedness"
-    "Temporal_Planning.Temporal_Happening_Semantics"
-    "Temporal_Planning.Temporal_Instantiations"
-    "Temporal_Planning.Temporal_Continuous_Reduction"
-    "Temporal_Planning.Temporal_State_Sequence_Semantics"
-    "Temporal_Planning.Temporal_PDDL_Checker_Numeric"
-    "Temporal_Planning.Temporal_PDDL_Checker_Explicit"
     "Grounding_Temporal_Common.Temporal_PDDL_Normalization"
 
 session Temporal_Planning_Common in Temporal_Planning_Common = Temporal_Planning_Base +
@@ -82,9 +76,13 @@ session TP_NTA_Reduction in TA_Network = Temporal_Planning_Semantics +
 
 session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp = TP_NTA_Reduction +
   sessions
-    "Temporal_Planning"
     "Grounding_Temporal_Common"
   theories
+    (* in-repo Analysis-free wf-checker: vendored FPS checker slice, re-pointed off the
+       Analysis-tainted Continuous_Planning onto Analysis_Free_Base (keeps the tower Product_Order-free) *)
+    Error_Monad_Add
+    PDDL_Checker_Common
+    Temporal_Continuous_Reduction_Free
     Ground_PDDL_Problem_Defs
     Ground_PDDL_Problem_Reduction
     Ground_PDDL_Plan_Defs
@@ -96,10 +94,20 @@ session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp = TP_NTA_Reduction +
     Ground_PDDL_Numeric_NTA_Reduction_Correctness
     Ground_PDDL_Numeric_NTA_Reduction_Impl
     Ground_PDDL_Numeric_NTA_Reduction_Bounds
+    Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
+    Ground_PDDL_Numeric_Code_Export
+
+session PDDL_TP_Unsolvability in Unsolvability_Export = PDDL_TP_Reduction +
+  description \<open>The executable-export capstone: the unified in-process certifier
+    (check_and_cert_pddl_problem, parameterized by an arbitrary SML certificate-producing function)
+    + its soundness (check_and_cert_pddl_problem_okay) against Munta's verified certificate checker,
+    plus the code compile/export.  Split into its own top-level session so the (heavy) reduction
+    library below heaps once and this capstone iterates fast.\<close>
+  theories
     Check_Unsolvability
     Unsolvability_Code_Compile
   export_files (in "../") [1]
-    "PDDL_TP_Reduction.Unsolvability_Code_Compile:ML/Check_Unsolvability.ML"
+    "PDDL_TP_Unsolvability.Unsolvability_Code_Compile:ML/Check_Unsolvability.ML"
 
 session PDDL_TP_Reduction_Index = PDDL_TP_Reduction +
   theories Index
@@ -119,3 +127,6 @@ session Numeric_Bound_Inference in Numeric_Bound_Inference = "HOL-IMP" +
     Numeric_Bound_Inference_Threshold
     Numeric_Bound_Inference_Guards
     Numeric_Bound_Inference_Extract
+    Numeric_Bound_Inference_Code_Export
+  export_files (in "../") [1]
+    "Numeric_Bound_Inference.Numeric_Bound_Inference_Code_Export:code/Numeric_Bound_Inference.ML"

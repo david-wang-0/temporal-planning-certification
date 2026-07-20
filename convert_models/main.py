@@ -1,5 +1,5 @@
-from convert import convert_from_file
-from convert_certificate import convert_from_renaming_file
+from .convert import convert_from_file
+from .convert_certificate import convert_from_renaming_file
 import subprocess
 import sys
 import json
@@ -29,12 +29,23 @@ if __name__ == "__main__":
     except Exception as e:
         print("Error while converting certificate to model!", file=sys.stderr)
         raise e
+    import os
     temp_dot_file = "temp.dot"
     mode = "zg:elapsed:extraMg"
     target = "_NO_REACH_"
-    tchecker = ["tchecker", "covreach", "-m", mode, "-S",
+    # binary overridable via env (it is often installed as `tck-reach`, or off PATH)
+    tchecker_bin = os.environ.get("TCHECKER_BIN", "tchecker")
+    tchecker = [tchecker_bin, "covreach", "-m", mode, "-S",
                 "-l", target, "-f", "dot", "-o", temp_dot_file]
-    subprocess.run(tchecker, input=certificate, encoding='ascii')
+    try:
+        cp = subprocess.run(tchecker, input=certificate, encoding='ascii')
+    except FileNotFoundError as e:
+        print("tchecker binary not found: %s (set TCHECKER_BIN)" % tchecker_bin,
+              file=sys.stderr)
+        sys.exit(2)
+    if cp.returncode != 0:
+        print("tchecker exited with status %d" % cp.returncode, file=sys.stderr)
+        sys.exit(cp.returncode)
     with open(temp_dot_file, 'r') as certificate_file:
         certificate = certificate_file.readlines()
         binary = convert_from_renaming_file(

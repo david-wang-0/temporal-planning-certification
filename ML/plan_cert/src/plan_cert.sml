@@ -28,17 +28,8 @@ datatype extrapolation =
          Local |
          LU
 
-fun mode_from_str s =
-    let val n = Int.fromString s |> the
-    in 
-        if n > 4 then
-            raise Fail "Implementation needs to be in the range 0 to 4"
-        else if n = 0 then Converter.Debug
-        else if n = 1 then Converter.Impl1
-        else if n = 2 then Converter.Impl2
-        else if n = 3 then Converter.Impl3
-        else raise Fail "Büchi model checking not supported"
-    end
+(* Munta model-checking mode retired with the in-process certifier; kept as a plain string. *)
+fun mode_from_str s = s
 fun extra_from_str "lu" = SOME LU |
     extra_from_str "local" = SOME Local |
     extra_from_str _ = NONE
@@ -106,11 +97,7 @@ val log_certification = Log.log "Certification Level"
 val log_num_threads = Log.log "Number of Threads"
 fun log_extra Local = Log.log "Extrapolation" "local ceilings"
   | log_extra LU    = Log.log "Extrapolation" "local lu-ceilings"
-fun log_mode Converter.Debug = Log.log "Mode" "Debug"
-  | log_mode Converter.Impl1 = Log.log "Mode" "Implementation 1"
-  | log_mode Converter.Impl2 = Log.log "Mode" "Implementation 2"
-  | log_mode Converter.Impl3 = Log.log "Mode" "Implementation 3"
-  | log_mode _ = Log.log "Mode" "Unknown"
+fun log_mode _ = ()  (* mode retired with the in-process certifier *)
 fun log_show_cert true = Log.log "Show Certificate" "true"
   | log_show_cert false = Log.log "Show Certificate" "false"
 
@@ -159,129 +146,17 @@ fun log_config1 (extra, domain, problem) =
 fun opt_from_either (Either.Left _) = NONE |
     opt_from_either (Either.Right x) = SOME x
 
-val opt_from_nested_either = 
-    opt_from_either
-    #> Option.map opt_from_either
-    #> Option.join
+(* opt_from_nested_either removed (only used by the retired in-process cert) *)
 
-fun check_and_cert_network extra renaming cert compression certification num_threads model =
-    let 
-        val _ = Par_List.set_num_threads (Int.fromString num_threads |> the)
-        val res = (case extra of
-            Local => MLuntaAdapter.check_and_cert_return |
-            LU => MLuntaAdapter.check_and_cert_return_lu)
-            renaming
-            cert
-            model
-            (Int.fromString compression |> the)
-            (Int.fromString certification |> the)
-    in res
-    end
+(* In-process MLunta certification retired -- superseded by the external tck-reach + muntac flow
+   (certify_tchecker / TCheckerCertify.certify_via_tchecker).  The old path used Converter symbols
+   (check_and_cert_pddl_problem_no_return, Reachable_Set, DBMEntry, Impl modes, CertificateConversion)
+   that need the (arity-conflicting) certificate stack, not part of the current export. *)
+fun check_and_cert_problem _ _ _ _ _ _ _ _ _ _ _ =
+    exit_fail "in-process certification retired; use  -certify tchecker  (external tck-reach + muntac)"
 
-structure CertificateConversion = CertificateConversion(MLuntaAdapter.Setup)
-
-
-fun check_and_cert_problem domain problem model renaming cert extra compression certification num_threads mode show_cert = 
-    let
-        val _ = log_config (domain, problem, model, renaming, cert, extra, compression, certification, num_threads, mode, show_cert)
-        val parsed_prob = PddlParser.get_prob domain problem
-        
-        val certifier = 
-            NetworkConversion.convert_network show_cert model
-            #> (check_and_cert_network extra renaming cert compression certification num_threads) 
-            #> opt_from_nested_either
-            #> (Option.map CertificateConversion.convert_certificate)
-            
-        val show_cert = (case mode of Converter.Debug => true | _ => show_cert)
-        val num_threads = num_threads |> Int.fromString |> the |> Converter.nat_of_integer
-        val res = Converter.check_and_cert_pddl_problem_no_return parsed_prob mode num_threads certifier show_cert ()
-    in res
-    end
-
-fun show_certificate (renaming, state_space:CertificateConversion.isa_state_space) = 
-    let 
-        val (renum_vars,
-            (renum_clocks,
-              (renum_states,
-                (inv_renum_vars,
-                  (inv_renum_clocks, inv_renum_states))))) = renaming
-        val state_space = case state_space of Converter.Reachable_Set s => s
-        (* val inv_renum_states = (fn i => fn j => 
-            let val res = inv_renum_states (i |> Converter.nat_of_integer) (j |> Converter.integer_of_int |> Converter.nat_of_integer) |> Converter.integer_of_nat |> Int.toString
-            in res end) *)
-        val inv_renum_clocks = Converter.nat_of_integer #> inv_renum_clocks
-        val inv_renum_vars = Converter.nat_of_integer #> inv_renum_vars
-
-        val show_states_and_vars = (fn ((states, vars), i) => 
-            "Entry: " ^ Int.toString i ^ "" ^
-            "\tStates: " ^
-            (states
-            (* |> ListUtils.zip_with_index
-            |> map (fn (j, i) => inv_renum_states i j) *)
-            |> map (Converter.integer_of_int #> Int.toString)
-            |> ListUtils.intersperse ", " 
-            |> foldr (op ^) "") ^
-            "\tVars: " ^
-            (vars
-            |> ListUtils.zip_with_index
-            |> map (fn (u, i) => inv_renum_vars i ^ "=" ^ (u |> Converter.integer_of_int |> Int.toString))
-            |> ListUtils.intersperse ", " |> foldr (op ^) "") 
-        )
-        
-        val show_dbms = (fn dbm =>
-            let 
-                val indexed_dbm = ListUtils.zip_with_index (map ListUtils.zip_with_index dbm)
-                val show_indexed_entry = (fn i => fn (e, j) => (case e of
-                    Converter.INF => "" |
-                    Converter.Le n => (inv_renum_clocks i) ^ " - " ^ (inv_renum_clocks j) ^ " <= " ^ (n |> Converter.integer_of_int |> Int.toString) |
-                    Converter.Lt n => (inv_renum_clocks i) ^ " - " ^ (inv_renum_clocks j) ^ " < " ^ (n |> Converter.integer_of_int |> Int.toString))
-                )
-                val show_indexed_row = (fn (xs, i) =>
-                    map (show_indexed_entry i) xs
-                    |> List.filter (fn x => (x <> ""))
-                    |> ListUtils.intersperse ", "
-                    |> foldr (op ^) ""
-                )
-                val show_rows = (fn dbm =>
-                    "[" ^
-                    (dbm 
-                        |> map show_indexed_row
-                        |> ListUtils.intersperse "],\n ["
-                        |> foldr (op ^) "")
-                    ^ "]"
-                )
-            in 
-                "DBMs: \n" ^ show_rows indexed_dbm
-            end
-        )
-    in
-        state_space 
-        |> ListUtils.zip_with_index
-        |> List.map (fn ((sv, d), i) => show_states_and_vars (sv, i) ^ "\n" ^ show_dbms d)
-        |> ListUtils.intersperse "\n" 
-        |> foldr (op ^) "\n"
-        |> print
-    end
-
-fun parse_check_and_cert_network model renaming cert extra compression certification num_threads =
-    (
-        log_model_checking_config  (model, renaming, cert, extra, compression, certification, num_threads);
-        Par_List.set_num_threads (Int.fromString num_threads |> the);
-        (case extra of
-            Local => MLuntaAdapter.parse_check_and_cert_return |
-            LU => MLuntaAdapter.parse_check_and_cert_return_lu
-            )
-            renaming
-            cert
-            (read_json model)
-            (Int.fromString compression |> the)
-            (Int.fromString certification |> the)
-        |> opt_from_either
-        |> Option.map (Either.either (fn x => x) (fn x => x))
-        |> Option.map (CertificateConversion.convert_certificate)
-        |> Option.map (show_certificate);
-        ()
-    )
+fun parse_check_and_cert_network _ _ _ _ _ _ _ =
+    exit_fail "in-process certification retired; use  -certify tchecker  (external tck-reach + muntac)"
 
 fun make_network domain problem model =
     let
@@ -300,10 +175,67 @@ fun make_renaming model renaming =
         ()
     )
 
+fun getEnvDefault k d = case OS.Process.getEnv k of SOME x => x | NONE => d
+
+(* Part B: external tchecker/muntac certification of the PROPOSITIONAL net.  Writes
+   muntax + renaming, then runs convert_models/main.py (-> tchecker -> munta cert) and
+   muntac, printing the verdict.  Replaces the non-terminating in-process MLunta path.
+   Tool locations come from env with repo-relative defaults: TCHECKER_PKG_ROOT (".",
+   the directory containing the convert_models package), TCK_REACH_BIN (./tck-reach),
+   MUNTAC_BIN (./muntac). *)
+fun certify_tchecker domain problem model renaming cert =
+    let
+        val () = make_network domain problem model
+        (* make identifiers tck-reach-safe (hyphen -> underscore) before the renaming is
+           derived, so muntax + renaming + tck stay name-consistent *)
+        val () = TCheckerCertify.sanitize_file model
+        val () = make_renaming model renaming
+        val pkg_root      = getEnvDefault "TCHECKER_PKG_ROOT" "."
+        val tck_reach_bin = getEnvDefault "TCK_REACH_BIN" "./tck-reach"
+        val muntac_bin    = getEnvDefault "MUNTAC_BIN" "./muntac"
+        val v = TCheckerCertify.certify_via_tchecker
+                  {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin, muntac_bin = muntac_bin,
+                   muntax = model, renaming = renaming, cert = cert, buechi = false}
+    in
+        println ("Verdict: " ^ TCheckerCertify.verdict_to_string v)
+    end
+
+(* Numeric bound-inference self-test: exercises the two extra Isabelle code exports
+   (NumericBoundInference compute side + NumericProjection reduction side) linked into
+   this binary alongside Converter, on hand-built draft data -- the guarded counter
+   `counter := counter+1` guarded by `counter <= 0`, init 0 (box [0,1]).  Proves the
+   three exports co-link and run; the full -numeric mode additionally needs a
+   Converter->NumericProjection AST coercion and the numeric-net code-gen. *)
+fun numeric_selftest () =
+    let
+        fun npi n = NumericProjection.Int_of_integer (IntInf.fromInt n)
+        val guarded : NumericBoundGlue.draft =
+          (["counter"],
+           ([([NumericProjection.GLe_i ("counter", npi 0)],
+              [("counter",
+                NumericProjection.EAdd (NumericProjection.EV "counter",
+                                        NumericProjection.EC (npi 1)))])],
+            [("counter", npi 0)]))
+        fun showBox NONE = "<NONE: unbounded / out of scope>"
+          | showBox (SOME box) =
+              String.concatWith ", "
+                (List.map (fn (f, (lo, hi)) =>
+                   f ^ " in [" ^ IntInf.toString (NumericProjection.integer_of_int lo)
+                   ^ "," ^ IntInf.toString (NumericProjection.integer_of_int hi) ^ "]") box)
+    in
+        println ("numeric bound-inference self-test: "
+                 ^ showBox (NumericBoundGlue.infer_box guarded))
+    end
+
 fun check args =
     case args of
+        (_, _, _, _, _, _, _, SOME "numeric-selftest", _, _, _) =>
+            numeric_selftest () |
+        (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, _, _,
+         SOME "tchecker", _, _, _) =>
+            certify_tchecker domain problem model renaming cert |
         (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, SOME extra, compression,
-         certification, num_threads, mode, show_cert) => 
+         certification, num_threads, mode, show_cert) =>
             check_and_cert_problem
                 domain
                 problem

@@ -1,7 +1,7 @@
 theory Ground_PDDL_Problem_Defs
   imports "TP_NTA_Reduction.TP_NTA_Reduction_Model_Checking"
-      "Temporal_Planning.Temporal_Instantiations"
-      "Temporal_Planning.Temporal_Happening_Semantics"
+      "Temporal_Planning_Discrete.Temporal_Instantiations"
+      "Temporal_Planning_Discrete.Temporal_Happening_Semantics"
       "Grounding_Temporal_Common.Temporal_PDDL_Normalization"
 begin
 
@@ -46,9 +46,9 @@ text \<open>Munta's @{const Assertions.models} (separation logic) also binds the
   uses.\<close>
 no_notation Assertions.models (infix "\<Turnstile>" 50)
 
-subsection \<open>Open-world world model (FPS @{const Worlds.valuation} / \<open>\<Turnstile>\<^sub>m\<close>)\<close>
+subsection \<open>Open-world world model (FPS @{const World_Model_Discrete.valuation} / \<open>\<Turnstile>\<^sub>m\<close>)\<close>
 
-text \<open>The re-point uses Formal-PDDL-Semantics' open-world, partial @{const Worlds.valuation}
+text \<open>The re-point uses Formal-PDDL-Semantics' open-world, partial @{const World_Model_Discrete.valuation}
   (@{typ \<open>world_model \<Rightarrow> object atom \<rightharpoonup> bool\<close>}) and @{const map_formula_semantics} (\<open>\<Turnstile>\<^sub>m\<close>).
   For a positive predicate conjunction this coincides with subset membership of its literals in the
   logical world model (\<open>pos_conj_models_iff_superset\<close> below); no closed-world layer is introduced.

@@ -21,6 +21,8 @@ fun test_bit x n =
 end; (* struct Uint *)
 
 
+
+
 structure Timing : sig
   val start_timer: unit -> unit
   val save_time: string -> unit
@@ -84,185 +86,6 @@ end = struct
 end
 
 
-
-
-
-structure STArray = struct
-
-datatype 'a Cell = Invalid | Value of 'a array;
-
-exception AccessedOldVersion;
-
-type 'a array = 'a Cell Unsynchronized.ref;
-
-fun fromList l = Unsynchronized.ref (Value (Array.fromList l));
-fun array (size, v) = Unsynchronized.ref (Value (Array.array (size,v)));
-fun tabulate (size, f) = Unsynchronized.ref (Value (Array.tabulate(size, f)));
-fun sub (Unsynchronized.ref Invalid, idx) = raise AccessedOldVersion |
-    sub (Unsynchronized.ref (Value a), idx) = Array.sub (a,idx);
-fun update (aref,idx,v) =
-  case aref of
-    (Unsynchronized.ref Invalid) => raise AccessedOldVersion |
-    (Unsynchronized.ref (Value a)) => (
-      aref := Invalid;
-      Array.update (a,idx,v);
-      Unsynchronized.ref (Value a)
-    );
-
-fun length (Unsynchronized.ref Invalid) = raise AccessedOldVersion |
-    length (Unsynchronized.ref (Value a)) = Array.length a
-
-fun grow (aref, i, x) = case aref of
-  (Unsynchronized.ref Invalid) => raise AccessedOldVersion |
-  (Unsynchronized.ref (Value a)) => (
-    let val len=Array.length a;
-        val na = Array.array (len+i,x)
-    in
-      aref := Invalid;
-      Array.copy {src=a, dst=na, di=0};
-      Unsynchronized.ref (Value na)
-    end
-    );
-
-fun shrink (aref, sz) = case aref of
-  (Unsynchronized.ref Invalid) => raise AccessedOldVersion |
-  (Unsynchronized.ref (Value a)) => (
-    if sz > Array.length a then
-      raise Size
-    else (
-      aref:=Invalid;
-      Unsynchronized.ref (Value (Array.tabulate (sz,fn i => Array.sub (a,i))))
-    )
-  );
-
-structure IsabelleMapping = struct
-type 'a ArrayType = 'a array;
-
-fun new_array (a:'a) (n:Int.int) = array (Int.toInt n, a);
-
-fun array_length (a:'a ArrayType) = Int.fromInt (length a);
-
-fun array_get (a:'a ArrayType) (i:Int.int) = sub (a, Int.toInt i);
-
-fun array_set (a:'a ArrayType) (i:Int.int) (e:'a) = update (a, Int.toInt i, e);
-
-fun array_of_list (xs:'a list) = fromList xs;
-
-fun array_grow (a:'a ArrayType) (i:Int.int) (x:'a) = grow (a, Int.toInt i, x);
-
-fun array_shrink (a:'a ArrayType) (sz:Int.int) = shrink (a,Int.toInt sz);
-
-end;
-
-end;
-
-structure FArray = struct
-  datatype 'a Cell = Value of 'a Array.array | Upd of (int*'a*'a Cell Unsynchronized.ref);
-
-  type 'a array = 'a Cell Unsynchronized.ref;
-
-  fun array (size,v) = Unsynchronized.ref (Value (Array.array (size,v)));
-  fun tabulate (size, f) = Unsynchronized.ref (Value (Array.tabulate(size, f)));
-  fun fromList l = Unsynchronized.ref (Value (Array.fromList l));
-
-  fun sub (Unsynchronized.ref (Value a), idx) = Array.sub (a,idx) |
-      sub (Unsynchronized.ref (Upd (i,v,cr)),idx) =
-        if i=idx then v
-        else sub (cr,idx);
-
-  fun length (Unsynchronized.ref (Value a)) = Array.length a |
-      length (Unsynchronized.ref (Upd (i,v,cr))) = length cr;
-
-  fun realize_aux (aref, v) =
-    case aref of
-      (Unsynchronized.ref (Value a)) => (
-        let
-          val len = Array.length a;
-          val a' = Array.array (len,v);
-        in
-          Array.copy {src=a, dst=a', di=0};
-          Unsynchronized.ref (Value a')
-        end
-      ) |
-      (Unsynchronized.ref (Upd (i,v,cr))) => (
-        let val res=realize_aux (cr,v) in
-          case res of
-            (Unsynchronized.ref (Value a)) => (Array.update (a,i,v); res)
-        end
-      );
-
-  fun realize aref =
-    case aref of
-      (Unsynchronized.ref (Value _)) => aref |
-      (Unsynchronized.ref (Upd (i,v,cr))) => realize_aux(aref,v);
-
-  fun update (aref,idx,v) =
-    case aref of
-      (Unsynchronized.ref (Value a)) => (
-        let val nref=Unsynchronized.ref (Value a) in
-          aref := Upd (idx,Array.sub(a,idx),nref);
-          Array.update (a,idx,v);
-          nref
-        end
-      ) |
-      (Unsynchronized.ref (Upd _)) =>
-        let val ra = realize_aux(aref,v) in
-          case ra of
-            (Unsynchronized.ref (Value a)) => Array.update (a,idx,v);
-          ra
-        end
-      ;
-
-  fun grow (aref, inc, x) = case aref of
-    (Unsynchronized.ref (Value a)) => (
-      let val len=Array.length a;
-          val na = Array.array (len+inc,x)
-      in
-        Array.copy {src=a, dst=na, di=0};
-        Unsynchronized.ref (Value na)
-      end
-      )
-  | (Unsynchronized.ref (Upd _)) => (
-    grow (realize aref, inc, x)
-  );
-
-  fun shrink (aref, sz) = case aref of
-    (Unsynchronized.ref (Value a)) => (
-      if sz > Array.length a then
-        raise Size
-      else (
-        Unsynchronized.ref (Value (Array.tabulate (sz,fn i => Array.sub (a,i))))
-      )
-    ) |
-    (Unsynchronized.ref (Upd _)) => (
-      shrink (realize aref,sz)
-    );
-
-structure IsabelleMapping = struct
-type 'a ArrayType = 'a array;
-
-fun new_array (a:'a) (n:Int.int) = array (Int.toInt n, a);
-
-fun array_length (a:'a ArrayType) = Int.fromInt (length a);
-
-fun array_get (a:'a ArrayType) (i:Int.int) = sub (a, Int.toInt i);
-
-fun array_set (a:'a ArrayType) (i:Int.int) (e:'a) = update (a, Int.toInt i, e);
-
-fun array_of_list (xs:'a list) = fromList xs;
-
-fun array_grow (a:'a ArrayType) (i:Int.int) (x:'a) = grow (a, Int.toInt i, x);
-
-fun array_shrink (a:'a ArrayType) (sz:Int.int) = shrink (a,Int.toInt sz);
-
-fun array_get_oo (d:'a) (a:'a ArrayType) (i:Int.int) =
-  sub (a,Int.toInt i) handle Subscript => d
-
-fun array_set_oo (d:(unit->'a ArrayType)) (a:'a ArrayType) (i:Int.int) (e:'a) =
-  update (a, Int.toInt i, e) handle Subscript => d ()
-
-end;
-end;
 
 
 
@@ -361,6 +184,27 @@ structure Converter : sig
     And of 'a formula * 'a formula | Or of 'a formula * 'a formula |
     Imp of 'a formula * 'a formula
   type json
+  datatype func = Func of string
+  datatype 'a primitive_numeric_expression = PNE of func * 'a list
+  datatype 'a numeric_expression = ConstantExpr of rat | DurationExpr |
+    AddExpr of 'a numeric_expression * 'a numeric_expression |
+    SubExpr of 'a numeric_expression * 'a numeric_expression |
+    MulExpr of 'a numeric_expression * 'a numeric_expression |
+    DivExpr of 'a numeric_expression * 'a numeric_expression |
+    SinExpr of 'a numeric_expression | CosExpr of 'a numeric_expression |
+    ExpExpr of 'a numeric_expression | PiExpr |
+    FunctionExpr of 'a primitive_numeric_expression
+  datatype predicate = Pred of string
+  datatype 'a atom = PredAtm of predicate * 'a list | EqAtm of 'a * 'a |
+    NumericEqAtm of 'a numeric_expression * 'a numeric_expression |
+    NumericLessAtm of 'a numeric_expression * 'a numeric_expression |
+    NumericLEAtm of 'a numeric_expression * 'a numeric_expression |
+    NumericGreaterAtm of 'a numeric_expression * 'a numeric_expression |
+    NumericGEAtm of 'a numeric_expression * 'a numeric_expression
+  datatype variable = Vara of string
+  datatype object = Obj of string
+  datatype term = VAR of variable | CONST of object
+  datatype typea = Either of string list
   datatype ('a, 'b) bexp = True | Nota of ('a, 'b) bexp |
     Anda of ('a, 'b) bexp * ('a, 'b) bexp | Ora of ('a, 'b) bexp * ('a, 'b) bexp
     | Imply of ('a, 'b) bexp * ('a, 'b) bexp |
@@ -371,43 +215,40 @@ structure Converter : sig
     If_then_else of ('a, 'b) bexp * ('a, 'b) exp * ('a, 'b) exp |
     Binop of ('b -> 'b -> 'b) * ('a, 'b) exp * ('a, 'b) exp |
     Unop of ('b -> 'b) * ('a, 'b) exp
+  type 'a numeric_effect
+  datatype 'a ast_effect =
+    Effect of
+      'a atom formula list * 'a atom formula list * 'a numeric_effect list
   datatype ('a, 'b) acconstraint = LTa of 'a * 'b | LEa of 'a * 'b |
-    EQ of 'a * 'b | GTa of 'a * 'b | GEa of 'a * 'b
-  datatype predicate = Pred of string
-  datatype 'a atom = PredAtm of predicate * 'a list | EqAtm of 'a * 'a
-  datatype func = Func of string
-  datatype variable = Vara of string
-  datatype object = Obj of string | FuncEnt of func * object list |
-    TimeEnt of rat
-  datatype term = VAR of variable | CONST of object
-  datatype typea = Either of string list
-  datatype 'a ast_effect = Effect of 'a atom formula list * 'a atom formula list
+    EQa of 'a * 'b | GTa of 'a * 'b | GEa of 'a * 'b
+  datatype duration_op = EQ | LEQ | GEQ
+  datatype 'a duration_constraint =
+    DurationConstraint of duration_op * 'a numeric_expression
   datatype temporal_annotation = At_Start | Over_All | At_End
-  datatype duration_op = EQa | LEQ | GEQ
-  datatype 'a duration_constraint = No_Const | Time_Const of duration_op * rat |
-    Func_Const of duration_op * func * 'a list
-  datatype ast_action_schema =
-    Simple_Action_Schema of
-      string * (variable * typea) list * term atom formula * term ast_effect
-    | Durative_Action_Schema of
-        string * (variable * typea) list * term duration_constraint list *
-          (temporal_annotation * term atom formula) list *
-          (temporal_annotation * term ast_effect) list
+  datatype ast_temporal_durative_action_body =
+    DurativeActionBody of
+      (temporal_annotation * term duration_constraint) list *
+        (temporal_annotation * term atom formula) list *
+        (temporal_annotation * term ast_effect) list
+  datatype ast_simple_action_body =
+    SimpleActionBody of term atom formula * term ast_effect
+  datatype ast_action_head = ActionHead of string * (variable * typea) list
+  datatype ast_temporal_action_schema =
+    SimpleActionSchemaa of ast_action_head * ast_simple_action_body |
+    DurativeActionSchema of ast_action_head * ast_temporal_durative_action_body
   datatype ('a, 'b) sum = Inl of 'a | Inr of 'b
   datatype 'a result = Result of 'a | Error of string list
-  type 'a len_list
   datatype predicate_decl = PredDecl of predicate * typea list
   datatype function_decl = FuncDecl of func * typea list
-  datatype ast_domain =
+  datatype 'a ast_domain =
     Domain of
       (string * string) list * predicate_decl list * function_decl list *
-        (object * typea) list * ast_action_schema list
-  datatype ast_problem =
+        (object * typea) list * 'a list
+  type 'a len_list
+  datatype 'a ast_problem =
     Problem of
-      ast_domain * (object * typea) list * object atom formula list *
+      'a ast_domain * (object * typea) list * object atom formula list *
         object atom formula
-  datatype plan_action = Simple_Plan_Action of string * object list |
-    Durative_Plan_Action of string * object list * rat
   type resulta
   datatype ('a, 'b, 'c, 'd) sexp = Truea | Notb of ('a, 'b, 'c, 'd) sexp |
     Andb of ('a, 'b, 'c, 'd) sexp * ('a, 'b, 'c, 'd) sexp |
@@ -428,12 +269,12 @@ structure Converter : sig
   val bigOr : 'a formula list -> 'a formula
   val implode : char list -> string
   val bigAnd : 'a formula list -> 'a formula
-  val rbt_to_list : ('a, 'b) rbt -> 'a list
   val map_atom : ('a -> 'b) -> 'a atom -> 'b atom
   val predicate : 'a atom -> predicate
+  val rbt_to_list : ('a, 'b) rbt -> 'a list
   val rat_of_digits_pair : nat list * nat list -> rat
   val check_and_make_network_opt :
-    ast_problem ->
+    ast_temporal_action_schema ast_problem ->
       (string list *
         (string list *
           ((nat -> nat -> string) *
@@ -453,7 +294,7 @@ structure Converter : sig
                       (nat list * (string * inta) list))))))))) option
   val parse_convert_run : bool -> string -> (unit -> string result)
   val check_and_cert_pddl_problem_no_return :
-    ast_problem ->
+    ast_temporal_action_schema ast_problem ->
       mode ->
         nat ->
           (string list *
@@ -1245,6 +1086,15 @@ val typerep_nat = {typerep = typerep_nata} : nat typerep;
 val heap_nat = {countable_heap = countable_nat, typerep_heap = typerep_nat} :
   nat heap;
 
+fun times_nata m n = Nat (integer_of_nat m * integer_of_nat n);
+
+type 'a dvd = {times_dvd : 'a times};
+val times_dvd = #times_dvd : 'a dvd -> 'a times;
+
+val times_nat = {times = times_nata} : nat times;
+
+val dvd_nat = {times_dvd = times_nat} : nat dvd;
+
 fun shows_prec_nat x = showsp_nat x;
 
 fun shows_list_nat x = showsp_list shows_prec_nat zero_nata x;
@@ -1260,7 +1110,285 @@ val plus_nat = {plus = plus_nata} : nat plus;
 
 val zero_nat = {zero = zero_nata} : nat zero;
 
+type 'a numeral =
+  {one_numeral : 'a one, semigroup_add_numeral : 'a semigroup_add};
+val one_numeral = #one_numeral : 'a numeral -> 'a one;
+val semigroup_add_numeral = #semigroup_add_numeral :
+  'a numeral -> 'a semigroup_add;
+
+val semigroup_add_nat = {plus_semigroup_add = plus_nat} : nat semigroup_add;
+
+val numeral_nat =
+  {one_numeral = one_nat, semigroup_add_numeral = semigroup_add_nat} :
+  nat numeral;
+
+val power_nat = {one_power = one_nat, times_power = times_nat} : nat power;
+
+fun minus_nata m n =
+  Nat (max ord_integer (0 : Int.int) (integer_of_nat m - integer_of_nat n));
+
+val minus_nat = {minusa = minus_nata} : nat minus;
+
 fun less_eq_nat m n = integer_of_nat m <= integer_of_nat n;
+
+type 'a mult_zero = {times_mult_zero : 'a times, zero_mult_zero : 'a zero};
+val times_mult_zero = #times_mult_zero : 'a mult_zero -> 'a times;
+val zero_mult_zero = #zero_mult_zero : 'a mult_zero -> 'a zero;
+
+type 'a semigroup_mult = {times_semigroup_mult : 'a times};
+val times_semigroup_mult = #times_semigroup_mult :
+  'a semigroup_mult -> 'a times;
+
+type 'a semiring =
+  {ab_semigroup_add_semiring : 'a ab_semigroup_add,
+    semigroup_mult_semiring : 'a semigroup_mult};
+val ab_semigroup_add_semiring = #ab_semigroup_add_semiring :
+  'a semiring -> 'a ab_semigroup_add;
+val semigroup_mult_semiring = #semigroup_mult_semiring :
+  'a semiring -> 'a semigroup_mult;
+
+type 'a semiring_0 =
+  {comm_monoid_add_semiring_0 : 'a comm_monoid_add,
+    mult_zero_semiring_0 : 'a mult_zero, semiring_semiring_0 : 'a semiring};
+val comm_monoid_add_semiring_0 = #comm_monoid_add_semiring_0 :
+  'a semiring_0 -> 'a comm_monoid_add;
+val mult_zero_semiring_0 = #mult_zero_semiring_0 :
+  'a semiring_0 -> 'a mult_zero;
+val semiring_semiring_0 = #semiring_semiring_0 : 'a semiring_0 -> 'a semiring;
+
+type 'a semiring_0_cancel =
+  {cancel_comm_monoid_add_semiring_0_cancel : 'a cancel_comm_monoid_add,
+    semiring_0_semiring_0_cancel : 'a semiring_0};
+val cancel_comm_monoid_add_semiring_0_cancel =
+  #cancel_comm_monoid_add_semiring_0_cancel :
+  'a semiring_0_cancel -> 'a cancel_comm_monoid_add;
+val semiring_0_semiring_0_cancel = #semiring_0_semiring_0_cancel :
+  'a semiring_0_cancel -> 'a semiring_0;
+
+type 'a ab_semigroup_mult =
+  {semigroup_mult_ab_semigroup_mult : 'a semigroup_mult};
+val semigroup_mult_ab_semigroup_mult = #semigroup_mult_ab_semigroup_mult :
+  'a ab_semigroup_mult -> 'a semigroup_mult;
+
+type 'a comm_semiring =
+  {ab_semigroup_mult_comm_semiring : 'a ab_semigroup_mult,
+    semiring_comm_semiring : 'a semiring};
+val ab_semigroup_mult_comm_semiring = #ab_semigroup_mult_comm_semiring :
+  'a comm_semiring -> 'a ab_semigroup_mult;
+val semiring_comm_semiring = #semiring_comm_semiring :
+  'a comm_semiring -> 'a semiring;
+
+type 'a comm_semiring_0 =
+  {comm_semiring_comm_semiring_0 : 'a comm_semiring,
+    semiring_0_comm_semiring_0 : 'a semiring_0};
+val comm_semiring_comm_semiring_0 = #comm_semiring_comm_semiring_0 :
+  'a comm_semiring_0 -> 'a comm_semiring;
+val semiring_0_comm_semiring_0 = #semiring_0_comm_semiring_0 :
+  'a comm_semiring_0 -> 'a semiring_0;
+
+type 'a comm_semiring_0_cancel =
+  {comm_semiring_0_comm_semiring_0_cancel : 'a comm_semiring_0,
+    semiring_0_cancel_comm_semiring_0_cancel : 'a semiring_0_cancel};
+val comm_semiring_0_comm_semiring_0_cancel =
+  #comm_semiring_0_comm_semiring_0_cancel :
+  'a comm_semiring_0_cancel -> 'a comm_semiring_0;
+val semiring_0_cancel_comm_semiring_0_cancel =
+  #semiring_0_cancel_comm_semiring_0_cancel :
+  'a comm_semiring_0_cancel -> 'a semiring_0_cancel;
+
+type 'a monoid_mult =
+  {semigroup_mult_monoid_mult : 'a semigroup_mult,
+    power_monoid_mult : 'a power};
+val semigroup_mult_monoid_mult = #semigroup_mult_monoid_mult :
+  'a monoid_mult -> 'a semigroup_mult;
+val power_monoid_mult = #power_monoid_mult : 'a monoid_mult -> 'a power;
+
+type 'a semiring_numeral =
+  {monoid_mult_semiring_numeral : 'a monoid_mult,
+    numeral_semiring_numeral : 'a numeral,
+    semiring_semiring_numeral : 'a semiring};
+val monoid_mult_semiring_numeral = #monoid_mult_semiring_numeral :
+  'a semiring_numeral -> 'a monoid_mult;
+val numeral_semiring_numeral = #numeral_semiring_numeral :
+  'a semiring_numeral -> 'a numeral;
+val semiring_semiring_numeral = #semiring_semiring_numeral :
+  'a semiring_numeral -> 'a semiring;
+
+type 'a zero_neq_one = {one_zero_neq_one : 'a one, zero_zero_neq_one : 'a zero};
+val one_zero_neq_one = #one_zero_neq_one : 'a zero_neq_one -> 'a one;
+val zero_zero_neq_one = #zero_zero_neq_one : 'a zero_neq_one -> 'a zero;
+
+type 'a semiring_1 =
+  {semiring_numeral_semiring_1 : 'a semiring_numeral,
+    semiring_0_semiring_1 : 'a semiring_0,
+    zero_neq_one_semiring_1 : 'a zero_neq_one};
+val semiring_numeral_semiring_1 = #semiring_numeral_semiring_1 :
+  'a semiring_1 -> 'a semiring_numeral;
+val semiring_0_semiring_1 = #semiring_0_semiring_1 :
+  'a semiring_1 -> 'a semiring_0;
+val zero_neq_one_semiring_1 = #zero_neq_one_semiring_1 :
+  'a semiring_1 -> 'a zero_neq_one;
+
+type 'a semiring_1_cancel =
+  {semiring_0_cancel_semiring_1_cancel : 'a semiring_0_cancel,
+    semiring_1_semiring_1_cancel : 'a semiring_1};
+val semiring_0_cancel_semiring_1_cancel = #semiring_0_cancel_semiring_1_cancel :
+  'a semiring_1_cancel -> 'a semiring_0_cancel;
+val semiring_1_semiring_1_cancel = #semiring_1_semiring_1_cancel :
+  'a semiring_1_cancel -> 'a semiring_1;
+
+type 'a comm_monoid_mult =
+  {ab_semigroup_mult_comm_monoid_mult : 'a ab_semigroup_mult,
+    monoid_mult_comm_monoid_mult : 'a monoid_mult,
+    dvd_comm_monoid_mult : 'a dvd};
+val ab_semigroup_mult_comm_monoid_mult = #ab_semigroup_mult_comm_monoid_mult :
+  'a comm_monoid_mult -> 'a ab_semigroup_mult;
+val monoid_mult_comm_monoid_mult = #monoid_mult_comm_monoid_mult :
+  'a comm_monoid_mult -> 'a monoid_mult;
+val dvd_comm_monoid_mult = #dvd_comm_monoid_mult :
+  'a comm_monoid_mult -> 'a dvd;
+
+type 'a comm_semiring_1 =
+  {comm_monoid_mult_comm_semiring_1 : 'a comm_monoid_mult,
+    comm_semiring_0_comm_semiring_1 : 'a comm_semiring_0,
+    semiring_1_comm_semiring_1 : 'a semiring_1};
+val comm_monoid_mult_comm_semiring_1 = #comm_monoid_mult_comm_semiring_1 :
+  'a comm_semiring_1 -> 'a comm_monoid_mult;
+val comm_semiring_0_comm_semiring_1 = #comm_semiring_0_comm_semiring_1 :
+  'a comm_semiring_1 -> 'a comm_semiring_0;
+val semiring_1_comm_semiring_1 = #semiring_1_comm_semiring_1 :
+  'a comm_semiring_1 -> 'a semiring_1;
+
+type 'a comm_semiring_1_cancel =
+  {comm_semiring_0_cancel_comm_semiring_1_cancel : 'a comm_semiring_0_cancel,
+    comm_semiring_1_comm_semiring_1_cancel : 'a comm_semiring_1,
+    semiring_1_cancel_comm_semiring_1_cancel : 'a semiring_1_cancel};
+val comm_semiring_0_cancel_comm_semiring_1_cancel =
+  #comm_semiring_0_cancel_comm_semiring_1_cancel :
+  'a comm_semiring_1_cancel -> 'a comm_semiring_0_cancel;
+val comm_semiring_1_comm_semiring_1_cancel =
+  #comm_semiring_1_comm_semiring_1_cancel :
+  'a comm_semiring_1_cancel -> 'a comm_semiring_1;
+val semiring_1_cancel_comm_semiring_1_cancel =
+  #semiring_1_cancel_comm_semiring_1_cancel :
+  'a comm_semiring_1_cancel -> 'a semiring_1_cancel;
+
+type 'a interval =
+  {linorder_interval : 'a linorder,
+    comm_semiring_1_cancel_interval : 'a comm_semiring_1_cancel};
+val linorder_interval = #linorder_interval : 'a interval -> 'a linorder;
+val comm_semiring_1_cancel_interval = #comm_semiring_1_cancel_interval :
+  'a interval -> 'a comm_semiring_1_cancel;
+
+val cancel_semigroup_add_nat =
+  {semigroup_add_cancel_semigroup_add = semigroup_add_nat} :
+  nat cancel_semigroup_add;
+
+val ab_semigroup_add_nat = {semigroup_add_ab_semigroup_add = semigroup_add_nat}
+  : nat ab_semigroup_add;
+
+val cancel_ab_semigroup_add_nat =
+  {ab_semigroup_add_cancel_ab_semigroup_add = ab_semigroup_add_nat,
+    cancel_semigroup_add_cancel_ab_semigroup_add = cancel_semigroup_add_nat,
+    minus_cancel_ab_semigroup_add = minus_nat}
+  : nat cancel_ab_semigroup_add;
+
+val monoid_add_nat =
+  {semigroup_add_monoid_add = semigroup_add_nat, zero_monoid_add = zero_nat} :
+  nat monoid_add;
+
+val comm_monoid_add_nat =
+  {ab_semigroup_add_comm_monoid_add = ab_semigroup_add_nat,
+    monoid_add_comm_monoid_add = monoid_add_nat}
+  : nat comm_monoid_add;
+
+val cancel_comm_monoid_add_nat =
+  {cancel_ab_semigroup_add_cancel_comm_monoid_add = cancel_ab_semigroup_add_nat,
+    comm_monoid_add_cancel_comm_monoid_add = comm_monoid_add_nat}
+  : nat cancel_comm_monoid_add;
+
+val mult_zero_nat = {times_mult_zero = times_nat, zero_mult_zero = zero_nat} :
+  nat mult_zero;
+
+val semigroup_mult_nat = {times_semigroup_mult = times_nat} :
+  nat semigroup_mult;
+
+val semiring_nat =
+  {ab_semigroup_add_semiring = ab_semigroup_add_nat,
+    semigroup_mult_semiring = semigroup_mult_nat}
+  : nat semiring;
+
+val semiring_0_nat =
+  {comm_monoid_add_semiring_0 = comm_monoid_add_nat,
+    mult_zero_semiring_0 = mult_zero_nat, semiring_semiring_0 = semiring_nat}
+  : nat semiring_0;
+
+val semiring_0_cancel_nat =
+  {cancel_comm_monoid_add_semiring_0_cancel = cancel_comm_monoid_add_nat,
+    semiring_0_semiring_0_cancel = semiring_0_nat}
+  : nat semiring_0_cancel;
+
+val ab_semigroup_mult_nat =
+  {semigroup_mult_ab_semigroup_mult = semigroup_mult_nat} :
+  nat ab_semigroup_mult;
+
+val comm_semiring_nat =
+  {ab_semigroup_mult_comm_semiring = ab_semigroup_mult_nat,
+    semiring_comm_semiring = semiring_nat}
+  : nat comm_semiring;
+
+val comm_semiring_0_nat =
+  {comm_semiring_comm_semiring_0 = comm_semiring_nat,
+    semiring_0_comm_semiring_0 = semiring_0_nat}
+  : nat comm_semiring_0;
+
+val comm_semiring_0_cancel_nat =
+  {comm_semiring_0_comm_semiring_0_cancel = comm_semiring_0_nat,
+    semiring_0_cancel_comm_semiring_0_cancel = semiring_0_cancel_nat}
+  : nat comm_semiring_0_cancel;
+
+val monoid_mult_nat =
+  {semigroup_mult_monoid_mult = semigroup_mult_nat,
+    power_monoid_mult = power_nat}
+  : nat monoid_mult;
+
+val semiring_numeral_nat =
+  {monoid_mult_semiring_numeral = monoid_mult_nat,
+    numeral_semiring_numeral = numeral_nat,
+    semiring_semiring_numeral = semiring_nat}
+  : nat semiring_numeral;
+
+val zero_neq_one_nat =
+  {one_zero_neq_one = one_nat, zero_zero_neq_one = zero_nat} : nat zero_neq_one;
+
+val semiring_1_nat =
+  {semiring_numeral_semiring_1 = semiring_numeral_nat,
+    semiring_0_semiring_1 = semiring_0_nat,
+    zero_neq_one_semiring_1 = zero_neq_one_nat}
+  : nat semiring_1;
+
+val semiring_1_cancel_nat =
+  {semiring_0_cancel_semiring_1_cancel = semiring_0_cancel_nat,
+    semiring_1_semiring_1_cancel = semiring_1_nat}
+  : nat semiring_1_cancel;
+
+val comm_monoid_mult_nat =
+  {ab_semigroup_mult_comm_monoid_mult = ab_semigroup_mult_nat,
+    monoid_mult_comm_monoid_mult = monoid_mult_nat,
+    dvd_comm_monoid_mult = dvd_nat}
+  : nat comm_monoid_mult;
+
+val comm_semiring_1_nat =
+  {comm_monoid_mult_comm_semiring_1 = comm_monoid_mult_nat,
+    comm_semiring_0_comm_semiring_1 = comm_semiring_0_nat,
+    semiring_1_comm_semiring_1 = semiring_1_nat}
+  : nat comm_semiring_1;
+
+val comm_semiring_1_cancel_nat =
+  {comm_semiring_0_cancel_comm_semiring_1_cancel = comm_semiring_0_cancel_nat,
+    comm_semiring_1_comm_semiring_1_cancel = comm_semiring_1_nat,
+    semiring_1_cancel_comm_semiring_1_cancel = semiring_1_cancel_nat}
+  : nat comm_semiring_1_cancel;
 
 val ord_nat = {less_eq = less_eq_nat, less = less_nat} : nat ord;
 
@@ -1270,6 +1398,11 @@ val order_nat = {preorder_order = preorder_nat} : nat order;
 
 val linorder_nat = {order_linorder = order_nat} : nat linorder;
 
+val interval_nat =
+  {linorder_interval = linorder_nat,
+    comm_semiring_1_cancel_interval = comm_semiring_1_cancel_nat}
+  : nat interval;
+
 fun compare_nata x = comparator_of (equal_nat, linorder_nat) x;
 
 val compare_nat = {compare = compare_nata} : nat compare;
@@ -1277,12 +1410,6 @@ val compare_nat = {compare = compare_nata} : nat compare;
 val ceq_nata : (nat -> nat -> bool) option = SOME equal_nata;
 
 val ceq_nat = {ceq = ceq_nata} : nat ceq;
-
-val semigroup_add_nat = {plus_semigroup_add = plus_nat} : nat semigroup_add;
-
-val monoid_add_nat =
-  {semigroup_add_monoid_add = semigroup_add_nat, zero_monoid_add = zero_nat} :
-  nat monoid_add;
 
 fun def_hashmap_size_nat x = (fn _ => nat_of_integer (16 : Int.int)) x;
 
@@ -1312,12 +1439,9 @@ val ccompare_nata : (nat -> nat -> ordera) option = SOME compare_nata;
 
 val ccompare_nat = {ccompare = ccompare_nata} : nat ccompare;
 
-fun minus_nat m n =
-  Nat (max ord_integer (0 : Int.int) (integer_of_nat m - integer_of_nat n));
-
 fun proper_interval_nat no NONE = true
   | proper_interval_nat NONE (SOME x) = less_nat zero_nata x
-  | proper_interval_nat (SOME x) (SOME y) = less_nat one_nata (minus_nat y x);
+  | proper_interval_nat (SOME x) (SOME y) = less_nat one_nata (minus_nata y x);
 
 fun cproper_interval_nata x = proper_interval_nat x;
 
@@ -1363,8 +1487,8 @@ datatype 'a set_dlist = Abs_dlist of 'a list;
 
 fun list_of_dlist A_ (Abs_dlist x) = x;
 
-fun list_member equal (x :: xs) y = equal x y orelse list_member equal xs y
-  | list_member equal [] y = false;
+fun list_member equal [] y = false
+  | list_member equal (x :: xs) y = equal x y orelse list_member equal xs y;
 
 datatype color = R | B;
 
@@ -1638,8 +1762,8 @@ fun rbt_split_comp c Empty k = (Empty, (NONE, Empty))
                 (rbt_join l a b r1, (beta, r2))
               end);
 
-fun folda f (Branch (c, lt, k, v, rt)) x = folda f rt (f k v (folda f lt x))
-  | folda f Empty x = x;
+fun folda f Empty x = x
+  | folda f (Branch (c, lt, k, v, rt)) x = folda f rt (f k v (folda f lt x));
 
 fun rbt_comp_union_swap_rec c f gamma t1 t2 =
   let
@@ -1676,8 +1800,8 @@ fun list_insert equal x xs = (if list_member equal xs x then xs else x :: xs);
 fun inserta A_ xb xc =
   Abs_dlist (list_insert (the (ceq A_)) xb (list_of_dlist A_ xc));
 
-fun fold f (x :: xs) s = fold f xs (f x s)
-  | fold f [] s = s;
+fun fold f [] s = s
+  | fold f (x :: xs) s = fold f xs (f x s);
 
 fun foldc A_ x xc = fold x (list_of_dlist A_ xc);
 
@@ -1716,8 +1840,8 @@ fun member (A1_, A2_) x (Set_Monad xs) =
 
 fun id x = (fn xa => xa) x;
 
-fun is_none (SOME x) = false
-  | is_none NONE = true;
+fun is_none NONE = true
+  | is_none (SOME x) = false;
 
 fun filter p [] = []
   | filter p (x :: xs) = (if p x then x :: filter p xs else filter p xs);
@@ -1732,10 +1856,10 @@ fun inter_list A_ xb xc =
         xc)
       Empty);
 
-fun gen_length n (x :: xs) = gen_length (suc n) xs
-  | gen_length n [] = n;
+fun length_tailrec [] n = n
+  | length_tailrec (x :: xs) n = length_tailrec xs (suc n);
 
-fun size_list x = gen_length zero_nata x;
+fun size_list xs = length_tailrec xs zero_nata;
 
 fun map_prod f g (a, b) = (f a, g b);
 
@@ -1798,10 +1922,10 @@ end
 
 fun rbtreeify kvs = fst (rbtreeify_g (suc (size_list kvs)) kvs);
 
-fun gen_entries kvts (Branch (c, l, k, v, r)) =
-  gen_entries (((k, v), r) :: kvts) l
+fun gen_entries [] Empty = []
   | gen_entries ((kv, t) :: kvts) Empty = kv :: gen_entries kvts t
-  | gen_entries [] Empty = [];
+  | gen_entries kvts (Branch (c, l, k, v, r)) =
+    gen_entries (((k, v), r) :: kvts) l;
 
 fun entries x = gen_entries [] x;
 
@@ -1877,6 +2001,24 @@ fun inf_seta (A1_, A2_) (RBT_set rbt1) (Set_Monad xs) =
       (raise Fail "inter RBT_set Set_Monad: ccompare = None")
         (fn _ => inf_seta (A1_, A2_) (RBT_set rbt1) (Set_Monad xs))
     | SOME _ => RBT_set (inter_list A2_ rbt1 xs))
+  | inf_seta (A1_, A2_) (Set_Monad xs) (RBT_set rbt1) =
+    (case ccompare A2_
+      of NONE =>
+        (raise Fail "inter Set_Monad RBT_set: ccompare = None")
+          (fn _ => inf_seta (A1_, A2_) (RBT_set rbt1) (Set_Monad xs))
+      | SOME _ => RBT_set (inter_list A2_ rbt1 xs))
+  | inf_seta (A1_, A2_) (Set_Monad xs) (DList_set dxs2) =
+    (case ceq A1_
+      of NONE =>
+        (raise Fail "inter Set_Monad DList_set: ceq = None")
+          (fn _ => inf_seta (A1_, A2_) (Set_Monad xs) (DList_set dxs2))
+      | SOME eq => DList_set (filtera A1_ (list_member eq xs) dxs2))
+  | inf_seta (A1_, A2_) (Set_Monad xs1) (Set_Monad xs2) =
+    (case ceq A1_
+      of NONE =>
+        (raise Fail "inter Set_Monad Set_Monad: ceq = None")
+          (fn _ => inf_seta (A1_, A2_) (Set_Monad xs1) (Set_Monad xs2))
+      | SOME eq => Set_Monad (filter (list_member eq xs2) xs1))
   | inf_seta (A1_, A2_) (RBT_set rbt) (DList_set dxs) =
     (case ccompare A2_
       of NONE =>
@@ -1917,24 +2059,6 @@ fun inf_seta (A1_, A2_) (RBT_set rbt1) (Set_Monad xs) =
             (raise Fail "inter DList_set RBT_set: ceq = None")
               (fn _ => inf_seta (A1_, A2_) (DList_set dxs) (RBT_set rbt))
           | SOME _ => RBT_set (inter_list A2_ rbt (list_of_dlist A1_ dxs))))
-  | inf_seta (A1_, A2_) (Set_Monad xs1) (Set_Monad xs2) =
-    (case ceq A1_
-      of NONE =>
-        (raise Fail "inter Set_Monad Set_Monad: ceq = None")
-          (fn _ => inf_seta (A1_, A2_) (Set_Monad xs1) (Set_Monad xs2))
-      | SOME eq => Set_Monad (filter (list_member eq xs2) xs1))
-  | inf_seta (A1_, A2_) (Set_Monad xs) (DList_set dxs2) =
-    (case ceq A1_
-      of NONE =>
-        (raise Fail "inter Set_Monad DList_set: ceq = None")
-          (fn _ => inf_seta (A1_, A2_) (Set_Monad xs) (DList_set dxs2))
-      | SOME eq => DList_set (filtera A1_ (list_member eq xs) dxs2))
-  | inf_seta (A1_, A2_) (Set_Monad xs) (RBT_set rbt1) =
-    (case ccompare A2_
-      of NONE =>
-        (raise Fail "inter Set_Monad RBT_set: ccompare = None")
-          (fn _ => inf_seta (A1_, A2_) (RBT_set rbt1) (Set_Monad xs))
-      | SOME _ => RBT_set (inter_list A2_ rbt1 xs))
   | inf_seta (A1_, A2_) (Complement ba) (Complement b) =
     Complement (sup_seta (A1_, A2_) ba b)
   | inf_seta (A1_, A2_) g (RBT_set rbt2) =
@@ -1975,52 +2099,12 @@ and sup_seta (A1_, A2_) ba (Complement b) =
   Complement (inf_seta (A1_, A2_) (uminus_set ba) b)
   | sup_seta (A1_, A2_) (Complement ba) b =
     Complement (inf_seta (A1_, A2_) ba (uminus_set b))
-  | sup_seta (A1_, A2_) b (Collect_set a) =
-    Collect_set (fn x => a x orelse member (A1_, A2_) x b)
-  | sup_seta (A1_, A2_) (Collect_set a) b =
-    Collect_set (fn x => a x orelse member (A1_, A2_) x b)
-  | sup_seta (A1_, A2_) (Set_Monad xs) (Set_Monad ys) = Set_Monad (xs @ ys)
-  | sup_seta (A1_, A2_) (DList_set dxs1) (Set_Monad ws) =
-    (case ceq A1_
-      of NONE =>
-        (raise Fail "union DList_set Set_Monad: ceq = None")
-          (fn _ => sup_seta (A1_, A2_) (DList_set dxs1) (Set_Monad ws))
-      | SOME _ => DList_set (fold (inserta A1_) ws dxs1))
-  | sup_seta (A1_, A2_) (Set_Monad ws) (DList_set dxs2) =
-    (case ceq A1_
-      of NONE =>
-        (raise Fail "union Set_Monad DList_set: ceq = None")
-          (fn _ => sup_seta (A1_, A2_) (Set_Monad ws) (DList_set dxs2))
-      | SOME _ => DList_set (fold (inserta A1_) ws dxs2))
-  | sup_seta (A1_, A2_) (RBT_set rbt1) (Set_Monad zs) =
+  | sup_seta (A1_, A2_) (RBT_set rbt1) (RBT_set rbt2) =
     (case ccompare A2_
       of NONE =>
-        (raise Fail "union RBT_set Set_Monad: ccompare = None")
-          (fn _ => sup_seta (A1_, A2_) (RBT_set rbt1) (Set_Monad zs))
-      | SOME _ => RBT_set (fold (fn k => insertb A2_ k ()) zs rbt1))
-  | sup_seta (A1_, A2_) (Set_Monad zs) (RBT_set rbt2) =
-    (case ccompare A2_
-      of NONE =>
-        (raise Fail "union Set_Monad RBT_set: ccompare = None")
-          (fn _ => sup_seta (A1_, A2_) (Set_Monad zs) (RBT_set rbt2))
-      | SOME _ => RBT_set (fold (fn k => insertb A2_ k ()) zs rbt2))
-  | sup_seta (A1_, A2_) (DList_set dxs1) (DList_set dxs2) =
-    (case ceq A1_
-      of NONE =>
-        (raise Fail "union DList_set DList_set: ceq = None")
-          (fn _ => sup_seta (A1_, A2_) (DList_set dxs1) (DList_set dxs2))
-      | SOME _ => DList_set (union A1_ dxs1 dxs2))
-  | sup_seta (A1_, A2_) (DList_set dxs) (RBT_set rbt) =
-    (case ccompare A2_
-      of NONE =>
-        (raise Fail "union DList_set RBT_set: ccompare = None")
-          (fn _ => sup_seta (A1_, A2_) (RBT_set rbt) (DList_set dxs))
-      | SOME _ =>
-        (case ceq A1_
-          of NONE =>
-            (raise Fail "union DList_set RBT_set: ceq = None")
-              (fn _ => sup_seta (A1_, A2_) (RBT_set rbt) (DList_set dxs))
-          | SOME _ => RBT_set (foldc A1_ (fn k => insertb A2_ k ()) dxs rbt)))
+        (raise Fail "union RBT_set RBT_set: ccompare = None")
+          (fn _ => sup_seta (A1_, A2_) (RBT_set rbt1) (RBT_set rbt2))
+      | SOME _ => RBT_set (join A2_ (fn _ => fn _ => id) rbt1 rbt2))
   | sup_seta (A1_, A2_) (RBT_set rbt) (DList_set dxs) =
     (case ccompare A2_
       of NONE =>
@@ -2032,12 +2116,52 @@ and sup_seta (A1_, A2_) ba (Complement b) =
             (raise Fail "union RBT_set DList_set: ceq = None")
               (fn _ => sup_seta (A1_, A2_) (RBT_set rbt) (DList_set dxs))
           | SOME _ => RBT_set (foldc A1_ (fn k => insertb A2_ k ()) dxs rbt)))
-  | sup_seta (A1_, A2_) (RBT_set rbt1) (RBT_set rbt2) =
+  | sup_seta (A1_, A2_) (DList_set dxs) (RBT_set rbt) =
     (case ccompare A2_
       of NONE =>
-        (raise Fail "union RBT_set RBT_set: ccompare = None")
-          (fn _ => sup_seta (A1_, A2_) (RBT_set rbt1) (RBT_set rbt2))
-      | SOME _ => RBT_set (join A2_ (fn _ => fn _ => id) rbt1 rbt2));
+        (raise Fail "union DList_set RBT_set: ccompare = None")
+          (fn _ => sup_seta (A1_, A2_) (RBT_set rbt) (DList_set dxs))
+      | SOME _ =>
+        (case ceq A1_
+          of NONE =>
+            (raise Fail "union DList_set RBT_set: ceq = None")
+              (fn _ => sup_seta (A1_, A2_) (RBT_set rbt) (DList_set dxs))
+          | SOME _ => RBT_set (foldc A1_ (fn k => insertb A2_ k ()) dxs rbt)))
+  | sup_seta (A1_, A2_) (DList_set dxs1) (DList_set dxs2) =
+    (case ceq A1_
+      of NONE =>
+        (raise Fail "union DList_set DList_set: ceq = None")
+          (fn _ => sup_seta (A1_, A2_) (DList_set dxs1) (DList_set dxs2))
+      | SOME _ => DList_set (union A1_ dxs1 dxs2))
+  | sup_seta (A1_, A2_) (Set_Monad zs) (RBT_set rbt2) =
+    (case ccompare A2_
+      of NONE =>
+        (raise Fail "union Set_Monad RBT_set: ccompare = None")
+          (fn _ => sup_seta (A1_, A2_) (Set_Monad zs) (RBT_set rbt2))
+      | SOME _ => RBT_set (fold (fn k => insertb A2_ k ()) zs rbt2))
+  | sup_seta (A1_, A2_) (RBT_set rbt1) (Set_Monad zs) =
+    (case ccompare A2_
+      of NONE =>
+        (raise Fail "union RBT_set Set_Monad: ccompare = None")
+          (fn _ => sup_seta (A1_, A2_) (RBT_set rbt1) (Set_Monad zs))
+      | SOME _ => RBT_set (fold (fn k => insertb A2_ k ()) zs rbt1))
+  | sup_seta (A1_, A2_) (Set_Monad ws) (DList_set dxs2) =
+    (case ceq A1_
+      of NONE =>
+        (raise Fail "union Set_Monad DList_set: ceq = None")
+          (fn _ => sup_seta (A1_, A2_) (Set_Monad ws) (DList_set dxs2))
+      | SOME _ => DList_set (fold (inserta A1_) ws dxs2))
+  | sup_seta (A1_, A2_) (DList_set dxs1) (Set_Monad ws) =
+    (case ceq A1_
+      of NONE =>
+        (raise Fail "union DList_set Set_Monad: ceq = None")
+          (fn _ => sup_seta (A1_, A2_) (DList_set dxs1) (Set_Monad ws))
+      | SOME _ => DList_set (fold (inserta A1_) ws dxs1))
+  | sup_seta (A1_, A2_) (Set_Monad xs) (Set_Monad ys) = Set_Monad (xs @ ys)
+  | sup_seta (A1_, A2_) b (Collect_set a) =
+    Collect_set (fn x => a x orelse member (A1_, A2_) x b)
+  | sup_seta (A1_, A2_) (Collect_set a) b =
+    Collect_set (fn x => a x orelse member (A1_, A2_) x b);
 
 fun inf_set (A1_, A2_) = {inf = inf_seta (A1_, A2_)} : 'a set inf;
 
@@ -2131,14 +2255,6 @@ fun less_eq_set (A1_, A2_, A3_) (RBT_set rbt1) (RBT_set rbt2) =
     less_eq_set (A1_, A2_, A3_) a2 a1
   | less_eq_set (A1_, A2_, A3_) (Collect_set p) (Complement a) =
     less_eq_set (A1_, A2_, A3_) a (collect A1_ (fn x => not (p x)))
-  | less_eq_set (A1_, A2_, A3_) (Set_Monad xs) c =
-    list_all (fn x => member (A2_, A3_) x c) xs
-  | less_eq_set (A1_, A2_, A3_) (DList_set dxs) c =
-    (case ceq A2_
-      of NONE =>
-        (raise Fail "subset DList_set1: ceq = None")
-          (fn _ => less_eq_set (A1_, A2_, A3_) (DList_set dxs) c)
-      | SOME _ => dlist_all A2_ (fn x => member (A2_, A3_) x c) dxs)
   | less_eq_set (A1_, A2_, A3_) (RBT_set rbt) b =
     (case ccompare A3_
       of NONE =>
@@ -2146,7 +2262,15 @@ fun less_eq_set (A1_, A2_, A3_) (RBT_set rbt1) (RBT_set rbt2) =
           (fn _ => less_eq_set (A1_, A2_, A3_) (RBT_set rbt) b)
       | SOME _ =>
         list_all_fusion rbt_keys_generator (fn x => member (A2_, A3_) x b)
-          (init A3_ rbt));
+          (init A3_ rbt))
+  | less_eq_set (A1_, A2_, A3_) (DList_set dxs) c =
+    (case ceq A2_
+      of NONE =>
+        (raise Fail "subset DList_set1: ceq = None")
+          (fn _ => less_eq_set (A1_, A2_, A3_) (DList_set dxs) c)
+      | SOME _ => dlist_all A2_ (fn x => member (A2_, A3_) x c) dxs)
+  | less_eq_set (A1_, A2_, A3_) (Set_Monad xs) c =
+    list_all (fn x => member (A2_, A3_) x c) xs;
 
 fun less_set (A1_, A2_, A3_) a b =
   less_eq_set (A1_, A2_, A3_) a b andalso not (less_eq_set (A1_, A2_, A3_) b a);
@@ -2274,35 +2398,35 @@ fun compl_set_less_eq_aux_fusion less proper_interval g1 g2 ao s1 s2 =
                 end
            else not (proper_interval ao NONE)));
 
-fun set_less_eq_aux_Compl less proper_interval ao (x :: xs) (y :: ys) =
-  (if less x y
-    then proper_interval ao (SOME x) orelse
-           set_less_eq_aux_Compl less proper_interval (SOME x) xs (y :: ys)
-    else (if less y x
-           then proper_interval ao (SOME y) orelse
-                  set_less_eq_aux_Compl less proper_interval (SOME y) (x :: xs)
-                    ys
-           else proper_interval ao (SOME y)))
+fun set_less_eq_aux_Compl less proper_interval ao [] ys = true
   | set_less_eq_aux_Compl less proper_interval ao xs [] = true
-  | set_less_eq_aux_Compl less proper_interval ao [] ys = true;
+  | set_less_eq_aux_Compl less proper_interval ao (x :: xs) (y :: ys) =
+    (if less x y
+      then proper_interval ao (SOME x) orelse
+             set_less_eq_aux_Compl less proper_interval (SOME x) xs (y :: ys)
+      else (if less y x
+             then proper_interval ao (SOME y) orelse
+                    set_less_eq_aux_Compl less proper_interval (SOME y)
+                      (x :: xs) ys
+             else proper_interval ao (SOME y)));
 
-fun compl_set_less_eq_aux less proper_interval ao (x :: xs) (y :: ys) =
-  (if less x y
-    then not (proper_interval ao (SOME x)) andalso
-           compl_set_less_eq_aux less proper_interval (SOME x) xs (y :: ys)
-    else (if less y x
-           then not (proper_interval ao (SOME y)) andalso
-                  compl_set_less_eq_aux less proper_interval (SOME y) (x :: xs)
-                    ys
-           else not (proper_interval ao (SOME y))))
-  | compl_set_less_eq_aux less proper_interval ao (x :: xs) [] =
-    not (proper_interval ao (SOME x)) andalso
-      compl_set_less_eq_aux less proper_interval (SOME x) xs []
+fun compl_set_less_eq_aux less proper_interval ao [] [] =
+  not (proper_interval ao NONE)
   | compl_set_less_eq_aux less proper_interval ao [] (y :: ys) =
     not (proper_interval ao (SOME y)) andalso
       compl_set_less_eq_aux less proper_interval (SOME y) [] ys
-  | compl_set_less_eq_aux less proper_interval ao [] [] =
-    not (proper_interval ao NONE);
+  | compl_set_less_eq_aux less proper_interval ao (x :: xs) [] =
+    not (proper_interval ao (SOME x)) andalso
+      compl_set_less_eq_aux less proper_interval (SOME x) xs []
+  | compl_set_less_eq_aux less proper_interval ao (x :: xs) (y :: ys) =
+    (if less x y
+      then not (proper_interval ao (SOME x)) andalso
+             compl_set_less_eq_aux less proper_interval (SOME x) xs (y :: ys)
+      else (if less y x
+             then not (proper_interval ao (SOME y)) andalso
+                    compl_set_less_eq_aux less proper_interval (SOME y)
+                      (x :: xs) ys
+             else not (proper_interval ao (SOME y))));
 
 fun lexord_eq_fusion less g1 g2 s1 s2 =
   (if has_next g1 s1
@@ -2316,28 +2440,28 @@ fun lexord_eq_fusion less g1 g2 s1 s2 =
            end
     else true);
 
-fun remdups_sorted less (x :: y :: xs) =
-  (if less x y then x :: remdups_sorted less (y :: xs)
-    else remdups_sorted less (y :: xs))
+fun remdups_sorted less [] = []
   | remdups_sorted less [x] = [x]
-  | remdups_sorted less [] = [];
+  | remdups_sorted less (x :: y :: xs) =
+    (if less x y then x :: remdups_sorted less (y :: xs)
+      else remdups_sorted less (y :: xs));
 
-fun quicksort_acc less ac (x :: v :: va) =
-  quicksort_part less ac x [] [] [] (v :: va)
+fun quicksort_acc less ac [] = ac
   | quicksort_acc less ac [x] = x :: ac
-  | quicksort_acc less ac [] = ac
-and quicksort_part less ac x lts eqs gts (z :: zs) =
-  (if less x z then quicksort_part less ac x lts eqs (z :: gts) zs
-    else (if less z x then quicksort_part less ac x (z :: lts) eqs gts zs
-           else quicksort_part less ac x lts (z :: eqs) gts zs))
-  | quicksort_part less ac x lts eqs gts [] =
-    quicksort_acc less (eqs @ x :: quicksort_acc less ac gts) lts;
+  | quicksort_acc less ac (x :: v :: va) =
+    quicksort_part less ac x [] [] [] (v :: va)
+and quicksort_part less ac x lts eqs gts [] =
+  quicksort_acc less (eqs @ x :: quicksort_acc less ac gts) lts
+  | quicksort_part less ac x lts eqs gts (z :: zs) =
+    (if less x z then quicksort_part less ac x lts eqs (z :: gts) zs
+      else (if less z x then quicksort_part less ac x (z :: lts) eqs gts zs
+             else quicksort_part less ac x lts (z :: eqs) gts zs));
 
 fun quicksort less = quicksort_acc less [];
 
-fun gen_keys kts (Branch (c, l, k, v, r)) = gen_keys ((k, r) :: kts) l
+fun gen_keys [] Empty = []
   | gen_keys ((k, t) :: kts) Empty = k :: gen_keys kts t
-  | gen_keys [] Empty = [];
+  | gen_keys kts (Branch (c, l, k, v, r)) = gen_keys ((k, r) :: kts) l;
 
 fun keys x = gen_keys [] x;
 
@@ -2377,11 +2501,11 @@ fun set_empty_choose (A1_, A2_) =
       (case ceq A1_ of NONE => Set_Monad [] | SOME _ => DList_set (emptyb A1_))
     | SOME _ => RBT_set (emptyc A2_));
 
-fun set_empty (A1_, A2_) Set_Choose = set_empty_choose (A1_, A2_)
-  | set_empty (A1_, A2_) Set_Monada = Set_Monad []
-  | set_empty (A1_, A2_) Set_RBT = RBT_set (emptyc A2_)
+fun set_empty (A1_, A2_) Set_Collect = Collect_set (fn _ => false)
   | set_empty (A1_, A2_) Set_DList = DList_set (emptyb A1_)
-  | set_empty (A1_, A2_) Set_Collect = Collect_set (fn _ => false);
+  | set_empty (A1_, A2_) Set_RBT = RBT_set (emptyc A2_)
+  | set_empty (A1_, A2_) Set_Monada = Set_Monad []
+  | set_empty (A1_, A2_) Set_Choose = set_empty_choose (A1_, A2_);
 
 fun bot_set (A1_, A2_, A3_) = set_empty (A1_, A2_) (of_phantom (set_impl A3_));
 
@@ -2390,11 +2514,10 @@ fun top_set (A1_, A2_, A3_) = uminus_set (bot_set (A1_, A2_, A3_));
 fun le_of_comp acomp x y =
   (case acomp x y of Eq => true | Lta => true | Gt => false);
 
-fun lexordp_eq less (x :: xs) (y :: ys) =
-  less x y orelse not (less y x) andalso lexordp_eq less xs ys
-  | lexordp_eq less (x :: xs) [] = false
+fun lexordp_eq less [] ys = true
   | lexordp_eq less xs [] = null xs
-  | lexordp_eq less [] ys = true;
+  | lexordp_eq less (x :: xs) (y :: ys) =
+    less x y orelse not (less y x) andalso lexordp_eq less xs ys;
 
 fun finite (A1_, A2_, A3_) (Collect_set p) =
   of_phantom (finite_UNIV A1_) orelse
@@ -2470,32 +2593,34 @@ fun compl_set_less_aux_fusion less proper_interval g1 g2 ao s1 s2 =
                  else not (proper_interval ao (SOME y))))
       end);
 
-fun set_less_aux_Compl less proper_interval ao (x :: xs) (y :: ys) =
-  (if less x y
-    then proper_interval ao (SOME x) orelse
-           set_less_aux_Compl less proper_interval (SOME x) xs (y :: ys)
-    else (if less y x
-           then proper_interval ao (SOME y) orelse
-                  set_less_aux_Compl less proper_interval (SOME y) (x :: xs) ys
-           else proper_interval ao (SOME y)))
-  | set_less_aux_Compl less proper_interval ao (x :: xs) [] =
-    proper_interval ao (SOME x) orelse
-      set_less_aux_Compl less proper_interval (SOME x) xs []
+fun set_less_aux_Compl less proper_interval ao [] [] = proper_interval ao NONE
   | set_less_aux_Compl less proper_interval ao [] (y :: ys) =
     proper_interval ao (SOME y) orelse
       set_less_aux_Compl less proper_interval (SOME y) [] ys
-  | set_less_aux_Compl less proper_interval ao [] [] = proper_interval ao NONE;
+  | set_less_aux_Compl less proper_interval ao (x :: xs) [] =
+    proper_interval ao (SOME x) orelse
+      set_less_aux_Compl less proper_interval (SOME x) xs []
+  | set_less_aux_Compl less proper_interval ao (x :: xs) (y :: ys) =
+    (if less x y
+      then proper_interval ao (SOME x) orelse
+             set_less_aux_Compl less proper_interval (SOME x) xs (y :: ys)
+      else (if less y x
+             then proper_interval ao (SOME y) orelse
+                    set_less_aux_Compl less proper_interval (SOME y) (x :: xs)
+                      ys
+             else proper_interval ao (SOME y)));
 
-fun compl_set_less_aux less proper_interval ao (x :: xs) (y :: ys) =
-  (if less x y
-    then not (proper_interval ao (SOME x)) andalso
-           compl_set_less_aux less proper_interval (SOME x) xs (y :: ys)
-    else (if less y x
-           then not (proper_interval ao (SOME y)) andalso
-                  compl_set_less_aux less proper_interval (SOME y) (x :: xs) ys
-           else not (proper_interval ao (SOME y))))
+fun compl_set_less_aux less proper_interval ao [] ys = false
   | compl_set_less_aux less proper_interval ao xs [] = false
-  | compl_set_less_aux less proper_interval ao [] ys = false;
+  | compl_set_less_aux less proper_interval ao (x :: xs) (y :: ys) =
+    (if less x y
+      then not (proper_interval ao (SOME x)) andalso
+             compl_set_less_aux less proper_interval (SOME x) xs (y :: ys)
+      else (if less y x
+             then not (proper_interval ao (SOME y)) andalso
+                    compl_set_less_aux less proper_interval (SOME y) (x :: xs)
+                      ys
+             else not (proper_interval ao (SOME y))));
 
 fun lexord_fusion less g1 g2 s1 s2 =
   (if has_next g1 s1
@@ -2510,10 +2635,10 @@ fun lexord_fusion less g1 g2 s1 s2 =
            else false)
     else has_next g2 s2);
 
-fun lexordp less (x :: xs) (y :: ys) =
-  less x y orelse not (less y x) andalso lexordp less xs ys
+fun lexordp less [] ys = not (null ys)
   | lexordp less xs [] = false
-  | lexordp less [] ys = not (null ys);
+  | lexordp less (x :: xs) (y :: ys) =
+    less x y orelse not (less y x) andalso lexordp less xs ys;
 
 fun comp_of_ords le lt x y =
   (if lt x y then Lta else (if le x y then Eq else Gt));
@@ -2715,11 +2840,11 @@ and cless_eq_set (A1_, A2_, A3_, A4_) (Complement (RBT_set rbt1)) (RBT_set rbt2)
 fun ccompare_set (A1_, A2_, A3_, A4_) =
   {ccompare = ccompare_seta (A1_, A2_, A3_, A4_)} : 'a set ccompare;
 
-fun less_eq_bool true b = b
-  | less_eq_bool false b = true;
+fun less_eq_bool false b = true
+  | less_eq_bool true b = b;
 
-fun less_bool true b = false
-  | less_bool false b = b;
+fun less_bool false b = b
+  | less_bool true b = false;
 
 val ord_bool = {less_eq = less_eq_bool, less = less_bool} : bool ord;
 
@@ -2750,22 +2875,20 @@ fun show_list A_ =
   {shows_prec = shows_prec_list A_, shows_list = shows_list_list A_} :
   ('a list) show;
 
-fun equality_list eq_a (x :: xa) (y :: ya) =
-  eq_a x y andalso equality_list eq_a xa ya
-  | equality_list eq_a (x :: xa) [] = false
+fun equality_list eq_a [] [] = true
   | equality_list eq_a [] (y :: ya) = false
-  | equality_list eq_a [] [] = true;
+  | equality_list eq_a (x :: xa) [] = false
+  | equality_list eq_a (x :: xa) (y :: ya) =
+    eq_a x y andalso equality_list eq_a xa ya;
 
 fun ceq_lista A_ =
   (case ceq A_ of NONE => NONE | SOME eq_a => SOME (equality_list eq_a));
 
 fun ceq_list A_ = {ceq = ceq_lista A_} : ('a list) ceq;
 
-fun times_nat m n = Nat (integer_of_nat m * integer_of_nat n);
-
 fun def_hashmap_size_list A_ =
   (fn _ =>
-    times_nat (nat_of_integer (2 : Int.int)) (def_hashmap_size A_ Type));
+    times_nata (nat_of_integer (2 : Int.int)) (def_hashmap_size A_ Type));
 
 fun foldl f a [] = a
   | foldl f a (x :: xs) = foldl f (f a x) xs;
@@ -2784,12 +2907,12 @@ val set_impl_lista : (('a list), set_impla) phantom = Phantom Set_Choose;
 
 val set_impl_list = {set_impl = set_impl_lista} : ('a list) set_impl;
 
-fun comparator_list comp_a (x :: xa) (y :: ya) =
-  (case comp_a x y of Eq => comparator_list comp_a xa ya | Lta => Lta
-    | Gt => Gt)
-  | comparator_list comp_a (x :: xa) [] = Gt
+fun comparator_list comp_a [] [] = Eq
   | comparator_list comp_a [] (y :: ya) = Lta
-  | comparator_list comp_a [] [] = Eq;
+  | comparator_list comp_a (x :: xa) [] = Gt
+  | comparator_list comp_a (x :: xa) (y :: ya) =
+    (case comp_a x y of Eq => comparator_list comp_a xa ya | Lta => Lta
+      | Gt => Gt);
 
 fun ccompare_lista A_ =
   (case ccompare A_ of NONE => NONE
@@ -2807,10 +2930,10 @@ fun heap_array A_ =
   {countable_heap = countable_array, typerep_heap = typerep_array A_} :
   ('a array) heap;
 
-fun equal_bool p true = p
-  | equal_bool p false = not p
+fun equal_bool false p = not p
   | equal_bool true p = p
-  | equal_bool false p = not p;
+  | equal_bool p false = not p
+  | equal_bool p true = p;
 
 fun equal_chara (Chara (x1, x2, x3, x4, x5, x6, x7, x8))
   (Chara (y1, y2, y3, y4, y5, y6, y7, y8)) =
@@ -2831,21 +2954,20 @@ fun shows_list_char cs = shows_string cs;
 val show_char = {shows_prec = shows_prec_char, shows_list = shows_list_char} :
   char show;
 
-fun lexordp_eqa A_ (x :: xs) (y :: ys) =
-  less A_ x y orelse not (less A_ y x) andalso lexordp_eqa A_ xs ys
-  | lexordp_eqa A_ (x :: xs) [] = false
+fun lexordp_eqa A_ [] ys = true
   | lexordp_eqa A_ xs [] = null xs
-  | lexordp_eqa A_ [] ys = true;
+  | lexordp_eqa A_ (x :: xs) (y :: ys) =
+    less A_ x y orelse not (less A_ y x) andalso lexordp_eqa A_ xs ys;
 
 fun less_eq_char (Chara (b0, b1, b2, b3, b4, b5, b6, b7))
   (Chara (c0, c1, c2, c3, c4, c5, c6, c7)) =
   lexordp_eqa ord_bool [b7, b6, b5, b4, b3, b2, b1, b0]
     [c7, c6, c5, c4, c3, c2, c1, c0];
 
-fun lexordpa A_ (x :: xs) (y :: ys) =
-  less A_ x y orelse not (less A_ y x) andalso lexordpa A_ xs ys
+fun lexordpa A_ [] ys = not (null ys)
   | lexordpa A_ xs [] = false
-  | lexordpa A_ [] ys = not (null ys);
+  | lexordpa A_ (x :: xs) (y :: ys) =
+    less A_ x y orelse not (less A_ y x) andalso lexordpa A_ xs ys;
 
 fun less_char (Chara (b0, b1, b2, b3, b4, b5, b6, b7))
   (Chara (c0, c1, c2, c3, c4, c5, c6, c7)) =
@@ -2930,17 +3052,17 @@ fun equal_DBMEntry A_ (Lt x2) INF = false
   | equal_DBMEntry A_ (Le x1) (Le y1) = eq A_ x1 y1
   | equal_DBMEntry A_ INF INF = true;
 
-fun dbm_lt A_ INF x = false
-  | dbm_lt A_ (Lt a) (Lt b) =
+fun dbm_lt A_ (Lt a) INF = true
+  | dbm_lt A_ (Le a) INF = true
+  | dbm_lt A_ (Le a) (Le b) =
+    less ((ord_preorder o preorder_order o order_linorder) A_) a b
+  | dbm_lt A_ (Le a) (Lt b) =
     less ((ord_preorder o preorder_order o order_linorder) A_) a b
   | dbm_lt A_ (Lt a) (Le b) =
     less_eq ((ord_preorder o preorder_order o order_linorder) A_) a b
-  | dbm_lt A_ (Le a) (Lt b) =
+  | dbm_lt A_ (Lt a) (Lt b) =
     less ((ord_preorder o preorder_order o order_linorder) A_) a b
-  | dbm_lt A_ (Le a) (Le b) =
-    less ((ord_preorder o preorder_order o order_linorder) A_) a b
-  | dbm_lt A_ (Le a) INF = true
-  | dbm_lt A_ (Lt a) INF = true;
+  | dbm_lt A_ INF x = false;
 
 fun dbm_le (A1_, A2_) a b = equal_DBMEntry A1_ a b orelse dbm_lt A2_ a b;
 
@@ -3036,12 +3158,11 @@ fun shows_pl p =
            (Chara (false, false, false, true, false, true, false, false))
     else id);
 
-fun showsp_act show_a p (Sil x) =
+fun showsp_act show_a p (In x) =
   shows_pl p o
     shows_string
-      [Chara (true, true, false, false, true, false, true, false),
-        Chara (true, false, false, true, false, true, true, false),
-        Chara (false, false, true, true, false, true, true, false)] o
+      [Chara (true, false, false, true, false, false, true, false),
+        Chara (false, true, true, true, false, true, true, false)] o
     shows_space o
     show_a one_nata x o
     shows_pr p
@@ -3054,11 +3175,12 @@ fun showsp_act show_a p (Sil x) =
       shows_space o
       show_a one_nata x o
       shows_pr p
-  | showsp_act show_a p (In x) =
+  | showsp_act show_a p (Sil x) =
     shows_pl p o
       shows_string
-        [Chara (true, false, false, true, false, false, true, false),
-          Chara (false, true, true, true, false, true, true, false)] o
+        [Chara (true, true, false, false, true, false, true, false),
+          Chara (true, false, false, true, false, true, true, false),
+          Chara (false, false, true, true, false, true, true, false)] o
       shows_space o
       show_a one_nata x o
       shows_pr p;
@@ -3219,48 +3341,48 @@ fun equal_formulaa A_ (Or (x51, x52)) (Imp (x61, x62)) = false
 
 fun equal_formula A_ = {equal = equal_formulaa A_} : 'a formula equal;
 
-fun comparator_formula comp_a (Imp (x, xa)) (Imp (yf, yg)) =
-  (case comparator_formula comp_a x yf of Eq => comparator_formula comp_a xa yg
-    | Lta => Lta | Gt => Gt)
-  | comparator_formula comp_a (Imp (x, xa)) (Or (yd, ye)) = Gt
-  | comparator_formula comp_a (Imp (x, xa)) (And (yb, yc)) = Gt
-  | comparator_formula comp_a (Imp (x, xa)) (Not ya) = Gt
-  | comparator_formula comp_a (Imp (x, xa)) Bot = Gt
-  | comparator_formula comp_a (Imp (x, xa)) (Atom y) = Gt
-  | comparator_formula comp_a (Or (x, xa)) (Imp (yf, yg)) = Lta
-  | comparator_formula comp_a (Or (x, xa)) (Or (yd, ye)) =
-    (case comparator_formula comp_a x yd
-      of Eq => comparator_formula comp_a xa ye | Lta => Lta | Gt => Gt)
-  | comparator_formula comp_a (Or (x, xa)) (And (yb, yc)) = Gt
-  | comparator_formula comp_a (Or (x, xa)) (Not ya) = Gt
-  | comparator_formula comp_a (Or (x, xa)) Bot = Gt
-  | comparator_formula comp_a (Or (x, xa)) (Atom y) = Gt
-  | comparator_formula comp_a (And (x, xa)) (Imp (yf, yg)) = Lta
-  | comparator_formula comp_a (And (x, xa)) (Or (yd, ye)) = Lta
+fun comparator_formula comp_a (Atom x) (Atom y) = comp_a x y
+  | comparator_formula comp_a (Atom x) Bot = Lta
+  | comparator_formula comp_a (Atom x) (Not ya) = Lta
+  | comparator_formula comp_a (Atom x) (And (yb, yc)) = Lta
+  | comparator_formula comp_a (Atom x) (Or (yd, ye)) = Lta
+  | comparator_formula comp_a (Atom x) (Imp (yf, yg)) = Lta
+  | comparator_formula comp_a Bot (Atom y) = Gt
+  | comparator_formula comp_a Bot Bot = Eq
+  | comparator_formula comp_a Bot (Not ya) = Lta
+  | comparator_formula comp_a Bot (And (yb, yc)) = Lta
+  | comparator_formula comp_a Bot (Or (yd, ye)) = Lta
+  | comparator_formula comp_a Bot (Imp (yf, yg)) = Lta
+  | comparator_formula comp_a (Not x) (Atom y) = Gt
+  | comparator_formula comp_a (Not x) Bot = Gt
+  | comparator_formula comp_a (Not x) (Not ya) = comparator_formula comp_a x ya
+  | comparator_formula comp_a (Not x) (And (yb, yc)) = Lta
+  | comparator_formula comp_a (Not x) (Or (yd, ye)) = Lta
+  | comparator_formula comp_a (Not x) (Imp (yf, yg)) = Lta
+  | comparator_formula comp_a (And (x, xa)) (Atom y) = Gt
+  | comparator_formula comp_a (And (x, xa)) Bot = Gt
+  | comparator_formula comp_a (And (x, xa)) (Not ya) = Gt
   | comparator_formula comp_a (And (x, xa)) (And (yb, yc)) =
     (case comparator_formula comp_a x yb
       of Eq => comparator_formula comp_a xa yc | Lta => Lta | Gt => Gt)
-  | comparator_formula comp_a (And (x, xa)) (Not ya) = Gt
-  | comparator_formula comp_a (And (x, xa)) Bot = Gt
-  | comparator_formula comp_a (And (x, xa)) (Atom y) = Gt
-  | comparator_formula comp_a (Not x) (Imp (yf, yg)) = Lta
-  | comparator_formula comp_a (Not x) (Or (yd, ye)) = Lta
-  | comparator_formula comp_a (Not x) (And (yb, yc)) = Lta
-  | comparator_formula comp_a (Not x) (Not ya) = comparator_formula comp_a x ya
-  | comparator_formula comp_a (Not x) Bot = Gt
-  | comparator_formula comp_a (Not x) (Atom y) = Gt
-  | comparator_formula comp_a Bot (Imp (yf, yg)) = Lta
-  | comparator_formula comp_a Bot (Or (yd, ye)) = Lta
-  | comparator_formula comp_a Bot (And (yb, yc)) = Lta
-  | comparator_formula comp_a Bot (Not ya) = Lta
-  | comparator_formula comp_a Bot Bot = Eq
-  | comparator_formula comp_a Bot (Atom y) = Gt
-  | comparator_formula comp_a (Atom x) (Imp (yf, yg)) = Lta
-  | comparator_formula comp_a (Atom x) (Or (yd, ye)) = Lta
-  | comparator_formula comp_a (Atom x) (And (yb, yc)) = Lta
-  | comparator_formula comp_a (Atom x) (Not ya) = Lta
-  | comparator_formula comp_a (Atom x) Bot = Lta
-  | comparator_formula comp_a (Atom x) (Atom y) = comp_a x y;
+  | comparator_formula comp_a (And (x, xa)) (Or (yd, ye)) = Lta
+  | comparator_formula comp_a (And (x, xa)) (Imp (yf, yg)) = Lta
+  | comparator_formula comp_a (Or (x, xa)) (Atom y) = Gt
+  | comparator_formula comp_a (Or (x, xa)) Bot = Gt
+  | comparator_formula comp_a (Or (x, xa)) (Not ya) = Gt
+  | comparator_formula comp_a (Or (x, xa)) (And (yb, yc)) = Gt
+  | comparator_formula comp_a (Or (x, xa)) (Or (yd, ye)) =
+    (case comparator_formula comp_a x yd
+      of Eq => comparator_formula comp_a xa ye | Lta => Lta | Gt => Gt)
+  | comparator_formula comp_a (Or (x, xa)) (Imp (yf, yg)) = Lta
+  | comparator_formula comp_a (Imp (x, xa)) (Atom y) = Gt
+  | comparator_formula comp_a (Imp (x, xa)) Bot = Gt
+  | comparator_formula comp_a (Imp (x, xa)) (Not ya) = Gt
+  | comparator_formula comp_a (Imp (x, xa)) (And (yb, yc)) = Gt
+  | comparator_formula comp_a (Imp (x, xa)) (Or (yd, ye)) = Gt
+  | comparator_formula comp_a (Imp (x, xa)) (Imp (yf, yg)) =
+    (case comparator_formula comp_a x yf
+      of Eq => comparator_formula comp_a xa yg | Lta => Lta | Gt => Gt);
 
 fun less_eq_formula (A1_, A2_) =
   le_of_comp (comparator_formula (comparator_of (A1_, A2_)));
@@ -3479,19 +3601,667 @@ fun cproper_interval_prod A_ B_ =
     cproper_interval = cproper_interval_proda A_ B_}
   : ('a * 'b) cproper_interval;
 
+datatype func = Func of string;
+
+datatype 'a primitive_numeric_expression = PNE of func * 'a list;
+
+fun equal_funca (Func x) (Func ya) = ((x : string) = ya);
+
+fun equal_primitive_numeric_expression A_ (PNE (x1, x2)) (PNE (y1, y2)) =
+  equal_funca x1 y1 andalso equal_lista A_ x2 y2;
+
+datatype 'a numeric_expression = ConstantExpr of rat | DurationExpr |
+  AddExpr of 'a numeric_expression * 'a numeric_expression |
+  SubExpr of 'a numeric_expression * 'a numeric_expression |
+  MulExpr of 'a numeric_expression * 'a numeric_expression |
+  DivExpr of 'a numeric_expression * 'a numeric_expression |
+  SinExpr of 'a numeric_expression | CosExpr of 'a numeric_expression |
+  ExpExpr of 'a numeric_expression | PiExpr |
+  FunctionExpr of 'a primitive_numeric_expression;
+
+fun equal_numeric_expression A_ PiExpr (FunctionExpr x11) = false
+  | equal_numeric_expression A_ (FunctionExpr x11) PiExpr = false
+  | equal_numeric_expression A_ (ExpExpr x9) (FunctionExpr x11) = false
+  | equal_numeric_expression A_ (FunctionExpr x11) (ExpExpr x9) = false
+  | equal_numeric_expression A_ (ExpExpr x9) PiExpr = false
+  | equal_numeric_expression A_ PiExpr (ExpExpr x9) = false
+  | equal_numeric_expression A_ (CosExpr x8) (FunctionExpr x11) = false
+  | equal_numeric_expression A_ (FunctionExpr x11) (CosExpr x8) = false
+  | equal_numeric_expression A_ (CosExpr x8) PiExpr = false
+  | equal_numeric_expression A_ PiExpr (CosExpr x8) = false
+  | equal_numeric_expression A_ (CosExpr x8) (ExpExpr x9) = false
+  | equal_numeric_expression A_ (ExpExpr x9) (CosExpr x8) = false
+  | equal_numeric_expression A_ (SinExpr x7) (FunctionExpr x11) = false
+  | equal_numeric_expression A_ (FunctionExpr x11) (SinExpr x7) = false
+  | equal_numeric_expression A_ (SinExpr x7) PiExpr = false
+  | equal_numeric_expression A_ PiExpr (SinExpr x7) = false
+  | equal_numeric_expression A_ (SinExpr x7) (ExpExpr x9) = false
+  | equal_numeric_expression A_ (ExpExpr x9) (SinExpr x7) = false
+  | equal_numeric_expression A_ (SinExpr x7) (CosExpr x8) = false
+  | equal_numeric_expression A_ (CosExpr x8) (SinExpr x7) = false
+  | equal_numeric_expression A_ (DivExpr (x61, x62)) (FunctionExpr x11) = false
+  | equal_numeric_expression A_ (FunctionExpr x11) (DivExpr (x61, x62)) = false
+  | equal_numeric_expression A_ (DivExpr (x61, x62)) PiExpr = false
+  | equal_numeric_expression A_ PiExpr (DivExpr (x61, x62)) = false
+  | equal_numeric_expression A_ (DivExpr (x61, x62)) (ExpExpr x9) = false
+  | equal_numeric_expression A_ (ExpExpr x9) (DivExpr (x61, x62)) = false
+  | equal_numeric_expression A_ (DivExpr (x61, x62)) (CosExpr x8) = false
+  | equal_numeric_expression A_ (CosExpr x8) (DivExpr (x61, x62)) = false
+  | equal_numeric_expression A_ (DivExpr (x61, x62)) (SinExpr x7) = false
+  | equal_numeric_expression A_ (SinExpr x7) (DivExpr (x61, x62)) = false
+  | equal_numeric_expression A_ (MulExpr (x51, x52)) (FunctionExpr x11) = false
+  | equal_numeric_expression A_ (FunctionExpr x11) (MulExpr (x51, x52)) = false
+  | equal_numeric_expression A_ (MulExpr (x51, x52)) PiExpr = false
+  | equal_numeric_expression A_ PiExpr (MulExpr (x51, x52)) = false
+  | equal_numeric_expression A_ (MulExpr (x51, x52)) (ExpExpr x9) = false
+  | equal_numeric_expression A_ (ExpExpr x9) (MulExpr (x51, x52)) = false
+  | equal_numeric_expression A_ (MulExpr (x51, x52)) (CosExpr x8) = false
+  | equal_numeric_expression A_ (CosExpr x8) (MulExpr (x51, x52)) = false
+  | equal_numeric_expression A_ (MulExpr (x51, x52)) (SinExpr x7) = false
+  | equal_numeric_expression A_ (SinExpr x7) (MulExpr (x51, x52)) = false
+  | equal_numeric_expression A_ (MulExpr (x51, x52)) (DivExpr (x61, x62)) =
+    false
+  | equal_numeric_expression A_ (DivExpr (x61, x62)) (MulExpr (x51, x52)) =
+    false
+  | equal_numeric_expression A_ (SubExpr (x41, x42)) (FunctionExpr x11) = false
+  | equal_numeric_expression A_ (FunctionExpr x11) (SubExpr (x41, x42)) = false
+  | equal_numeric_expression A_ (SubExpr (x41, x42)) PiExpr = false
+  | equal_numeric_expression A_ PiExpr (SubExpr (x41, x42)) = false
+  | equal_numeric_expression A_ (SubExpr (x41, x42)) (ExpExpr x9) = false
+  | equal_numeric_expression A_ (ExpExpr x9) (SubExpr (x41, x42)) = false
+  | equal_numeric_expression A_ (SubExpr (x41, x42)) (CosExpr x8) = false
+  | equal_numeric_expression A_ (CosExpr x8) (SubExpr (x41, x42)) = false
+  | equal_numeric_expression A_ (SubExpr (x41, x42)) (SinExpr x7) = false
+  | equal_numeric_expression A_ (SinExpr x7) (SubExpr (x41, x42)) = false
+  | equal_numeric_expression A_ (SubExpr (x41, x42)) (DivExpr (x61, x62)) =
+    false
+  | equal_numeric_expression A_ (DivExpr (x61, x62)) (SubExpr (x41, x42)) =
+    false
+  | equal_numeric_expression A_ (SubExpr (x41, x42)) (MulExpr (x51, x52)) =
+    false
+  | equal_numeric_expression A_ (MulExpr (x51, x52)) (SubExpr (x41, x42)) =
+    false
+  | equal_numeric_expression A_ (AddExpr (x31, x32)) (FunctionExpr x11) = false
+  | equal_numeric_expression A_ (FunctionExpr x11) (AddExpr (x31, x32)) = false
+  | equal_numeric_expression A_ (AddExpr (x31, x32)) PiExpr = false
+  | equal_numeric_expression A_ PiExpr (AddExpr (x31, x32)) = false
+  | equal_numeric_expression A_ (AddExpr (x31, x32)) (ExpExpr x9) = false
+  | equal_numeric_expression A_ (ExpExpr x9) (AddExpr (x31, x32)) = false
+  | equal_numeric_expression A_ (AddExpr (x31, x32)) (CosExpr x8) = false
+  | equal_numeric_expression A_ (CosExpr x8) (AddExpr (x31, x32)) = false
+  | equal_numeric_expression A_ (AddExpr (x31, x32)) (SinExpr x7) = false
+  | equal_numeric_expression A_ (SinExpr x7) (AddExpr (x31, x32)) = false
+  | equal_numeric_expression A_ (AddExpr (x31, x32)) (DivExpr (x61, x62)) =
+    false
+  | equal_numeric_expression A_ (DivExpr (x61, x62)) (AddExpr (x31, x32)) =
+    false
+  | equal_numeric_expression A_ (AddExpr (x31, x32)) (MulExpr (x51, x52)) =
+    false
+  | equal_numeric_expression A_ (MulExpr (x51, x52)) (AddExpr (x31, x32)) =
+    false
+  | equal_numeric_expression A_ (AddExpr (x31, x32)) (SubExpr (x41, x42)) =
+    false
+  | equal_numeric_expression A_ (SubExpr (x41, x42)) (AddExpr (x31, x32)) =
+    false
+  | equal_numeric_expression A_ DurationExpr (FunctionExpr x11) = false
+  | equal_numeric_expression A_ (FunctionExpr x11) DurationExpr = false
+  | equal_numeric_expression A_ DurationExpr PiExpr = false
+  | equal_numeric_expression A_ PiExpr DurationExpr = false
+  | equal_numeric_expression A_ DurationExpr (ExpExpr x9) = false
+  | equal_numeric_expression A_ (ExpExpr x9) DurationExpr = false
+  | equal_numeric_expression A_ DurationExpr (CosExpr x8) = false
+  | equal_numeric_expression A_ (CosExpr x8) DurationExpr = false
+  | equal_numeric_expression A_ DurationExpr (SinExpr x7) = false
+  | equal_numeric_expression A_ (SinExpr x7) DurationExpr = false
+  | equal_numeric_expression A_ DurationExpr (DivExpr (x61, x62)) = false
+  | equal_numeric_expression A_ (DivExpr (x61, x62)) DurationExpr = false
+  | equal_numeric_expression A_ DurationExpr (MulExpr (x51, x52)) = false
+  | equal_numeric_expression A_ (MulExpr (x51, x52)) DurationExpr = false
+  | equal_numeric_expression A_ DurationExpr (SubExpr (x41, x42)) = false
+  | equal_numeric_expression A_ (SubExpr (x41, x42)) DurationExpr = false
+  | equal_numeric_expression A_ DurationExpr (AddExpr (x31, x32)) = false
+  | equal_numeric_expression A_ (AddExpr (x31, x32)) DurationExpr = false
+  | equal_numeric_expression A_ (ConstantExpr x1) (FunctionExpr x11) = false
+  | equal_numeric_expression A_ (FunctionExpr x11) (ConstantExpr x1) = false
+  | equal_numeric_expression A_ (ConstantExpr x1) PiExpr = false
+  | equal_numeric_expression A_ PiExpr (ConstantExpr x1) = false
+  | equal_numeric_expression A_ (ConstantExpr x1) (ExpExpr x9) = false
+  | equal_numeric_expression A_ (ExpExpr x9) (ConstantExpr x1) = false
+  | equal_numeric_expression A_ (ConstantExpr x1) (CosExpr x8) = false
+  | equal_numeric_expression A_ (CosExpr x8) (ConstantExpr x1) = false
+  | equal_numeric_expression A_ (ConstantExpr x1) (SinExpr x7) = false
+  | equal_numeric_expression A_ (SinExpr x7) (ConstantExpr x1) = false
+  | equal_numeric_expression A_ (ConstantExpr x1) (DivExpr (x61, x62)) = false
+  | equal_numeric_expression A_ (DivExpr (x61, x62)) (ConstantExpr x1) = false
+  | equal_numeric_expression A_ (ConstantExpr x1) (MulExpr (x51, x52)) = false
+  | equal_numeric_expression A_ (MulExpr (x51, x52)) (ConstantExpr x1) = false
+  | equal_numeric_expression A_ (ConstantExpr x1) (SubExpr (x41, x42)) = false
+  | equal_numeric_expression A_ (SubExpr (x41, x42)) (ConstantExpr x1) = false
+  | equal_numeric_expression A_ (ConstantExpr x1) (AddExpr (x31, x32)) = false
+  | equal_numeric_expression A_ (AddExpr (x31, x32)) (ConstantExpr x1) = false
+  | equal_numeric_expression A_ (ConstantExpr x1) DurationExpr = false
+  | equal_numeric_expression A_ DurationExpr (ConstantExpr x1) = false
+  | equal_numeric_expression A_ (FunctionExpr x11) (FunctionExpr y11) =
+    equal_primitive_numeric_expression A_ x11 y11
+  | equal_numeric_expression A_ (ExpExpr x9) (ExpExpr y9) =
+    equal_numeric_expression A_ x9 y9
+  | equal_numeric_expression A_ (CosExpr x8) (CosExpr y8) =
+    equal_numeric_expression A_ x8 y8
+  | equal_numeric_expression A_ (SinExpr x7) (SinExpr y7) =
+    equal_numeric_expression A_ x7 y7
+  | equal_numeric_expression A_ (DivExpr (x61, x62)) (DivExpr (y61, y62)) =
+    equal_numeric_expression A_ x61 y61 andalso
+      equal_numeric_expression A_ x62 y62
+  | equal_numeric_expression A_ (MulExpr (x51, x52)) (MulExpr (y51, y52)) =
+    equal_numeric_expression A_ x51 y51 andalso
+      equal_numeric_expression A_ x52 y52
+  | equal_numeric_expression A_ (SubExpr (x41, x42)) (SubExpr (y41, y42)) =
+    equal_numeric_expression A_ x41 y41 andalso
+      equal_numeric_expression A_ x42 y42
+  | equal_numeric_expression A_ (AddExpr (x31, x32)) (AddExpr (y31, y32)) =
+    equal_numeric_expression A_ x31 y31 andalso
+      equal_numeric_expression A_ x32 y32
+  | equal_numeric_expression A_ (ConstantExpr x1) (ConstantExpr y1) =
+    equal_rata x1 y1
+  | equal_numeric_expression A_ PiExpr PiExpr = true
+  | equal_numeric_expression A_ DurationExpr DurationExpr = true;
+
+datatype predicate = Pred of string;
+
+fun equal_predicatea (Pred x) (Pred ya) = ((x : string) = ya);
+
+datatype 'a atom = PredAtm of predicate * 'a list | EqAtm of 'a * 'a |
+  NumericEqAtm of 'a numeric_expression * 'a numeric_expression |
+  NumericLessAtm of 'a numeric_expression * 'a numeric_expression |
+  NumericLEAtm of 'a numeric_expression * 'a numeric_expression |
+  NumericGreaterAtm of 'a numeric_expression * 'a numeric_expression |
+  NumericGEAtm of 'a numeric_expression * 'a numeric_expression;
+
+fun equal_atoma A_ (NumericGreaterAtm (x61, x62)) (NumericGEAtm (x71, x72)) =
+  false
+  | equal_atoma A_ (NumericGEAtm (x71, x72)) (NumericGreaterAtm (x61, x62)) =
+    false
+  | equal_atoma A_ (NumericLEAtm (x51, x52)) (NumericGEAtm (x71, x72)) = false
+  | equal_atoma A_ (NumericGEAtm (x71, x72)) (NumericLEAtm (x51, x52)) = false
+  | equal_atoma A_ (NumericLEAtm (x51, x52)) (NumericGreaterAtm (x61, x62)) =
+    false
+  | equal_atoma A_ (NumericGreaterAtm (x61, x62)) (NumericLEAtm (x51, x52)) =
+    false
+  | equal_atoma A_ (NumericLessAtm (x41, x42)) (NumericGEAtm (x71, x72)) = false
+  | equal_atoma A_ (NumericGEAtm (x71, x72)) (NumericLessAtm (x41, x42)) = false
+  | equal_atoma A_ (NumericLessAtm (x41, x42)) (NumericGreaterAtm (x61, x62)) =
+    false
+  | equal_atoma A_ (NumericGreaterAtm (x61, x62)) (NumericLessAtm (x41, x42)) =
+    false
+  | equal_atoma A_ (NumericLessAtm (x41, x42)) (NumericLEAtm (x51, x52)) = false
+  | equal_atoma A_ (NumericLEAtm (x51, x52)) (NumericLessAtm (x41, x42)) = false
+  | equal_atoma A_ (NumericEqAtm (x31, x32)) (NumericGEAtm (x71, x72)) = false
+  | equal_atoma A_ (NumericGEAtm (x71, x72)) (NumericEqAtm (x31, x32)) = false
+  | equal_atoma A_ (NumericEqAtm (x31, x32)) (NumericGreaterAtm (x61, x62)) =
+    false
+  | equal_atoma A_ (NumericGreaterAtm (x61, x62)) (NumericEqAtm (x31, x32)) =
+    false
+  | equal_atoma A_ (NumericEqAtm (x31, x32)) (NumericLEAtm (x51, x52)) = false
+  | equal_atoma A_ (NumericLEAtm (x51, x52)) (NumericEqAtm (x31, x32)) = false
+  | equal_atoma A_ (NumericEqAtm (x31, x32)) (NumericLessAtm (x41, x42)) = false
+  | equal_atoma A_ (NumericLessAtm (x41, x42)) (NumericEqAtm (x31, x32)) = false
+  | equal_atoma A_ (EqAtm (x21, x22)) (NumericGEAtm (x71, x72)) = false
+  | equal_atoma A_ (NumericGEAtm (x71, x72)) (EqAtm (x21, x22)) = false
+  | equal_atoma A_ (EqAtm (x21, x22)) (NumericGreaterAtm (x61, x62)) = false
+  | equal_atoma A_ (NumericGreaterAtm (x61, x62)) (EqAtm (x21, x22)) = false
+  | equal_atoma A_ (EqAtm (x21, x22)) (NumericLEAtm (x51, x52)) = false
+  | equal_atoma A_ (NumericLEAtm (x51, x52)) (EqAtm (x21, x22)) = false
+  | equal_atoma A_ (EqAtm (x21, x22)) (NumericLessAtm (x41, x42)) = false
+  | equal_atoma A_ (NumericLessAtm (x41, x42)) (EqAtm (x21, x22)) = false
+  | equal_atoma A_ (EqAtm (x21, x22)) (NumericEqAtm (x31, x32)) = false
+  | equal_atoma A_ (NumericEqAtm (x31, x32)) (EqAtm (x21, x22)) = false
+  | equal_atoma A_ (PredAtm (x11, x12)) (NumericGEAtm (x71, x72)) = false
+  | equal_atoma A_ (NumericGEAtm (x71, x72)) (PredAtm (x11, x12)) = false
+  | equal_atoma A_ (PredAtm (x11, x12)) (NumericGreaterAtm (x61, x62)) = false
+  | equal_atoma A_ (NumericGreaterAtm (x61, x62)) (PredAtm (x11, x12)) = false
+  | equal_atoma A_ (PredAtm (x11, x12)) (NumericLEAtm (x51, x52)) = false
+  | equal_atoma A_ (NumericLEAtm (x51, x52)) (PredAtm (x11, x12)) = false
+  | equal_atoma A_ (PredAtm (x11, x12)) (NumericLessAtm (x41, x42)) = false
+  | equal_atoma A_ (NumericLessAtm (x41, x42)) (PredAtm (x11, x12)) = false
+  | equal_atoma A_ (PredAtm (x11, x12)) (NumericEqAtm (x31, x32)) = false
+  | equal_atoma A_ (NumericEqAtm (x31, x32)) (PredAtm (x11, x12)) = false
+  | equal_atoma A_ (PredAtm (x11, x12)) (EqAtm (x21, x22)) = false
+  | equal_atoma A_ (EqAtm (x21, x22)) (PredAtm (x11, x12)) = false
+  | equal_atoma A_ (NumericGEAtm (x71, x72)) (NumericGEAtm (y71, y72)) =
+    equal_numeric_expression A_ x71 y71 andalso
+      equal_numeric_expression A_ x72 y72
+  | equal_atoma A_ (NumericGreaterAtm (x61, x62)) (NumericGreaterAtm (y61, y62))
+    = equal_numeric_expression A_ x61 y61 andalso
+        equal_numeric_expression A_ x62 y62
+  | equal_atoma A_ (NumericLEAtm (x51, x52)) (NumericLEAtm (y51, y52)) =
+    equal_numeric_expression A_ x51 y51 andalso
+      equal_numeric_expression A_ x52 y52
+  | equal_atoma A_ (NumericLessAtm (x41, x42)) (NumericLessAtm (y41, y42)) =
+    equal_numeric_expression A_ x41 y41 andalso
+      equal_numeric_expression A_ x42 y42
+  | equal_atoma A_ (NumericEqAtm (x31, x32)) (NumericEqAtm (y31, y32)) =
+    equal_numeric_expression A_ x31 y31 andalso
+      equal_numeric_expression A_ x32 y32
+  | equal_atoma A_ (EqAtm (x21, x22)) (EqAtm (y21, y22)) =
+    eq A_ x21 y21 andalso eq A_ x22 y22
+  | equal_atoma A_ (PredAtm (x11, x12)) (PredAtm (y11, y12)) =
+    equal_predicatea x11 y11 andalso equal_lista A_ x12 y12;
+
+fun equal_atom A_ = {equal = equal_atoma A_} : 'a atom equal;
+
+fun comparator_func (Func x) (Func y) =
+  comparator_of (equal_literal, linorder_literal) x y;
+
+fun comparator_primitive_numeric_expression comp_e_n_t (PNE (x, xa))
+  (PNE (y, ya)) =
+  (case comparator_func x y of Eq => comparator_list comp_e_n_t xa ya
+    | Lta => Lta | Gt => Gt);
+
+fun comparator_numeric_expression comp_e_n_t (ConstantExpr x) (ConstantExpr y) =
+  comparator_of (equal_rat, linorder_rat) x y
+  | comparator_numeric_expression comp_e_n_t (ConstantExpr x) DurationExpr = Lta
+  | comparator_numeric_expression comp_e_n_t (ConstantExpr x) (AddExpr (ya, yb))
+    = Lta
+  | comparator_numeric_expression comp_e_n_t (ConstantExpr x) (SubExpr (yc, yd))
+    = Lta
+  | comparator_numeric_expression comp_e_n_t (ConstantExpr x) (MulExpr (ye, yf))
+    = Lta
+  | comparator_numeric_expression comp_e_n_t (ConstantExpr x) (DivExpr (yg, yh))
+    = Lta
+  | comparator_numeric_expression comp_e_n_t (ConstantExpr x) (SinExpr yi) = Lta
+  | comparator_numeric_expression comp_e_n_t (ConstantExpr x) (CosExpr yj) = Lta
+  | comparator_numeric_expression comp_e_n_t (ConstantExpr x) (ExpExpr yk) = Lta
+  | comparator_numeric_expression comp_e_n_t (ConstantExpr x) PiExpr = Lta
+  | comparator_numeric_expression comp_e_n_t (ConstantExpr x) (FunctionExpr yl)
+    = Lta
+  | comparator_numeric_expression comp_e_n_t DurationExpr (ConstantExpr y) = Gt
+  | comparator_numeric_expression comp_e_n_t DurationExpr DurationExpr = Eq
+  | comparator_numeric_expression comp_e_n_t DurationExpr (AddExpr (ya, yb)) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t DurationExpr (SubExpr (yc, yd)) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t DurationExpr (MulExpr (ye, yf)) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t DurationExpr (DivExpr (yg, yh)) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t DurationExpr (SinExpr yi) = Lta
+  | comparator_numeric_expression comp_e_n_t DurationExpr (CosExpr yj) = Lta
+  | comparator_numeric_expression comp_e_n_t DurationExpr (ExpExpr yk) = Lta
+  | comparator_numeric_expression comp_e_n_t DurationExpr PiExpr = Lta
+  | comparator_numeric_expression comp_e_n_t DurationExpr (FunctionExpr yl) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (AddExpr (x, xa)) (ConstantExpr y)
+    = Gt
+  | comparator_numeric_expression comp_e_n_t (AddExpr (x, xa)) DurationExpr = Gt
+  | comparator_numeric_expression comp_e_n_t (AddExpr (x, xa))
+    (AddExpr (ya, yb)) =
+    (case comparator_numeric_expression comp_e_n_t x ya
+      of Eq => comparator_numeric_expression comp_e_n_t xa yb | Lta => Lta
+      | Gt => Gt)
+  | comparator_numeric_expression comp_e_n_t (AddExpr (x, xa))
+    (SubExpr (yc, yd)) = Lta
+  | comparator_numeric_expression comp_e_n_t (AddExpr (x, xa))
+    (MulExpr (ye, yf)) = Lta
+  | comparator_numeric_expression comp_e_n_t (AddExpr (x, xa))
+    (DivExpr (yg, yh)) = Lta
+  | comparator_numeric_expression comp_e_n_t (AddExpr (x, xa)) (SinExpr yi) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (AddExpr (x, xa)) (CosExpr yj) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (AddExpr (x, xa)) (ExpExpr yk) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (AddExpr (x, xa)) PiExpr = Lta
+  | comparator_numeric_expression comp_e_n_t (AddExpr (x, xa)) (FunctionExpr yl)
+    = Lta
+  | comparator_numeric_expression comp_e_n_t (SubExpr (x, xa)) (ConstantExpr y)
+    = Gt
+  | comparator_numeric_expression comp_e_n_t (SubExpr (x, xa)) DurationExpr = Gt
+  | comparator_numeric_expression comp_e_n_t (SubExpr (x, xa))
+    (AddExpr (ya, yb)) = Gt
+  | comparator_numeric_expression comp_e_n_t (SubExpr (x, xa))
+    (SubExpr (yc, yd)) =
+    (case comparator_numeric_expression comp_e_n_t x yc
+      of Eq => comparator_numeric_expression comp_e_n_t xa yd | Lta => Lta
+      | Gt => Gt)
+  | comparator_numeric_expression comp_e_n_t (SubExpr (x, xa))
+    (MulExpr (ye, yf)) = Lta
+  | comparator_numeric_expression comp_e_n_t (SubExpr (x, xa))
+    (DivExpr (yg, yh)) = Lta
+  | comparator_numeric_expression comp_e_n_t (SubExpr (x, xa)) (SinExpr yi) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (SubExpr (x, xa)) (CosExpr yj) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (SubExpr (x, xa)) (ExpExpr yk) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (SubExpr (x, xa)) PiExpr = Lta
+  | comparator_numeric_expression comp_e_n_t (SubExpr (x, xa)) (FunctionExpr yl)
+    = Lta
+  | comparator_numeric_expression comp_e_n_t (MulExpr (x, xa)) (ConstantExpr y)
+    = Gt
+  | comparator_numeric_expression comp_e_n_t (MulExpr (x, xa)) DurationExpr = Gt
+  | comparator_numeric_expression comp_e_n_t (MulExpr (x, xa))
+    (AddExpr (ya, yb)) = Gt
+  | comparator_numeric_expression comp_e_n_t (MulExpr (x, xa))
+    (SubExpr (yc, yd)) = Gt
+  | comparator_numeric_expression comp_e_n_t (MulExpr (x, xa))
+    (MulExpr (ye, yf)) =
+    (case comparator_numeric_expression comp_e_n_t x ye
+      of Eq => comparator_numeric_expression comp_e_n_t xa yf | Lta => Lta
+      | Gt => Gt)
+  | comparator_numeric_expression comp_e_n_t (MulExpr (x, xa))
+    (DivExpr (yg, yh)) = Lta
+  | comparator_numeric_expression comp_e_n_t (MulExpr (x, xa)) (SinExpr yi) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (MulExpr (x, xa)) (CosExpr yj) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (MulExpr (x, xa)) (ExpExpr yk) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (MulExpr (x, xa)) PiExpr = Lta
+  | comparator_numeric_expression comp_e_n_t (MulExpr (x, xa)) (FunctionExpr yl)
+    = Lta
+  | comparator_numeric_expression comp_e_n_t (DivExpr (x, xa)) (ConstantExpr y)
+    = Gt
+  | comparator_numeric_expression comp_e_n_t (DivExpr (x, xa)) DurationExpr = Gt
+  | comparator_numeric_expression comp_e_n_t (DivExpr (x, xa))
+    (AddExpr (ya, yb)) = Gt
+  | comparator_numeric_expression comp_e_n_t (DivExpr (x, xa))
+    (SubExpr (yc, yd)) = Gt
+  | comparator_numeric_expression comp_e_n_t (DivExpr (x, xa))
+    (MulExpr (ye, yf)) = Gt
+  | comparator_numeric_expression comp_e_n_t (DivExpr (x, xa))
+    (DivExpr (yg, yh)) =
+    (case comparator_numeric_expression comp_e_n_t x yg
+      of Eq => comparator_numeric_expression comp_e_n_t xa yh | Lta => Lta
+      | Gt => Gt)
+  | comparator_numeric_expression comp_e_n_t (DivExpr (x, xa)) (SinExpr yi) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (DivExpr (x, xa)) (CosExpr yj) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (DivExpr (x, xa)) (ExpExpr yk) =
+    Lta
+  | comparator_numeric_expression comp_e_n_t (DivExpr (x, xa)) PiExpr = Lta
+  | comparator_numeric_expression comp_e_n_t (DivExpr (x, xa)) (FunctionExpr yl)
+    = Lta
+  | comparator_numeric_expression comp_e_n_t (SinExpr x) (ConstantExpr y) = Gt
+  | comparator_numeric_expression comp_e_n_t (SinExpr x) DurationExpr = Gt
+  | comparator_numeric_expression comp_e_n_t (SinExpr x) (AddExpr (ya, yb)) = Gt
+  | comparator_numeric_expression comp_e_n_t (SinExpr x) (SubExpr (yc, yd)) = Gt
+  | comparator_numeric_expression comp_e_n_t (SinExpr x) (MulExpr (ye, yf)) = Gt
+  | comparator_numeric_expression comp_e_n_t (SinExpr x) (DivExpr (yg, yh)) = Gt
+  | comparator_numeric_expression comp_e_n_t (SinExpr x) (SinExpr yi) =
+    comparator_numeric_expression comp_e_n_t x yi
+  | comparator_numeric_expression comp_e_n_t (SinExpr x) (CosExpr yj) = Lta
+  | comparator_numeric_expression comp_e_n_t (SinExpr x) (ExpExpr yk) = Lta
+  | comparator_numeric_expression comp_e_n_t (SinExpr x) PiExpr = Lta
+  | comparator_numeric_expression comp_e_n_t (SinExpr x) (FunctionExpr yl) = Lta
+  | comparator_numeric_expression comp_e_n_t (CosExpr x) (ConstantExpr y) = Gt
+  | comparator_numeric_expression comp_e_n_t (CosExpr x) DurationExpr = Gt
+  | comparator_numeric_expression comp_e_n_t (CosExpr x) (AddExpr (ya, yb)) = Gt
+  | comparator_numeric_expression comp_e_n_t (CosExpr x) (SubExpr (yc, yd)) = Gt
+  | comparator_numeric_expression comp_e_n_t (CosExpr x) (MulExpr (ye, yf)) = Gt
+  | comparator_numeric_expression comp_e_n_t (CosExpr x) (DivExpr (yg, yh)) = Gt
+  | comparator_numeric_expression comp_e_n_t (CosExpr x) (SinExpr yi) = Gt
+  | comparator_numeric_expression comp_e_n_t (CosExpr x) (CosExpr yj) =
+    comparator_numeric_expression comp_e_n_t x yj
+  | comparator_numeric_expression comp_e_n_t (CosExpr x) (ExpExpr yk) = Lta
+  | comparator_numeric_expression comp_e_n_t (CosExpr x) PiExpr = Lta
+  | comparator_numeric_expression comp_e_n_t (CosExpr x) (FunctionExpr yl) = Lta
+  | comparator_numeric_expression comp_e_n_t (ExpExpr x) (ConstantExpr y) = Gt
+  | comparator_numeric_expression comp_e_n_t (ExpExpr x) DurationExpr = Gt
+  | comparator_numeric_expression comp_e_n_t (ExpExpr x) (AddExpr (ya, yb)) = Gt
+  | comparator_numeric_expression comp_e_n_t (ExpExpr x) (SubExpr (yc, yd)) = Gt
+  | comparator_numeric_expression comp_e_n_t (ExpExpr x) (MulExpr (ye, yf)) = Gt
+  | comparator_numeric_expression comp_e_n_t (ExpExpr x) (DivExpr (yg, yh)) = Gt
+  | comparator_numeric_expression comp_e_n_t (ExpExpr x) (SinExpr yi) = Gt
+  | comparator_numeric_expression comp_e_n_t (ExpExpr x) (CosExpr yj) = Gt
+  | comparator_numeric_expression comp_e_n_t (ExpExpr x) (ExpExpr yk) =
+    comparator_numeric_expression comp_e_n_t x yk
+  | comparator_numeric_expression comp_e_n_t (ExpExpr x) PiExpr = Lta
+  | comparator_numeric_expression comp_e_n_t (ExpExpr x) (FunctionExpr yl) = Lta
+  | comparator_numeric_expression comp_e_n_t PiExpr (ConstantExpr y) = Gt
+  | comparator_numeric_expression comp_e_n_t PiExpr DurationExpr = Gt
+  | comparator_numeric_expression comp_e_n_t PiExpr (AddExpr (ya, yb)) = Gt
+  | comparator_numeric_expression comp_e_n_t PiExpr (SubExpr (yc, yd)) = Gt
+  | comparator_numeric_expression comp_e_n_t PiExpr (MulExpr (ye, yf)) = Gt
+  | comparator_numeric_expression comp_e_n_t PiExpr (DivExpr (yg, yh)) = Gt
+  | comparator_numeric_expression comp_e_n_t PiExpr (SinExpr yi) = Gt
+  | comparator_numeric_expression comp_e_n_t PiExpr (CosExpr yj) = Gt
+  | comparator_numeric_expression comp_e_n_t PiExpr (ExpExpr yk) = Gt
+  | comparator_numeric_expression comp_e_n_t PiExpr PiExpr = Eq
+  | comparator_numeric_expression comp_e_n_t PiExpr (FunctionExpr yl) = Lta
+  | comparator_numeric_expression comp_e_n_t (FunctionExpr x) (ConstantExpr y) =
+    Gt
+  | comparator_numeric_expression comp_e_n_t (FunctionExpr x) DurationExpr = Gt
+  | comparator_numeric_expression comp_e_n_t (FunctionExpr x) (AddExpr (ya, yb))
+    = Gt
+  | comparator_numeric_expression comp_e_n_t (FunctionExpr x) (SubExpr (yc, yd))
+    = Gt
+  | comparator_numeric_expression comp_e_n_t (FunctionExpr x) (MulExpr (ye, yf))
+    = Gt
+  | comparator_numeric_expression comp_e_n_t (FunctionExpr x) (DivExpr (yg, yh))
+    = Gt
+  | comparator_numeric_expression comp_e_n_t (FunctionExpr x) (SinExpr yi) = Gt
+  | comparator_numeric_expression comp_e_n_t (FunctionExpr x) (CosExpr yj) = Gt
+  | comparator_numeric_expression comp_e_n_t (FunctionExpr x) (ExpExpr yk) = Gt
+  | comparator_numeric_expression comp_e_n_t (FunctionExpr x) PiExpr = Gt
+  | comparator_numeric_expression comp_e_n_t (FunctionExpr x) (FunctionExpr yl)
+    = comparator_primitive_numeric_expression comp_e_n_t x yl;
+
+fun comparator_predicate (Pred x) (Pred y) =
+  comparator_of (equal_literal, linorder_literal) x y;
+
+fun comparator_atom comp_e_n_t (PredAtm (x, xa)) (PredAtm (y, ya)) =
+  (case comparator_predicate x y of Eq => comparator_list comp_e_n_t xa ya
+    | Lta => Lta | Gt => Gt)
+  | comparator_atom comp_e_n_t (PredAtm (x, xa)) (EqAtm (yb, yc)) = Lta
+  | comparator_atom comp_e_n_t (PredAtm (x, xa)) (NumericEqAtm (yd, ye)) = Lta
+  | comparator_atom comp_e_n_t (PredAtm (x, xa)) (NumericLessAtm (yf, yg)) = Lta
+  | comparator_atom comp_e_n_t (PredAtm (x, xa)) (NumericLEAtm (yh, yi)) = Lta
+  | comparator_atom comp_e_n_t (PredAtm (x, xa)) (NumericGreaterAtm (yj, yk)) =
+    Lta
+  | comparator_atom comp_e_n_t (PredAtm (x, xa)) (NumericGEAtm (yl, ym)) = Lta
+  | comparator_atom comp_e_n_t (EqAtm (x, xa)) (PredAtm (y, ya)) = Gt
+  | comparator_atom comp_e_n_t (EqAtm (x, xa)) (EqAtm (yb, yc)) =
+    (case comp_e_n_t x yb of Eq => comp_e_n_t xa yc | Lta => Lta | Gt => Gt)
+  | comparator_atom comp_e_n_t (EqAtm (x, xa)) (NumericEqAtm (yd, ye)) = Lta
+  | comparator_atom comp_e_n_t (EqAtm (x, xa)) (NumericLessAtm (yf, yg)) = Lta
+  | comparator_atom comp_e_n_t (EqAtm (x, xa)) (NumericLEAtm (yh, yi)) = Lta
+  | comparator_atom comp_e_n_t (EqAtm (x, xa)) (NumericGreaterAtm (yj, yk)) =
+    Lta
+  | comparator_atom comp_e_n_t (EqAtm (x, xa)) (NumericGEAtm (yl, ym)) = Lta
+  | comparator_atom comp_e_n_t (NumericEqAtm (x, xa)) (PredAtm (y, ya)) = Gt
+  | comparator_atom comp_e_n_t (NumericEqAtm (x, xa)) (EqAtm (yb, yc)) = Gt
+  | comparator_atom comp_e_n_t (NumericEqAtm (x, xa)) (NumericEqAtm (yd, ye)) =
+    (case comparator_numeric_expression comp_e_n_t x yd
+      of Eq => comparator_numeric_expression comp_e_n_t xa ye | Lta => Lta
+      | Gt => Gt)
+  | comparator_atom comp_e_n_t (NumericEqAtm (x, xa)) (NumericLessAtm (yf, yg))
+    = Lta
+  | comparator_atom comp_e_n_t (NumericEqAtm (x, xa)) (NumericLEAtm (yh, yi)) =
+    Lta
+  | comparator_atom comp_e_n_t (NumericEqAtm (x, xa))
+    (NumericGreaterAtm (yj, yk)) = Lta
+  | comparator_atom comp_e_n_t (NumericEqAtm (x, xa)) (NumericGEAtm (yl, ym)) =
+    Lta
+  | comparator_atom comp_e_n_t (NumericLessAtm (x, xa)) (PredAtm (y, ya)) = Gt
+  | comparator_atom comp_e_n_t (NumericLessAtm (x, xa)) (EqAtm (yb, yc)) = Gt
+  | comparator_atom comp_e_n_t (NumericLessAtm (x, xa)) (NumericEqAtm (yd, ye))
+    = Gt
+  | comparator_atom comp_e_n_t (NumericLessAtm (x, xa))
+    (NumericLessAtm (yf, yg)) =
+    (case comparator_numeric_expression comp_e_n_t x yf
+      of Eq => comparator_numeric_expression comp_e_n_t xa yg | Lta => Lta
+      | Gt => Gt)
+  | comparator_atom comp_e_n_t (NumericLessAtm (x, xa)) (NumericLEAtm (yh, yi))
+    = Lta
+  | comparator_atom comp_e_n_t (NumericLessAtm (x, xa))
+    (NumericGreaterAtm (yj, yk)) = Lta
+  | comparator_atom comp_e_n_t (NumericLessAtm (x, xa)) (NumericGEAtm (yl, ym))
+    = Lta
+  | comparator_atom comp_e_n_t (NumericLEAtm (x, xa)) (PredAtm (y, ya)) = Gt
+  | comparator_atom comp_e_n_t (NumericLEAtm (x, xa)) (EqAtm (yb, yc)) = Gt
+  | comparator_atom comp_e_n_t (NumericLEAtm (x, xa)) (NumericEqAtm (yd, ye)) =
+    Gt
+  | comparator_atom comp_e_n_t (NumericLEAtm (x, xa)) (NumericLessAtm (yf, yg))
+    = Gt
+  | comparator_atom comp_e_n_t (NumericLEAtm (x, xa)) (NumericLEAtm (yh, yi)) =
+    (case comparator_numeric_expression comp_e_n_t x yh
+      of Eq => comparator_numeric_expression comp_e_n_t xa yi | Lta => Lta
+      | Gt => Gt)
+  | comparator_atom comp_e_n_t (NumericLEAtm (x, xa))
+    (NumericGreaterAtm (yj, yk)) = Lta
+  | comparator_atom comp_e_n_t (NumericLEAtm (x, xa)) (NumericGEAtm (yl, ym)) =
+    Lta
+  | comparator_atom comp_e_n_t (NumericGreaterAtm (x, xa)) (PredAtm (y, ya)) =
+    Gt
+  | comparator_atom comp_e_n_t (NumericGreaterAtm (x, xa)) (EqAtm (yb, yc)) = Gt
+  | comparator_atom comp_e_n_t (NumericGreaterAtm (x, xa))
+    (NumericEqAtm (yd, ye)) = Gt
+  | comparator_atom comp_e_n_t (NumericGreaterAtm (x, xa))
+    (NumericLessAtm (yf, yg)) = Gt
+  | comparator_atom comp_e_n_t (NumericGreaterAtm (x, xa))
+    (NumericLEAtm (yh, yi)) = Gt
+  | comparator_atom comp_e_n_t (NumericGreaterAtm (x, xa))
+    (NumericGreaterAtm (yj, yk)) =
+    (case comparator_numeric_expression comp_e_n_t x yj
+      of Eq => comparator_numeric_expression comp_e_n_t xa yk | Lta => Lta
+      | Gt => Gt)
+  | comparator_atom comp_e_n_t (NumericGreaterAtm (x, xa))
+    (NumericGEAtm (yl, ym)) = Lta
+  | comparator_atom comp_e_n_t (NumericGEAtm (x, xa)) (PredAtm (y, ya)) = Gt
+  | comparator_atom comp_e_n_t (NumericGEAtm (x, xa)) (EqAtm (yb, yc)) = Gt
+  | comparator_atom comp_e_n_t (NumericGEAtm (x, xa)) (NumericEqAtm (yd, ye)) =
+    Gt
+  | comparator_atom comp_e_n_t (NumericGEAtm (x, xa)) (NumericLessAtm (yf, yg))
+    = Gt
+  | comparator_atom comp_e_n_t (NumericGEAtm (x, xa)) (NumericLEAtm (yh, yi)) =
+    Gt
+  | comparator_atom comp_e_n_t (NumericGEAtm (x, xa))
+    (NumericGreaterAtm (yj, yk)) = Gt
+  | comparator_atom comp_e_n_t (NumericGEAtm (x, xa)) (NumericGEAtm (yl, ym)) =
+    (case comparator_numeric_expression comp_e_n_t x yl
+      of Eq => comparator_numeric_expression comp_e_n_t xa ym | Lta => Lta
+      | Gt => Gt);
+
+fun less_eq_atom (A1_, A2_) =
+  le_of_comp (comparator_atom (comparator_of (A1_, A2_)));
+
+fun less_atom (A1_, A2_) =
+  lt_of_comp (comparator_atom (comparator_of (A1_, A2_)));
+
+fun ord_atom (A1_, A2_) =
+  {less_eq = less_eq_atom (A1_, A2_), less = less_atom (A1_, A2_)} :
+  'a atom ord;
+
+fun preorder_atom (A1_, A2_) = {ord_preorder = ord_atom (A1_, A2_)} :
+  'a atom preorder;
+
+fun order_atom (A1_, A2_) = {preorder_order = preorder_atom (A1_, A2_)} :
+  'a atom order;
+
+fun ceq_atoma A_ = SOME (equal_atoma A_);
+
+fun ceq_atom A_ = {ceq = ceq_atoma A_} : 'a atom ceq;
+
+val set_impl_atoma : ('a atom, set_impla) phantom = Phantom Set_DList;
+
+val set_impl_atom = {set_impl = set_impl_atoma} : 'a atom set_impl;
+
+fun linorder_atom (A1_, A2_) = {order_linorder = order_atom (A1_, A2_)} :
+  'a atom linorder;
+
+fun ccompare_atoma A_ =
+  (case ccompare A_ of NONE => NONE
+    | SOME comp_ent => SOME (comparator_atom comp_ent));
+
+fun ccompare_atom A_ = {ccompare = ccompare_atoma A_} : 'a atom ccompare;
+
+val equal_func = {equal = equal_funca} : func equal;
+
+fun less_eq_func x = le_of_comp comparator_func x;
+
+fun less_func x = lt_of_comp comparator_func x;
+
+val ord_func = {less_eq = less_eq_func, less = less_func} : func ord;
+
+val preorder_func = {ord_preorder = ord_func} : func preorder;
+
+val order_func = {preorder_order = preorder_func} : func order;
+
+val linorder_func = {order_linorder = order_func} : func linorder;
+
+datatype variable = Vara of string;
+
+fun equal_variablea (Vara x) (Vara ya) = ((x : string) = ya);
+
+datatype object = Obj of string;
+
+fun equal_objecta (Obj x) (Obj ya) = ((x : string) = ya);
+
+datatype term = VAR of variable | CONST of object;
+
+fun equal_terma (VAR x1) (CONST x2) = false
+  | equal_terma (CONST x2) (VAR x1) = false
+  | equal_terma (CONST x2) (CONST y2) = equal_objecta x2 y2
+  | equal_terma (VAR x1) (VAR y1) = equal_variablea x1 y1;
+
+val equal_term = {equal = equal_terma} : term equal;
+
+fun comparator_variable (Vara x) (Vara y) =
+  comparator_of (equal_literal, linorder_literal) x y;
+
+fun comparator_object (Obj x) (Obj y) =
+  comparator_of (equal_literal, linorder_literal) x y;
+
+fun comparator_term (VAR x) (VAR y) = comparator_variable x y
+  | comparator_term (VAR x) (CONST ya) = Lta
+  | comparator_term (CONST x) (VAR y) = Gt
+  | comparator_term (CONST x) (CONST ya) = comparator_object x ya;
+
+val ccompare_terma : (term -> term -> ordera) option = SOME comparator_term;
+
+val ccompare_term = {ccompare = ccompare_terma} : term ccompare;
+
+datatype typea = Either of string list;
+
+fun equal_typea (Either x) (Either ya) = equal_lista equal_literal x ya;
+
+val equal_type = {equal = equal_typea} : typea equal;
+
 val one_integera : int = (1 : Int.int);
 
 val one_integer = {one = one_integera} : int one;
 
 val zero_integer = {zero = (0 : Int.int)} : int zero;
 
-type 'a zero_neq_one = {one_zero_neq_one : 'a one, zero_zero_neq_one : 'a zero};
-val one_zero_neq_one = #one_zero_neq_one : 'a zero_neq_one -> 'a one;
-val zero_zero_neq_one = #zero_zero_neq_one : 'a zero_neq_one -> 'a zero;
-
 val zero_neq_one_integer =
   {one_zero_neq_one = one_integer, zero_zero_neq_one = zero_integer} :
   int zero_neq_one;
+
+val equal_object = {equal = equal_objecta} : object equal;
+
+fun less_eq_object x = le_of_comp comparator_object x;
+
+fun less_object x = lt_of_comp comparator_object x;
+
+val ord_object = {less_eq = less_eq_object, less = less_object} : object ord;
+
+val preorder_object = {ord_preorder = ord_object} : object preorder;
+
+val order_object = {preorder_order = preorder_object} : object order;
+
+val linorder_object = {order_linorder = order_object} : object linorder;
+
+val ccompare_objecta : (object -> object -> ordera) option =
+  SOME comparator_object;
+
+val ccompare_object = {ccompare = ccompare_objecta} : object ccompare;
+
+val mapping_impl_objecta : (object, mapping_impla) phantom =
+  Phantom Mapping_RBT;
+
+val mapping_impl_object = {mapping_impl = mapping_impl_objecta} :
+  object mapping_impl;
 
 datatype ('a, 'b) bexp = True | Nota of ('a, 'b) bexp |
   Anda of ('a, 'b) bexp * ('a, 'b) bexp | Ora of ('a, 'b) bexp * ('a, 'b) bexp |
@@ -3631,6 +4401,128 @@ fun show_bexp A_ B_ =
   {shows_prec = shows_prec_bexp A_ B_, shows_list = shows_list_bexp A_ B_} :
   ('a, 'b) bexp show;
 
+val equal_variable = {equal = equal_variablea} : variable equal;
+
+fun less_eq_variable x = le_of_comp comparator_variable x;
+
+fun less_variable x = lt_of_comp comparator_variable x;
+
+val ord_variable = {less_eq = less_eq_variable, less = less_variable} :
+  variable ord;
+
+val preorder_variable = {ord_preorder = ord_variable} : variable preorder;
+
+val order_variable = {preorder_order = preorder_variable} : variable order;
+
+val linorder_variable = {order_linorder = order_variable} : variable linorder;
+
+val equal_predicate = {equal = equal_predicatea} : predicate equal;
+
+fun less_eq_predicate x = le_of_comp comparator_predicate x;
+
+fun less_predicate x = lt_of_comp comparator_predicate x;
+
+val ord_predicate = {less_eq = less_eq_predicate, less = less_predicate} :
+  predicate ord;
+
+val preorder_predicate = {ord_preorder = ord_predicate} : predicate preorder;
+
+val order_predicate = {preorder_order = preorder_predicate} : predicate order;
+
+val ceq_predicatea : (predicate -> predicate -> bool) option =
+  SOME equal_predicatea;
+
+val ceq_predicate = {ceq = ceq_predicatea} : predicate ceq;
+
+val set_impl_predicatea : (predicate, set_impla) phantom = Phantom Set_DList;
+
+val set_impl_predicate = {set_impl = set_impl_predicatea} : predicate set_impl;
+
+val linorder_predicate = {order_linorder = order_predicate} :
+  predicate linorder;
+
+val finite_UNIV_predicatea : (predicate, bool) phantom = Phantom false;
+
+val card_UNIV_predicatea : (predicate, nat) phantom = Phantom zero_nata;
+
+type 'a card_UNIV =
+  {finite_UNIV_card_UNIV : 'a finite_UNIV, card_UNIV : ('a, nat) phantom};
+val finite_UNIV_card_UNIV = #finite_UNIV_card_UNIV :
+  'a card_UNIV -> 'a finite_UNIV;
+val card_UNIV = #card_UNIV : 'a card_UNIV -> ('a, nat) phantom;
+
+val finite_UNIV_predicate = {finite_UNIV = finite_UNIV_predicatea} :
+  predicate finite_UNIV;
+
+val card_UNIV_predicate =
+  {finite_UNIV_card_UNIV = finite_UNIV_predicate,
+    card_UNIV = card_UNIV_predicatea}
+  : predicate card_UNIV;
+
+val ccompare_predicatea : (predicate -> predicate -> ordera) option =
+  SOME comparator_predicate;
+
+val ccompare_predicate = {ccompare = ccompare_predicatea} : predicate ccompare;
+
+fun cproper_interval_predicatea uu uv = (raise Fail "undefined");
+
+val cproper_interval_predicate =
+  {ccompare_cproper_interval = ccompare_predicate,
+    cproper_interval = cproper_interval_predicatea}
+  : predicate cproper_interval;
+
+datatype numeric_effect_op = Assign | ScaleUp | ScaleDown | Increase | Decrease;
+
+datatype 'a numeric_effect =
+  NumericEffect of
+    numeric_effect_op * 'a primitive_numeric_expression * 'a numeric_expression;
+
+datatype 'a ast_effect =
+  Effect of
+    'a atom formula list * 'a atom formula list * 'a numeric_effect list;
+
+fun equal_numeric_effect_op Increase Decrease = false
+  | equal_numeric_effect_op Decrease Increase = false
+  | equal_numeric_effect_op ScaleDown Decrease = false
+  | equal_numeric_effect_op Decrease ScaleDown = false
+  | equal_numeric_effect_op ScaleDown Increase = false
+  | equal_numeric_effect_op Increase ScaleDown = false
+  | equal_numeric_effect_op ScaleUp Decrease = false
+  | equal_numeric_effect_op Decrease ScaleUp = false
+  | equal_numeric_effect_op ScaleUp Increase = false
+  | equal_numeric_effect_op Increase ScaleUp = false
+  | equal_numeric_effect_op ScaleUp ScaleDown = false
+  | equal_numeric_effect_op ScaleDown ScaleUp = false
+  | equal_numeric_effect_op Assign Decrease = false
+  | equal_numeric_effect_op Decrease Assign = false
+  | equal_numeric_effect_op Assign Increase = false
+  | equal_numeric_effect_op Increase Assign = false
+  | equal_numeric_effect_op Assign ScaleDown = false
+  | equal_numeric_effect_op ScaleDown Assign = false
+  | equal_numeric_effect_op Assign ScaleUp = false
+  | equal_numeric_effect_op ScaleUp Assign = false
+  | equal_numeric_effect_op Decrease Decrease = true
+  | equal_numeric_effect_op Increase Increase = true
+  | equal_numeric_effect_op ScaleDown ScaleDown = true
+  | equal_numeric_effect_op ScaleUp ScaleUp = true
+  | equal_numeric_effect_op Assign Assign = true;
+
+fun equal_numeric_effecta A_ (NumericEffect (x1, x2, x3))
+  (NumericEffect (y1, y2, y3)) =
+  equal_numeric_effect_op x1 y1 andalso
+    (equal_primitive_numeric_expression A_ x2 y2 andalso
+      equal_numeric_expression A_ x3 y3);
+
+fun equal_numeric_effect A_ = {equal = equal_numeric_effecta A_} :
+  'a numeric_effect equal;
+
+fun equal_ast_effecta A_ (Effect (x1, x2, x3)) (Effect (y1, y2, y3)) =
+  equal_lista (equal_formula (equal_atom A_)) x1 y1 andalso
+    (equal_lista (equal_formula (equal_atom A_)) x2 y2 andalso
+      equal_lista (equal_numeric_effect A_) x3 y3);
+
+fun equal_ast_effect A_ = {equal = equal_ast_effecta A_} : 'a ast_effect equal;
+
 datatype 'a lower_bound = GT of 'a | GE of 'a;
 
 fun less_eq_lower_bound A_ (GE x) (GE y) =
@@ -3697,39 +4589,19 @@ fun order_upper_bound A_ = {preorder_order = preorder_upper_bound A_} :
 fun linorder_upper_bound A_ = {order_linorder = order_upper_bound A_} :
   'a upper_bound linorder;
 
-datatype ('a, 'b) acconstraint = LTa of 'a * 'b | LEa of 'a * 'b | EQ of 'a * 'b
-  | GTa of 'a * 'b | GEa of 'a * 'b;
+datatype ('a, 'b) acconstraint = LTa of 'a * 'b | LEa of 'a * 'b |
+  EQa of 'a * 'b | GTa of 'a * 'b | GEa of 'a * 'b;
 
-fun showsp_acconstraint show_c show_t p (GEa (x, y)) =
+fun showsp_acconstraint show_c show_t p (LTa (x, y)) =
   shows_pl p o
     shows_string
-      [Chara (true, true, true, false, false, false, true, false),
-        Chara (true, false, true, false, false, false, true, false)] o
+      [Chara (false, false, true, true, false, false, true, false),
+        Chara (false, false, true, false, true, false, true, false)] o
     shows_space o
     show_c one_nata x o
     shows_space o
     show_t one_nata y o
     shows_pr p
-  | showsp_acconstraint show_c show_t p (GTa (x, y)) =
-    shows_pl p o
-      shows_string
-        [Chara (true, true, true, false, false, false, true, false),
-          Chara (false, false, true, false, true, false, true, false)] o
-      shows_space o
-      show_c one_nata x o
-      shows_space o
-      show_t one_nata y o
-      shows_pr p
-  | showsp_acconstraint show_c show_t p (EQ (x, y)) =
-    shows_pl p o
-      shows_string
-        [Chara (true, false, true, false, false, false, true, false),
-          Chara (true, false, false, false, true, false, true, false)] o
-      shows_space o
-      show_c one_nata x o
-      shows_space o
-      show_t one_nata y o
-      shows_pr p
   | showsp_acconstraint show_c show_t p (LEa (x, y)) =
     shows_pl p o
       shows_string
@@ -3740,11 +4612,31 @@ fun showsp_acconstraint show_c show_t p (GEa (x, y)) =
       shows_space o
       show_t one_nata y o
       shows_pr p
-  | showsp_acconstraint show_c show_t p (LTa (x, y)) =
+  | showsp_acconstraint show_c show_t p (EQa (x, y)) =
     shows_pl p o
       shows_string
-        [Chara (false, false, true, true, false, false, true, false),
+        [Chara (true, false, true, false, false, false, true, false),
+          Chara (true, false, false, false, true, false, true, false)] o
+      shows_space o
+      show_c one_nata x o
+      shows_space o
+      show_t one_nata y o
+      shows_pr p
+  | showsp_acconstraint show_c show_t p (GTa (x, y)) =
+    shows_pl p o
+      shows_string
+        [Chara (true, true, true, false, false, false, true, false),
           Chara (false, false, true, false, true, false, true, false)] o
+      shows_space o
+      show_c one_nata x o
+      shows_space o
+      show_t one_nata y o
+      shows_pr p
+  | showsp_acconstraint show_c show_t p (GEa (x, y)) =
+    shows_pl p o
+      shows_string
+        [Chara (true, true, true, false, false, false, true, false),
+          Chara (true, false, true, false, false, false, true, false)] o
       shows_space o
       show_c one_nata x o
       shows_space o
@@ -3764,29 +4656,29 @@ fun show_acconstraint A_ B_ =
 
 fun equal_acconstraint A_ B_ (GTa (x41, x42)) (GEa (x51, x52)) = false
   | equal_acconstraint A_ B_ (GEa (x51, x52)) (GTa (x41, x42)) = false
-  | equal_acconstraint A_ B_ (EQ (x31, x32)) (GEa (x51, x52)) = false
-  | equal_acconstraint A_ B_ (GEa (x51, x52)) (EQ (x31, x32)) = false
-  | equal_acconstraint A_ B_ (EQ (x31, x32)) (GTa (x41, x42)) = false
-  | equal_acconstraint A_ B_ (GTa (x41, x42)) (EQ (x31, x32)) = false
+  | equal_acconstraint A_ B_ (EQa (x31, x32)) (GEa (x51, x52)) = false
+  | equal_acconstraint A_ B_ (GEa (x51, x52)) (EQa (x31, x32)) = false
+  | equal_acconstraint A_ B_ (EQa (x31, x32)) (GTa (x41, x42)) = false
+  | equal_acconstraint A_ B_ (GTa (x41, x42)) (EQa (x31, x32)) = false
   | equal_acconstraint A_ B_ (LEa (x21, x22)) (GEa (x51, x52)) = false
   | equal_acconstraint A_ B_ (GEa (x51, x52)) (LEa (x21, x22)) = false
   | equal_acconstraint A_ B_ (LEa (x21, x22)) (GTa (x41, x42)) = false
   | equal_acconstraint A_ B_ (GTa (x41, x42)) (LEa (x21, x22)) = false
-  | equal_acconstraint A_ B_ (LEa (x21, x22)) (EQ (x31, x32)) = false
-  | equal_acconstraint A_ B_ (EQ (x31, x32)) (LEa (x21, x22)) = false
+  | equal_acconstraint A_ B_ (LEa (x21, x22)) (EQa (x31, x32)) = false
+  | equal_acconstraint A_ B_ (EQa (x31, x32)) (LEa (x21, x22)) = false
   | equal_acconstraint A_ B_ (LTa (x11, x12)) (GEa (x51, x52)) = false
   | equal_acconstraint A_ B_ (GEa (x51, x52)) (LTa (x11, x12)) = false
   | equal_acconstraint A_ B_ (LTa (x11, x12)) (GTa (x41, x42)) = false
   | equal_acconstraint A_ B_ (GTa (x41, x42)) (LTa (x11, x12)) = false
-  | equal_acconstraint A_ B_ (LTa (x11, x12)) (EQ (x31, x32)) = false
-  | equal_acconstraint A_ B_ (EQ (x31, x32)) (LTa (x11, x12)) = false
+  | equal_acconstraint A_ B_ (LTa (x11, x12)) (EQa (x31, x32)) = false
+  | equal_acconstraint A_ B_ (EQa (x31, x32)) (LTa (x11, x12)) = false
   | equal_acconstraint A_ B_ (LTa (x11, x12)) (LEa (x21, x22)) = false
   | equal_acconstraint A_ B_ (LEa (x21, x22)) (LTa (x11, x12)) = false
   | equal_acconstraint A_ B_ (GEa (x51, x52)) (GEa (y51, y52)) =
     eq A_ x51 y51 andalso eq B_ x52 y52
   | equal_acconstraint A_ B_ (GTa (x41, x42)) (GTa (y41, y42)) =
     eq A_ x41 y41 andalso eq B_ x42 y42
-  | equal_acconstraint A_ B_ (EQ (x31, x32)) (EQ (y31, y32)) =
+  | equal_acconstraint A_ B_ (EQa (x31, x32)) (EQa (y31, y32)) =
     eq A_ x31 y31 andalso eq B_ x32 y32
   | equal_acconstraint A_ B_ (LEa (x21, x22)) (LEa (y21, y22)) =
     eq A_ x21 y21 andalso eq B_ x22 y22
@@ -3804,36 +4696,36 @@ val set_impl_acconstrainta : (('a, 'b) acconstraint, set_impla) phantom =
 val set_impl_acconstraint = {set_impl = set_impl_acconstrainta} :
   ('a, 'b) acconstraint set_impl;
 
-fun comparator_acconstraint comp_c comp_t (GEa (x, xa)) (GEa (yh, yi)) =
-  (case comp_c x yh of Eq => comp_t xa yi | Lta => Lta | Gt => Gt)
-  | comparator_acconstraint comp_c comp_t (GEa (x, xa)) (GTa (yf, yg)) = Gt
-  | comparator_acconstraint comp_c comp_t (GEa (x, xa)) (EQ (yd, ye)) = Gt
-  | comparator_acconstraint comp_c comp_t (GEa (x, xa)) (LEa (yb, yc)) = Gt
-  | comparator_acconstraint comp_c comp_t (GEa (x, xa)) (LTa (y, ya)) = Gt
-  | comparator_acconstraint comp_c comp_t (GTa (x, xa)) (GEa (yh, yi)) = Lta
-  | comparator_acconstraint comp_c comp_t (GTa (x, xa)) (GTa (yf, yg)) =
-    (case comp_c x yf of Eq => comp_t xa yg | Lta => Lta | Gt => Gt)
-  | comparator_acconstraint comp_c comp_t (GTa (x, xa)) (EQ (yd, ye)) = Gt
-  | comparator_acconstraint comp_c comp_t (GTa (x, xa)) (LEa (yb, yc)) = Gt
-  | comparator_acconstraint comp_c comp_t (GTa (x, xa)) (LTa (y, ya)) = Gt
-  | comparator_acconstraint comp_c comp_t (EQ (x, xa)) (GEa (yh, yi)) = Lta
-  | comparator_acconstraint comp_c comp_t (EQ (x, xa)) (GTa (yf, yg)) = Lta
-  | comparator_acconstraint comp_c comp_t (EQ (x, xa)) (EQ (yd, ye)) =
-    (case comp_c x yd of Eq => comp_t xa ye | Lta => Lta | Gt => Gt)
-  | comparator_acconstraint comp_c comp_t (EQ (x, xa)) (LEa (yb, yc)) = Gt
-  | comparator_acconstraint comp_c comp_t (EQ (x, xa)) (LTa (y, ya)) = Gt
-  | comparator_acconstraint comp_c comp_t (LEa (x, xa)) (GEa (yh, yi)) = Lta
-  | comparator_acconstraint comp_c comp_t (LEa (x, xa)) (GTa (yf, yg)) = Lta
-  | comparator_acconstraint comp_c comp_t (LEa (x, xa)) (EQ (yd, ye)) = Lta
+fun comparator_acconstraint comp_c comp_t (LTa (x, xa)) (LTa (y, ya)) =
+  (case comp_c x y of Eq => comp_t xa ya | Lta => Lta | Gt => Gt)
+  | comparator_acconstraint comp_c comp_t (LTa (x, xa)) (LEa (yb, yc)) = Lta
+  | comparator_acconstraint comp_c comp_t (LTa (x, xa)) (EQa (yd, ye)) = Lta
+  | comparator_acconstraint comp_c comp_t (LTa (x, xa)) (GTa (yf, yg)) = Lta
+  | comparator_acconstraint comp_c comp_t (LTa (x, xa)) (GEa (yh, yi)) = Lta
+  | comparator_acconstraint comp_c comp_t (LEa (x, xa)) (LTa (y, ya)) = Gt
   | comparator_acconstraint comp_c comp_t (LEa (x, xa)) (LEa (yb, yc)) =
     (case comp_c x yb of Eq => comp_t xa yc | Lta => Lta | Gt => Gt)
-  | comparator_acconstraint comp_c comp_t (LEa (x, xa)) (LTa (y, ya)) = Gt
-  | comparator_acconstraint comp_c comp_t (LTa (x, xa)) (GEa (yh, yi)) = Lta
-  | comparator_acconstraint comp_c comp_t (LTa (x, xa)) (GTa (yf, yg)) = Lta
-  | comparator_acconstraint comp_c comp_t (LTa (x, xa)) (EQ (yd, ye)) = Lta
-  | comparator_acconstraint comp_c comp_t (LTa (x, xa)) (LEa (yb, yc)) = Lta
-  | comparator_acconstraint comp_c comp_t (LTa (x, xa)) (LTa (y, ya)) =
-    (case comp_c x y of Eq => comp_t xa ya | Lta => Lta | Gt => Gt);
+  | comparator_acconstraint comp_c comp_t (LEa (x, xa)) (EQa (yd, ye)) = Lta
+  | comparator_acconstraint comp_c comp_t (LEa (x, xa)) (GTa (yf, yg)) = Lta
+  | comparator_acconstraint comp_c comp_t (LEa (x, xa)) (GEa (yh, yi)) = Lta
+  | comparator_acconstraint comp_c comp_t (EQa (x, xa)) (LTa (y, ya)) = Gt
+  | comparator_acconstraint comp_c comp_t (EQa (x, xa)) (LEa (yb, yc)) = Gt
+  | comparator_acconstraint comp_c comp_t (EQa (x, xa)) (EQa (yd, ye)) =
+    (case comp_c x yd of Eq => comp_t xa ye | Lta => Lta | Gt => Gt)
+  | comparator_acconstraint comp_c comp_t (EQa (x, xa)) (GTa (yf, yg)) = Lta
+  | comparator_acconstraint comp_c comp_t (EQa (x, xa)) (GEa (yh, yi)) = Lta
+  | comparator_acconstraint comp_c comp_t (GTa (x, xa)) (LTa (y, ya)) = Gt
+  | comparator_acconstraint comp_c comp_t (GTa (x, xa)) (LEa (yb, yc)) = Gt
+  | comparator_acconstraint comp_c comp_t (GTa (x, xa)) (EQa (yd, ye)) = Gt
+  | comparator_acconstraint comp_c comp_t (GTa (x, xa)) (GTa (yf, yg)) =
+    (case comp_c x yf of Eq => comp_t xa yg | Lta => Lta | Gt => Gt)
+  | comparator_acconstraint comp_c comp_t (GTa (x, xa)) (GEa (yh, yi)) = Lta
+  | comparator_acconstraint comp_c comp_t (GEa (x, xa)) (LTa (y, ya)) = Gt
+  | comparator_acconstraint comp_c comp_t (GEa (x, xa)) (LEa (yb, yc)) = Gt
+  | comparator_acconstraint comp_c comp_t (GEa (x, xa)) (EQa (yd, ye)) = Gt
+  | comparator_acconstraint comp_c comp_t (GEa (x, xa)) (GTa (yf, yg)) = Gt
+  | comparator_acconstraint comp_c comp_t (GEa (x, xa)) (GEa (yh, yi)) =
+    (case comp_c x yh of Eq => comp_t xa yi | Lta => Lta | Gt => Gt);
 
 fun compare_acconstraint A_ B_ =
   comparator_acconstraint (compare A_) (compare B_);
@@ -3843,283 +4735,29 @@ fun ccompare_acconstrainta A_ B_ = SOME (compare_acconstraint A_ B_);
 fun ccompare_acconstraint A_ B_ = {ccompare = ccompare_acconstrainta A_ B_} :
   ('a, 'b) acconstraint ccompare;
 
-datatype predicate = Pred of string;
-
-fun equal_predicatea (Pred x) (Pred ya) = ((x : string) = ya);
-
-datatype 'a atom = PredAtm of predicate * 'a list | EqAtm of 'a * 'a;
-
-fun equal_atoma A_ (PredAtm (x11, x12)) (EqAtm (x21, x22)) = false
-  | equal_atoma A_ (EqAtm (x21, x22)) (PredAtm (x11, x12)) = false
-  | equal_atoma A_ (EqAtm (x21, x22)) (EqAtm (y21, y22)) =
-    eq A_ x21 y21 andalso eq A_ x22 y22
-  | equal_atoma A_ (PredAtm (x11, x12)) (PredAtm (y11, y12)) =
-    equal_predicatea x11 y11 andalso equal_lista A_ x12 y12;
-
-fun equal_atom A_ = {equal = equal_atoma A_} : 'a atom equal;
-
-fun comparator_predicate (Pred x) (Pred y) =
-  comparator_of (equal_literal, linorder_literal) x y;
-
-fun comparator_atom comp_e_n_t (EqAtm (x, xa)) (EqAtm (yb, yc)) =
-  (case comp_e_n_t x yb of Eq => comp_e_n_t xa yc | Lta => Lta | Gt => Gt)
-  | comparator_atom comp_e_n_t (EqAtm (x, xa)) (PredAtm (y, ya)) = Gt
-  | comparator_atom comp_e_n_t (PredAtm (x, xa)) (EqAtm (yb, yc)) = Lta
-  | comparator_atom comp_e_n_t (PredAtm (x, xa)) (PredAtm (y, ya)) =
-    (case comparator_predicate x y of Eq => comparator_list comp_e_n_t xa ya
-      | Lta => Lta | Gt => Gt);
-
-fun less_eq_atom (A1_, A2_) =
-  le_of_comp (comparator_atom (comparator_of (A1_, A2_)));
-
-fun less_atom (A1_, A2_) =
-  lt_of_comp (comparator_atom (comparator_of (A1_, A2_)));
-
-fun ord_atom (A1_, A2_) =
-  {less_eq = less_eq_atom (A1_, A2_), less = less_atom (A1_, A2_)} :
-  'a atom ord;
-
-fun preorder_atom (A1_, A2_) = {ord_preorder = ord_atom (A1_, A2_)} :
-  'a atom preorder;
-
-fun order_atom (A1_, A2_) = {preorder_order = preorder_atom (A1_, A2_)} :
-  'a atom order;
-
-fun ceq_atoma A_ = SOME (equal_atoma A_);
-
-fun ceq_atom A_ = {ceq = ceq_atoma A_} : 'a atom ceq;
-
-val set_impl_atoma : ('a atom, set_impla) phantom = Phantom Set_RBT;
-
-val set_impl_atom = {set_impl = set_impl_atoma} : 'a atom set_impl;
-
-fun linorder_atom (A1_, A2_) = {order_linorder = order_atom (A1_, A2_)} :
-  'a atom linorder;
-
-fun ccompare_atoma A_ =
-  (case ccompare A_ of NONE => NONE
-    | SOME comp_ent => SOME (comparator_atom comp_ent));
-
-fun ccompare_atom A_ = {ccompare = ccompare_atoma A_} : 'a atom ccompare;
-
-datatype func = Func of string;
-
-fun equal_funca (Func x) (Func ya) = ((x : string) = ya);
-
-val equal_func = {equal = equal_funca} : func equal;
-
-fun comparator_func (Func x) (Func y) =
-  comparator_of (equal_literal, linorder_literal) x y;
-
-fun less_eq_func x = le_of_comp comparator_func x;
-
-fun less_func x = lt_of_comp comparator_func x;
-
-val ord_func = {less_eq = less_eq_func, less = less_func} : func ord;
-
-val preorder_func = {ord_preorder = ord_func} : func preorder;
-
-val order_func = {preorder_order = preorder_func} : func order;
-
-val linorder_func = {order_linorder = order_func} : func linorder;
-
-datatype variable = Vara of string;
-
-fun equal_variablea (Vara x) (Vara ya) = ((x : string) = ya);
-
-datatype object = Obj of string | FuncEnt of func * object list |
-  TimeEnt of rat;
-
-fun equal_objecta (FuncEnt (x21, x22)) (TimeEnt x3) = false
-  | equal_objecta (TimeEnt x3) (FuncEnt (x21, x22)) = false
-  | equal_objecta (Obj x1) (TimeEnt x3) = false
-  | equal_objecta (TimeEnt x3) (Obj x1) = false
-  | equal_objecta (Obj x1) (FuncEnt (x21, x22)) = false
-  | equal_objecta (FuncEnt (x21, x22)) (Obj x1) = false
-  | equal_objecta (TimeEnt x3) (TimeEnt y3) = equal_rata x3 y3
-  | equal_objecta (FuncEnt (x21, x22)) (FuncEnt (y21, y22)) =
-    equal_funca x21 y21 andalso equal_lista (equal_object ()) x22 y22
-  | equal_objecta (Obj x1) (Obj y1) = ((x1 : string) = y1)
-and equal_object () = {equal = equal_objecta} : object equal;
-val equal_object = equal_object ();
-
-datatype term = VAR of variable | CONST of object;
-
-fun equal_terma (VAR x1) (CONST x2) = false
-  | equal_terma (CONST x2) (VAR x1) = false
-  | equal_terma (CONST x2) (CONST y2) = equal_objecta x2 y2
-  | equal_terma (VAR x1) (VAR y1) = equal_variablea x1 y1;
-
-val equal_term = {equal = equal_terma} : term equal;
-
-datatype typea = Either of string list;
-
-fun equal_typea (Either x) (Either ya) = equal_lista equal_literal x ya;
-
-val equal_type = {equal = equal_typea} : typea equal;
-
-fun comparator_object (TimeEnt x) (TimeEnt yc) =
-  comparator_of (equal_rat, linorder_rat) x yc
-  | comparator_object (TimeEnt x) (FuncEnt (ya, yb)) = Gt
-  | comparator_object (TimeEnt x) (Obj y) = Gt
-  | comparator_object (FuncEnt (x, xa)) (TimeEnt yc) = Lta
-  | comparator_object (FuncEnt (x, xa)) (FuncEnt (ya, yb)) =
-    (case comparator_func x ya of Eq => comparator_list comparator_object xa yb
-      | Lta => Lta | Gt => Gt)
-  | comparator_object (FuncEnt (x, xa)) (Obj y) = Gt
-  | comparator_object (Obj x) (TimeEnt yc) = Lta
-  | comparator_object (Obj x) (FuncEnt (ya, yb)) = Lta
-  | comparator_object (Obj x) (Obj y) =
-    comparator_of (equal_literal, linorder_literal) x y;
-
-fun less_eq_object x = le_of_comp comparator_object x;
-
-fun less_object x = lt_of_comp comparator_object x;
-
-val ord_object = {less_eq = less_eq_object, less = less_object} : object ord;
-
-val preorder_object = {ord_preorder = ord_object} : object preorder;
-
-val order_object = {preorder_order = preorder_object} : object order;
-
-val linorder_object = {order_linorder = order_object} : object linorder;
-
-val ccompare_objecta : (object -> object -> ordera) option =
-  SOME comparator_object;
-
-val ccompare_object = {ccompare = ccompare_objecta} : object ccompare;
-
-val mapping_impl_objecta : (object, mapping_impla) phantom =
-  Phantom Mapping_RBT;
-
-val mapping_impl_object = {mapping_impl = mapping_impl_objecta} :
-  object mapping_impl;
-
-val equal_variable = {equal = equal_variablea} : variable equal;
-
-val equal_predicate = {equal = equal_predicatea} : predicate equal;
-
-fun less_eq_predicate x = le_of_comp comparator_predicate x;
-
-fun less_predicate x = lt_of_comp comparator_predicate x;
-
-val ord_predicate = {less_eq = less_eq_predicate, less = less_predicate} :
-  predicate ord;
-
-val preorder_predicate = {ord_preorder = ord_predicate} : predicate preorder;
-
-val order_predicate = {preorder_order = preorder_predicate} : predicate order;
-
-val ceq_predicatea : (predicate -> predicate -> bool) option =
-  SOME equal_predicatea;
-
-val ceq_predicate = {ceq = ceq_predicatea} : predicate ceq;
-
-val set_impl_predicatea : (predicate, set_impla) phantom = Phantom Set_RBT;
-
-val set_impl_predicate = {set_impl = set_impl_predicatea} : predicate set_impl;
-
-val linorder_predicate = {order_linorder = order_predicate} :
-  predicate linorder;
-
-val finite_UNIV_predicatea : (predicate, bool) phantom = Phantom false;
-
-val card_UNIV_predicatea : (predicate, nat) phantom = Phantom zero_nata;
-
-type 'a card_UNIV =
-  {finite_UNIV_card_UNIV : 'a finite_UNIV, card_UNIV : ('a, nat) phantom};
-val finite_UNIV_card_UNIV = #finite_UNIV_card_UNIV :
-  'a card_UNIV -> 'a finite_UNIV;
-val card_UNIV = #card_UNIV : 'a card_UNIV -> ('a, nat) phantom;
-
-val finite_UNIV_predicate = {finite_UNIV = finite_UNIV_predicatea} :
-  predicate finite_UNIV;
-
-val card_UNIV_predicate =
-  {finite_UNIV_card_UNIV = finite_UNIV_predicate,
-    card_UNIV = card_UNIV_predicatea}
-  : predicate card_UNIV;
-
-val ccompare_predicatea : (predicate -> predicate -> ordera) option =
-  SOME comparator_predicate;
-
-val ccompare_predicate = {ccompare = ccompare_predicatea} : predicate ccompare;
-
-fun of_bool A_ true = one (one_zero_neq_one A_)
-  | of_bool A_ false = zero (zero_zero_neq_one A_);
-
-fun integer_of_char (Chara (b0, b1, b2, b3, b4, b5, b6, b7)) =
-  ((((((of_bool zero_neq_one_integer b7 * (2 : Int.int) +
-         of_bool zero_neq_one_integer b6) *
-         (2 : Int.int) +
-        of_bool zero_neq_one_integer b5) *
-        (2 : Int.int) +
-       of_bool zero_neq_one_integer b4) *
-       (2 : Int.int) +
-      of_bool zero_neq_one_integer b3) *
-      (2 : Int.int) +
-     of_bool zero_neq_one_integer b2) *
-     (2 : Int.int) +
-    of_bool zero_neq_one_integer b1) *
-    (2 : Int.int) +
-    of_bool zero_neq_one_integer b0;
-
-fun nat_of_char c = Nat (integer_of_char c);
-
-fun list_less_one uu [] = false
-  | list_less_one [] (y :: ys) =
-    less_nat
-      (nat_of_char
-        (Chara (false, false, false, false, false, false, false, false)))
-      (nat_of_char y) orelse
-      less_nat zero_nata (size_list ys)
-  | list_less_one (x :: xs) (y :: ys) =
-    (if equal_chara x y then list_less_one xs ys
-      else (if less_nat (nat_of_char y) (nat_of_char x) then false else true));
-
-fun proper_interval_literal NONE NONE = true
-  | proper_interval_literal (SOME s) NONE = true
-  | proper_interval_literal NONE (SOME s) = not ((s : string) = "")
-  | proper_interval_literal (SOME s) (SOME t) =
-    list_less_one (explode s) (explode t);
-
-fun proper_interval_predicate NONE NONE = true
-  | proper_interval_predicate (SOME (Pred p)) NONE =
-    proper_interval_literal (SOME p) NONE
-  | proper_interval_predicate NONE (SOME (Pred q)) =
-    proper_interval_literal NONE (SOME q)
-  | proper_interval_predicate (SOME (Pred p)) (SOME (Pred q)) =
-    proper_interval_literal (SOME p) (SOME q);
-
-fun cproper_interval_predicatea x = proper_interval_predicate x;
-
-val cproper_interval_predicate =
-  {ccompare_cproper_interval = ccompare_predicate,
-    cproper_interval = cproper_interval_predicatea}
-  : predicate cproper_interval;
-
-datatype 'a ast_effect = Effect of 'a atom formula list * 'a atom formula list;
-
-fun equal_ast_effecta A_ (Effect (x1, x2)) (Effect (y1, y2)) =
-  equal_lista (equal_formula (equal_atom A_)) x1 y1 andalso
-    equal_lista (equal_formula (equal_atom A_)) x2 y2;
-
-fun equal_ast_effect A_ = {equal = equal_ast_effecta A_} : 'a ast_effect equal;
+datatype duration_op = EQ | LEQ | GEQ;
+
+fun equal_duration_op LEQ GEQ = false
+  | equal_duration_op GEQ LEQ = false
+  | equal_duration_op EQ GEQ = false
+  | equal_duration_op GEQ EQ = false
+  | equal_duration_op EQ LEQ = false
+  | equal_duration_op LEQ EQ = false
+  | equal_duration_op GEQ GEQ = true
+  | equal_duration_op LEQ LEQ = true
+  | equal_duration_op EQ EQ = true;
+
+datatype 'a duration_constraint =
+  DurationConstraint of duration_op * 'a numeric_expression;
+
+fun equal_duration_constrainta A_ (DurationConstraint (x1, x2))
+  (DurationConstraint (y1, y2)) =
+  equal_duration_op x1 y1 andalso equal_numeric_expression A_ x2 y2;
+
+fun equal_duration_constraint A_ = {equal = equal_duration_constrainta A_} :
+  'a duration_constraint equal;
 
 datatype temporal_annotation = At_Start | Over_All | At_End;
-
-datatype duration_op = EQa | LEQ | GEQ;
-
-datatype 'a duration_constraint = No_Const | Time_Const of duration_op * rat |
-  Func_Const of duration_op * func * 'a list;
-
-datatype ast_action_schema =
-  Simple_Action_Schema of
-    string * (variable * typea) list * term atom formula * term ast_effect
-  | Durative_Action_Schema of
-      string * (variable * typea) list * term duration_constraint list *
-        (temporal_annotation * term atom formula) list *
-        (temporal_annotation * term ast_effect) list;
 
 fun equal_temporal_annotationa Over_All At_End = false
   | equal_temporal_annotationa At_End Over_All = false
@@ -4134,181 +4772,197 @@ fun equal_temporal_annotationa Over_All At_End = false
 val equal_temporal_annotation = {equal = equal_temporal_annotationa} :
   temporal_annotation equal;
 
-fun equal_duration_op LEQ GEQ = false
-  | equal_duration_op GEQ LEQ = false
-  | equal_duration_op EQa GEQ = false
-  | equal_duration_op GEQ EQa = false
-  | equal_duration_op EQa LEQ = false
-  | equal_duration_op LEQ EQa = false
-  | equal_duration_op GEQ GEQ = true
-  | equal_duration_op LEQ LEQ = true
-  | equal_duration_op EQa EQa = true;
+datatype ast_temporal_durative_action_body =
+  DurativeActionBody of
+    (temporal_annotation * term duration_constraint) list *
+      (temporal_annotation * term atom formula) list *
+      (temporal_annotation * term ast_effect) list;
 
-fun equal_duration_constrainta A_ (Time_Const (x21, x22))
-  (Func_Const (x31, x32, x33)) = false
-  | equal_duration_constrainta A_ (Func_Const (x31, x32, x33))
-    (Time_Const (x21, x22)) = false
-  | equal_duration_constrainta A_ No_Const (Func_Const (x31, x32, x33)) = false
-  | equal_duration_constrainta A_ (Func_Const (x31, x32, x33)) No_Const = false
-  | equal_duration_constrainta A_ No_Const (Time_Const (x21, x22)) = false
-  | equal_duration_constrainta A_ (Time_Const (x21, x22)) No_Const = false
-  | equal_duration_constrainta A_ (Func_Const (x31, x32, x33))
-    (Func_Const (y31, y32, y33)) =
-    equal_duration_op x31 y31 andalso
-      (equal_funca x32 y32 andalso equal_lista A_ x33 y33)
-  | equal_duration_constrainta A_ (Time_Const (x21, x22))
-    (Time_Const (y21, y22)) =
-    equal_duration_op x21 y21 andalso equal_rata x22 y22
-  | equal_duration_constrainta A_ No_Const No_Const = true;
+fun equal_ast_temporal_durative_action_body (DurativeActionBody (x1, x2, x3))
+  (DurativeActionBody (y1, y2, y3)) =
+  equal_lista
+    (equal_prod equal_temporal_annotation
+      (equal_duration_constraint equal_term))
+    x1 y1 andalso
+    (equal_lista
+       (equal_prod equal_temporal_annotation
+         (equal_formula (equal_atom equal_term)))
+       x2 y2 andalso
+      equal_lista
+        (equal_prod equal_temporal_annotation (equal_ast_effect equal_term)) x3
+        y3);
 
-fun equal_duration_constraint A_ = {equal = equal_duration_constrainta A_} :
-  'a duration_constraint equal;
+datatype ast_simple_action_body =
+  SimpleActionBody of term atom formula * term ast_effect;
 
-fun equal_ast_action_schema (Simple_Action_Schema (x11, x12, x13, x14))
-  (Durative_Action_Schema (x21, x22, x23, x24, x25)) = false
-  | equal_ast_action_schema (Durative_Action_Schema (x21, x22, x23, x24, x25))
-    (Simple_Action_Schema (x11, x12, x13, x14)) = false
-  | equal_ast_action_schema (Durative_Action_Schema (x21, x22, x23, x24, x25))
-    (Durative_Action_Schema (y21, y22, y23, y24, y25)) =
-    ((x21 : string) = y21) andalso
-      (equal_lista (equal_prod equal_variable equal_type) x22 y22 andalso
-        (equal_lista (equal_duration_constraint equal_term) x23 y23 andalso
-          (equal_lista
-             (equal_prod equal_temporal_annotation
-               (equal_formula (equal_atom equal_term)))
-             x24 y24 andalso
-            equal_lista
-              (equal_prod equal_temporal_annotation
-                (equal_ast_effect equal_term))
-              x25 y25)))
-  | equal_ast_action_schema (Simple_Action_Schema (x11, x12, x13, x14))
-    (Simple_Action_Schema (y11, y12, y13, y14)) =
-    ((x11 : string) = y11) andalso
-      (equal_lista (equal_prod equal_variable equal_type) x12 y12 andalso
-        (equal_formulaa (equal_atom equal_term) x13 y13 andalso
-          equal_ast_effecta equal_term x14 y14));
+fun equal_ast_simple_action_body (SimpleActionBody (x1, x2))
+  (SimpleActionBody (y1, y2)) =
+  equal_formulaa (equal_atom equal_term) x1 y1 andalso
+    equal_ast_effecta equal_term x2 y2;
 
-val ceq_ast_action_schemaa :
-  (ast_action_schema -> ast_action_schema -> bool) option
-  = SOME equal_ast_action_schema;
+datatype ast_action_head = ActionHead of string * (variable * typea) list;
 
-val ceq_ast_action_schema = {ceq = ceq_ast_action_schemaa} :
-  ast_action_schema ceq;
+datatype ast_temporal_action_schema =
+  SimpleActionSchemaa of ast_action_head * ast_simple_action_body |
+  DurativeActionSchema of ast_action_head * ast_temporal_durative_action_body;
 
-val set_impl_ast_action_schemaa : (ast_action_schema, set_impla) phantom =
-  Phantom Set_RBT;
+fun equal_ast_action_head (ActionHead (x1, x2)) (ActionHead (y1, y2)) =
+  ((x1 : string) = y1) andalso
+    equal_lista (equal_prod equal_variable equal_type) x2 y2;
 
-val set_impl_ast_action_schema = {set_impl = set_impl_ast_action_schemaa} :
-  ast_action_schema set_impl;
+fun equal_ast_temporal_action_schema (SimpleActionSchemaa (x11, x12))
+  (DurativeActionSchema (x21, x22)) = false
+  | equal_ast_temporal_action_schema (DurativeActionSchema (x21, x22))
+    (SimpleActionSchemaa (x11, x12)) = false
+  | equal_ast_temporal_action_schema (DurativeActionSchema (x21, x22))
+    (DurativeActionSchema (y21, y22)) =
+    equal_ast_action_head x21 y21 andalso
+      equal_ast_temporal_durative_action_body x22 y22
+  | equal_ast_temporal_action_schema (SimpleActionSchemaa (x11, x12))
+    (SimpleActionSchemaa (y11, y12)) =
+    equal_ast_action_head x11 y11 andalso equal_ast_simple_action_body x12 y12;
 
-fun comparator_temporal_annotation At_End At_End = Eq
-  | comparator_temporal_annotation At_End Over_All = Gt
-  | comparator_temporal_annotation At_End At_Start = Gt
-  | comparator_temporal_annotation Over_All At_End = Lta
-  | comparator_temporal_annotation Over_All Over_All = Eq
-  | comparator_temporal_annotation Over_All At_Start = Gt
-  | comparator_temporal_annotation At_Start At_End = Lta
+val ceq_ast_temporal_action_schemaa :
+  (ast_temporal_action_schema -> ast_temporal_action_schema -> bool) option
+  = SOME equal_ast_temporal_action_schema;
+
+val ceq_ast_temporal_action_schema = {ceq = ceq_ast_temporal_action_schemaa} :
+  ast_temporal_action_schema ceq;
+
+val set_impl_ast_temporal_action_schemaa :
+  (ast_temporal_action_schema, set_impla) phantom
+  = Phantom Set_DList;
+
+val set_impl_ast_temporal_action_schema =
+  {set_impl = set_impl_ast_temporal_action_schemaa} :
+  ast_temporal_action_schema set_impl;
+
+fun comparator_temporal_annotation At_Start At_Start = Eq
   | comparator_temporal_annotation At_Start Over_All = Lta
-  | comparator_temporal_annotation At_Start At_Start = Eq;
+  | comparator_temporal_annotation At_Start At_End = Lta
+  | comparator_temporal_annotation Over_All At_Start = Gt
+  | comparator_temporal_annotation Over_All Over_All = Eq
+  | comparator_temporal_annotation Over_All At_End = Lta
+  | comparator_temporal_annotation At_End At_Start = Gt
+  | comparator_temporal_annotation At_End Over_All = Gt
+  | comparator_temporal_annotation At_End At_End = Eq;
 
-fun comparator_duration_op GEQ GEQ = Eq
-  | comparator_duration_op GEQ LEQ = Gt
-  | comparator_duration_op GEQ EQa = Gt
-  | comparator_duration_op LEQ GEQ = Lta
+fun comparator_duration_op EQ EQ = Eq
+  | comparator_duration_op EQ LEQ = Lta
+  | comparator_duration_op EQ GEQ = Lta
+  | comparator_duration_op LEQ EQ = Gt
   | comparator_duration_op LEQ LEQ = Eq
-  | comparator_duration_op LEQ EQa = Gt
-  | comparator_duration_op EQa GEQ = Lta
-  | comparator_duration_op EQa LEQ = Lta
-  | comparator_duration_op EQa EQa = Eq;
+  | comparator_duration_op LEQ GEQ = Lta
+  | comparator_duration_op GEQ EQ = Gt
+  | comparator_duration_op GEQ LEQ = Gt
+  | comparator_duration_op GEQ GEQ = Eq;
 
-fun comparator_duration_constraint comp_e_n_t (Func_Const (x, xa, xb))
-  (Func_Const (yb, yc, yd)) =
-  (case comparator_duration_op x yb
-    of Eq =>
-      (case comparator_func xa yc of Eq => comparator_list comp_e_n_t xb yd
-        | Lta => Lta | Gt => Gt)
-    | Lta => Lta | Gt => Gt)
-  | comparator_duration_constraint comp_e_n_t (Func_Const (x, xa, xb))
-    (Time_Const (y, ya)) = Gt
-  | comparator_duration_constraint comp_e_n_t (Func_Const (x, xa, xb)) No_Const
-    = Gt
-  | comparator_duration_constraint comp_e_n_t (Time_Const (x, xa))
-    (Func_Const (yb, yc, yd)) = Lta
-  | comparator_duration_constraint comp_e_n_t (Time_Const (x, xa))
-    (Time_Const (y, ya)) =
-    (case comparator_duration_op x y
-      of Eq => comparator_of (equal_rat, linorder_rat) xa ya | Lta => Lta
-      | Gt => Gt)
-  | comparator_duration_constraint comp_e_n_t (Time_Const (x, xa)) No_Const = Gt
-  | comparator_duration_constraint comp_e_n_t No_Const (Func_Const (yb, yc, yd))
-    = Lta
-  | comparator_duration_constraint comp_e_n_t No_Const (Time_Const (y, ya)) =
-    Lta
-  | comparator_duration_constraint comp_e_n_t No_Const No_Const = Eq;
+fun comparator_duration_constraint comp_e_n_t (DurationConstraint (x, xa))
+  (DurationConstraint (y, ya)) =
+  (case comparator_duration_op x y
+    of Eq => comparator_numeric_expression comp_e_n_t xa ya | Lta => Lta
+    | Gt => Gt);
 
-fun comparator_ast_effect comp_e_n_t (Effect (x, xa)) (Effect (y, ya)) =
-  (case comparator_list (comparator_formula (comparator_atom comp_e_n_t)) x y
+fun comparator_numeric_effect_op Assign Assign = Eq
+  | comparator_numeric_effect_op Assign ScaleUp = Lta
+  | comparator_numeric_effect_op Assign ScaleDown = Lta
+  | comparator_numeric_effect_op Assign Increase = Lta
+  | comparator_numeric_effect_op Assign Decrease = Lta
+  | comparator_numeric_effect_op ScaleUp Assign = Gt
+  | comparator_numeric_effect_op ScaleUp ScaleUp = Eq
+  | comparator_numeric_effect_op ScaleUp ScaleDown = Lta
+  | comparator_numeric_effect_op ScaleUp Increase = Lta
+  | comparator_numeric_effect_op ScaleUp Decrease = Lta
+  | comparator_numeric_effect_op ScaleDown Assign = Gt
+  | comparator_numeric_effect_op ScaleDown ScaleUp = Gt
+  | comparator_numeric_effect_op ScaleDown ScaleDown = Eq
+  | comparator_numeric_effect_op ScaleDown Increase = Lta
+  | comparator_numeric_effect_op ScaleDown Decrease = Lta
+  | comparator_numeric_effect_op Increase Assign = Gt
+  | comparator_numeric_effect_op Increase ScaleUp = Gt
+  | comparator_numeric_effect_op Increase ScaleDown = Gt
+  | comparator_numeric_effect_op Increase Increase = Eq
+  | comparator_numeric_effect_op Increase Decrease = Lta
+  | comparator_numeric_effect_op Decrease Assign = Gt
+  | comparator_numeric_effect_op Decrease ScaleUp = Gt
+  | comparator_numeric_effect_op Decrease ScaleDown = Gt
+  | comparator_numeric_effect_op Decrease Increase = Gt
+  | comparator_numeric_effect_op Decrease Decrease = Eq;
+
+fun comparator_numeric_effect comp_e_n_t (NumericEffect (x, xa, xb))
+  (NumericEffect (y, ya, yb)) =
+  (case comparator_numeric_effect_op x y
     of Eq =>
-      comparator_list (comparator_formula (comparator_atom comp_e_n_t)) xa ya
+      (case comparator_primitive_numeric_expression comp_e_n_t xa ya
+        of Eq => comparator_numeric_expression comp_e_n_t xb yb | Lta => Lta
+        | Gt => Gt)
     | Lta => Lta | Gt => Gt);
 
-fun comparator_variable (Vara x) (Vara y) =
-  comparator_of (equal_literal, linorder_literal) x y;
+fun comparator_ast_effect comp_e_n_t (Effect (x, xa, xb)) (Effect (y, ya, yb)) =
+  (case comparator_list (comparator_formula (comparator_atom comp_e_n_t)) x y
+    of Eq =>
+      (case comparator_list (comparator_formula (comparator_atom comp_e_n_t)) xa
+              ya
+        of Eq => comparator_list (comparator_numeric_effect comp_e_n_t) xb yb
+        | Lta => Lta | Gt => Gt)
+    | Lta => Lta | Gt => Gt);
+
+fun comparator_ast_temporal_durative_action_body
+  (DurativeActionBody (x, xa, xb)) (DurativeActionBody (y, ya, yb)) =
+  (case comparator_list
+          (comparator_prod comparator_temporal_annotation
+            (comparator_duration_constraint comparator_term))
+          x y
+    of Eq =>
+      (case comparator_list
+              (comparator_prod comparator_temporal_annotation
+                (comparator_formula (comparator_atom comparator_term)))
+              xa ya
+        of Eq =>
+          comparator_list
+            (comparator_prod comparator_temporal_annotation
+              (comparator_ast_effect comparator_term))
+            xb yb
+        | Lta => Lta | Gt => Gt)
+    | Lta => Lta | Gt => Gt);
+
+fun comparator_ast_simple_action_body (SimpleActionBody (x, xa))
+  (SimpleActionBody (y, ya)) =
+  (case comparator_formula (comparator_atom comparator_term) x y
+    of Eq => comparator_ast_effect comparator_term xa ya | Lta => Lta
+    | Gt => Gt);
 
 fun comparator_type (Either x) (Either y) =
   comparator_list (comparator_of (equal_literal, linorder_literal)) x y;
 
-fun comparator_term (CONST x) (CONST ya) = comparator_object x ya
-  | comparator_term (CONST x) (VAR y) = Gt
-  | comparator_term (VAR x) (CONST ya) = Lta
-  | comparator_term (VAR x) (VAR y) = comparator_variable x y;
-
-fun comparator_ast_action_schema (Durative_Action_Schema (x, xa, xb, xc, xd))
-  (Durative_Action_Schema (yd, ye, yf, yg, yh)) =
-  (case comparator_of (equal_literal, linorder_literal) x yd
+fun comparator_ast_action_head (ActionHead (x, xa)) (ActionHead (y, ya)) =
+  (case comparator_of (equal_literal, linorder_literal) x y
     of Eq =>
-      (case comparator_list
-              (comparator_prod comparator_variable comparator_type) xa ye
-        of Eq =>
-          (case comparator_list (comparator_duration_constraint comparator_term)
-                  xb yf
-            of Eq =>
-              (case comparator_list
-                      (comparator_prod comparator_temporal_annotation
-                        (comparator_formula (comparator_atom comparator_term)))
-                      xc yg
-                of Eq =>
-                  comparator_list
-                    (comparator_prod comparator_temporal_annotation
-                      (comparator_ast_effect comparator_term))
-                    xd yh
-                | Lta => Lta | Gt => Gt)
-            | Lta => Lta | Gt => Gt)
-        | Lta => Lta | Gt => Gt)
-    | Lta => Lta | Gt => Gt)
-  | comparator_ast_action_schema (Durative_Action_Schema (x, xa, xb, xc, xd))
-    (Simple_Action_Schema (y, ya, yb, yc)) = Gt
-  | comparator_ast_action_schema (Simple_Action_Schema (x, xa, xb, xc))
-    (Durative_Action_Schema (yd, ye, yf, yg, yh)) = Lta
-  | comparator_ast_action_schema (Simple_Action_Schema (x, xa, xb, xc))
-    (Simple_Action_Schema (y, ya, yb, yc)) =
-    (case comparator_of (equal_literal, linorder_literal) x y
-      of Eq =>
-        (case comparator_list
-                (comparator_prod comparator_variable comparator_type) xa ya
-          of Eq =>
-            (case comparator_formula (comparator_atom comparator_term) xb yb
-              of Eq => comparator_ast_effect comparator_term xc yc | Lta => Lta
-              | Gt => Gt)
-          | Lta => Lta | Gt => Gt)
-      | Lta => Lta | Gt => Gt);
+      comparator_list (comparator_prod comparator_variable comparator_type) xa
+        ya
+    | Lta => Lta | Gt => Gt);
 
-val ccompare_ast_action_schemaa :
-  (ast_action_schema -> ast_action_schema -> ordera) option
-  = SOME comparator_ast_action_schema;
+fun comparator_ast_temporal_action_schema (SimpleActionSchemaa (x, xa))
+  (SimpleActionSchemaa (y, ya)) =
+  (case comparator_ast_action_head x y
+    of Eq => comparator_ast_simple_action_body xa ya | Lta => Lta | Gt => Gt)
+  | comparator_ast_temporal_action_schema (SimpleActionSchemaa (x, xa))
+    (DurativeActionSchema (yb, yc)) = Lta
+  | comparator_ast_temporal_action_schema (DurativeActionSchema (x, xa))
+    (SimpleActionSchemaa (y, ya)) = Gt
+  | comparator_ast_temporal_action_schema (DurativeActionSchema (x, xa))
+    (DurativeActionSchema (yb, yc)) =
+    (case comparator_ast_action_head x yb
+      of Eq => comparator_ast_temporal_durative_action_body xa yc | Lta => Lta
+      | Gt => Gt);
 
-val ccompare_ast_action_schema = {ccompare = ccompare_ast_action_schemaa} :
-  ast_action_schema ccompare;
+val ccompare_ast_temporal_action_schemaa :
+  (ast_temporal_action_schema -> ast_temporal_action_schema -> ordera) option
+  = SOME comparator_ast_temporal_action_schema;
+
+val ccompare_ast_temporal_action_schema =
+  {ccompare = ccompare_ast_temporal_action_schemaa} :
+  ast_temporal_action_schema ccompare;
 
 datatype ('b, 'a) alist = Alist of ('b * 'a) list;
 
@@ -4327,37 +4981,51 @@ datatype 'a result = Result of 'a | Error of string list;
 
 datatype 'a semilattice_set = Abs_semilattice_set of ('a -> 'a -> 'a);
 
-datatype 'a len_list = LL of nat * 'a list;
-
-datatype 'a snap_action = AtStart of 'a | AtEnd of 'a;
-
-datatype ('a, 'b) hashmap =
-  HashMap of (('a * 'b) list) FArray.IsabelleMapping.ArrayType * nat;
-
-datatype 'a label = Del | Internal of 'a | Bin of 'a | Broad of 'a;
-
 datatype predicate_decl = PredDecl of predicate * typea list;
 
 datatype function_decl = FuncDecl of func * typea list;
 
-datatype ast_domain =
+datatype 'a ast_domain =
   Domain of
     (string * string) list * predicate_decl list * function_decl list *
-      (object * typea) list * ast_action_schema list;
+      (object * typea) list * 'a list;
 
-datatype ast_problem =
+datatype 'a len_list = LL of nat * 'a list;
+
+datatype 'a snap_action = AtStart of 'a | AtEnd of 'a;
+
+datatype 'a ast_problem =
   Problem of
-    ast_domain * (object * typea) list * object atom formula list *
+    'a ast_domain * (object * typea) list * object atom formula list *
       object atom formula;
 
-datatype plan_action = Simple_Plan_Action of string * object list |
-  Durative_Plan_Action of string * object list * rat;
+datatype ('a, 'b) hashmap =
+  HashMap of (('a * 'b) list) FArray.IsabelleMapping.ArrayType * nat;
+
+datatype ground_action =
+  GroundAction of object atom formula * object ast_effect;
+
+datatype 'a label = Del | Internal of 'a | Bin of 'a | Broad of 'a;
 
 datatype message = ExploredState;
 
-datatype ground_action =
-  Ground_Action of
-    string * temporal_annotation * object atom formula * object ast_effect;
+datatype continuous_effect_op = ContinuousIncrease | ContinuousDecrease;
+
+datatype 'a ast_continuous_effect =
+  ContinuousEffect of
+    continuous_effect_op * 'a primitive_numeric_expression *
+      'a numeric_expression;
+
+datatype ast_cont_change_action_body =
+  ContChangeActionBody of
+    (temporal_annotation * term duration_constraint) list *
+      (temporal_annotation * term atom formula) list *
+      (temporal_annotation * term ast_effect) list *
+      term ast_continuous_effect list;
+
+datatype ast_cont_action_schema =
+  SimpleActionSchema of ast_action_head * ast_simple_action_body |
+  ContChangeActionSchema of ast_action_head * ast_cont_change_action_body;
 
 datatype ('a, 'b, 'c, 'd) gen_g_impl_ext = Gen_g_impl_ext of 'a * 'b * 'c * 'd;
 
@@ -4382,19 +5050,19 @@ datatype 'a state_space =
   Buechi_Set of (('a list * inta list) * (inta dBMEntry list * nat) list) list;
 
 fun nth (x :: xs) n =
-  (if equal_nata n zero_nata then x else nth xs (minus_nat n one_nata));
+  (if equal_nata n zero_nata then x else nth xs (minus_nata n one_nata));
 
 fun rev xs = fold (fn a => fn b => a :: b) xs [];
 
 fun upt i j = (if less_nat i j then i :: upt (suc i) j else []);
 
-fun zip (x :: xs) (y :: ys) = (x, y) :: zip xs ys
+fun zip [] ys = []
   | zip xs [] = []
-  | zip [] ys = [];
+  | zip (x :: xs) (y :: ys) = (x, y) :: zip xs ys;
 
-fun rBT_Impl_rbt_all p (Branch (c, l, k, v, r)) =
-  p k v andalso (rBT_Impl_rbt_all p l andalso rBT_Impl_rbt_all p r)
-  | rBT_Impl_rbt_all p Empty = true;
+fun rBT_Impl_rbt_all p Empty = true
+  | rBT_Impl_rbt_all p (Branch (c, l, k, v, r)) =
+    p k v andalso (rBT_Impl_rbt_all p l andalso rBT_Impl_rbt_all p r);
 
 fun all A_ xb xc = rBT_Impl_rbt_all xb (impl_ofa A_ xc);
 
@@ -4429,7 +5097,7 @@ fun upd A_ i x a =
 fun drop n [] = []
   | drop n (x :: xs) =
     (if equal_nata n zero_nata then x :: xs
-      else drop (minus_nat n one_nata) xs);
+      else drop (minus_nata n one_nata) xs);
 
 fun maps f [] = []
   | maps f (x :: xs) = f x @ maps f xs;
@@ -4437,7 +5105,7 @@ fun maps f [] = []
 fun take n [] = []
   | take n (x :: xs) =
     (if equal_nata n zero_nata then []
-      else x :: take (minus_nat n one_nata) xs);
+      else x :: take (minus_nata n one_nata) xs);
 
 fun divide_int k l =
   Int_of_integer (divide_integer (integer_of_int k) (integer_of_int l));
@@ -4558,9 +5226,9 @@ fun rbt_comp_delete c k t = paint B (rbt_comp_del c k t);
 fun delete A_ xb xc =
   Mapping_RBTa (rbt_comp_delete (the (ccompare A_)) xb (impl_ofa A_ xc));
 
-fun list_remove1 equal x (y :: xs) =
-  (if equal x y then xs else y :: list_remove1 equal x xs)
-  | list_remove1 equal x [] = [];
+fun list_remove1 equal x [] = []
+  | list_remove1 equal x (y :: xs) =
+    (if equal x y then xs else y :: list_remove1 equal x xs);
 
 fun removea A_ xb xc =
   Abs_dlist (list_remove1 (the (ceq A_)) xb (list_of_dlist A_ xc));
@@ -4638,8 +5306,8 @@ fun inj_on (A1_, A2_, A3_) B_ f a =
 fun sub asa n =
   (Vector.sub o (fn (a, b) => (a, Int.toInt b))) (asa, integer_of_nat n);
 
-fun map_of A_ ((l, v) :: ps) k = (if eq A_ l k then SOME v else map_of A_ ps k)
-  | map_of A_ [] k = NONE;
+fun map_of A_ [] k = NONE
+  | map_of A_ ((l, v) :: ps) k = (if eq A_ l k then SOME v else map_of A_ ps k);
 
 fun of_int a = Frct (a, one_inta);
 
@@ -4932,7 +5600,7 @@ fun get ll =
                                  false),
                          Chara (false, false, true, false, true, true, true,
                                  false)])
-             | x :: xs => Inr (x, LL (minus_nat nat one_nata, xs))))
+             | x :: xs => Inr (x, LL (minus_nata nat one_nata, xs))))
   end;
 
 fun membera A_ [] y = false
@@ -5018,6 +5686,27 @@ fun exactly (A1_, A2_) ts =
                 shows_prec_list A2_ zero_nata ts)))
     (fn x => return (sum_join x));
 
+fun of_bool A_ false = zero (zero_zero_neq_one A_)
+  | of_bool A_ true = one (one_zero_neq_one A_);
+
+fun integer_of_char (Chara (b0, b1, b2, b3, b4, b5, b6, b7)) =
+  ((((((of_bool zero_neq_one_integer b7 * (2 : Int.int) +
+         of_bool zero_neq_one_integer b6) *
+         (2 : Int.int) +
+        of_bool zero_neq_one_integer b5) *
+        (2 : Int.int) +
+       of_bool zero_neq_one_integer b4) *
+       (2 : Int.int) +
+      of_bool zero_neq_one_integer b3) *
+      (2 : Int.int) +
+     of_bool zero_neq_one_integer b2) *
+     (2 : Int.int) +
+    of_bool zero_neq_one_integer b1) *
+    (2 : Int.int) +
+    of_bool zero_neq_one_integer b0;
+
+fun nat_of_char c = Nat (integer_of_char c);
+
 fun range (A1_, A2_) a b =
   bindb get
     (fn x =>
@@ -5066,8 +5755,9 @@ fun lx_nat_aux acc l =
   bindb (alt (bindb lx_digit
                (fn x =>
                  lx_nat_aux
-                   (plus_nata (times_nat (nat_of_integer (10 : Int.int)) acc)
-                     (minus_nat (nat_of_char x)
+                   (plus_nata
+                     (times_nata (nat_of_integer (10 : Int.int)) acc)
+                     (minus_nata (nat_of_char x)
                        (nat_of_char
                          (Chara
                            (false, false, false, false, true, true, false,
@@ -5079,7 +5769,7 @@ fun lx_nat x =
   bindb lx_digit
     (fn xa =>
       lx_nat_aux
-        (minus_nat (nat_of_char xa)
+        (minus_nata (nat_of_char xa)
           (nat_of_char
             (Chara (false, false, false, false, true, true, false, false)))))
     x;
@@ -5102,11 +5792,11 @@ fun tk_div x =
       [Chara (true, true, true, true, false, true, false, false)])
     x;
 
-fun extract p (x :: xs) =
-  (if p x then SOME ([], (x, xs))
-    else (case extract p xs of NONE => NONE
-           | SOME (ys, (y, zs)) => SOME (x :: ys, (y, zs))))
-  | extract p [] = NONE;
+fun extract p [] = NONE
+  | extract p (x :: xs) =
+    (if p x then SOME ([], (x, xs))
+      else (case extract p xs of NONE => NONE
+             | SOME (ys, (y, zs)) => SOME (x :: ys, (y, zs))));
 
 fun list_ex p [] = false
   | list_ex p (x :: xs) = p x orelse list_ex p xs;
@@ -5139,10 +5829,10 @@ fun exhaustive_fusion proper_interval g s =
         exhaustive_above_fusion proper_interval g x sa
     end;
 
-fun list_remdups equal (x :: xs) =
-  (if list_member equal xs x then list_remdups equal xs
-    else x :: list_remdups equal xs)
-  | list_remdups equal [] = [];
+fun list_remdups equal [] = []
+  | list_remdups equal (x :: xs) =
+    (if list_member equal xs x then list_remdups equal xs
+      else x :: list_remdups equal xs);
 
 fun length A_ xa = size_list (list_of_dlist A_ xa);
 
@@ -5151,7 +5841,7 @@ fun card (A1_, A2_, A3_) (Complement a) =
     val aa = card (A1_, A2_, A3_) a;
     val s = of_phantom (card_UNIV A1_);
   in
-    (if less_nat zero_nata s then minus_nat s aa
+    (if less_nat zero_nata s then minus_nata s aa
       else (if finite (finite_UNIV_card_UNIV A1_, A2_, A3_) a then zero_nata
              else (raise Fail "card Complement: infinite")
                     (fn _ => card (A1_, A2_, A3_) (Complement a))))
@@ -5224,9 +5914,6 @@ fun tk_plus x =
       [Chara (true, true, false, true, false, true, false, false)])
     x;
 
-fun distinct A_ [] = true
-  | distinct A_ (x :: xs) = not (membera A_ xs x) andalso distinct A_ xs;
-
 fun set_aux (A1_, A2_) Set_Monada = Set_Monad
   | set_aux (A1_, A2_) Set_Choose =
     (case ccompare A2_
@@ -5270,7 +5957,7 @@ fun tk_times x =
 
 fun replicate n x =
   (if equal_nata n zero_nata then []
-    else x :: replicate (minus_nat n one_nata) x);
+    else x :: replicate (minus_nata n one_nata) x);
 
 fun lookupa (A1_, A2_) (RBT_Mapping t) = lookupb A1_ t
   | lookupa (A1_, A2_) (Assoc_List_Mapping al) = lookup A2_ al;
@@ -5285,12 +5972,12 @@ fun updateb (A1_, A2_) k v (RBT_Mapping t) =
     Assoc_List_Mapping (updatea A2_ k v al)
   | updateb (A1_, A2_) k v (Mapping m) = Mapping (fun_upd A2_ m k (SOME v));
 
-fun rBT_Impl_fold1 f (Branch (ca, Branch (c, l, ka, va, ra), k, v, r)) =
-  folda (fn kb => fn _ => f kb) r
-    (f k (rBT_Impl_fold1 f (Branch (c, l, ka, va, ra))))
+fun rBT_Impl_fold1 f Empty = (raise Fail "undefined")
   | rBT_Impl_fold1 f (Branch (c, Empty, k, v, r)) =
     folda (fn ka => fn _ => f ka) r k
-  | rBT_Impl_fold1 f Empty = (raise Fail "undefined");
+  | rBT_Impl_fold1 f (Branch (ca, Branch (c, l, ka, va, ra), k, v, r)) =
+    folda (fn kb => fn _ => f kb) r
+      (f k (rBT_Impl_fold1 f (Branch (c, l, ka, va, ra))));
 
 fun fold1 A_ x xc = rBT_Impl_fold1 x (impl_ofa A_ xc);
 
@@ -5317,10 +6004,6 @@ fun minus A_ xb xc =
     (rbt_comp_minus (the (ccompare A_)) (impl_ofa A_ xb) (impl_ofa A_ xc));
 
 fun implode cs = Str_Literal.literal_of_asciis (map integer_of_char cs);
-
-fun is_integer_code q = equal_inta (snd (quotient_of q)) one_inta;
-
-fun is_integer q = is_integer_code q;
 
 fun v_dbm (A1_, A2_, A3_) B_ n =
   (fn (i, j) =>
@@ -5477,7 +6160,7 @@ fun json_string x =
 
 fun nats_to_nat x [] = x
   | nats_to_nat x (n :: ns) =
-    nats_to_nat (plus_nata (times_nat (nat_of_integer (10 : Int.int)) x) n)
+    nats_to_nat (plus_nata (times_nata (nat_of_integer (10 : Int.int)) x) n)
       ns;
 
 fun lx_rat x =
@@ -5492,7 +6175,7 @@ fun lx_rat x =
                       (bindb lx_digit
                         (fn xb =>
                           return
-                            (minus_nat (nat_of_char xb)
+                            (minus_nata (nat_of_char xb)
                               (nat_of_char
                                 (Chara
                                   (false, false, false, false, true, true,
@@ -5502,13 +6185,13 @@ fun lx_rat x =
                     (if less_eq_int zero_inta xa
                       then Rata (true, xa,
                                   (int_of_nat o nats_to_nat zero_nata)
-                                    (minus_nat (nat_of_char xaa)
+                                    (minus_nata (nat_of_char xaa)
                                        (nat_of_char
  (Chara (false, false, false, false, true, true, false, false))) ::
                                       xb))
                       else Rata (false, xa,
                                   (int_of_nat o nats_to_nat zero_nata)
-                                    (minus_nat (nat_of_char xaa)
+                                    (minus_nata (nat_of_char xaa)
                                        (nat_of_char
  (Chara (false, false, false, false, true, true, false, false))) ::
                                       xb)))))))
@@ -5587,7 +6270,7 @@ and dict l =
 fun list_update [] i y = []
   | list_update (x :: xs) i y =
     (if equal_nata i zero_nata then y :: xs
-      else x :: list_update xs (minus_nat i one_nata) y);
+      else x :: list_update xs (minus_nata i one_nata) y);
 
 fun find_index uu [] = zero_nata
   | find_index p (x :: xs) =
@@ -5678,15 +6361,19 @@ fun ht_copy (A1_, A2_, A3_) B_ n src dst =
   (if equal_nata n zero_nata then (fn () => dst)
     else (fn f_ => fn () => f_
            ((ntha (heap_list (heap_prod A3_ B_)) (the_array src)
-              (minus_nat n one_nata))
+              (minus_nata n one_nata))
            ()) ())
            (fn l =>
              (fn f_ => fn () => f_ ((ht_insls (A1_, A2_, A3_) B_ l dst) ()) ())
-               (ht_copy (A1_, A2_, A3_) B_ (minus_nat n one_nata) src)));
+               (ht_copy (A1_, A2_, A3_) B_ (minus_nata n one_nata) src)));
 
 fun product_lists [] = [[]]
   | product_lists (xs :: xss) =
     maps (fn x => map (fn a => x :: a) (product_lists xss)) xs;
+
+fun partition_rev p (yes, no) [] = (yes, no)
+  | partition_rev p (yes, no) (x :: xs) =
+    partition_rev p (if p x then (x :: yes, no) else (yes, x :: no)) xs;
 
 fun semilattice_set_apply (Abs_semilattice_set x) = x;
 
@@ -5727,12 +6414,16 @@ fun forallM f [] = Inr ()
 
 fun hm_isEmpty ht = (fn () => (equal_nata (the_size ht) zero_nata));
 
-fun list_all2 p (x :: xs) (y :: ys) = p x y andalso list_all2 p xs ys
+fun list_all2 p [] ys = null ys
   | list_all2 p xs [] = null xs
-  | list_all2 p [] ys = null ys;
+  | list_all2 p (x :: xs) (y :: ys) = p x y andalso list_all2 p xs ys;
 
 fun map_defaulta (A1_, A2_) k v f m =
   map_entry (A1_, A2_) k f (default (A1_, A2_) k v m);
+
+fun is_integer_code q = equal_inta (snd (quotient_of q)) one_inta;
+
+fun is_integer q = is_integer_code q;
 
 fun array_get a = FArray.IsabelleMapping.array_get a o integer_of_nat;
 
@@ -5767,7 +6458,7 @@ fun ht_delete (A1_, A2_, A3_) B_ k ht =
                 (fn _ =>
                   let
                     val n =
-                      (if snd la then minus_nat (the_size ht) one_nata
+                      (if snd la then minus_nata (the_size ht) one_nata
                         else the_size ht);
                   in
                     (fn () => (HashTable (the_array ht, n)))
@@ -5797,7 +6488,7 @@ fun ht_rehash (A1_, A2_, A3_) B_ ht =
     (fn n =>
       (fn f_ => fn () => f_
         ((ht_new_sz (A2_, A3_) B_
-           (times_nat (nat_of_integer (2 : Int.int)) n))
+           (times_nata (nat_of_integer (2 : Int.int)) n))
         ()) ())
         (ht_copy (A1_, A2_, A3_) B_ n ht));
 
@@ -5808,8 +6499,8 @@ fun ht_update (A1_, A2_, A3_) B_ k v ht =
     ())
     (fn m =>
       (fn f_ => fn () => f_
-        ((if less_eq_nat (times_nat m load_factor)
-               (times_nat (the_size ht) (nat_of_integer (100 : Int.int)))
+        ((if less_eq_nat (times_nata m load_factor)
+               (times_nata (the_size ht) (nat_of_integer (100 : Int.int)))
            then ht_rehash (A1_, A2_, A3_) B_ ht else (fn () => ht))
         ()) ())
         (ht_upd (A1_, A2_, A3_) B_ k v));
@@ -5855,22 +6546,37 @@ fun hm_it_adjust (A1_, A2_) B_ v ht =
   (if equal_nata v zero_nata then (fn () => zero_nata)
     else (fn f_ => fn () => f_
            ((ntha (heap_list (heap_prod A2_ B_)) (the_array ht)
-              (suc (minus_nat v one_nata)))
+              (suc (minus_nata v one_nata)))
            ()) ())
            (fn a =>
              (case a
                of [] =>
                  hm_it_adjust (A1_, A2_) B_
-                   (minus_nat (suc (minus_nat v one_nata)) one_nata) ht
-               | _ :: _ => (fn () => (suc (minus_nat v one_nata))))));
+                   (minus_nata (suc (minus_nata v one_nata)) one_nata) ht
+               | _ :: _ => (fn () => (suc (minus_nata v one_nata))))));
 
 fun op_list_rev x = rev x;
 
-fun all_interval_nat p i j =
-  less_eq_nat j i orelse p i andalso all_interval_nat p (suc i) j;
+fun psubst params args =
+  the o map_of equal_variable (zip (map fst params) args);
+
+fun parameters (ActionHead (x1, x2)) = x2;
+
+fun subst_term psubst (VAR x) = psubst x
+  | subst_term psubst (CONST c) = c;
+
+fun tsubst h args = subst_term (psubst (parameters h) args);
 
 fun map_index n f [] = []
   | map_index n f (x :: xs) = f n x :: map_index (suc n) f xs;
+
+fun quicksort_by_rel r sl [] = sl
+  | quicksort_by_rel r sl (x :: xs) =
+    let
+      val (xs_s, xs_b) = partition_rev (fn y => r y x) ([], []) xs;
+    in
+      quicksort_by_rel r (x :: quicksort_by_rel r sl xs_b) xs_s
+    end;
 
 fun pred_act (A1_, A2_, A3_) =
   (fn p => fn x => ball (A1_, A2_) (set_act (A1_, A2_, A3_) x) p);
@@ -5963,7 +6669,7 @@ fun as_shrink s =
   let
     val (a, n) = s;
     val aa =
-      (if less_eq_nat (times_nat (nat_of_integer (128 : Int.int)) n)
+      (if less_eq_nat (times_nata (nat_of_integer (128 : Int.int)) n)
             (array_length a) andalso
             less_nat (nat_of_integer (4 : Int.int)) n
         then array_shrink a n else a);
@@ -5974,7 +6680,7 @@ fun as_shrink s =
 fun as_pop s = let
                  val (a, n) = s;
                in
-                 as_shrink (a, minus_nat n one_nata)
+                 as_shrink (a, minus_nata n one_nata)
                end;
 
 fun as_set s i x = let
@@ -5986,7 +6692,7 @@ fun as_set s i x = let
 fun as_top s = let
                  val (a, n) = s;
                in
-                 array_get a (minus_nat n one_nata)
+                 array_get a (minus_nata n one_nata)
                end;
 
 fun hm_it_next_key (A1_, A2_) B_ ht =
@@ -5995,7 +6701,7 @@ fun hm_it_next_key (A1_, A2_) B_ ht =
     (fn n =>
       (if equal_nata n zero_nata then (raise Fail "Map is empty!")
         else (fn f_ => fn () => f_
-               ((hm_it_adjust (A1_, A2_) B_ (minus_nat n one_nata) ht) ()) ())
+               ((hm_it_adjust (A1_, A2_) B_ (minus_nata n one_nata) ht) ()) ())
                (fn i =>
                  (fn f_ => fn () => f_
                    ((ntha (heap_list (heap_prod A2_ B_)) (the_array ht) i) ())
@@ -6008,7 +6714,7 @@ fun min A_ a b = (if less_eq A_ a b then a else b);
 
 fun power A_ a n =
   (if equal_nata n zero_nata then one (one_power A_)
-    else times (times_power A_) a (power A_ a (minus_nat n one_nata)));
+    else times (times_power A_) a (power A_ a (minus_nata n one_nata)));
 
 fun trace m x = let
                   val _ = (fn x => Tracing.count_up ()) m;
@@ -6026,12 +6732,12 @@ fun heap_WHILET b f s =
       (if bv then (fn f_ => fn () => f_ ((f s) ()) ()) (heap_WHILET b f)
         else (fn () => s)));
 
-fun imp_nfoldli (x :: ls) c f s =
-  (fn f_ => fn () => f_ ((c s) ()) ())
-    (fn b =>
-      (if b then (fn f_ => fn () => f_ ((f x s) ()) ()) (imp_nfoldli ls c f)
-        else (fn () => s)))
-  | imp_nfoldli [] c f s = (fn () => s);
+fun imp_nfoldli [] c f s = (fn () => s)
+  | imp_nfoldli (x :: ls) c f s =
+    (fn f_ => fn () => f_ ((c s) ()) ())
+      (fn b =>
+        (if b then (fn f_ => fn () => f_ ((f x s) ()) ()) (imp_nfoldli ls c f)
+          else (fn () => s)));
 
 fun lso_bex_impl pi li =
   imp_nfoldli li (fn sigma => (fn () => (not sigma))) (fn xa => fn _ => pi xa)
@@ -6242,10 +6948,10 @@ fun imp_for_inta i u f s =
     s;
 
 fun mtx_tabulate (A1_, A2_, A3_) (B1_, B2_) n m c =
-  (fn f_ => fn () => f_ ((new B2_ (times_nat n m) (zero B1_)) ()) ())
+  (fn f_ => fn () => f_ ((new B2_ (times_nata n m) (zero B1_)) ()) ())
     (fn ma =>
       (fn f_ => fn () => f_
-        ((imp_for_inta zero_nata (times_nat n m)
+        ((imp_for_inta zero_nata (times_nata n m)
            (fn k => fn (i, (j, maa)) =>
              (fn f_ => fn () => f_ ((upd B2_ k (c (i, j)) maa) ()) ())
                (fn _ =>
@@ -6289,6 +6995,30 @@ fun combinea [] = Result []
 fun err_msg m (Error es) = Error (m :: es)
   | err_msg m (Result v) = Result v;
 
+fun is_pos_lit Bot = true
+  | is_pos_lit (Not Bot) = true
+  | is_pos_lit (Atom (PredAtm (n, args))) = true
+  | is_pos_lit (Not (Atom (PredAtm (n, args)))) = false
+  | is_pos_lit (Atom (EqAtm (a, b))) = true
+  | is_pos_lit (Not (Atom (EqAtm (a, b)))) = true
+  | is_pos_lit (Atom (NumericEqAtm (va, vb))) = false
+  | is_pos_lit (Atom (NumericLessAtm (va, vb))) = false
+  | is_pos_lit (Atom (NumericLEAtm (va, vb))) = false
+  | is_pos_lit (Atom (NumericGreaterAtm (va, vb))) = false
+  | is_pos_lit (Atom (NumericGEAtm (va, vb))) = false
+  | is_pos_lit (Not (Atom (NumericEqAtm (v, vb)))) = false
+  | is_pos_lit (Not (Atom (NumericLessAtm (v, vb)))) = false
+  | is_pos_lit (Not (Atom (NumericLEAtm (v, vb)))) = false
+  | is_pos_lit (Not (Atom (NumericGreaterAtm (v, vb)))) = false
+  | is_pos_lit (Not (Atom (NumericGEAtm (v, vb)))) = false
+  | is_pos_lit (Not (Not va)) = false
+  | is_pos_lit (Not (And (va, vb))) = false
+  | is_pos_lit (Not (Or (va, vb))) = false
+  | is_pos_lit (Not (Imp (va, vb))) = false
+  | is_pos_lit (And (v, va)) = false
+  | is_pos_lit (Or (v, va)) = false
+  | is_pos_lit (Imp (v, va)) = false;
+
 fun hms_lookup lookup copy k m =
   (fn f_ => fn () => f_ ((lookup k m) ()) ())
     (fn a =>
@@ -6306,7 +7036,7 @@ fun as_push s x =
       (if equal_nata n (array_length a)
         then array_grow a
                (max ord_nat (nat_of_integer (4 : Int.int))
-                 (times_nat (nat_of_integer (2 : Int.int)) n))
+                 (times_nata (nat_of_integer (2 : Int.int)) n))
                x
         else a);
     val ab = array_set aa n x;
@@ -6345,17 +7075,26 @@ fun ran_of_map_impl (A1_, A2_, A3_) B_ =
 fun map_option f NONE = NONE
   | map_option f (SOME x2) = SOME (f x2);
 
+fun name (Func x) = x;
+
 fun combine2 x = combine2_gen (fn a => fn b => Result (a, b)) x;
 
-fun mtx_get A_ m mtx e = ntha A_ mtx (plus_nata (times_nat (fst e) m) (snd e));
+fun is_pos_conj (And (f, g)) = is_pos_lit f andalso is_pos_conj g
+  | is_pos_conj (Atom v) = is_pos_lit (Atom v)
+  | is_pos_conj Bot = is_pos_lit Bot
+  | is_pos_conj (Not v) = is_pos_lit (Not v)
+  | is_pos_conj (Or (v, va)) = is_pos_lit (Or (v, va))
+  | is_pos_conj (Imp (v, va)) = is_pos_lit (Imp (v, va));
+
+fun mtx_get A_ m mtx e = ntha A_ mtx (plus_nata (times_nata (fst e) m) (snd e));
 
 fun mtx_set A_ m mtx e v =
-  upd A_ (plus_nata (times_nat (fst e) m) (snd e)) v mtx;
+  upd A_ (plus_nata (times_nata (fst e) m) (snd e)) v mtx;
 
 fun idx_iteratei_aux get sz i l c f sigma =
   (if equal_nata i zero_nata orelse not (c sigma) then sigma
-    else idx_iteratei_aux get sz (minus_nat i one_nata) l c f
-           (f (get l (minus_nat sz i)) sigma));
+    else idx_iteratei_aux get sz (minus_nata i one_nata) l c f
+           (f (get l (minus_nata sz i)) sigma));
 
 fun idx_iteratei get sz l c f sigma =
   idx_iteratei_aux get (sz l) (sz l) l c f sigma;
@@ -6667,17 +7406,17 @@ fun last_seg_tr s =
         (fn (xe, _) =>
           less_nat xe
             (if equal_nata
-                  (plus_nata (minus_nat (as_length aa) one_nata) one_nata)
+                  (plus_nata (minus_nata (as_length aa) one_nata) one_nata)
                   (as_length aa)
               then as_length a
               else as_get aa
-                     (plus_nata (minus_nat (as_length aa) one_nata) one_nata)))
+                     (plus_nata (minus_nata (as_length aa) one_nata) one_nata)))
         (fn (ac, bc) => let
                           val xa = as_get a ac;
                         in
                           (suc ac, xa :: bc)
                         end)
-        (as_get aa (minus_nat (as_length aa) one_nata), []);
+        (as_get aa (minus_nata (as_length aa) one_nata), []);
   in
     bc
   end;
@@ -6721,11 +7460,11 @@ fun ahm_rehash bhc (HashMap (a, n)) sz = HashMap (ahm_rehash_aux bhc a sz, n);
 val load_factora : nat = nat_of_integer (75 : Int.int);
 
 fun ahm_filled (HashMap (a, n)) =
-  less_eq_nat (times_nat (array_length a) load_factora)
-    (times_nat n (nat_of_integer (100 : Int.int)));
+  less_eq_nat (times_nata (array_length a) load_factora)
+    (times_nata n (nat_of_integer (100 : Int.int)));
 
 fun hm_grow (HashMap (a, n)) =
-  plus_nata (times_nat (nat_of_integer (2 : Int.int)) (array_length a))
+  plus_nata (times_nata (nat_of_integer (2 : Int.int)) (array_length a))
     (nat_of_integer (3 : Int.int));
 
 fun ahm_update eq bhc k v hm =
@@ -6738,7 +7477,7 @@ fun ahm_update eq bhc k v hm =
 fun pop_tr node_eq_impl node_hash_impl s =
   let
     val (a, (aa, (ab, bb))) = s;
-    val x = minus_nat (as_length aa) one_nata;
+    val x = minus_nata (as_length aa) one_nata;
     val xa =
       let
         val (_, bc) =
@@ -6782,6 +7521,19 @@ fun lx_alpha x =
 
 val zero_rat : rat = Frct (zero_inta, one_inta);
 
+fun is_predAtom (Atom (PredAtm (uu, uv))) = true
+  | is_predAtom (Atom (EqAtm (va, vb))) = false
+  | is_predAtom (Atom (NumericEqAtm (va, vb))) = false
+  | is_predAtom (Atom (NumericLessAtm (va, vb))) = false
+  | is_predAtom (Atom (NumericLEAtm (va, vb))) = false
+  | is_predAtom (Atom (NumericGreaterAtm (va, vb))) = false
+  | is_predAtom (Atom (NumericGEAtm (va, vb))) = false
+  | is_predAtom Bot = false
+  | is_predAtom (Not v) = false
+  | is_predAtom (And (v, va)) = false
+  | is_predAtom (Or (v, va)) = false
+  | is_predAtom (Imp (v, va)) = false;
+
 fun is_Nil a = (case a of [] => true | _ :: _ => false);
 
 fun act_sym (In a) = a
@@ -6799,12 +7551,108 @@ fun the_errors (Error es) = es;
 
 fun find_max_nat n uu =
   (if equal_nata n zero_nata then zero_nata
-    else (if uu (minus_nat n one_nata) then minus_nat n one_nata
-           else find_max_nat (minus_nat n one_nata) uu));
+    else (if uu (minus_nata n one_nata) then minus_nata n one_nata
+           else find_max_nat (minus_nata n one_nata) uu));
 
 fun amtx_copy A_ = array_copy A_;
 
-fun amtx_dflt A_ n m v = make A_ (times_nat n m) (fn _ => v);
+fun amtx_dflt A_ n m v = make A_ (times_nata n m) (fn _ => v);
+
+fun inst_duration_in_numeric_expression (ConstantExpr x) d = ConstantExpr x
+  | inst_duration_in_numeric_expression DurationExpr d = ConstantExpr d
+  | inst_duration_in_numeric_expression (AddExpr (x, y)) d =
+    AddExpr
+      (inst_duration_in_numeric_expression x d,
+        inst_duration_in_numeric_expression y d)
+  | inst_duration_in_numeric_expression (SubExpr (x, y)) d =
+    SubExpr
+      (inst_duration_in_numeric_expression x d,
+        inst_duration_in_numeric_expression y d)
+  | inst_duration_in_numeric_expression (MulExpr (x, y)) d =
+    MulExpr
+      (inst_duration_in_numeric_expression x d,
+        inst_duration_in_numeric_expression y d)
+  | inst_duration_in_numeric_expression (DivExpr (x, y)) d =
+    DivExpr
+      (inst_duration_in_numeric_expression x d,
+        inst_duration_in_numeric_expression y d)
+  | inst_duration_in_numeric_expression (SinExpr x) d =
+    SinExpr (inst_duration_in_numeric_expression x d)
+  | inst_duration_in_numeric_expression (CosExpr x) d =
+    CosExpr (inst_duration_in_numeric_expression x d)
+  | inst_duration_in_numeric_expression (ExpExpr x) d =
+    ExpExpr (inst_duration_in_numeric_expression x d)
+  | inst_duration_in_numeric_expression PiExpr d = PiExpr
+  | inst_duration_in_numeric_expression (FunctionExpr x) d = FunctionExpr x;
+
+fun inst_duration_in_atom (EqAtm (x, y)) d = EqAtm (x, y)
+  | inst_duration_in_atom (NumericEqAtm (x, y)) d =
+    NumericEqAtm
+      (inst_duration_in_numeric_expression x d,
+        inst_duration_in_numeric_expression y d)
+  | inst_duration_in_atom (NumericLessAtm (x, y)) d =
+    NumericLessAtm
+      (inst_duration_in_numeric_expression x d,
+        inst_duration_in_numeric_expression y d)
+  | inst_duration_in_atom (NumericLEAtm (x, y)) d =
+    NumericLEAtm
+      (inst_duration_in_numeric_expression x d,
+        inst_duration_in_numeric_expression y d)
+  | inst_duration_in_atom (NumericGreaterAtm (x, y)) d =
+    NumericGreaterAtm
+      (inst_duration_in_numeric_expression x d,
+        inst_duration_in_numeric_expression y d)
+  | inst_duration_in_atom (NumericGEAtm (x, y)) d =
+    NumericGEAtm
+      (inst_duration_in_numeric_expression x d,
+        inst_duration_in_numeric_expression y d)
+  | inst_duration_in_atom (PredAtm (p, a)) d = PredAtm (p, a);
+
+fun map_primitive_numeric_expression f (PNE (x1, x2)) = PNE (x1, map f x2);
+
+fun map_numeric_expression f (ConstantExpr x1) = ConstantExpr x1
+  | map_numeric_expression f DurationExpr = DurationExpr
+  | map_numeric_expression f (AddExpr (x31, x32)) =
+    AddExpr (map_numeric_expression f x31, map_numeric_expression f x32)
+  | map_numeric_expression f (SubExpr (x41, x42)) =
+    SubExpr (map_numeric_expression f x41, map_numeric_expression f x42)
+  | map_numeric_expression f (MulExpr (x51, x52)) =
+    MulExpr (map_numeric_expression f x51, map_numeric_expression f x52)
+  | map_numeric_expression f (DivExpr (x61, x62)) =
+    DivExpr (map_numeric_expression f x61, map_numeric_expression f x62)
+  | map_numeric_expression f (SinExpr x7) =
+    SinExpr (map_numeric_expression f x7)
+  | map_numeric_expression f (CosExpr x8) =
+    CosExpr (map_numeric_expression f x8)
+  | map_numeric_expression f (ExpExpr x9) =
+    ExpExpr (map_numeric_expression f x9)
+  | map_numeric_expression f PiExpr = PiExpr
+  | map_numeric_expression f (FunctionExpr x11) =
+    FunctionExpr (map_primitive_numeric_expression f x11);
+
+fun map_atom f (PredAtm (x11, x12)) = PredAtm (x11, map f x12)
+  | map_atom f (EqAtm (x21, x22)) = EqAtm (f x21, f x22)
+  | map_atom f (NumericEqAtm (x31, x32)) =
+    NumericEqAtm (map_numeric_expression f x31, map_numeric_expression f x32)
+  | map_atom f (NumericLessAtm (x41, x42)) =
+    NumericLessAtm (map_numeric_expression f x41, map_numeric_expression f x42)
+  | map_atom f (NumericLEAtm (x51, x52)) =
+    NumericLEAtm (map_numeric_expression f x51, map_numeric_expression f x52)
+  | map_atom f (NumericGreaterAtm (x61, x62)) =
+    NumericGreaterAtm
+      (map_numeric_expression f x61, map_numeric_expression f x62)
+  | map_atom f (NumericGEAtm (x71, x72)) =
+    NumericGEAtm (map_numeric_expression f x71, map_numeric_expression f x72);
+
+fun map_formula f (Atom x1) = Atom (f x1)
+  | map_formula f Bot = Bot
+  | map_formula f (Not x3) = Not (map_formula f x3)
+  | map_formula f (And (x41, x42)) = And (map_formula f x41, map_formula f x42)
+  | map_formula f (Or (x51, x52)) = Or (map_formula f x51, map_formula f x52)
+  | map_formula f (Imp (x61, x62)) = Imp (map_formula f x61, map_formula f x62);
+
+fun inst_formula f dur form =
+  map_formula ((fn x => inst_duration_in_atom x dur) o map_atom f) form;
 
 fun ll_from_list l = LL (size_list l, l);
 
@@ -6942,14 +7790,37 @@ fun more (Gen_g_impl_ext (gi_V, gi_E, gi_V0, more)) = more;
 
 fun combine_map f xs = combinea (map f xs);
 
-fun map_formula f (Atom x1) = Atom (f x1)
-  | map_formula f Bot = Bot
-  | map_formula f (Not x3) = Not (map_formula f x3)
-  | map_formula f (And (x41, x42)) = And (map_formula f x41, map_formula f x42)
-  | map_formula f (Or (x51, x52)) = Or (map_formula f x51, map_formula f x52)
-  | map_formula f (Imp (x61, x62)) = Imp (map_formula f x61, map_formula f x62);
-
 fun as_is_empty s = equal_nata (snd s) zero_nata;
+
+fun interval (A1_, A2_) a b =
+  (if less ((ord_preorder o preorder_order o order_linorder o linorder_interval)
+             A2_)
+        a b
+    then a :: interval (A1_, A2_)
+                (plus ((plus_semigroup_add o semigroup_add_numeral o
+                         numeral_semiring_numeral o
+                         semiring_numeral_semiring_1 o
+                         semiring_1_comm_semiring_1 o
+                         comm_semiring_1_comm_semiring_1_cancel o
+                         comm_semiring_1_cancel_interval)
+                        A2_)
+                  a (one ((one_numeral o numeral_semiring_numeral o
+                            semiring_numeral_semiring_1 o
+                            semiring_1_comm_semiring_1 o
+                            comm_semiring_1_comm_semiring_1_cancel o
+                            comm_semiring_1_cancel_interval)
+                           A2_)))
+                b
+    else (if eq A1_ a b then [a] else []));
+
+fun tab_succ (A1_, A2_, A3_) l =
+  lookup_default (A1_, A2_) []
+    (fold (fn (u, v) => map_defaulta (A1_, A2_) u [] (fn a => v :: a)) l
+      (emptya (A1_, A3_)));
+
+fun ty_term varT objT (VAR v) = varT v
+  | ty_term varT objT (CONST c) =
+    lookupa (ccompare_object, equal_object) objT c;
 
 fun minus_set (A1_, A2_) (RBT_set rbt1) (RBT_set rbt2) =
   (case ccompare A2_
@@ -6958,19 +7829,6 @@ fun minus_set (A1_, A2_) (RBT_set rbt1) (RBT_set rbt2) =
         (fn _ => minus_set (A1_, A2_) (RBT_set rbt1) (RBT_set rbt2))
     | SOME _ => RBT_set (minus A2_ rbt1 rbt2))
   | minus_set (A1_, A2_) a b = inf_seta (A1_, A2_) a (uminus_set b);
-
-fun quicksort_acca A_ ac (x :: v :: va) =
-  quicksort_parta A_ ac x [] [] [] (v :: va)
-  | quicksort_acca A_ ac [x] = x :: ac
-  | quicksort_acca A_ ac [] = ac
-and quicksort_parta A_ ac x lts eqs gts (z :: zs) =
-  (if less A_ x z then quicksort_parta A_ ac x lts eqs (z :: gts) zs
-    else (if less A_ z x then quicksort_parta A_ ac x (z :: lts) eqs gts zs
-           else quicksort_parta A_ ac x lts (z :: eqs) gts zs))
-  | quicksort_parta A_ ac x lts eqs gts [] =
-    quicksort_acca A_ (eqs @ x :: quicksort_acca A_ ac gts) lts;
-
-fun quicksorta A_ = quicksort_acca A_ [];
 
 fun heap_map copy xs =
   (fn f_ => fn () => f_
@@ -6992,13 +7850,13 @@ fun select_edge_tr node_eq_impl s =
       else let
              val (ac, bc) = as_top bb;
            in
-             (if less_eq_nat (as_get aa (minus_nat (as_length aa) one_nata)) ac
+             (if less_eq_nat (as_get aa (minus_nata (as_length aa) one_nata)) ac
                then let
                       val xa = gen_pick (fn x => foldli (id x)) bc;
                       val xb = glist_delete node_eq_impl xa bc;
                       val xc =
                         (if is_Nil xb then as_pop bb
-                          else as_set bb (minus_nat (as_length bb) one_nata)
+                          else as_set bb (minus_nata (as_length bb) one_nata)
                                  (ac, xb));
                     in
                       (SOME xa, (a, (aa, (ab, xc))))
@@ -7135,12 +7993,16 @@ collapse_tr node_eq_impl node_hash_impl xf bb;
 
 fun constraint_clk (LTa (c, uu)) = c
   | constraint_clk (LEa (c, uv)) = c
-  | constraint_clk (EQ (c, uw)) = c
+  | constraint_clk (EQa (c, uw)) = c
   | constraint_clk (GEa (c, ux)) = c
   | constraint_clk (GTa (c, uy)) = c;
 
 fun start_timer_impl x =
   ((fn a => (fn () => a)) o (fn a => Timing.start_timer a)) x;
+
+fun predicate (PredAtm (x11, x12)) = x11;
+
+fun namea (Pred x) = x;
 
 fun neg_dbm_entry_int (Le a) = Lt (uminus_inta a)
   | neg_dbm_entry_int (Lt a) = Le (uminus_inta a)
@@ -7174,6 +8036,22 @@ fun upd_entries_impl x =
         imp_nfoldli xa (fn _ => (fn () => true))
           (fn xb => fn sigma => (fn () => (xb :: sigma))) op_list_empty))
     x;
+
+fun no_stutter A_ [] = true
+  | no_stutter A_ [uu] = true
+  | no_stutter A_ (a :: b :: l) =
+    not (eq A_ a b) andalso no_stutter A_ (b :: l);
+
+fun trim_ld_zs [] = []
+  | trim_ld_zs (d :: ds) =
+    (if equal_nata d zero_nata then trim_ld_zs ds else d :: ds);
+
+fun trim_tr_zsa [] zs = []
+  | trim_tr_zsa (d :: ds) zs =
+    (if equal_nata d zero_nata then trim_tr_zsa ds (zero_nata :: zs)
+      else zs @ d :: trim_tr_zsa ds []);
+
+fun trim_tr_zs ds = trim_tr_zsa ds [];
 
 fun map_exp f (Const x1) = Const x1
   | map_exp f (Var x2) = Var (f x2)
@@ -7232,20 +8110,17 @@ and set_bexp (A1_, A2_, A3_) True = bot_set (A1_, A2_, A3_)
     sup_seta (A1_, A2_) (set_exp (A1_, A2_, A3_) x101)
       (set_exp (A1_, A2_, A3_) x102);
 
-fun tab_succ (A1_, A2_, A3_) l =
-  lookup_default (A1_, A2_) []
-    (fold (fn (u, v) => map_defaulta (A1_, A2_) u [] (fn a => v :: a)) l
-      (emptya (A1_, A3_)));
-
-fun ty_term varT objT (VAR v) = varT v
-  | ty_term varT objT (CONST c) =
-    lookupa (ccompare_object, equal_object) objT c;
-
 fun constraint_pair (LTa (x, m)) = (x, m)
   | constraint_pair (LEa (x, m)) = (x, m)
-  | constraint_pair (EQ (x, m)) = (x, m)
+  | constraint_pair (EQa (x, m)) = (x, m)
   | constraint_pair (GEa (x, m)) = (x, m)
   | constraint_pair (GTa (x, m)) = (x, m);
+
+fun adds (Effect (x1, x2, x3)) = x1;
+
+fun dels (Effect (x1, x2, x3)) = x2;
+
+fun primitives (Either x) = x;
 
 fun rbt_to_list Empty = []
   | rbt_to_list (Branch (c, l, e, x, r)) = e :: rbt_to_list l @ rbt_to_list r;
@@ -7385,9 +8260,34 @@ else (fn f_ => fn () => f_ ((keyi xl) ()) ())
                                 false)
                             false))))));
 
+fun numeric_effects (Effect (x1, x2, x3)) = x3;
+
+fun conjunct_effects l =
+  Effect
+    ((concat o map adds) l, (concat o map dels) l,
+      (concat o map numeric_effects) l);
+
+fun filter_time_spec t l =
+  map_filter
+    (fn x =>
+      (if (equal_temporal_annotationa t o fst) x then SOME (snd x) else NONE))
+    l;
+
 fun maxa (A1_, A2_, A3_, A4_) a = set_fold1 (A1_, A2_, A3_) (max_sls A4_) a;
 
+fun quicksorta A_ =
+  quicksort_by_rel
+    (less_eq ((ord_preorder o preorder_order o order_linorder) A_)) [];
+
+fun distinct_ds (A1_, A2_) l = no_stutter A1_ (quicksorta A2_ l);
+
 fun print_check s b = writeln (s ^ ": " ^ (if b then "passed" else "failed"));
+
+fun types (Domain (x1, x2, x3, x4, x5)) = x1;
+
+fun goal (Problem (x1, x2, x3, x4)) = x4;
+
+fun inita (Problem (x1, x2, x3, x4)) = x3;
 
 fun collect_clock_pairs (A1_, A2_, A3_, A4_, A5_) (B1_, B2_, B3_, B4_, B5_) cc =
   image (ceq_acconstraint A4_ B4_, ccompare_acconstraint A3_ B3_)
@@ -7441,23 +8341,56 @@ fun loc_set_impl (C1_, C2_, C3_) automata p =
             end)
     (bot_set (C1_, C2_, C3_)) (fst (snd (snd (nth automata p))));
 
-fun no_stutter A_ [] = true
-  | no_stutter A_ [uu] = true
-  | no_stutter A_ (a :: b :: l) =
-    not (eq A_ a b) andalso no_stutter A_ (b :: l);
+fun all_interval (A1_, A2_) p a b =
+  (if less ((ord_preorder o preorder_order o order_linorder o linorder_interval)
+             A2_)
+        a b
+    then p a andalso
+           all_interval (A1_, A2_) p
+             (plus ((plus_semigroup_add o semigroup_add_numeral o
+                      numeral_semiring_numeral o semiring_numeral_semiring_1 o
+                      semiring_1_comm_semiring_1 o
+                      comm_semiring_1_comm_semiring_1_cancel o
+                      comm_semiring_1_cancel_interval)
+                     A2_)
+               a (one ((one_numeral o numeral_semiring_numeral o
+                         semiring_numeral_semiring_1 o
+                         semiring_1_comm_semiring_1 o
+                         comm_semiring_1_comm_semiring_1_cancel o
+                         comm_semiring_1_cancel_interval)
+                        A2_)))
+             b
+    else true) andalso
+    (if eq A1_ a b then p a else true);
 
-fun trim_ld_zs [] = []
-  | trim_ld_zs (d :: ds) =
-    (if equal_nata d zero_nata then trim_ld_zs ds else d :: ds);
+fun dfs_reachable (A1_, A2_, A3_) succ d w =
+  let
+    val (_, (_, brk)) =
+      whilea (fn (_, (wa, brk)) => not brk andalso not (null wa))
+        (fn (v, (va :: wa, _)) =>
+          (if d va then (v, (va :: wa, true))
+            else (if member (A1_, A2_) va v then (v, (wa, false))
+                   else let
+                          val vb = insert (A1_, A2_) va v;
+                          val wb = succ va @ wa;
+                        in
+                          (vb, (wb, false))
+                        end)))
+        (bot_set (A1_, A2_, A3_), (w, false));
+  in
+    brk
+  end;
 
-fun trim_tr_zsa [] zs = []
-  | trim_tr_zsa (d :: ds) zs =
-    (if equal_nata d zero_nata then trim_tr_zsa ds (zero_nata :: zs)
-      else zs @ d :: trim_tr_zsa ds []);
-
-fun trim_tr_zs ds = trim_tr_zsa ds [];
+fun of_type_impl g oT t =
+  list_all
+    (fn pt =>
+      dfs_reachable (ceq_literal, ccompare_literal, set_impl_literal) g
+        (fn a => ((pt : string) = a)) (primitives t))
+    (primitives oT);
 
 fun run_map_heap f xs = Par_List.map ((fn a => (fn f => f ()) a) o f) xs;
+
+fun consts (Domain (x1, x2, x3, x4, x5)) = x4;
 
 fun n num_states q = num_states q;
 
@@ -7683,7 +8616,7 @@ q c)
 
 fun map_acconstraint f1 f2 (LTa (x11, x12)) = LTa (f1 x11, f2 x12)
   | map_acconstraint f1 f2 (LEa (x21, x22)) = LEa (f1 x21, f2 x22)
-  | map_acconstraint f1 f2 (EQ (x31, x32)) = EQ (f1 x31, f2 x32)
+  | map_acconstraint f1 f2 (EQa (x31, x32)) = EQa (f1 x31, f2 x32)
   | map_acconstraint f1 f2 (GTa (x41, x42)) = GTa (f1 x41, f2 x42)
   | map_acconstraint f1 f2 (GEa (x51, x52)) = GEa (f1 x51, f2 x52);
 
@@ -7943,7 +8876,7 @@ fun make_renaming (A1_, A2_, A3_, A4_, A5_) =
                     val inv_renum_clocksa =
                       (fn c =>
                         (if equal_nata c zero_nata then "0"
-                          else inv_renum_clocks (minus_nat c one_nata)));
+                          else inv_renum_clocks (minus_nata c one_nata)));
                   in
                     binda (combine_map
                             (fn i => mk_renaminga (A3_, A5_) (loc_seta i))
@@ -8093,7 +9026,7 @@ fun convert_dbm urge m dbm =
       Le zero_inta ::
         insert_every_nth m INF (drop m dbm) @
           (if urge then Le zero_inta else INF) ::
-            replicate (minus_nat m one_nata) INF @ [Le zero_inta]);
+            replicate (minus_nata m one_nata) INF @ [Le zero_inta]);
 
 fun convert_state_space m is_urgent (Reachable_Set xs) =
   Reachable_Set
@@ -8393,68 +9326,136 @@ fun vars_of_formula (C1_, C2_, C3_) (EX phi) = vars_of_sexp (C1_, C2_, C3_) phi
     sup_seta (C1_, C2_) (vars_of_sexp (C1_, C2_, C3_) phi)
       (vars_of_sexp (C1_, C2_, C3_) psi);
 
-fun distinct_ds (A1_, A2_) l =
-  no_stutter A1_
-    (quicksorta ((ord_preorder o preorder_order o order_linorder) A2_) l);
+fun atLeastLessThan (A1_, A2_, A3_, A4_, A5_) a b =
+  let
+    val d =
+      minusa
+        ((minus_cancel_ab_semigroup_add o
+           cancel_ab_semigroup_add_cancel_comm_monoid_add o
+           cancel_comm_monoid_add_semiring_0_cancel o
+           semiring_0_cancel_semiring_1_cancel o
+           semiring_1_cancel_comm_semiring_1_cancel o
+           comm_semiring_1_cancel_interval)
+          A4_)
+        b (one ((one_numeral o numeral_semiring_numeral o
+                  semiring_numeral_semiring_1 o semiring_1_comm_semiring_1 o
+                  comm_semiring_1_comm_semiring_1_cancel o
+                  comm_semiring_1_cancel_interval)
+                 A4_));
+  in
+    (if less ((ord_preorder o preorder_order o order_linorder o
+                linorder_interval)
+               A4_)
+          d b
+      then set (A1_, A2_, A5_) (interval (A3_, A4_) a d)
+      else bot_set (A1_, A2_, A5_))
+  end;
 
 fun simple_Network_Impl_nat_ceiling_start_state_axioms x =
   (fn _ => fn bounds => fn automata => fn m => fn num_states => fn k =>
     fn l_0 => fn s_0 => fn formula =>
-    all_interval_nat
-      (fn i =>
-        list_all
-          (fn (l, g) =>
-            ball (ceq_prod ceq_nat ceq_int,
-                   ccompare_prod ccompare_nat ccompare_int)
-              (collect_clock_pairs
-                (ceq_nat, ccompare_nat, compare_nat, equal_nat, set_impl_nat)
-                (ceq_int, ccompare_int, compare_int, equal_int, set_impl_int) g)
-              (fn (xa, ma) =>
-                less_eq_int ma (int_of_nat (nth (nth (nth k i) l) xa))))
-          ((snd o snd o snd) (nth automata i)))
-      zero_nata (size_list automata) andalso
-      (all_interval_nat
-         (fn i =>
-           list_all
-             (fn (l, (_, (g, _))) =>
-               ball (ceq_prod ceq_nat ceq_int,
-                      ccompare_prod ccompare_nat ccompare_int)
-                 (collect_clock_pairs
-                   (ceq_nat, ccompare_nat, compare_nat, equal_nat, set_impl_nat)
-                   (ceq_int, ccompare_int, compare_int, equal_int, set_impl_int)
-                   g)
-                 (fn (xa, ma) =>
-                   less_eq_int ma (int_of_nat (nth (nth (nth k i) l) xa))))
-             ((fst o snd o snd) (nth automata i)))
-         zero_nata (size_list automata) andalso
-        all_interval_nat
-          (fn i =>
-            list_all
-              (fn (l, (_, (_, (_, (_, (r, la)))))) =>
-                ball (ceq_nat, ccompare_nat)
-                  (minus_set (ceq_nat, ccompare_nat)
-                    (set (ceq_nat, ccompare_nat, set_impl_nat)
-                      (upt zero_nata (plus_nata m one_nata)))
-                    (set (ceq_nat, ccompare_nat, set_impl_nat) r))
-                  (fn c =>
-                    less_eq_nat (nth (nth (nth k i) la) c)
-                      (nth (nth (nth k i) l) c)))
-              ((fst o snd o snd) (nth automata i)))
-          zero_nata (size_list automata)) andalso
+    let
+      val d = minus_nata (size_list automata) one_nata;
+    in
+      (if less_nat d (size_list automata)
+        then all_interval (equal_nat, interval_nat)
+               (fn i =>
+                 list_all
+                   (fn (l, g) =>
+                     ball (ceq_prod ceq_nat ceq_int,
+                            ccompare_prod ccompare_nat ccompare_int)
+                       (collect_clock_pairs
+                         (ceq_nat, ccompare_nat, compare_nat, equal_nat,
+                           set_impl_nat)
+                         (ceq_int, ccompare_int, compare_int, equal_int,
+                           set_impl_int)
+                         g)
+                       (fn (xa, ma) =>
+                         less_eq_int ma
+                           (int_of_nat (nth (nth (nth k i) l) xa))))
+                   ((snd o snd o snd) (nth automata i)))
+               zero_nata d
+        else true)
+    end andalso
+      (let
+         val d = minus_nata (size_list automata) one_nata;
+       in
+         (if less_nat d (size_list automata)
+           then all_interval (equal_nat, interval_nat)
+                  (fn i =>
+                    list_all
+                      (fn (l, (_, (g, _))) =>
+                        ball (ceq_prod ceq_nat ceq_int,
+                               ccompare_prod ccompare_nat ccompare_int)
+                          (collect_clock_pairs
+                            (ceq_nat, ccompare_nat, compare_nat, equal_nat,
+                              set_impl_nat)
+                            (ceq_int, ccompare_int, compare_int, equal_int,
+                              set_impl_int)
+                            g)
+                          (fn (xa, ma) =>
+                            less_eq_int ma
+                              (int_of_nat (nth (nth (nth k i) l) xa))))
+                      ((fst o snd o snd) (nth automata i)))
+                  zero_nata d
+           else true)
+       end andalso
+        let
+          val d = minus_nata (size_list automata) one_nata;
+        in
+          (if less_nat d (size_list automata)
+            then all_interval (equal_nat, interval_nat)
+                   (fn i =>
+                     list_all
+                       (fn (l, (_, (_, (_, (_, (r, la)))))) =>
+                         ball (ceq_nat, ccompare_nat)
+                           (minus_set (ceq_nat, ccompare_nat)
+                             (atLeastLessThan
+                               (ceq_nat, ccompare_nat, equal_nat, interval_nat,
+                                 set_impl_nat)
+                               zero_nata (plus_nata m one_nata))
+                             (set (ceq_nat, ccompare_nat, set_impl_nat) r))
+                           (fn c =>
+                             less_eq_nat (nth (nth (nth k i) la) c)
+                               (nth (nth (nth k i) l) c)))
+                       ((fst o snd o snd) (nth automata i)))
+                   zero_nata d
+            else true)
+        end) andalso
       (equal_nata (size_list k) (size_list automata) andalso
-        (all_interval_nat
-           (fn i => equal_nata (size_list (nth k i)) (num_states i)) zero_nata
-           (size_list automata) andalso
+        (let
+           val d = minus_nata (size_list automata) one_nata;
+         in
+           (if less_nat d (size_list automata)
+             then all_interval (equal_nat, interval_nat)
+                    (fn i => equal_nata (size_list (nth k i)) (num_states i))
+                    zero_nata d
+             else true)
+         end andalso
           list_all
             (list_all
               (fn xxs => equal_nata (size_list xxs) (plus_nata m one_nata)))
             k)) andalso
-      (all_interval_nat
-         (fn i =>
-           all_interval_nat
-             (fn l => equal_nata (nth (nth (nth k i) l) zero_nata) zero_nata)
-             zero_nata (num_states i))
-         zero_nata (size_list automata) andalso
+      (let
+         val d = minus_nata (size_list automata) one_nata;
+       in
+         (if less_nat d (size_list automata)
+           then all_interval (equal_nat, interval_nat)
+                  (fn i =>
+                    let
+                      val da = minus_nata (num_states i) one_nata;
+                    in
+                      (if less_nat da (num_states i)
+                        then all_interval (equal_nat, interval_nat)
+                               (fn l =>
+                                 equal_nata (nth (nth (nth k i) l) zero_nata)
+                                   zero_nata)
+                               zero_nata da
+                        else true)
+                    end)
+                  zero_nata d
+           else true)
+       end andalso
          (list_all
             (fn (_, (_, (_, inv))) =>
               distinct_ds (equal_nat, linorder_nat) (map fst inv))
@@ -8494,15 +9495,23 @@ fun simple_Network_Impl_nat_ceiling_start_state_axioms x =
                    less_eq_int (the (map_of equal_nat s_0 xa))
                      (snd (the (map_of equal_nat bounds xa)))))) andalso
         (equal_nata (size_list l_0) (size_list automata) andalso
-          (all_interval_nat
-             (fn i =>
-               membera equal_nat (map fst ((fst o snd o snd) (nth automata i)))
-                 (nth l_0 i))
-             zero_nata (size_list automata) andalso
+          (let
+             val d = minus_nata (size_list automata) one_nata;
+           in
+             (if less_nat d (size_list automata)
+               then all_interval (equal_nat, interval_nat)
+                      (fn i =>
+                        membera equal_nat
+                          (map fst ((fst o snd o snd) (nth automata i)))
+                          (nth l_0 i))
+                      zero_nata d
+               else true)
+           end andalso
             less_eq_set (cenum_nat, ceq_nat, ccompare_nat)
               (vars_of_formula (ceq_nat, ccompare_nat, set_impl_nat) formula)
-              (set (ceq_nat, ccompare_nat, set_impl_nat)
-                (upt zero_nata (size_list bounds)))))))
+              (atLeastLessThan
+                (ceq_nat, ccompare_nat, equal_nat, interval_nat, set_impl_nat)
+                zero_nata (size_list bounds))))))
     x;
 
 fun simple_Network_Impl_nat_urge_axioms automata =
@@ -8513,24 +9522,37 @@ fun n_vs bounds = size_list bounds;
 fun simple_Network_Impl_nat broadcast bounds automata m num_states num_actions =
   less_nat zero_nata m andalso
     (less_nat zero_nata (size_list automata) andalso
-      all_interval_nat
-        (fn i =>
-          let
-            val (_, (_, (trans, _))) = nth automata i;
-          in
-            list_all
-              (fn (l, (_, (_, (_, (_, (_, la)))))) =>
-                less_nat l (num_states i) andalso less_nat la (num_states i))
-              trans
-          end)
-        zero_nata (size_list automata)) andalso
-    (all_interval_nat
-       (fn i => let
-                  val (_, (_, (_, a))) = nth automata i;
-                in
-                  list_all (fn (x, _) => less_nat x (num_states i)) a
-                end)
-       zero_nata (size_list automata) andalso
+      let
+        val d = minus_nata (size_list automata) one_nata;
+      in
+        (if less_nat d (size_list automata)
+          then all_interval (equal_nat, interval_nat)
+                 (fn i =>
+                   let
+                     val (_, (_, (trans, _))) = nth automata i;
+                   in
+                     list_all
+                       (fn (l, (_, (_, (_, (_, (_, la)))))) =>
+                         less_nat l (num_states i) andalso
+                           less_nat la (num_states i))
+                       trans
+                   end)
+                 zero_nata d
+          else true)
+      end) andalso
+    (let
+       val d = minus_nata (size_list automata) one_nata;
+     in
+       (if less_nat d (size_list automata)
+         then all_interval (equal_nat, interval_nat)
+                (fn i => let
+                           val (_, (_, (_, a))) = nth automata i;
+                         in
+                           list_all (fn (x, _) => less_nat x (num_states i)) a
+                         end)
+                zero_nata d
+         else true)
+     end andalso
       (list_all
          (fn (_, (_, (trans, _))) =>
            list_all
@@ -8553,8 +9575,14 @@ fun simple_Network_Impl_nat broadcast bounds automata m num_states num_actions =
                   (fn i => less_nat i (n_vs bounds)))
               trans)
           automata)) andalso
-    (all_interval_nat (fn i => equal_nata (fst (nth bounds i)) i) zero_nata
-       (n_vs bounds) andalso
+    (let
+       val d = minus_nata (n_vs bounds) one_nata;
+     in
+       (if less_nat d (n_vs bounds)
+         then all_interval (equal_nat, interval_nat)
+                (fn i => equal_nata (fst (nth bounds i)) i) zero_nata d
+         else true)
+     end andalso
        (list_all (fn a => less_nat a num_actions) broadcast andalso
          list_all
            (fn (_, (_, (trans, _))) =>
@@ -8628,11 +9656,17 @@ fun simple_Network_Impl_nat_ceiling_start_state broadcast bounds automata m
 fun bounds_map bounds = the o map_of equal_nat bounds;
 
 fun check_boundedi bounds s =
-  all_interval_nat
-    (fn x =>
-      less_eq_int (fst (bounds_map bounds x)) (nth s x) andalso
-        less_eq_int (nth s x) (snd (bounds_map bounds x)))
-    zero_nata (size_list s);
+  let
+    val d = minus_nata (size_list s) one_nata;
+  in
+    (if less_nat d (size_list s)
+      then all_interval (equal_nat, interval_nat)
+             (fn x =>
+               less_eq_int (fst (bounds_map bounds x)) (nth s x) andalso
+                 less_eq_int (nth s x) (snd (bounds_map bounds x)))
+             zero_nata d
+      else true)
+  end;
 
 fun states_i x =
   (fn automata => fn i =>
@@ -8671,15 +9705,22 @@ fun certificate_checker_pre1 l_list m_list broadcast bounds automata m
       list_all
         (fn (l, s) =>
           equal_nata (size_list l) n_ps andalso
-            (all_interval_nat
-               (fn i =>
-                 member (ceq_nat, ccompare_nat) (nth l i) (nth states_ia i))
-               zero_nata n_ps andalso
+            (let
+               val d = minus_nata n_ps one_nata;
+             in
+               (if less_nat d n_ps
+                 then all_interval (equal_nat, interval_nat)
+                        (fn i =>
+                          member (ceq_nat, ccompare_nat) (nth l i)
+                            (nth states_ia i))
+                        zero_nata d
+                 else true)
+             end andalso
               (equal_nata (size_list s) n_vsa andalso check_boundedi bounds s)))
         l_list;
     val _ = Timing.save_time "Time to check states";
     val _ = Timing.start_timer ();
-    val n_sq = times_nat (suc m) (suc m);
+    val n_sq = times_nata (suc m) (suc m);
     val check3 =
       list_all
         (fn (_, a) => list_all (fn (ma, _) => equal_nata (size_list ma) n_sq) a)
@@ -8696,9 +9737,9 @@ fun certificate_checker_pre1 l_list m_list broadcast bounds automata m
     check1 andalso (check2 andalso (check3 andalso check4))
   end;
 
-fun dbm_lt_0 INF = false
+fun dbm_lt_0 (Le x) = less_int x zero_inta
   | dbm_lt_0 (Lt x) = less_eq_int x zero_inta
-  | dbm_lt_0 (Le x) = less_int x zero_inta;
+  | dbm_lt_0 INF = false;
 
 fun imp_for_int_inner i u c f s =
   (if u <= i then (fn () => s)
@@ -8997,7 +10038,7 @@ fun abstra_upd_impl_int x =
           (fn xa =>
             mtx_set (heap_DBMEntry heap_int) (suc n) bi (x41a, zero_nata)
               (min_int_entry xa (Le x42a)))
-      | EQ (x41a, x42a) =>
+      | EQa (x41a, x42a) =>
         (fn f_ => fn () => f_
           ((mtx_get (heap_DBMEntry heap_int) (suc n) bi (zero_nata, x41a)) ())
           ())
@@ -9313,7 +10354,14 @@ fun dbm_le_int (Lt a) (Lt b) = less_eq_int a b
   | dbm_le_int INF (Lt v) = false;
 
 fun array_all2 n p asa bs =
-  all_interval_nat (fn i => p (sub asa i) (sub bs i)) zero_nata n;
+  let
+    val d = minus_nata n one_nata;
+  in
+    (if less_nat d n
+      then all_interval (equal_nat, interval_nat)
+             (fn i => p (sub asa i) (sub bs i)) zero_nata d
+      else true)
+  end;
 
 fun check_sexpi A_ Truea uu uv = true
   | check_sexpi A_ (Notb e) l s = not (check_sexpi A_ e l s)
@@ -9385,9 +10433,17 @@ fun no_buechi_run_checker broadcast bounds automata m num_states num_actions l_0
     val check_state =
       (fn (l, s) =>
         equal_nata (size_list l) n_ps andalso
-          all_interval_nat
-            (fn i => member (ceq_nat, ccompare_nat) (nth l i) (nth states_ia i))
-            zero_nata n_ps andalso
+          let
+            val d = minus_nata n_ps one_nata;
+          in
+            (if less_nat d n_ps
+              then all_interval (equal_nat, interval_nat)
+                     (fn i =>
+                       member (ceq_nat, ccompare_nat) (nth l i)
+                         (nth states_ia i))
+                     zero_nata d
+              else true)
+          end andalso
           (equal_nata (size_list s) n_vsa andalso check_boundedi bounds s));
     val mi =
       hashmap_of_list
@@ -9421,13 +10477,13 @@ fun no_buechi_run_checker broadcast bounds automata m num_states num_actions l_0
             end))
       l_list
       (fn asa => fn bs =>
-        not (all_interval_nat
+        not (all_interval (equal_nat, interval_nat)
               (not o
                 (fn i =>
                   dbm_lt_0
-                    (sub asa (plus_nata (plus_nata i (times_nat i m)) i))))
-              zero_nata (suc m)) orelse
-          array_all2 (times_nat (suc m) (suc m)) dbm_le_int asa bs)
+                    (sub asa (plus_nata (plus_nata i (times_nata i m)) i))))
+              zero_nata m) orelse
+          array_all2 (times_nata (suc m) (suc m)) dbm_le_int asa bs)
       (split_ka num_split m_list)
       (fn a =>
         (fn f => f ()) ((fn f_ => fn () => f_
@@ -9624,19 +10680,28 @@ fun check_renaming x =
     fn l_0 => fn s_0 =>
     combinea
       [assert
-         (all_interval_nat
-           (fn i =>
-             ball (ceq_nat, ccompare_nat)
-               (prod_TA_loc_set_impl (ceq_nat, ccompare_nat, set_impl_nat)
-                 (broadcast, (automata, bounds)))
-               (fn xa =>
-                 ball (ceq_nat, ccompare_nat)
-                   (prod_TA_loc_set_impl (ceq_nat, ccompare_nat, set_impl_nat)
-                     (broadcast, (automata, bounds)))
-                   (fn y =>
-                     (if equal_nata (renum_states i xa) (renum_states i y)
-                       then equal_nata xa y else true))))
-           zero_nata (size_list automata))
+         let
+           val d = minus_nata (size_list automata) one_nata;
+         in
+           (if less_nat d (size_list automata)
+             then all_interval (equal_nat, interval_nat)
+                    (fn i =>
+                      ball (ceq_nat, ccompare_nat)
+                        (prod_TA_loc_set_impl
+                          (ceq_nat, ccompare_nat, set_impl_nat)
+                          (broadcast, (automata, bounds)))
+                        (fn xa =>
+                          ball (ceq_nat, ccompare_nat)
+                            (prod_TA_loc_set_impl
+                              (ceq_nat, ccompare_nat, set_impl_nat)
+                              (broadcast, (automata, bounds)))
+                            (fn y =>
+                              (if equal_nata (renum_states i xa)
+                                    (renum_states i y)
+                                then equal_nata xa y else true))))
+                    zero_nata d
+             else true)
+         end
          "Location renamings are injective",
         assert
           (inj_on (ceq_literal, ccompare_literal, equal_literal) equal_nat
@@ -9731,28 +10796,34 @@ fun check_renaming x =
           "Urge not in clock set",
         assert
           (equal_nata (size_list l_0) (size_list automata) andalso
-            all_interval_nat
-              (fn i =>
-                member (ceq_nat, ccompare_nat) (nth l_0 i)
-                  (foldl
-                    (fn a => fn xa =>
-                      sup_seta (ceq_nat, ccompare_nat) a
-                        let
-                          val (l, (_, (_, (_, (_, (_, la)))))) = xa;
-                        in
-                          insert (ceq_nat, ccompare_nat) l
-                            (insert (ceq_nat, ccompare_nat) la
-                              (set_empty (ceq_nat, ccompare_nat)
-                                (of_phantom set_impl_nata)))
-                        end)
-                    (set_empty (ceq_nat, ccompare_nat)
-                      (of_phantom set_impl_nata))
-                    let
-                      val (_, (_, (ts, _))) = nth automata i;
-                    in
-                      ts
-                    end))
-              zero_nata (size_list automata))
+            let
+              val d = minus_nata (size_list automata) one_nata;
+            in
+              (if less_nat d (size_list automata)
+                then all_interval (equal_nat, interval_nat)
+                       (fn i =>
+                         member (ceq_nat, ccompare_nat) (nth l_0 i)
+                           (foldl
+                             (fn a => fn xa =>
+                               sup_seta (ceq_nat, ccompare_nat) a
+                                 let
+                                   val (l, (_, (_, (_, (_, (_, la)))))) = xa;
+                                 in
+                                   insert (ceq_nat, ccompare_nat) l
+                                     (insert (ceq_nat, ccompare_nat) la
+                                       (set_empty (ceq_nat, ccompare_nat)
+ (of_phantom set_impl_nata)))
+                                 end)
+                             (set_empty (ceq_nat, ccompare_nat)
+                               (of_phantom set_impl_nata))
+                             let
+                               val (_, (_, (ts, _))) = nth automata i;
+                             in
+                               ts
+                             end))
+                       zero_nata d
+                else true)
+            end)
           "Initial location is in the state set",
         assert
           (set_eq (cenum_literal, ceq_literal, ccompare_literal)
@@ -9773,8 +10844,9 @@ fun check_renaming x =
         assert
           (less_eq_set (cenum_nat, ceq_nat, ccompare_nat)
             (locs_of_formula (ceq_nat, ccompare_nat, set_impl_nat) phi)
-            (set (ceq_nat, ccompare_nat, set_impl_nat)
-              (upt zero_nata (size_list automata))))
+            (atLeastLessThan
+              (ceq_nat, ccompare_nat, equal_nat, interval_nat, set_impl_nat)
+              zero_nata (size_list automata)))
           "Formula automata are contained in the automata set",
         assert
           (less_eq_set (cenum_literal, ceq_literal, ccompare_literal)
@@ -9791,62 +10863,90 @@ fun check_precond2 x =
     fn l_0 => fn s_0 => fn formula =>
     combinea
       [assert
-         (all_interval_nat
-           (fn i =>
-             list_all
-               (fn (l, g) =>
-                 ball (ceq_prod ceq_nat ceq_int,
-                        ccompare_prod ccompare_nat ccompare_int)
-                   (collect_clock_pairs
-                     (ceq_nat, ccompare_nat, compare_nat, equal_nat,
-                       set_impl_nat)
-                     (ceq_int, ccompare_int, compare_int, equal_int,
-                       set_impl_int)
-                     g)
-                   (fn (xa, ma) =>
-                     less_eq_int ma (int_of_nat (nth (nth (nth k i) l) xa))))
-               ((snd o snd o snd) (nth automata i)))
-           zero_nata (size_list automata))
+         let
+           val d = minus_nata (size_list automata) one_nata;
+         in
+           (if less_nat d (size_list automata)
+             then all_interval (equal_nat, interval_nat)
+                    (fn i =>
+                      list_all
+                        (fn (l, g) =>
+                          ball (ceq_prod ceq_nat ceq_int,
+                                 ccompare_prod ccompare_nat ccompare_int)
+                            (collect_clock_pairs
+                              (ceq_nat, ccompare_nat, compare_nat, equal_nat,
+                                set_impl_nat)
+                              (ceq_int, ccompare_int, compare_int, equal_int,
+                                set_impl_int)
+                              g)
+                            (fn (xa, ma) =>
+                              less_eq_int ma
+                                (int_of_nat (nth (nth (nth k i) l) xa))))
+                        ((snd o snd o snd) (nth automata i)))
+                    zero_nata d
+             else true)
+         end
          "Ceiling invariants",
         assert
-          (all_interval_nat
-            (fn i =>
-              list_all
-                (fn (l, (_, (g, _))) =>
-                  ball (ceq_prod ceq_nat ceq_int,
-                         ccompare_prod ccompare_nat ccompare_int)
-                    (collect_clock_pairs
-                      (ceq_nat, ccompare_nat, compare_nat, equal_nat,
-                        set_impl_nat)
-                      (ceq_int, ccompare_int, compare_int, equal_int,
-                        set_impl_int)
-                      g)
-                    (fn (xa, ma) =>
-                      less_eq_int ma (int_of_nat (nth (nth (nth k i) l) xa))))
-                ((fst o snd o snd) (nth automata i)))
-            zero_nata (size_list automata))
+          let
+            val d = minus_nata (size_list automata) one_nata;
+          in
+            (if less_nat d (size_list automata)
+              then all_interval (equal_nat, interval_nat)
+                     (fn i =>
+                       list_all
+                         (fn (l, (_, (g, _))) =>
+                           ball (ceq_prod ceq_nat ceq_int,
+                                  ccompare_prod ccompare_nat ccompare_int)
+                             (collect_clock_pairs
+                               (ceq_nat, ccompare_nat, compare_nat, equal_nat,
+                                 set_impl_nat)
+                               (ceq_int, ccompare_int, compare_int, equal_int,
+                                 set_impl_int)
+                               g)
+                             (fn (xa, ma) =>
+                               less_eq_int ma
+                                 (int_of_nat (nth (nth (nth k i) l) xa))))
+                         ((fst o snd o snd) (nth automata i)))
+                     zero_nata d
+              else true)
+          end
           "Ceiling transitions",
         assert
-          (all_interval_nat
-            (fn i =>
-              list_all
-                (fn (l, (_, (_, (_, (_, (r, la)))))) =>
-                  ball (ceq_nat, ccompare_nat)
-                    (minus_set (ceq_nat, ccompare_nat)
-                      (set (ceq_nat, ccompare_nat, set_impl_nat)
-                        (upt zero_nata (plus_nata m one_nata)))
-                      (set (ceq_nat, ccompare_nat, set_impl_nat) r))
-                    (fn c =>
-                      less_eq_nat (nth (nth (nth k i) la) c)
-                        (nth (nth (nth k i) l) c)))
-                ((fst o snd o snd) (nth automata i)))
-            zero_nata (size_list automata))
+          let
+            val d = minus_nata (size_list automata) one_nata;
+          in
+            (if less_nat d (size_list automata)
+              then all_interval (equal_nat, interval_nat)
+                     (fn i =>
+                       list_all
+                         (fn (l, (_, (_, (_, (_, (r, la)))))) =>
+                           ball (ceq_nat, ccompare_nat)
+                             (minus_set (ceq_nat, ccompare_nat)
+                               (atLeastLessThan
+                                 (ceq_nat, ccompare_nat, equal_nat,
+                                   interval_nat, set_impl_nat)
+                                 zero_nata (plus_nata m one_nata))
+                               (set (ceq_nat, ccompare_nat, set_impl_nat) r))
+                             (fn c =>
+                               less_eq_nat (nth (nth (nth k i) la) c)
+                                 (nth (nth (nth k i) l) c)))
+                         ((fst o snd o snd) (nth automata i)))
+                     zero_nata d
+              else true)
+          end
           "Ceiling resets",
         assert (equal_nata (size_list k) (size_list automata)) "Ceiling length",
         assert
-          (all_interval_nat
-            (fn i => equal_nata (size_list (nth k i)) (num_states i)) zero_nata
-            (size_list automata))
+          let
+            val d = minus_nata (size_list automata) one_nata;
+          in
+            (if less_nat d (size_list automata)
+              then all_interval (equal_nat, interval_nat)
+                     (fn i => equal_nata (size_list (nth k i)) (num_states i))
+                     zero_nata d
+              else true)
+          end
           "Ceiling length automata)",
         assert
           (list_all
@@ -9855,12 +10955,26 @@ fun check_precond2 x =
             k)
           "Ceiling length clocks",
         assert
-          (all_interval_nat
-            (fn i =>
-              all_interval_nat
-                (fn l => equal_nata (nth (nth (nth k i) l) zero_nata) zero_nata)
-                zero_nata (num_states i))
-            zero_nata (size_list automata))
+          let
+            val d = minus_nata (size_list automata) one_nata;
+          in
+            (if less_nat d (size_list automata)
+              then all_interval (equal_nat, interval_nat)
+                     (fn i =>
+                       let
+                         val da = minus_nata (num_states i) one_nata;
+                       in
+                         (if less_nat da (num_states i)
+                           then all_interval (equal_nat, interval_nat)
+                                  (fn l =>
+                                    equal_nata (nth (nth (nth k i) l) zero_nata)
+                                      zero_nata)
+                                  zero_nata da
+                           else true)
+                       end)
+                     zero_nata d
+              else true)
+          end
           "Ceiling zero clock",
         assert
           (list_all
@@ -9907,17 +11021,25 @@ fun check_precond2 x =
         assert (equal_nata (size_list l_0) (size_list automata))
           "Length of initial state",
         assert
-          (all_interval_nat
-            (fn i =>
-              membera equal_nat (map fst ((fst o snd o snd) (nth automata i)))
-                (nth l_0 i))
-            zero_nata (size_list automata))
+          let
+            val d = minus_nata (size_list automata) one_nata;
+          in
+            (if less_nat d (size_list automata)
+              then all_interval (equal_nat, interval_nat)
+                     (fn i =>
+                       membera equal_nat
+                         (map fst ((fst o snd o snd) (nth automata i)))
+                         (nth l_0 i))
+                     zero_nata d
+              else true)
+          end
           "Initial state has outgoing transitions",
         assert
           (less_eq_set (cenum_nat, ceq_nat, ccompare_nat)
             (vars_of_formula (ceq_nat, ccompare_nat, set_impl_nat) formula)
-            (set (ceq_nat, ccompare_nat, set_impl_nat)
-              (upt zero_nata (size_list bounds))))
+            (atLeastLessThan
+              (ceq_nat, ccompare_nat, equal_nat, interval_nat, set_impl_nat)
+              zero_nata (size_list bounds)))
           "Variable set of formula"])
     x;
 
@@ -9926,26 +11048,40 @@ fun check_precond1 broadcast bounds automata m num_states num_actions =
     [assert (less_nat zero_nata m) "At least one clock",
       assert (less_nat zero_nata (size_list automata)) "At least one automaton",
       assert
-        (all_interval_nat
-          (fn i =>
-            let
-              val (_, (_, (trans, _))) = nth automata i;
-            in
-              list_all
-                (fn (l, (_, (_, (_, (_, (_, la)))))) =>
-                  less_nat l (num_states i) andalso less_nat la (num_states i))
-                trans
-            end)
-          zero_nata (size_list automata))
+        let
+          val d = minus_nata (size_list automata) one_nata;
+        in
+          (if less_nat d (size_list automata)
+            then all_interval (equal_nat, interval_nat)
+                   (fn i =>
+                     let
+                       val (_, (_, (trans, _))) = nth automata i;
+                     in
+                       list_all
+                         (fn (l, (_, (_, (_, (_, (_, la)))))) =>
+                           less_nat l (num_states i) andalso
+                             less_nat la (num_states i))
+                         trans
+                     end)
+                   zero_nata d
+            else true)
+        end
         "Number of states is correct (transitions)",
       assert
-        (all_interval_nat
-          (fn i => let
-                     val (_, (_, (_, a))) = nth automata i;
-                   in
-                     list_all (fn (x, _) => less_nat x (num_states i)) a
-                   end)
-          zero_nata (size_list automata))
+        let
+          val d = minus_nata (size_list automata) one_nata;
+        in
+          (if less_nat d (size_list automata)
+            then all_interval (equal_nat, interval_nat)
+                   (fn i =>
+                     let
+                       val (_, (_, (_, a))) = nth automata i;
+                     in
+                       list_all (fn (x, _) => less_nat x (num_states i)) a
+                     end)
+                   zero_nata d
+            else true)
+        end
         "Number of states is correct (invariants)",
       assert
         (list_all
@@ -9974,8 +11110,14 @@ fun check_precond1 broadcast bounds automata m num_states num_actions =
           automata)
         "Variable set bounded (guards)",
       assert
-        (all_interval_nat (fn i => equal_nata (fst (nth bounds i)) i) zero_nata
-          (n_vs bounds))
+        let
+          val d = minus_nata (n_vs bounds) one_nata;
+        in
+          (if less_nat d (n_vs bounds)
+            then all_interval (equal_nat, interval_nat)
+                   (fn i => equal_nata (fst (nth bounds i)) i) zero_nata d
+            else true)
+        end
         "Bounds first index",
       assert (list_all (fn a => less_nat a num_actions) broadcast)
         "Broadcast actions bounded",
@@ -10209,7 +11351,7 @@ fun check_diag_impl_inta x =
 fun dbm_subset_impl_inta x =
   (fn m => fn a => fn b =>
     imp_for_int zero_nata
-      (times_nat (plus_nata m one_nata) (plus_nata m one_nata))
+      (times_nata (plus_nata m one_nata) (plus_nata m one_nata))
       (fn aa => (fn () => aa))
       (fn i => fn _ =>
         (fn f_ => fn () => f_ ((ntha (heap_DBMEntry heap_int) a i) ()) ())
@@ -10400,9 +11542,17 @@ fun unreachability_checker broadcast bounds automata m num_states num_actions
     val check_states =
       (fn (l, s) =>
         equal_nata (size_list l) (size_list automata) andalso
-          all_interval_nat
-            (fn i => member (ceq_nat, ccompare_nat) (nth l i) (nth states_ia i))
-            zero_nata (size_list automata) andalso
+          let
+            val d = minus_nata (size_list automata) one_nata;
+          in
+            (if less_nat d (size_list automata)
+              then all_interval (equal_nat, interval_nat)
+                     (fn i =>
+                       member (ceq_nat, ccompare_nat) (nth l i)
+                         (nth states_ia i))
+                     zero_nata d
+              else true)
+          end andalso
           (equal_nata (size_list s) (n_vs bounds) andalso
             check_boundedi bounds s));
     val fi = (fn xi => (fn () => let
@@ -12014,9 +13164,17 @@ fun check_prop_fail broadcast bounds automata m show_clock show_state =
     val check_states =
       (fn (l, s) =>
         equal_nata (size_list l) (size_list automata) andalso
-          all_interval_nat
-            (fn i => member (ceq_nat, ccompare_nat) (nth l i) (nth states_ia i))
-            zero_nata (size_list automata) andalso
+          let
+            val d = minus_nata (size_list automata) one_nata;
+          in
+            (if less_nat d (size_list automata)
+              then all_interval (equal_nat, interval_nat)
+                     (fn i =>
+                       member (ceq_nat, ccompare_nat) (nth l i)
+                         (nth states_ia i))
+                     zero_nata d
+              else true)
+          end andalso
           (equal_nata (size_list s) (n_vs bounds) andalso
             check_boundedi bounds s));
   in
@@ -12209,10 +13367,17 @@ fun certificate_checker_dbg num_split dc show_clock show_state m_list broadcast
       list_all
         (fn (l, s) =>
           equal_nata (size_list l) n_ps andalso
-            (all_interval_nat
-               (fn i =>
-                 member (ceq_nat, ccompare_nat) (nth l i) (nth states_ia i))
-               zero_nata n_ps andalso
+            (let
+               val d = minus_nata n_ps one_nata;
+             in
+               (if less_nat d n_ps
+                 then all_interval (equal_nat, interval_nat)
+                        (fn i =>
+                          member (ceq_nat, ccompare_nat) (nth l i)
+                            (nth states_ia i))
+                        zero_nata d
+                 else true)
+             end andalso
               (equal_nata (size_list s) n_vsa andalso check_boundedi bounds s)))
         l_list;
     val _ = Timing.save_time "Time to check states";
@@ -12438,9 +13603,17 @@ fun unreachability_checker2 broadcast bounds automata m num_states num_actions
     val check_states =
       (fn (l, s) =>
         equal_nata (size_list l) (size_list automata) andalso
-          all_interval_nat
-            (fn i => member (ceq_nat, ccompare_nat) (nth l i) (nth states_ia i))
-            zero_nata (size_list automata) andalso
+          let
+            val d = minus_nata (size_list automata) one_nata;
+          in
+            (if less_nat d (size_list automata)
+              then all_interval (equal_nat, interval_nat)
+                     (fn i =>
+                       member (ceq_nat, ccompare_nat) (nth l i)
+                         (nth states_ia i))
+                     zero_nata d
+              else true)
+          end andalso
           (equal_nata (size_list s) (n_vs bounds) andalso
             check_boundedi bounds s));
     val fi = (fn xi => (fn () => let
@@ -12852,15 +14025,22 @@ fun certificate_checker_pre l_list m_list broadcast bounds automata m num_states
       list_all
         (fn (l, s) =>
           equal_nata (size_list l) n_ps andalso
-            (all_interval_nat
-               (fn i =>
-                 member (ceq_nat, ccompare_nat) (nth l i) (nth states_ia i))
-               zero_nata n_ps andalso
+            (let
+               val d = minus_nata n_ps one_nata;
+             in
+               (if less_nat d n_ps
+                 then all_interval (equal_nat, interval_nat)
+                        (fn i =>
+                          member (ceq_nat, ccompare_nat) (nth l i)
+                            (nth states_ia i))
+                        zero_nata d
+                 else true)
+             end andalso
               (equal_nata (size_list s) n_vsa andalso check_boundedi bounds s)))
         l_list;
     val _ = Timing.save_time "Time to check states";
     val _ = Timing.start_timer ();
-    val n_sq = times_nat (suc m) (suc m);
+    val n_sq = times_nata (suc m) (suc m);
     val check3 =
       list_all
         (fn (_, a) => list_all (fn ma => equal_nata (size_list ma) n_sq) a)
@@ -12881,9 +14061,17 @@ fun no_deadlock_certifier2 broadcast bounds automata m num_states num_actions
     val check_states =
       (fn (l, s) =>
         equal_nata (size_list l) (size_list automata) andalso
-          all_interval_nat
-            (fn i => member (ceq_nat, ccompare_nat) (nth l i) (nth states_ia i))
-            zero_nata (size_list automata) andalso
+          let
+            val d = minus_nata (size_list automata) one_nata;
+          in
+            (if less_nat d (size_list automata)
+              then all_interval (equal_nat, interval_nat)
+                     (fn i =>
+                       member (ceq_nat, ccompare_nat) (nth l i)
+                         (nth states_ia i))
+                     zero_nata d
+              else true)
+          end andalso
           (equal_nata (size_list s) (n_vs bounds) andalso
             check_boundedi bounds s));
     val fi =
@@ -13574,9 +14762,17 @@ fun no_deadlock_certifier broadcast bounds automata m num_states num_actions l_0
     val check_states =
       (fn (l, s) =>
         equal_nata (size_list l) (size_list automata) andalso
-          all_interval_nat
-            (fn i => member (ceq_nat, ccompare_nat) (nth l i) (nth states_ia i))
-            zero_nata (size_list automata) andalso
+          let
+            val d = minus_nata (size_list automata) one_nata;
+          in
+            (if less_nat d (size_list automata)
+              then all_interval (equal_nat, interval_nat)
+                     (fn i =>
+                       member (ceq_nat, ccompare_nat) (nth l i)
+                         (nth states_ia i))
+                     zero_nata d
+              else true)
+          end andalso
           (equal_nata (size_list s) (n_vs bounds) andalso
             check_boundedi bounds s));
     val fi =
@@ -14406,82 +15602,53 @@ end
       end
     | Error es => (fn () => (Error es)));
 
-fun dc_to_lb No_Const = NONE
-  | dc_to_lb (Time_Const (EQa, x)) = SOME (GE x)
-  | dc_to_lb (Time_Const (GEQ, x)) = SOME (GE x)
-  | dc_to_lb (Time_Const (LEQ, x)) = NONE;
+fun dc_to_lb (DurationConstraint (EQ, ConstantExpr x)) = SOME (GE x)
+  | dc_to_lb (DurationConstraint (GEQ, ConstantExpr x)) = SOME (GE x)
+  | dc_to_lb (DurationConstraint (LEQ, va)) = NONE
+  | dc_to_lb (DurationConstraint (GEQ, DurationExpr)) = NONE
+  | dc_to_lb (DurationConstraint (GEQ, AddExpr (v, vb))) = NONE
+  | dc_to_lb (DurationConstraint (GEQ, SubExpr (v, vb))) = NONE
+  | dc_to_lb (DurationConstraint (GEQ, MulExpr (v, vb))) = NONE
+  | dc_to_lb (DurationConstraint (GEQ, DivExpr (v, vb))) = NONE
+  | dc_to_lb (DurationConstraint (GEQ, SinExpr v)) = NONE
+  | dc_to_lb (DurationConstraint (GEQ, CosExpr v)) = NONE
+  | dc_to_lb (DurationConstraint (GEQ, ExpExpr v)) = NONE
+  | dc_to_lb (DurationConstraint (GEQ, PiExpr)) = NONE
+  | dc_to_lb (DurationConstraint (GEQ, FunctionExpr v)) = NONE
+  | dc_to_lb (DurationConstraint (v, DurationExpr)) = NONE
+  | dc_to_lb (DurationConstraint (v, AddExpr (vb, vc))) = NONE
+  | dc_to_lb (DurationConstraint (v, SubExpr (vb, vc))) = NONE
+  | dc_to_lb (DurationConstraint (v, MulExpr (vb, vc))) = NONE
+  | dc_to_lb (DurationConstraint (v, DivExpr (vb, vc))) = NONE
+  | dc_to_lb (DurationConstraint (v, SinExpr vb)) = NONE
+  | dc_to_lb (DurationConstraint (v, CosExpr vb)) = NONE
+  | dc_to_lb (DurationConstraint (v, ExpExpr vb)) = NONE
+  | dc_to_lb (DurationConstraint (v, PiExpr)) = NONE
+  | dc_to_lb (DurationConstraint (v, FunctionExpr vb)) = NONE;
 
-fun dc_to_ub No_Const = NONE
-  | dc_to_ub (Time_Const (EQa, x)) = SOME (LE x)
-  | dc_to_ub (Time_Const (GEQ, x)) = NONE
-  | dc_to_ub (Time_Const (LEQ, x)) = SOME (LE x);
-
-fun name (Func x) = x;
-
-fun primitives (Either x) = x;
-
-fun dfs_reachable (A1_, A2_, A3_) succ d w =
-  let
-    val (_, (_, brk)) =
-      whilea (fn (_, (wa, brk)) => not brk andalso not (null wa))
-        (fn (v, (va :: wa, _)) =>
-          (if d va then (v, (va :: wa, true))
-            else (if member (A1_, A2_) va v then (v, (wa, false))
-                   else let
-                          val vb = insert (A1_, A2_) va v;
-                          val wb = succ va @ wa;
-                        in
-                          (vb, (wb, false))
-                        end)))
-        (bot_set (A1_, A2_, A3_), (w, false));
-  in
-    brk
-  end;
-
-fun of_type_impl g oT t =
-  list_all
-    (fn pt =>
-      dfs_reachable (ceq_literal, ccompare_literal, set_impl_literal) g
-        (fn a => ((pt : string) = a)) (primitives t))
-    (primitives oT);
-
-fun bexp_and_all [] = True
-  | bexp_and_all (x :: xs) = Anda (x, bexp_and_all xs);
-
-fun is_pos_lit (Not Bot) = true
-  | is_pos_lit (Atom (PredAtm (n, args))) = true
-  | is_pos_lit (Atom (EqAtm (va, vb))) = false
-  | is_pos_lit Bot = false
-  | is_pos_lit (Not (Atom va)) = false
-  | is_pos_lit (Not (Not va)) = false
-  | is_pos_lit (Not (And (va, vb))) = false
-  | is_pos_lit (Not (Or (va, vb))) = false
-  | is_pos_lit (Not (Imp (va, vb))) = false
-  | is_pos_lit (And (v, va)) = false
-  | is_pos_lit (Or (v, va)) = false
-  | is_pos_lit (Imp (v, va)) = false;
-
-fun comp_opt_ge A_ NONE NONE = true
-  | comp_opt_ge A_ NONE (SOME x) = false
-  | comp_opt_ge A_ (SOME x) NONE = true
-  | comp_opt_ge A_ (SOME x) (SOME y) =
-    less_eq ((ord_preorder o preorder_order o order_linorder) A_) y x;
-
-fun max_lb_opt A_ [] l = l
-  | max_lb_opt A_ (x :: xs) l =
-    max_lb_opt A_ xs
-      (if comp_opt_ge (linorder_lower_bound A_) x l then x else l);
-
-fun comp_opt_le A_ NONE NONE = true
-  | comp_opt_le A_ NONE (SOME x) = false
-  | comp_opt_le A_ (SOME x) NONE = true
-  | comp_opt_le A_ (SOME x) (SOME y) =
-    less_eq ((ord_preorder o preorder_order o order_linorder) A_) x y;
-
-fun min_ub_opt A_ [] u = u
-  | min_ub_opt A_ (x :: xs) u =
-    min_ub_opt A_ xs
-      (if comp_opt_le (linorder_upper_bound A_) x u then x else u);
+fun dc_to_ub (DurationConstraint (EQ, ConstantExpr x)) = SOME (LE x)
+  | dc_to_ub (DurationConstraint (LEQ, ConstantExpr x)) = SOME (LE x)
+  | dc_to_ub (DurationConstraint (LEQ, DurationExpr)) = NONE
+  | dc_to_ub (DurationConstraint (LEQ, AddExpr (v, vb))) = NONE
+  | dc_to_ub (DurationConstraint (LEQ, SubExpr (v, vb))) = NONE
+  | dc_to_ub (DurationConstraint (LEQ, MulExpr (v, vb))) = NONE
+  | dc_to_ub (DurationConstraint (LEQ, DivExpr (v, vb))) = NONE
+  | dc_to_ub (DurationConstraint (LEQ, SinExpr v)) = NONE
+  | dc_to_ub (DurationConstraint (LEQ, CosExpr v)) = NONE
+  | dc_to_ub (DurationConstraint (LEQ, ExpExpr v)) = NONE
+  | dc_to_ub (DurationConstraint (LEQ, PiExpr)) = NONE
+  | dc_to_ub (DurationConstraint (LEQ, FunctionExpr v)) = NONE
+  | dc_to_ub (DurationConstraint (GEQ, va)) = NONE
+  | dc_to_ub (DurationConstraint (v, DurationExpr)) = NONE
+  | dc_to_ub (DurationConstraint (v, AddExpr (vb, vc))) = NONE
+  | dc_to_ub (DurationConstraint (v, SubExpr (vb, vc))) = NONE
+  | dc_to_ub (DurationConstraint (v, MulExpr (vb, vc))) = NONE
+  | dc_to_ub (DurationConstraint (v, DivExpr (vb, vc))) = NONE
+  | dc_to_ub (DurationConstraint (v, SinExpr vb)) = NONE
+  | dc_to_ub (DurationConstraint (v, CosExpr vb)) = NONE
+  | dc_to_ub (DurationConstraint (v, ExpExpr vb)) = NONE
+  | dc_to_ub (DurationConstraint (v, PiExpr)) = NONE
+  | dc_to_ub (DurationConstraint (v, FunctionExpr vb)) = NONE;
 
 fun int_of_digits [] acc = acc
   | int_of_digits (d :: ds) acc =
@@ -14489,41 +15656,11 @@ fun int_of_digits [] acc = acc
       (plus_inta (times_inta acc (Int_of_integer (10 : Int.int)))
         (int_of_nat d));
 
-fun is_predAtom (Atom (PredAtm (uu, uv))) = true
-  | is_predAtom (Atom (EqAtm (va, vb))) = false
-  | is_predAtom Bot = false
-  | is_predAtom (Not v) = false
-  | is_predAtom (And (v, va)) = false
-  | is_predAtom (Or (v, va)) = false
-  | is_predAtom (Imp (v, va)) = false;
+fun actions (Domain (x1, x2, x3, x4, x5)) = x5;
 
-fun app_snap at_start at_end f (AtEnd a) = f (at_end a)
-  | app_snap at_start at_end f (AtStart a) = f (at_start a);
+fun domain (Problem (x1, x2, x3, x4)) = x1;
 
-fun is_pos_conj (And (f, g)) = is_pos_conj f andalso is_pos_conj g
-  | is_pos_conj (Atom v) = is_pos_lit (Atom v)
-  | is_pos_conj Bot = is_pos_lit Bot
-  | is_pos_conj (Not v) = is_pos_lit (Not v)
-  | is_pos_conj (Or (v, va)) = is_pos_lit (Or (v, va))
-  | is_pos_conj (Imp (v, va)) = is_pos_lit (Imp (v, va));
-
-fun to_literals (Atom (PredAtm (x, asa))) = [Atom (PredAtm (x, asa))]
-  | to_literals (And (x, y)) = to_literals x @ to_literals y
-  | to_literals (Not Bot) = [];
-
-fun floor_rat p = let
-                    val (a, b) = quotient_of p;
-                  in
-                    divide_int a b
-                  end;
-
-fun subtype_edge (ty, superty) = (superty, ty);
-
-fun types (Domain (x1, x2, x3, x4, x5)) = x1;
-
-fun stg d =
-  tab_succ (ccompare_literal, equal_literal, mapping_impl_literal)
-    (map subtype_edge (types d));
+fun func (FuncDecl (x1, x2)) = x1;
 
 fun check_all_list B_ p l msg msgf =
   catch_error
@@ -14576,19 +15713,56 @@ fun check_wf_types d =
       Chara (true, false, true, false, false, true, true, false)]
     (shows_prec_literal zero_nata o snd);
 
-fun act_pres_pos (Simple_Action_Schema (n, ps, pre, eff)) = is_pos_conj pre
-  | act_pres_pos (Durative_Action_Schema (n, ps, d, pre, eff)) =
-    list_all is_pos_conj (map snd pre);
+fun bexp_and_all [] = True
+  | bexp_and_all (x :: xs) = Anda (x, bexp_and_all xs);
 
-fun atom_no_args (PredAtm (p, [])) = true
-  | atom_no_args (PredAtm (v, vb :: vc)) = false
-  | atom_no_args (EqAtm (v, va)) = false;
+fun objects (Problem (x1, x2, x3, x4)) = x2;
 
-fun pred_no_args (PredDecl (p, asa)) = null asa;
+fun pred (PredDecl (x1, x2)) = x1;
 
-fun to_predicate (Atom (PredAtm (x, uu))) = x;
+fun dc_no_func (DurationConstraint (dop, ConstantExpr x)) = true
+  | dc_no_func (DurationConstraint (v, DurationExpr)) = false
+  | dc_no_func (DurationConstraint (v, AddExpr (vb, vc))) = false
+  | dc_no_func (DurationConstraint (v, SubExpr (vb, vc))) = false
+  | dc_no_func (DurationConstraint (v, MulExpr (vb, vc))) = false
+  | dc_no_func (DurationConstraint (v, DivExpr (vb, vc))) = false
+  | dc_no_func (DurationConstraint (v, SinExpr vb)) = false
+  | dc_no_func (DurationConstraint (v, CosExpr vb)) = false
+  | dc_no_func (DurationConstraint (v, ExpExpr vb)) = false
+  | dc_no_func (DurationConstraint (v, PiExpr)) = false
+  | dc_no_func (DurationConstraint (v, FunctionExpr vb)) = false;
 
-fun wf_type d (Either ts) =
+fun comp_opt_ge A_ NONE NONE = true
+  | comp_opt_ge A_ NONE (SOME x) = false
+  | comp_opt_ge A_ (SOME x) NONE = true
+  | comp_opt_ge A_ (SOME x) (SOME y) =
+    less_eq ((ord_preorder o preorder_order o order_linorder) A_) y x;
+
+fun max_lb_opt A_ [] l = l
+  | max_lb_opt A_ (x :: xs) l =
+    max_lb_opt A_ xs
+      (if comp_opt_ge (linorder_lower_bound A_) x l then x else l);
+
+fun comp_opt_le A_ NONE NONE = true
+  | comp_opt_le A_ NONE (SOME x) = false
+  | comp_opt_le A_ (SOME x) NONE = true
+  | comp_opt_le A_ (SOME x) (SOME y) =
+    less_eq ((ord_preorder o preorder_order o order_linorder) A_) x y;
+
+fun min_ub_opt A_ [] u = u
+  | min_ub_opt A_ (x :: xs) u =
+    min_ub_opt A_ xs
+      (if comp_opt_le (linorder_upper_bound A_) x u then x else u);
+
+fun prepend_err_msg A_ msg e =
+  (fn _ =>
+    shows_prec A_ zero_nata msg o
+      shows_prec_list show_char zero_nata
+        [Chara (false, true, false, true, true, true, false, false),
+          Chara (false, false, false, false, false, true, false, false)] o
+      e ());
+
+fun wf_type ty_decl (Either ts) =
   less_eq_set (cenum_literal, ceq_literal, ccompare_literal)
     (set (ceq_literal, ccompare_literal, set_impl_literal) ts)
     (insert (ceq_literal, ccompare_literal) "object"
@@ -14599,484 +15773,56 @@ fun wf_type d (Either ts) =
         (set (ceq_prod ceq_literal ceq_literal,
                ccompare_prod ccompare_literal ccompare_literal,
                set_impl_prod set_impl_literal set_impl_literal)
-          (types d))));
+          ty_decl)));
 
-fun wf_predicate_decl d (PredDecl (p, ts)) = list_all (wf_type d) ts;
+fun app_snap at_start at_end f (AtStart a) = f (at_start a)
+  | app_snap at_start at_end f (AtEnd a) = f (at_end a);
 
-fun wf_function_decl d (FuncDecl (f, ts)) = list_all (wf_type d) ts;
-
-fun is_of_type ty_ent stg v t =
-  (case ty_ent v of NONE => false | SOME vT => of_type_impl stg vT t);
+fun nameb (ActionHead (x1, x2)) = x1;
 
 fun functions (Domain (x1, x2, x3, x4, x5)) = x3;
 
-fun func_sig d =
-  map_of equal_func (map (fn FuncDecl (a, b) => (a, b)) (functions d));
+fun to_literals (Atom (PredAtm (x, asa))) = [Atom (PredAtm (x, asa))]
+  | to_literals (And (x, y)) = to_literals x @ to_literals y
+  | to_literals (Atom (EqAtm (va, vb))) = []
+  | to_literals (Atom (NumericEqAtm (va, vb))) = []
+  | to_literals (Atom (NumericLessAtm (va, vb))) = []
+  | to_literals (Atom (NumericLEAtm (va, vb))) = []
+  | to_literals (Atom (NumericGreaterAtm (va, vb))) = []
+  | to_literals (Atom (NumericGEAtm (va, vb))) = []
+  | to_literals Bot = []
+  | to_literals (Not v) = []
+  | to_literals (Or (v, va)) = []
+  | to_literals (Imp (v, va)) = [];
 
-fun wf_duration_const d ty_ent stg (Func_Const (opa, f, vs)) =
-  (case func_sig d f of NONE => false
-    | SOME a => list_all2 (is_of_type ty_ent stg) vs a)
-  | wf_duration_const da ty_ent stg (Time_Const (opa, d)) =
-    less_eq_rat zero_rat d
-  | wf_duration_const d ty_ent stg No_Const = true;
+fun floor_rat p = let
+                    val (a, b) = quotient_of p;
+                  in
+                    divide_int a b
+                  end;
 
-fun wf_duration_consts d ty_ent stg = list_all (wf_duration_const d ty_ent stg);
+fun siga predicates =
+  map_of equal_predicate (map (fn PredDecl (a, b) => (a, b)) predicates);
 
 fun predicates (Domain (x1, x2, x3, x4, x5)) = x2;
 
-fun siga d =
-  map_of equal_predicate (map (fn PredDecl (a, b) => (a, b)) (predicates d));
+fun act_pres_pos (SimpleActionSchemaa (h, SimpleActionBody (pre, eff))) =
+  is_pos_conj pre
+  | act_pres_pos (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff)))
+    = list_all is_pos_conj (map snd cond);
 
-fun wf_pred_atom d ty_ent stg (p, vs) =
-  (case siga d p of NONE => false
-    | SOME a => list_all2 (is_of_type ty_ent stg) vs a);
+fun atom_no_args (PredAtm (p, [])) = true
+  | atom_no_args (PredAtm (v, vb :: vc)) = false
+  | atom_no_args (EqAtm (v, va)) = false
+  | atom_no_args (NumericEqAtm (v, va)) = false
+  | atom_no_args (NumericLessAtm (v, va)) = false
+  | atom_no_args (NumericLEAtm (v, va)) = false
+  | atom_no_args (NumericGreaterAtm (v, va)) = false
+  | atom_no_args (NumericGEAtm (v, va)) = false;
 
-fun wf_fmla_atom1 d ty_ent stg (Imp (v, va)) = false
-  | wf_fmla_atom1 d ty_ent stg (Or (v, va)) = false
-  | wf_fmla_atom1 d ty_ent stg (And (v, va)) = false
-  | wf_fmla_atom1 d ty_ent stg (Not v) = false
-  | wf_fmla_atom1 d ty_ent stg Bot = false
-  | wf_fmla_atom1 d ty_ent stg (Atom (EqAtm (va, vb))) = false
-  | wf_fmla_atom1 d ty_ent stg (Atom (PredAtm (p, vs))) =
-    wf_pred_atom d ty_ent stg (p, vs);
+fun pred_no_args (PredDecl (p, asa)) = null asa;
 
-fun wf_effect da ty_ent stg (Effect (a, d)) =
-  list_all (wf_fmla_atom1 da ty_ent stg) a andalso
-    list_all (wf_fmla_atom1 da ty_ent stg) d;
-
-fun wf_atom d ty_ent stg (EqAtm (a, b)) =
-  not (is_none (ty_ent a)) andalso not (is_none (ty_ent b))
-  | wf_atom d ty_ent stg (PredAtm (p, vs)) = wf_pred_atom d ty_ent stg (p, vs);
-
-fun wf_fmla d ty_ent stg (Not phi) = wf_fmla d ty_ent stg phi
-  | wf_fmla d ty_ent stg (Imp (phi_1, phi_2)) =
-    wf_fmla d ty_ent stg phi_1 andalso wf_fmla d ty_ent stg phi_2
-  | wf_fmla d ty_ent stg (Or (phi_1, phi_2)) =
-    wf_fmla d ty_ent stg phi_1 andalso wf_fmla d ty_ent stg phi_2
-  | wf_fmla d ty_ent stg (And (phi_1, phi_2)) =
-    wf_fmla d ty_ent stg phi_1 andalso wf_fmla d ty_ent stg phi_2
-  | wf_fmla d ty_ent stg Bot = true
-  | wf_fmla d ty_ent stg (Atom a) = wf_atom d ty_ent stg a;
-
-fun wf_action_schema da stg conT
-  (Durative_Action_Schema (n, params, d, cond, eff)) =
-  let
-    val tyv = ty_term (map_of equal_variable params) conT;
-  in
-    distinct equal_variable (map fst params) andalso
-      (list_all (fn (_, a) => wf_fmla da tyv stg a) cond andalso
-        (list_all
-           (fn (t, e) =>
-             wf_effect da tyv stg e andalso
-               not (equal_temporal_annotationa t Over_All))
-           eff andalso
-          wf_duration_consts da tyv stg d))
-  end
-  | wf_action_schema d stg conT (Simple_Action_Schema (n, params, pre, eff)) =
-    let
-      val tyv = ty_term (map_of equal_variable params) conT;
-    in
-      distinct equal_variable (map fst params) andalso
-        (wf_fmla d tyv stg pre andalso wf_effect d tyv stg eff)
-    end;
-
-fun nameb (Simple_Action_Schema (x11, x12, x13, x14)) = x11
-  | nameb (Durative_Action_Schema (x21, x22, x23, x24, x25)) = x21;
-
-fun pred (PredDecl (x1, x2)) = x1;
-
-fun func (FuncDecl (x1, x2)) = x1;
-
-fun actions (Domain (x1, x2, x3, x4, x5)) = x5;
-
-fun consts (Domain (x1, x2, x3, x4, x5)) = x4;
-
-fun namea (Pred x) = x;
-
-fun check_wf_domain d stg conT =
-  bind (check_wf_types d)
-    (fn _ =>
-      bind (check
-             (distinct_ds (equal_predicate, linorder_predicate)
-               (map pred (predicates d)))
-             (fn _ =>
-               shows_prec_list show_char zero_nata
-                 [Chara (false, false, true, false, false, false, true, false),
-                   Chara (true, false, true, false, true, true, true, false),
-                   Chara (false, false, false, false, true, true, true, false),
-                   Chara (false, false, true, true, false, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (true, true, false, false, false, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, false, false, false, true, true, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (false, false, true, false, false, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (true, true, false, false, false, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, false, true, false, false, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (true, true, false, false, false, true, true, false),
-                   Chara (false, false, true, true, false, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (true, true, true, true, false, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false)]))
-        (fn _ =>
-          bind (check_all_list (show_list show_char) (wf_predicate_decl d)
-                 (predicates d)
-                 [Chara (true, false, true, true, false, false, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, true, true, false, true, true, false),
-                   Chara (false, true, true, false, false, true, true, false),
-                   Chara (true, true, true, true, false, true, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (true, false, true, true, false, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (false, false, true, false, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, false, false, false, true, true, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (false, false, true, false, false, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (true, true, false, false, false, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, false, true, false, false, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (true, true, false, false, false, true, true, false),
-                   Chara (false, false, true, true, false, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (true, true, true, true, false, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false)]
-                 (shows_prec_literal zero_nata o namea o pred))
-            (fn _ =>
-              bind (check
-                     (distinct_ds (equal_func, linorder_func)
-                       (map func (functions d)))
-                     (fn _ =>
-                       shows_prec_list show_char zero_nata
-                         [Chara (false, false, true, false, false, false, true,
-                                  false),
-                           Chara (true, false, true, false, true, true, true,
-                                   false),
-                           Chara (false, false, false, false, true, true, true,
-                                   false),
-                           Chara (false, false, true, true, false, true, true,
-                                   false),
-                           Chara (true, false, false, true, false, true, true,
-                                   false),
-                           Chara (true, true, false, false, false, true, true,
-                                   false),
-                           Chara (true, false, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, true, true, true,
-                                   false),
-                           Chara (true, false, true, false, false, true, true,
-                                   false),
-                           Chara (false, false, false, false, false, true,
-                                   false, false),
-                           Chara (false, true, true, false, false, true, true,
-                                   false),
-                           Chara (true, false, true, false, true, true, true,
-                                   false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false),
-                           Chara (true, true, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, true, true, true,
-                                   false),
-                           Chara (true, false, false, true, false, true, true,
-                                   false),
-                           Chara (true, true, true, true, false, true, true,
-                                   false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false),
-                           Chara (false, false, false, false, false, true,
-                                   false, false),
-                           Chara (false, false, true, false, false, true, true,
-                                   false),
-                           Chara (true, false, true, false, false, true, true,
-                                   false),
-                           Chara (true, true, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, true, false, true, true,
-                                   false),
-                           Chara (true, false, false, false, false, true, true,
-                                   false),
-                           Chara (false, true, false, false, true, true, true,
-                                   false),
-                           Chara (true, false, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, true, true, true,
-                                   false),
-                           Chara (true, false, false, true, false, true, true,
-                                   false),
-                           Chara (true, true, true, true, false, true, true,
-                                   false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false)]))
-                (fn _ =>
-                  bind (check_all_list (show_list show_char)
-                         (wf_function_decl d) (functions d)
-                         [Chara (true, false, true, true, false, false, true,
-                                  false),
-                           Chara (true, false, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, true, false, true, true,
-                                   false),
-                           Chara (false, true, true, false, false, true, true,
-                                   false),
-                           Chara (true, true, true, true, false, true, true,
-                                   false),
-                           Chara (false, true, false, false, true, true, true,
-                                   false),
-                           Chara (true, false, true, true, false, true, true,
-                                   false),
-                           Chara (true, false, true, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, false, true, true,
-                                   false),
-                           Chara (false, false, false, false, false, true,
-                                   false, false),
-                           Chara (false, true, true, false, false, true, true,
-                                   false),
-                           Chara (true, false, true, false, true, true, true,
-                                   false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false),
-                           Chara (true, true, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, true, true, true,
-                                   false),
-                           Chara (true, false, false, true, false, true, true,
-                                   false),
-                           Chara (true, true, true, true, false, true, true,
-                                   false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false),
-                           Chara (false, false, false, false, false, true,
-                                   false, false),
-                           Chara (false, false, true, false, false, true, true,
-                                   false),
-                           Chara (true, false, true, false, false, true, true,
-                                   false),
-                           Chara (true, true, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, true, false, true, true,
-                                   false),
-                           Chara (true, false, false, false, false, true, true,
-                                   false),
-                           Chara (false, true, false, false, true, true, true,
-                                   false),
-                           Chara (true, false, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, true, true, true,
-                                   false),
-                           Chara (true, false, false, true, false, true, true,
-                                   false),
-                           Chara (true, true, true, true, false, true, true,
-                                   false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false)]
-                         (shows_prec_literal zero_nata o name o func))
-                    (fn _ =>
-                      bind (check
-                             (distinct_ds (equal_object, linorder_object)
-                               (map fst (consts d)))
-                             (fn _ =>
-                               shows_prec_list show_char zero_nata
-                                 [Chara (false, false, true, false, false,
-  false, true, false),
-                                   Chara (true, false, true, false, true, true,
-   true, false),
-                                   Chara (false, false, false, false, true,
-   true, true, false),
-                                   Chara (false, false, true, true, false, true,
-   true, false),
-                                   Chara (true, false, false, true, false, true,
-   true, false),
-                                   Chara (true, true, false, false, false, true,
-   true, false),
-                                   Chara (true, false, false, false, false,
-   true, true, false),
-                                   Chara (false, false, true, false, true, true,
-   true, false),
-                                   Chara (true, false, true, false, false, true,
-   true, false),
-                                   Chara (false, false, false, false, false,
-   true, false, false),
-                                   Chara (true, true, false, false, false, true,
-   true, false),
-                                   Chara (true, true, true, true, false, true,
-   true, false),
-                                   Chara (false, true, true, true, false, true,
-   true, false),
-                                   Chara (true, true, false, false, true, true,
-   true, false),
-                                   Chara (false, false, true, false, true, true,
-   true, false),
-                                   Chara (true, false, false, false, false,
-   true, true, false),
-                                   Chara (false, true, true, true, false, true,
-   true, false),
-                                   Chara (false, false, true, false, true, true,
-   true, false),
-                                   Chara (false, false, false, false, false,
-   true, false, false),
-                                   Chara (false, false, true, false, false,
-   true, true, false),
-                                   Chara (true, false, true, false, false, true,
-   true, false),
-                                   Chara (true, true, false, false, false, true,
-   true, false),
-                                   Chara (false, false, true, true, false, true,
-   true, false),
-                                   Chara (true, false, false, false, false,
-   true, true, false),
-                                   Chara (false, true, false, false, true, true,
-   true, false),
-                                   Chara (true, false, false, false, false,
-   true, true, false),
-                                   Chara (false, false, true, false, true, true,
-   true, false),
-                                   Chara (true, false, false, true, false, true,
-   true, false),
-                                   Chara (true, true, true, true, false, true,
-   true, false),
-                                   Chara (false, true, true, true, false, true,
-   true, false)]))
-                        (fn _ =>
-                          bind (check
-                                 (list_all (fn (_, a) => wf_type d a)
-                                   (consts d))
-                                 (fn _ =>
-                                   shows_prec_list show_char zero_nata
-                                     [Chara
-(true, false, true, true, false, false, true, false),
-                                       Chara
- (true, false, false, false, false, true, true, false),
-                                       Chara
- (false, false, true, true, false, true, true, false),
-                                       Chara
- (false, true, true, false, false, true, true, false),
-                                       Chara
- (true, true, true, true, false, true, true, false),
-                                       Chara
- (false, true, false, false, true, true, true, false),
-                                       Chara
- (true, false, true, true, false, true, true, false),
-                                       Chara
- (true, false, true, false, false, true, true, false),
-                                       Chara
- (false, false, true, false, false, true, true, false),
-                                       Chara
- (false, false, false, false, false, true, false, false),
-                                       Chara
- (false, false, true, false, true, true, true, false),
-                                       Chara
- (true, false, false, true, true, true, true, false),
-                                       Chara
- (false, false, false, false, true, true, true, false),
-                                       Chara
- (true, false, true, false, false, true, true, false)]))
-                            (fn _ =>
-                              bind (check
-                                     (distinct_ds
-                                       (equal_literal, linorder_literal)
-                                       (map nameb (actions d)))
-                                     (fn _ =>
-                                       shows_prec_list show_char zero_nata
- [Chara (false, false, true, false, false, false, true, false),
-   Chara (true, false, true, false, true, true, true, false),
-   Chara (false, false, false, false, true, true, true, false),
-   Chara (false, false, true, true, false, true, true, false),
-   Chara (true, false, false, true, false, true, true, false),
-   Chara (true, true, false, false, false, true, true, false),
-   Chara (true, false, false, false, false, true, true, false),
-   Chara (false, false, true, false, true, true, true, false),
-   Chara (true, false, true, false, false, true, true, false),
-   Chara (false, false, false, false, false, true, false, false),
-   Chara (true, false, false, false, false, true, true, false),
-   Chara (true, true, false, false, false, true, true, false),
-   Chara (false, false, true, false, true, true, true, false),
-   Chara (true, false, false, true, false, true, true, false),
-   Chara (true, true, true, true, false, true, true, false),
-   Chara (false, true, true, true, false, true, true, false),
-   Chara (false, false, false, false, false, true, false, false),
-   Chara (false, true, true, true, false, true, true, false),
-   Chara (true, false, false, false, false, true, true, false),
-   Chara (true, false, true, true, false, true, true, false),
-   Chara (true, false, true, false, false, true, true, false)]))
-                                (fn _ =>
-                                  check_all_list (show_list show_char)
-                                    (wf_action_schema d stg conT) (actions d)
-                                    [Chara (true, false, true, true, false,
-     false, true, false),
-                                      Chara
-(true, false, false, false, false, true, true, false),
-                                      Chara
-(false, false, true, true, false, true, true, false),
-                                      Chara
-(false, true, true, false, false, true, true, false),
-                                      Chara
-(true, true, true, true, false, true, true, false),
-                                      Chara
-(false, true, false, false, true, true, true, false),
-                                      Chara
-(true, false, true, true, false, true, true, false),
-                                      Chara
-(true, false, true, false, false, true, true, false),
-                                      Chara
-(false, false, true, false, false, true, true, false),
-                                      Chara
-(false, false, false, false, false, true, false, false),
-                                      Chara
-(true, false, false, false, false, true, true, false),
-                                      Chara
-(true, true, false, false, false, true, true, false),
-                                      Chara
-(false, false, true, false, true, true, true, false),
-                                      Chara
-(true, false, false, true, false, true, true, false),
-                                      Chara
-(true, true, true, true, false, true, true, false),
-                                      Chara
-(false, true, true, true, false, true, true, false)]
-                                    (shows_prec_literal zero_nata o
-                                      nameb)))))))));
-
-fun prepend_err_msg A_ msg e =
-  (fn _ =>
-    shows_prec A_ zero_nata msg o
-      shows_prec_list show_char zero_nata
-        [Chara (false, true, false, true, true, true, false, false),
-          Chara (false, false, false, false, false, true, false, false)] o
-      e ());
-
-fun map_atom f (PredAtm (x11, x12)) = PredAtm (x11, map f x12)
-  | map_atom f (EqAtm (x21, x22)) = EqAtm (f x21, f x22);
+fun to_predicate (Atom (PredAtm (x, uu))) = x;
 
 fun dfs_map_impl_0 A_ (B1_, B2_, B3_) succsi lei keyi copyi x =
   let
@@ -15228,73 +15974,609 @@ fun dfs_map_impl_0 A_ (B1_, B2_, B3_) succsi lei keyi copyi x =
               (fn _ => (fn () => (a2h, (a2g, a2f))))))))))))))))))))))))))
   end;
 
-fun form_preds_no_args (A1_, A2_) form =
-  ball (ceq_atom A2_, ccompare_atom A1_)
-    (atoms (ceq_atom A2_, ccompare_atom A1_, set_impl_atom) form) atom_no_args;
+fun heada (SimpleActionSchemaa (x11, x12)) = x11
+  | heada (DurativeActionSchema (x21, x22)) = x21;
 
-fun domain (Problem (x1, x2, x3, x4)) = x1;
+fun temporal_to_continuous_action_body (DurativeActionBody (d, c, e)) =
+  ContChangeActionBody (d, c, e, []);
 
-fun mp_constT d =
-  of_alist (ccompare_object, equal_object, mapping_impl_object) (consts d);
+fun temporal_to_continuous_action_schema (SimpleActionSchemaa (h, b)) =
+  SimpleActionSchema (h, b)
+  | temporal_to_continuous_action_schema (DurativeActionSchema (h, b)) =
+    ContChangeActionSchema (h, temporal_to_continuous_action_body b);
 
-fun objects (Problem (x1, x2, x3, x4)) = x2;
+fun map_ast_domain f (Domain (x1, x2, x3, x4, x5)) =
+  Domain (x1, x2, x3, x4, map f x5);
 
-fun mp_objT p =
-  of_alist (ccompare_object, equal_object, mapping_impl_object)
-    (consts (domain p) @ objects p);
+fun map_ast_problem f (Problem (x1, x2, x3, x4)) =
+  Problem (map_ast_domain f x1, x2, x3, x4);
 
-fun duration_constraint_integer No_Const = true
-  | duration_constraint_integer (Time_Const (EQa, x)) = is_integer x
-  | duration_constraint_integer (Time_Const (GEQ, x)) = is_integer x
-  | duration_constraint_integer (Time_Const (LEQ, x)) = is_integer x;
+fun temporal_to_continuous_problem x =
+  map_ast_problem temporal_to_continuous_action_schema x;
 
-fun act_dcs_integers (Simple_Action_Schema (n, ps, pre, eff)) = true
-  | act_dcs_integers (Durative_Action_Schema (n, ps, dcs, pre, eff)) =
-    list_all duration_constraint_integer dcs;
+fun is_of_type ty_ent stg v t =
+  (case ty_ent v of NONE => false | SOME vT => of_type_impl stg vT t);
 
-fun inita (Problem (x1, x2, x3, x4)) = x3;
-
-fun goal (Problem (x1, x2, x3, x4)) = x4;
-
-fun is_Func_Const No_Const = false
-  | is_Func_Const (Time_Const (x21, x22)) = false
-  | is_Func_Const (Func_Const (x31, x32, x33)) = true;
-
-fun act_no_func_dcs (Simple_Action_Schema (n, ps, pre, eff)) = true
-  | act_no_func_dcs (Durative_Action_Schema (n, ps, dcs, pre, eff)) =
-    list_all (fn d => not (is_Func_Const d)) dcs;
+fun func_sig functions =
+  map_of equal_func (map (fn FuncDecl (a, b) => (a, b)) functions);
 
 fun wf_func_args d ty_ent stg (f, args) =
-  (case func_sig d f of NONE => false
+  (case func_sig (functions d) f of NONE => false
     | SOME a => list_all2 (is_of_type ty_ent stg) args a);
 
-fun wf_func_assign p ot stg (Imp (v, va)) = false
-  | wf_func_assign p ot stg (Or (v, va)) = false
-  | wf_func_assign p ot stg (And (v, va)) = false
-  | wf_func_assign p ot stg (Not v) = false
-  | wf_func_assign p ot stg Bot = false
-  | wf_func_assign p ot stg (Atom (EqAtm (va, FuncEnt (vc, vd)))) = false
-  | wf_func_assign p ot stg (Atom (EqAtm (va, Obj vc))) = false
-  | wf_func_assign p ot stg (Atom (EqAtm (TimeEnt vc, vb))) = false
-  | wf_func_assign p ot stg (Atom (EqAtm (Obj vc, vb))) = false
+fun wf_func_assign p ot stg
+  (Atom (NumericEqAtm (FunctionExpr (PNE (f, args)), ConstantExpr r))) =
+  wf_func_args (domain p) (lookupa (ccompare_object, equal_object) ot) stg
+    (f, args)
   | wf_func_assign p ot stg (Atom (PredAtm (va, vb))) = false
-  | wf_func_assign p ot stg (Atom (EqAtm (FuncEnt (f, args), TimeEnt d))) =
-    wf_func_args (domain p) (lookupa (ccompare_object, equal_object) ot) stg
-      (f, args);
+  | wf_func_assign p ot stg (Atom (EqAtm (va, vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (ConstantExpr vc, vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (DurationExpr, vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (AddExpr (vc, vd), vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (SubExpr (vc, vd), vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (MulExpr (vc, vd), vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (DivExpr (vc, vd), vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (SinExpr vc, vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (CosExpr vc, vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (ExpExpr vc, vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (PiExpr, vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (va, DurationExpr))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (va, AddExpr (vc, vd)))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (va, SubExpr (vc, vd)))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (va, MulExpr (vc, vd)))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (va, DivExpr (vc, vd)))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (va, SinExpr vc))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (va, CosExpr vc))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (va, ExpExpr vc))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (va, PiExpr))) = false
+  | wf_func_assign p ot stg (Atom (NumericEqAtm (va, FunctionExpr vc))) = false
+  | wf_func_assign p ot stg (Atom (NumericLessAtm (va, vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericLEAtm (va, vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericGreaterAtm (va, vb))) = false
+  | wf_func_assign p ot stg (Atom (NumericGEAtm (va, vb))) = false
+  | wf_func_assign p ot stg Bot = false
+  | wf_func_assign p ot stg (Not v) = false
+  | wf_func_assign p ot stg (And (v, va)) = false
+  | wf_func_assign p ot stg (Or (v, va)) = false
+  | wf_func_assign p ot stg (Imp (v, va)) = false;
+
+fun wf_pred_atom d ty_ent stg (p, vs) =
+  (case siga (predicates d) p of NONE => false
+    | SOME a => list_all2 (is_of_type ty_ent stg) vs a);
 
 fun wf_fact p ot stg =
   wf_pred_atom (domain p) (lookupa (ccompare_object, equal_object) ot) stg;
 
 fun wf_fmla_atom2 p mp stg f =
   (case f of Atom (PredAtm (pa, vs)) => wf_fact p mp stg (pa, vs)
-    | Atom (EqAtm (_, _)) => false | Bot => false | Not _ => false
+    | Atom (EqAtm (_, _)) => false | Atom (NumericEqAtm (_, _)) => false
+    | Atom (NumericLessAtm (_, _)) => false
+    | Atom (NumericLEAtm (_, _)) => false
+    | Atom (NumericGreaterAtm (_, _)) => false
+    | Atom (NumericGEAtm (_, _)) => false | Bot => false | Not _ => false
     | And (_, _) => false | Or (_, _) => false | Imp (_, _) => false);
 
-fun check_wf_problem p stg conT mp =
+fun mp_constT d =
+  of_alist (ccompare_object, equal_object, mapping_impl_object) (consts d);
+
+fun mp_objT p =
+  of_alist (ccompare_object, equal_object, mapping_impl_object)
+    (consts (domain p) @ objects p);
+
+fun wf_primitive_numeric_expression d ty_ent stg (PNE (f, args)) =
+  wf_func_args d ty_ent stg (f, args);
+
+fun wf_numeric_expression d ty_ent stg (ConstantExpr uu) = true
+  | wf_numeric_expression d ty_ent stg DurationExpr = true
+  | wf_numeric_expression d ty_ent stg (AddExpr (x, y)) =
+    wf_numeric_expression d ty_ent stg x andalso
+      wf_numeric_expression d ty_ent stg y
+  | wf_numeric_expression d ty_ent stg (SubExpr (x, y)) =
+    wf_numeric_expression d ty_ent stg x andalso
+      wf_numeric_expression d ty_ent stg y
+  | wf_numeric_expression d ty_ent stg (MulExpr (x, y)) =
+    wf_numeric_expression d ty_ent stg x andalso
+      wf_numeric_expression d ty_ent stg y
+  | wf_numeric_expression d ty_ent stg (DivExpr (x, y)) =
+    wf_numeric_expression d ty_ent stg x andalso
+      wf_numeric_expression d ty_ent stg y
+  | wf_numeric_expression d ty_ent stg (SinExpr x) =
+    wf_numeric_expression d ty_ent stg x
+  | wf_numeric_expression d ty_ent stg (CosExpr x) =
+    wf_numeric_expression d ty_ent stg x
+  | wf_numeric_expression d ty_ent stg (ExpExpr x) =
+    wf_numeric_expression d ty_ent stg x
+  | wf_numeric_expression d ty_ent stg PiExpr = true
+  | wf_numeric_expression d ty_ent stg (FunctionExpr p) =
+    wf_primitive_numeric_expression d ty_ent stg p;
+
+fun wf_atom d ty_ent stg (PredAtm (p, vs)) = wf_pred_atom d ty_ent stg (p, vs)
+  | wf_atom d ty_ent stg (EqAtm (a, b)) =
+    not (is_none (ty_ent a)) andalso not (is_none (ty_ent b))
+  | wf_atom d ty_ent stg (NumericEqAtm (a, b)) =
+    wf_numeric_expression d ty_ent stg a andalso
+      wf_numeric_expression d ty_ent stg b
+  | wf_atom d ty_ent stg (NumericLessAtm (a, b)) =
+    wf_numeric_expression d ty_ent stg a andalso
+      wf_numeric_expression d ty_ent stg b
+  | wf_atom d ty_ent stg (NumericLEAtm (a, b)) =
+    wf_numeric_expression d ty_ent stg a andalso
+      wf_numeric_expression d ty_ent stg b
+  | wf_atom d ty_ent stg (NumericGreaterAtm (a, b)) =
+    wf_numeric_expression d ty_ent stg a andalso
+      wf_numeric_expression d ty_ent stg b
+  | wf_atom d ty_ent stg (NumericGEAtm (a, b)) =
+    wf_numeric_expression d ty_ent stg a andalso
+      wf_numeric_expression d ty_ent stg b;
+
+fun wf_fmla d ty_ent stg (Atom a) = wf_atom d ty_ent stg a
+  | wf_fmla d ty_ent stg Bot = true
+  | wf_fmla d ty_ent stg (And (phi_1, phi_2)) =
+    wf_fmla d ty_ent stg phi_1 andalso wf_fmla d ty_ent stg phi_2
+  | wf_fmla d ty_ent stg (Or (phi_1, phi_2)) =
+    wf_fmla d ty_ent stg phi_1 andalso wf_fmla d ty_ent stg phi_2
+  | wf_fmla d ty_ent stg (Imp (phi_1, phi_2)) =
+    wf_fmla d ty_ent stg phi_1 andalso wf_fmla d ty_ent stg phi_2
+  | wf_fmla d ty_ent stg (Not phi) = wf_fmla d ty_ent stg phi;
+
+fun wf_continuous_effect d ty_ent stg (ContinuousEffect (cop, l, r)) =
+  wf_primitive_numeric_expression d ty_ent stg l andalso
+    wf_numeric_expression d ty_ent stg r;
+
+fun wf_duration_const d ty_ent stg (DurationConstraint (operator, r)) =
+  wf_numeric_expression d ty_ent stg r;
+
+fun wf_numeric_effect d ty_ent stg (NumericEffect (uu, l, r)) =
+  wf_primitive_numeric_expression d ty_ent stg l andalso
+    wf_numeric_expression d ty_ent stg r;
+
+fun wf_fmla_atom1 d ty_ent stg (Atom (PredAtm (p, vs))) =
+  wf_pred_atom d ty_ent stg (p, vs)
+  | wf_fmla_atom1 d ty_ent stg (Atom (EqAtm (va, vb))) = false
+  | wf_fmla_atom1 d ty_ent stg (Atom (NumericEqAtm (va, vb))) = false
+  | wf_fmla_atom1 d ty_ent stg (Atom (NumericLessAtm (va, vb))) = false
+  | wf_fmla_atom1 d ty_ent stg (Atom (NumericLEAtm (va, vb))) = false
+  | wf_fmla_atom1 d ty_ent stg (Atom (NumericGreaterAtm (va, vb))) = false
+  | wf_fmla_atom1 d ty_ent stg (Atom (NumericGEAtm (va, vb))) = false
+  | wf_fmla_atom1 d ty_ent stg Bot = false
+  | wf_fmla_atom1 d ty_ent stg (Not v) = false
+  | wf_fmla_atom1 d ty_ent stg (And (v, va)) = false
+  | wf_fmla_atom1 d ty_ent stg (Or (v, va)) = false
+  | wf_fmla_atom1 d ty_ent stg (Imp (v, va)) = false;
+
+fun wf_effect da ty_ent stg (Effect (a, d, nes)) =
+  list_all (wf_fmla_atom1 da ty_ent stg) a andalso
+    (list_all (wf_fmla_atom1 da ty_ent stg) d andalso
+      list_all (wf_numeric_effect da ty_ent stg) nes);
+
+fun wf_cont_action_schema d stg conT
+  (SimpleActionSchema (ActionHead (n, params), SimpleActionBody (pre, eff))) =
+  let
+    val tyv = ty_term (map_of equal_variable params) conT;
+  in
+    distinct_ds (equal_variable, linorder_variable) (map fst params) andalso
+      (wf_fmla d tyv stg pre andalso wf_effect d tyv stg eff)
+  end
+  | wf_cont_action_schema da stg conT
+    (ContChangeActionSchema
+      (ActionHead (n, params), ContChangeActionBody (d, cond, eff, cont_eff)))
+    = let
+        val tyv = ty_term (map_of equal_variable params) conT;
+      in
+        distinct_ds (equal_variable, linorder_variable) (map fst params) andalso
+          (list_all (fn (_, a) => wf_fmla da tyv stg a) cond andalso
+            (list_all
+               (fn (t, e) =>
+                 wf_effect da tyv stg e andalso
+                   not (equal_temporal_annotationa t Over_All))
+               eff andalso
+              (list_all (wf_continuous_effect da tyv stg) cont_eff andalso
+                list_all
+                  (fn (t, c) =>
+                    (equal_temporal_annotationa t At_Start orelse
+                      equal_temporal_annotationa t At_End) andalso
+                      wf_duration_const da tyv stg c)
+                  d)))
+      end;
+
+fun wf_predicate_decl ty_decl (PredDecl (p, ts)) =
+  list_all (wf_type ty_decl) ts;
+
+fun wf_function_decl ty_decl (FuncDecl (f, ts)) = list_all (wf_type ty_decl) ts;
+
+fun head (SimpleActionSchema (x11, x12)) = x11
+  | head (ContChangeActionSchema (x21, x22)) = x21;
+
+fun check_wf_cont_domain d stg conT =
+  bind (check_wf_types d)
+    (fn _ =>
+      bind (check
+             (distinct_ds (equal_predicate, linorder_predicate)
+               (map pred (predicates d)))
+             (fn _ =>
+               shows_prec_list show_char zero_nata
+                 [Chara (false, false, true, false, false, false, true, false),
+                   Chara (true, false, true, false, true, true, true, false),
+                   Chara (false, false, false, false, true, true, true, false),
+                   Chara (false, false, true, true, false, true, true, false),
+                   Chara (true, false, false, true, false, true, true, false),
+                   Chara (true, true, false, false, false, true, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, false, true, false, true, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (false, false, false, false, false, true, false,
+                           false),
+                   Chara (false, false, false, false, true, true, true, false),
+                   Chara (false, true, false, false, true, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (false, false, true, false, false, true, true, false),
+                   Chara (true, false, false, true, false, true, true, false),
+                   Chara (true, true, false, false, false, true, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, false, true, false, true, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (false, false, false, false, false, true, false,
+                           false),
+                   Chara (false, false, true, false, false, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (true, true, false, false, false, true, true, false),
+                   Chara (false, false, true, true, false, true, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, true, false, false, true, true, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, false, true, false, true, true, true, false),
+                   Chara (true, false, false, true, false, true, true, false),
+                   Chara (true, true, true, true, false, true, true, false),
+                   Chara (false, true, true, true, false, true, true, false)]))
+        (fn _ =>
+          bind (check_all_list (show_list show_char)
+                 (wf_predicate_decl (types d)) (predicates d)
+                 [Chara (true, false, true, true, false, false, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, false, true, true, false, true, true, false),
+                   Chara (false, true, true, false, false, true, true, false),
+                   Chara (true, true, true, true, false, true, true, false),
+                   Chara (false, true, false, false, true, true, true, false),
+                   Chara (true, false, true, true, false, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (false, false, true, false, false, true, true, false),
+                   Chara (false, false, false, false, false, true, false,
+                           false),
+                   Chara (false, false, false, false, true, true, true, false),
+                   Chara (false, true, false, false, true, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (false, false, true, false, false, true, true, false),
+                   Chara (true, false, false, true, false, true, true, false),
+                   Chara (true, true, false, false, false, true, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, false, true, false, true, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (false, false, false, false, false, true, false,
+                           false),
+                   Chara (false, false, true, false, false, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (true, true, false, false, false, true, true, false),
+                   Chara (false, false, true, true, false, true, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, true, false, false, true, true, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, false, true, false, true, true, true, false),
+                   Chara (true, false, false, true, false, true, true, false),
+                   Chara (true, true, true, true, false, true, true, false),
+                   Chara (false, true, true, true, false, true, true, false)]
+                 (shows_prec_literal zero_nata o namea o pred))
+            (fn _ =>
+              bind (check
+                     (distinct_ds (equal_func, linorder_func)
+                       (map func (functions d)))
+                     (fn _ =>
+                       shows_prec_list show_char zero_nata
+                         [Chara (false, false, true, false, false, false, true,
+                                  false),
+                           Chara (true, false, true, false, true, true, true,
+                                   false),
+                           Chara (false, false, false, false, true, true, true,
+                                   false),
+                           Chara (false, false, true, true, false, true, true,
+                                   false),
+                           Chara (true, false, false, true, false, true, true,
+                                   false),
+                           Chara (true, true, false, false, false, true, true,
+                                   false),
+                           Chara (true, false, false, false, false, true, true,
+                                   false),
+                           Chara (false, false, true, false, true, true, true,
+                                   false),
+                           Chara (true, false, true, false, false, true, true,
+                                   false),
+                           Chara (false, false, false, false, false, true,
+                                   false, false),
+                           Chara (false, true, true, false, false, true, true,
+                                   false),
+                           Chara (true, false, true, false, true, true, true,
+                                   false),
+                           Chara (false, true, true, true, false, true, true,
+                                   false),
+                           Chara (true, true, false, false, false, true, true,
+                                   false),
+                           Chara (false, false, true, false, true, true, true,
+                                   false),
+                           Chara (true, false, false, true, false, true, true,
+                                   false),
+                           Chara (true, true, true, true, false, true, true,
+                                   false),
+                           Chara (false, true, true, true, false, true, true,
+                                   false),
+                           Chara (false, false, false, false, false, true,
+                                   false, false),
+                           Chara (false, false, true, false, false, true, true,
+                                   false),
+                           Chara (true, false, true, false, false, true, true,
+                                   false),
+                           Chara (true, true, false, false, false, true, true,
+                                   false),
+                           Chara (false, false, true, true, false, true, true,
+                                   false),
+                           Chara (true, false, false, false, false, true, true,
+                                   false),
+                           Chara (false, true, false, false, true, true, true,
+                                   false),
+                           Chara (true, false, false, false, false, true, true,
+                                   false),
+                           Chara (false, false, true, false, true, true, true,
+                                   false),
+                           Chara (true, false, false, true, false, true, true,
+                                   false),
+                           Chara (true, true, true, true, false, true, true,
+                                   false),
+                           Chara (false, true, true, true, false, true, true,
+                                   false)]))
+                (fn _ =>
+                  bind (check_all_list (show_list show_char)
+                         (wf_function_decl (types d)) (functions d)
+                         [Chara (true, false, true, true, false, false, true,
+                                  false),
+                           Chara (true, false, false, false, false, true, true,
+                                   false),
+                           Chara (false, false, true, true, false, true, true,
+                                   false),
+                           Chara (false, true, true, false, false, true, true,
+                                   false),
+                           Chara (true, true, true, true, false, true, true,
+                                   false),
+                           Chara (false, true, false, false, true, true, true,
+                                   false),
+                           Chara (true, false, true, true, false, true, true,
+                                   false),
+                           Chara (true, false, true, false, false, true, true,
+                                   false),
+                           Chara (false, false, true, false, false, true, true,
+                                   false),
+                           Chara (false, false, false, false, false, true,
+                                   false, false),
+                           Chara (false, true, true, false, false, true, true,
+                                   false),
+                           Chara (true, false, true, false, true, true, true,
+                                   false),
+                           Chara (false, true, true, true, false, true, true,
+                                   false),
+                           Chara (true, true, false, false, false, true, true,
+                                   false),
+                           Chara (false, false, true, false, true, true, true,
+                                   false),
+                           Chara (true, false, false, true, false, true, true,
+                                   false),
+                           Chara (true, true, true, true, false, true, true,
+                                   false),
+                           Chara (false, true, true, true, false, true, true,
+                                   false),
+                           Chara (false, false, false, false, false, true,
+                                   false, false),
+                           Chara (false, false, true, false, false, true, true,
+                                   false),
+                           Chara (true, false, true, false, false, true, true,
+                                   false),
+                           Chara (true, true, false, false, false, true, true,
+                                   false),
+                           Chara (false, false, true, true, false, true, true,
+                                   false),
+                           Chara (true, false, false, false, false, true, true,
+                                   false),
+                           Chara (false, true, false, false, true, true, true,
+                                   false),
+                           Chara (true, false, false, false, false, true, true,
+                                   false),
+                           Chara (false, false, true, false, true, true, true,
+                                   false),
+                           Chara (true, false, false, true, false, true, true,
+                                   false),
+                           Chara (true, true, true, true, false, true, true,
+                                   false),
+                           Chara (false, true, true, true, false, true, true,
+                                   false)]
+                         (shows_prec_literal zero_nata o name o func))
+                    (fn _ =>
+                      bind (check
+                             (distinct_ds (equal_object, linorder_object)
+                               (map fst (consts d)))
+                             (fn _ =>
+                               shows_prec_list show_char zero_nata
+                                 [Chara (false, false, true, false, false,
+  false, true, false),
+                                   Chara (true, false, true, false, true, true,
+   true, false),
+                                   Chara (false, false, false, false, true,
+   true, true, false),
+                                   Chara (false, false, true, true, false, true,
+   true, false),
+                                   Chara (true, false, false, true, false, true,
+   true, false),
+                                   Chara (true, true, false, false, false, true,
+   true, false),
+                                   Chara (true, false, false, false, false,
+   true, true, false),
+                                   Chara (false, false, true, false, true, true,
+   true, false),
+                                   Chara (true, false, true, false, false, true,
+   true, false),
+                                   Chara (false, false, false, false, false,
+   true, false, false),
+                                   Chara (true, true, false, false, false, true,
+   true, false),
+                                   Chara (true, true, true, true, false, true,
+   true, false),
+                                   Chara (false, true, true, true, false, true,
+   true, false),
+                                   Chara (true, true, false, false, true, true,
+   true, false),
+                                   Chara (false, false, true, false, true, true,
+   true, false),
+                                   Chara (true, false, false, false, false,
+   true, true, false),
+                                   Chara (false, true, true, true, false, true,
+   true, false),
+                                   Chara (false, false, true, false, true, true,
+   true, false),
+                                   Chara (false, false, false, false, false,
+   true, false, false),
+                                   Chara (false, false, true, false, false,
+   true, true, false),
+                                   Chara (true, false, true, false, false, true,
+   true, false),
+                                   Chara (true, true, false, false, false, true,
+   true, false),
+                                   Chara (false, false, true, true, false, true,
+   true, false),
+                                   Chara (true, false, false, false, false,
+   true, true, false),
+                                   Chara (false, true, false, false, true, true,
+   true, false),
+                                   Chara (true, false, false, false, false,
+   true, true, false),
+                                   Chara (false, false, true, false, true, true,
+   true, false),
+                                   Chara (true, false, false, true, false, true,
+   true, false),
+                                   Chara (true, true, true, true, false, true,
+   true, false),
+                                   Chara (false, true, true, true, false, true,
+   true, false)]))
+                        (fn _ =>
+                          bind (check
+                                 (list_all (fn (_, a) => wf_type (types d) a)
+                                   (consts d))
+                                 (fn _ =>
+                                   shows_prec_list show_char zero_nata
+                                     [Chara
+(true, false, true, true, false, false, true, false),
+                                       Chara
+ (true, false, false, false, false, true, true, false),
+                                       Chara
+ (false, false, true, true, false, true, true, false),
+                                       Chara
+ (false, true, true, false, false, true, true, false),
+                                       Chara
+ (true, true, true, true, false, true, true, false),
+                                       Chara
+ (false, true, false, false, true, true, true, false),
+                                       Chara
+ (true, false, true, true, false, true, true, false),
+                                       Chara
+ (true, false, true, false, false, true, true, false),
+                                       Chara
+ (false, false, true, false, false, true, true, false),
+                                       Chara
+ (false, false, false, false, false, true, false, false),
+                                       Chara
+ (false, false, true, false, true, true, true, false),
+                                       Chara
+ (true, false, false, true, true, true, true, false),
+                                       Chara
+ (false, false, false, false, true, true, true, false),
+                                       Chara
+ (true, false, true, false, false, true, true, false)]))
+                            (fn _ =>
+                              bind (check
+                                     (distinct_ds
+                                       (equal_literal, linorder_literal)
+                                       (map (fn a => nameb (head a))
+ (actions d)))
+                                     (fn _ =>
+                                       shows_prec_list show_char zero_nata
+ [Chara (false, false, true, false, false, false, true, false),
+   Chara (true, false, true, false, true, true, true, false),
+   Chara (false, false, false, false, true, true, true, false),
+   Chara (false, false, true, true, false, true, true, false),
+   Chara (true, false, false, true, false, true, true, false),
+   Chara (true, true, false, false, false, true, true, false),
+   Chara (true, false, false, false, false, true, true, false),
+   Chara (false, false, true, false, true, true, true, false),
+   Chara (true, false, true, false, false, true, true, false),
+   Chara (false, false, false, false, false, true, false, false),
+   Chara (true, false, false, false, false, true, true, false),
+   Chara (true, true, false, false, false, true, true, false),
+   Chara (false, false, true, false, true, true, true, false),
+   Chara (true, false, false, true, false, true, true, false),
+   Chara (true, true, true, true, false, true, true, false),
+   Chara (false, true, true, true, false, true, true, false),
+   Chara (false, false, false, false, false, true, false, false),
+   Chara (false, true, true, true, false, true, true, false),
+   Chara (true, false, false, false, false, true, true, false),
+   Chara (true, false, true, true, false, true, true, false),
+   Chara (true, false, true, false, false, true, true, false)]))
+                                (fn _ =>
+                                  check_all_list (show_list show_char)
+                                    (wf_cont_action_schema d stg conT)
+                                    (actions d)
+                                    [Chara (true, false, true, true, false,
+     false, true, false),
+                                      Chara
+(true, false, false, false, false, true, true, false),
+                                      Chara
+(false, false, true, true, false, true, true, false),
+                                      Chara
+(false, true, true, false, false, true, true, false),
+                                      Chara
+(true, true, true, true, false, true, true, false),
+                                      Chara
+(false, true, false, false, true, true, true, false),
+                                      Chara
+(true, false, true, true, false, true, true, false),
+                                      Chara
+(true, false, true, false, false, true, true, false),
+                                      Chara
+(false, false, true, false, false, true, true, false),
+                                      Chara
+(false, false, false, false, false, true, false, false),
+                                      Chara
+(true, false, false, false, false, true, true, false),
+                                      Chara
+(true, true, false, false, false, true, true, false),
+                                      Chara
+(false, false, true, false, true, true, true, false),
+                                      Chara
+(true, false, false, true, false, true, true, false),
+                                      Chara
+(true, true, true, true, false, true, true, false),
+                                      Chara
+(false, true, true, true, false, true, true, false)]
+                                    (shows_prec_literal zero_nata o
+                                      (fn a => nameb (head a)))))))))));
+
+fun subtype_edge (ty, superty) = (superty, ty);
+
+fun stg d =
+  tab_succ (ccompare_literal, equal_literal, mapping_impl_literal)
+    (map subtype_edge (types d));
+
+fun check_wf_cont_problem p =
   let
     val d = domain p;
+    val stga = stg (domain p);
+    val conT = mp_constT (domain p);
+    val mp = mp_objT p;
   in
-    bind (catch_error (check_wf_domain d stg conT)
+    bind (catch_error (check_wf_cont_domain d stga conT)
            (fn x =>
              Inl (prepend_err_msg (show_list show_char)
                    [Chara (false, false, true, false, false, false, true,
@@ -15370,7 +16652,8 @@ fun check_wf_problem p stg conT mp =
                      Chara (false, true, true, true, false, true, true,
                              false)]))
           (fn _ =>
-            bind (check (list_all (fn (_, a) => wf_type d a) (objects p))
+            bind (check
+                   (list_all (fn (_, a) => wf_type (types d) a) (objects p))
                    (fn _ =>
                      shows_prec_list show_char zero_nata
                        [Chara (true, false, true, true, false, false, true,
@@ -15477,8 +16760,8 @@ fun check_wf_problem p stg conT mp =
                     bind (check
                            (list_all
                              (fn f =>
-                               wf_fmla_atom2 p mp stg f orelse
-                                 wf_func_assign p mp stg f)
+                               wf_fmla_atom2 p mp stga f orelse
+                                 wf_func_assign p mp stga f)
                              (inita p))
                            (fn _ =>
                              shows_prec_list show_char zero_nata
@@ -15552,8 +16835,8 @@ true, false),
  true, false)]))
                       (fn _ =>
                         check (wf_fmla d
-                                (lookupa (ccompare_object, equal_object) mp) stg
-                                (goal p))
+                                (lookupa (ccompare_object, equal_object) mp)
+                                stga (goal p))
                           (fn _ =>
                             shows_prec_list show_char zero_nata
                               [Chara (true, false, true, true, false, false,
@@ -15602,17 +16885,55 @@ true, false),
 true, false)]))))))
   end;
 
-fun act_no_params (Simple_Action_Schema (n, ps, pre, eff)) = null ps
-  | act_no_params (Durative_Action_Schema (n, ps, d, pre, eff)) = null ps;
+fun check_wf_temporal_problem p =
+  check_wf_cont_problem (temporal_to_continuous_problem p);
 
-fun check_ground_problem p =
+fun form_preds_no_args (A1_, A2_) form =
+  ball (ceq_atom A2_, ccompare_atom A1_)
+    (atoms (ceq_atom A2_, ccompare_atom A1_, set_impl_atom) form) atom_no_args;
+
+fun act_conds_no_args (SimpleActionSchemaa (h, SimpleActionBody (pre, eff))) =
+  form_preds_no_args (ccompare_term, equal_term) pre
+  | act_conds_no_args
+    (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff))) =
+    list_all (form_preds_no_args (ccompare_term, equal_term)) (map snd cond);
+
+fun duration_constraint_integer (DurationConstraint (dop, ConstantExpr x)) =
+  is_integer x
+  | duration_constraint_integer (DurationConstraint (v, DurationExpr)) = false
+  | duration_constraint_integer (DurationConstraint (v, AddExpr (vb, vc))) =
+    false
+  | duration_constraint_integer (DurationConstraint (v, SubExpr (vb, vc))) =
+    false
+  | duration_constraint_integer (DurationConstraint (v, MulExpr (vb, vc))) =
+    false
+  | duration_constraint_integer (DurationConstraint (v, DivExpr (vb, vc))) =
+    false
+  | duration_constraint_integer (DurationConstraint (v, SinExpr vb)) = false
+  | duration_constraint_integer (DurationConstraint (v, CosExpr vb)) = false
+  | duration_constraint_integer (DurationConstraint (v, ExpExpr vb)) = false
+  | duration_constraint_integer (DurationConstraint (v, PiExpr)) = false
+  | duration_constraint_integer (DurationConstraint (v, FunctionExpr vb)) =
+    false;
+
+fun act_dcs_integers (SimpleActionSchemaa (h, b)) = true
+  | act_dcs_integers
+    (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff))) =
+    list_all duration_constraint_integer (map snd dc);
+
+fun act_no_func_dcs (SimpleActionSchemaa (h, b)) = true
+  | act_no_func_dcs
+    (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff))) =
+    list_all dc_no_func (map snd dc);
+
+fun act_no_params (SimpleActionSchemaa (h, b)) = null (parameters h)
+  | act_no_params (DurativeActionSchema (h, b)) = null (parameters h);
+
+fun check_ground_problem_core p =
   let
     val d = domain p;
-    val stga = stg d;
-    val conT = mp_constT d;
-    val mp = mp_objT p;
   in
-    bind (check_wf_problem p stga conT mp)
+    bind (check_wf_temporal_problem p)
       (fn _ =>
         bind (check (is_pos_conj (goal p))
                (fn _ =>
@@ -15839,7 +17160,8 @@ fun check_ground_problem p =
                                  false),
                          Chara (true, false, false, true, false, true, false,
                                  false)]
-                       (shows_prec_literal zero_nata o nameb))
+                       (shows_prec_literal zero_nata o
+                         (fn x => nameb (heada x))))
                   (fn _ =>
                     bind (check_all_list (show_list show_char) act_no_func_dcs
                            (actions d)
@@ -15963,7 +17285,8 @@ fun check_ground_problem p =
                                      false),
                              Chara (false, false, true, false, true, true, true,
                                      false)]
-                           (shows_prec_literal zero_nata o nameb))
+                           (shows_prec_literal zero_nata o
+                             (fn x => nameb (heada x))))
                       (fn _ =>
                         bind (check_all_list (show_list show_char)
                                act_dcs_integers (actions d)
@@ -16059,7 +17382,8 @@ true, false),
  true, false),
                                  Chara (false, true, false, false, true, true,
  true, false)]
-                               (shows_prec_literal zero_nata o nameb))
+                               (shows_prec_literal zero_nata o
+                                 (fn x => nameb (heada x))))
                           (fn _ =>
                             bind (check_all_list (show_list show_char)
                                    act_pres_pos (actions d)
@@ -16106,8 +17430,6 @@ true, false),
                                      Chara (true, true, true, true, false, true,
      true, false),
                                      Chara (false, true, true, true, false,
-     true, true, false),
-                                     Chara (true, true, false, false, true,
      true, true, false),
                                      Chara (false, false, false, false, false,
      true, false, false),
@@ -16203,31 +17525,88 @@ true, false),
      true, true, false),
                                      Chara (true, true, false, false, true,
      true, true, false)]
-                                   (shows_prec_literal zero_nata o nameb))
+                                   (shows_prec_literal zero_nata o
+                                     (fn x => nameb (heada x))))
                               (fn _ =>
-                                bind (check (null (functions d))
-                                       (fn _ =>
- shows_prec_list show_char zero_nata
-   [Chara (false, false, true, false, false, false, true, false),
-     Chara (true, true, true, true, false, true, true, false),
-     Chara (true, false, true, true, false, true, true, false),
-     Chara (true, false, false, false, false, true, true, false),
-     Chara (true, false, false, true, false, true, true, false),
-     Chara (false, true, true, true, false, true, true, false),
-     Chara (false, false, false, false, false, true, false, false),
-     Chara (false, false, false, true, false, true, true, false),
-     Chara (true, false, false, false, false, true, true, false),
-     Chara (true, true, false, false, true, true, true, false),
-     Chara (false, false, false, false, false, true, false, false),
-     Chara (false, true, true, false, false, true, true, false),
-     Chara (true, false, true, false, true, true, true, false),
-     Chara (false, true, true, true, false, true, true, false),
-     Chara (true, true, false, false, false, true, true, false),
-     Chara (false, false, true, false, true, true, true, false),
-     Chara (true, false, false, true, false, true, true, false),
-     Chara (true, true, true, true, false, true, true, false),
-     Chara (false, true, true, true, false, true, true, false),
-     Chara (true, true, false, false, true, true, true, false)]))
+                                bind (check_all_list (show_list show_char)
+                                       act_conds_no_args (actions d)
+                                       [Chara
+  (true, false, false, false, false, false, true, false),
+ Chara (true, true, false, false, false, true, true, false),
+ Chara (false, false, true, false, true, true, true, false),
+ Chara (true, false, false, true, false, true, true, false),
+ Chara (true, true, true, true, false, true, true, false),
+ Chara (false, true, true, true, false, true, true, false),
+ Chara (false, false, false, false, false, true, false, false),
+ Chara (true, true, false, false, false, true, true, false),
+ Chara (true, true, true, true, false, true, true, false),
+ Chara (false, true, true, true, false, true, true, false),
+ Chara (false, false, true, false, false, true, true, false),
+ Chara (true, false, false, true, false, true, true, false),
+ Chara (false, false, true, false, true, true, true, false),
+ Chara (true, false, false, true, false, true, true, false),
+ Chara (true, true, true, true, false, true, true, false),
+ Chara (false, true, true, true, false, true, true, false),
+ Chara (false, false, false, false, false, true, false, false),
+ Chara (true, false, false, true, false, true, true, false),
+ Chara (true, true, false, false, true, true, true, false),
+ Chara (false, false, false, false, false, true, false, false),
+ Chara (false, true, true, true, false, true, true, false),
+ Chara (true, true, true, true, false, true, true, false),
+ Chara (false, false, true, false, true, true, true, false),
+ Chara (false, false, false, false, false, true, false, false),
+ Chara (true, false, false, false, false, true, true, false),
+ Chara (false, true, false, false, true, true, true, false),
+ Chara (true, true, true, false, false, true, true, false),
+ Chara (true, false, true, false, true, true, true, false),
+ Chara (true, false, true, true, false, true, true, false),
+ Chara (true, false, true, false, false, true, true, false),
+ Chara (false, true, true, true, false, true, true, false),
+ Chara (false, false, true, false, true, true, true, false),
+ Chara (true, false, true, true, false, true, false, false),
+ Chara (false, true, true, false, false, true, true, false),
+ Chara (false, true, false, false, true, true, true, false),
+ Chara (true, false, true, false, false, true, true, false),
+ Chara (true, false, true, false, false, true, true, false),
+ Chara (false, false, false, false, false, true, false, false),
+ Chara (false, false, false, true, false, true, false, false),
+ Chara (false, true, true, true, false, true, true, false),
+ Chara (true, false, true, false, true, true, true, false),
+ Chara (true, false, true, true, false, true, true, false),
+ Chara (true, false, true, false, false, true, true, false),
+ Chara (false, true, false, false, true, true, true, false),
+ Chara (true, false, false, true, false, true, true, false),
+ Chara (true, true, false, false, false, true, true, false),
+ Chara (true, true, true, true, false, true, false, false),
+ Chara (true, false, true, false, false, true, true, false),
+ Chara (true, false, false, false, true, true, true, false),
+ Chara (true, false, false, false, false, false, true, false),
+ Chara (false, false, true, false, true, true, true, false),
+ Chara (true, false, true, true, false, true, true, false),
+ Chara (false, false, false, false, false, true, false, false),
+ Chara (true, false, false, false, false, true, true, false),
+ Chara (false, false, true, false, true, true, true, false),
+ Chara (true, true, true, true, false, true, true, false),
+ Chara (true, false, true, true, false, true, true, false),
+ Chara (true, true, false, false, true, true, true, false),
+ Chara (false, false, false, false, false, true, false, false),
+ Chara (true, true, true, false, true, true, true, false),
+ Chara (true, false, false, true, false, true, true, false),
+ Chara (false, false, true, false, true, true, true, false),
+ Chara (false, false, false, true, false, true, true, false),
+ Chara (false, false, false, false, false, true, false, false),
+ Chara (true, false, false, false, false, true, true, false),
+ Chara (false, true, false, false, true, true, true, false),
+ Chara (true, true, true, false, false, true, true, false),
+ Chara (true, false, true, false, true, true, true, false),
+ Chara (true, false, true, true, false, true, true, false),
+ Chara (true, false, true, false, false, true, true, false),
+ Chara (false, true, true, true, false, true, true, false),
+ Chara (false, false, true, false, true, true, true, false),
+ Chara (true, true, false, false, true, true, true, false),
+ Chara (true, false, false, true, false, true, false, false)]
+                                       (shows_prec_literal zero_nata o
+ (fn x => nameb (heada x))))
                                   (fn _ =>
                                     bind (check (null (consts d))
    (fn _ =>
@@ -16311,23 +17690,50 @@ check_all_list (show_list show_char)
   (fn _ => fn y => shows_prec_list show_char zero_nata y []))))))))))
   end;
 
+fun check_ground_problem p =
+  bind (check_ground_problem_core p)
+    (fn _ =>
+      check (null (functions (domain p)))
+        (fn _ =>
+          shows_prec_list show_char zero_nata
+            [Chara (false, false, true, false, false, false, true, false),
+              Chara (true, true, true, true, false, true, true, false),
+              Chara (true, false, true, true, false, true, true, false),
+              Chara (true, false, false, false, false, true, true, false),
+              Chara (true, false, false, true, false, true, true, false),
+              Chara (false, true, true, true, false, true, true, false),
+              Chara (false, false, false, false, false, true, false, false),
+              Chara (false, false, false, true, false, true, true, false),
+              Chara (true, false, false, false, false, true, true, false),
+              Chara (true, true, false, false, true, true, true, false),
+              Chara (false, false, false, false, false, true, false, false),
+              Chara (false, true, true, false, false, true, true, false),
+              Chara (true, false, true, false, true, true, true, false),
+              Chara (false, true, true, true, false, true, true, false),
+              Chara (true, true, false, false, false, true, true, false),
+              Chara (false, false, true, false, true, true, true, false),
+              Chara (true, false, false, true, false, true, true, false),
+              Chara (true, true, true, true, false, true, true, false),
+              Chara (false, true, true, true, false, true, true, false),
+              Chara (true, true, false, false, true, true, true, false)]));
+
 fun auto_loc_ids_to_names n m =
   (if equal_nata n zero_nata
     then (if equal_nata m zero_nata then "init"
-           else (if equal_nata (minus_nat m one_nata) zero_nata then "planning"
+           else (if equal_nata (minus_nata m one_nata) zero_nata then "planning"
                   else (if equal_nata
-                             (minus_nat (minus_nat m one_nata) one_nata)
+                             (minus_nata (minus_nata m one_nata) one_nata)
                              zero_nata
                          then "goal" else (raise Fail "undefined"))))
     else (if equal_nata m zero_nata then "off"
-           else (if equal_nata (minus_nat m one_nata) zero_nata then "starting"
+           else (if equal_nata (minus_nata m one_nata) zero_nata then "starting"
                   else (if equal_nata
-                             (minus_nat (minus_nat m one_nata) one_nata)
+                             (minus_nata (minus_nata m one_nata) one_nata)
                              zero_nata
                          then "running"
                          else (if equal_nata
-                                    (minus_nat
-                                      (minus_nat (minus_nat m one_nata)
+                                    (minus_nata
+                                      (minus_nata (minus_nata m one_nata)
 one_nata)
                                       one_nata)
                                     zero_nata
@@ -16336,9 +17742,17 @@ one_nata)
 
 fun actions_spec p = actions (domain p);
 
-fun auto_names p = "main" :: map (fn x => "act_" ^ nameb x) (actions_spec p);
+fun auto_names p =
+  "main" :: map (fn x => "act_" ^ nameb (heada x)) (actions_spec p);
 
 fun auto_names_to_index p = index equal_literal (auto_names p);
+
+val goal_loc_impl : nat = nat_of_integer (2 : Int.int);
+
+val reach_formula : (nat, nat, string, inta) formulaa =
+  EX (Loc (zero_nata, goal_loc_impl));
+
+val net_broadcast : string list = [];
 
 fun pre_imp_list x = app_snap x;
 
@@ -16346,202 +17760,75 @@ fun del_imp_list x = app_snap x;
 
 fun add_imp_list x = app_snap x;
 
-fun map_ast_effect f (Effect (x1, x2)) =
-  Effect (map (map_formula (map_atom f)) x1, map (map_formula (map_atom f)) x2);
+fun map_numeric_effect f (NumericEffect (x1, x2, x3)) =
+  NumericEffect
+    (x1, map_primitive_numeric_expression f x2, map_numeric_expression f x3);
 
-fun subst_term psubst (CONST c) = c
-  | subst_term psubst (VAR x) = psubst x;
+fun map_ast_effect f (Effect (x1, x2, x3)) =
+  Effect
+    (map (map_formula (map_atom f)) x1, map (map_formula (map_atom f)) x2,
+      map (map_numeric_effect f) x3);
 
-fun instantiate_action_schema (Simple_Action_Schema (n, params, pre, eff)) args
-  ta =
+fun instantiate_simple_body (SimpleActionBody (pre, eff)) f =
   let
-    val tsubst =
-      subst_term (the o map_of equal_variable (zip (map fst params) args));
-    val pre_inst = (map_formula o map_atom) tsubst pre;
-    val a = map_ast_effect tsubst eff;
+    val pre_inst = (map_formula o map_atom) f pre;
+    val a = map_ast_effect f eff;
   in
-    Ground_Action (n, ta, pre_inst, a)
+    GroundAction (pre_inst, a)
   end;
 
-fun filter_time_spec t l =
-  map_filter
-    (fn x =>
-      (if (equal_temporal_annotationa t o fst) x then SOME (snd x) else NONE))
-    l;
+fun instantiate_temporal_action_schema (SimpleActionSchemaa (h, b)) args =
+  instantiate_simple_body b (tsubst h args);
 
-fun dels (Effect (x1, x2)) = x2;
+fun duration_constraint_as_formula (DurationConstraint (EQ, r)) =
+  Atom (NumericEqAtm (DurationExpr, r))
+  | duration_constraint_as_formula (DurationConstraint (LEQ, r)) =
+    Atom (NumericLEAtm (DurationExpr, r))
+  | duration_constraint_as_formula (DurationConstraint (GEQ, r)) =
+    Atom (NumericGEAtm (DurationExpr, r));
 
-fun adds (Effect (x1, x2)) = x1;
+fun inst_duration_in_numeric_effect (NumericEffect (p, l, r)) d =
+  NumericEffect (p, l, inst_duration_in_numeric_expression r d);
 
-fun conjunct_effects l = Effect ((concat o map adds) l, (concat o map dels) l);
+fun inst_duration_in_ast_effect (Effect (a, de, nums)) d =
+  Effect (a, de, map (fn x => inst_duration_in_numeric_effect x d) nums);
 
-fun inst_snap_action (Durative_Action_Schema (n, params, d, cond, eff)) args ta
-  = let
-      val tsubst =
-        subst_term (the o map_of equal_variable (zip (map fst params) args));
-      val pre_i =
-        (map_formula o map_atom) tsubst (bigAnd (filter_time_spec ta cond));
-      val a =
-        map_ast_effect tsubst (conjunct_effects (filter_time_spec ta eff));
-    in
-      Ground_Action (n, ta, pre_i, a)
-    end;
+fun inst_snap_action_body_elements d cond eff f dur ta =
+  let
+    val pre_i =
+      inst_formula f dur
+        (bigAnd
+          (filter_time_spec ta
+            (cond @
+              map (fn (x, y) => (x, duration_constraint_as_formula y)) d)));
+    val a =
+      inst_duration_in_ast_effect
+        (map_ast_effect f (conjunct_effects (filter_time_spec ta eff))) dur;
+  in
+    GroundAction (pre_i, a)
+  end;
 
-fun at_start_spec (Durative_Action_Schema (n, ps, d, cond, eff)) =
-  inst_snap_action (Durative_Action_Schema (n, ps, d, cond, eff)) [] At_Start
-  | at_start_spec (Simple_Action_Schema (n, ps, pre, eff)) =
-    instantiate_action_schema (Simple_Action_Schema (n, ps, pre, eff)) []
-      At_Start;
+fun at_start_spec (SimpleActionSchemaa (h, b)) =
+  instantiate_temporal_action_schema (SimpleActionSchemaa (h, b)) []
+  | at_start_spec
+    (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff))) =
+    inst_snap_action_body_elements [] cond deff (tsubst h []) zero_rat At_Start;
 
-fun ground_non_action n anno =
-  Ground_Action (n, anno, Not Bot, Effect ([], []));
+val ground_non_action : ground_action =
+  GroundAction (Not Bot, Effect ([], [], []));
 
-fun at_end_spec (Durative_Action_Schema (n, ps, d, cond, eff)) =
-  inst_snap_action (Durative_Action_Schema (n, ps, d, cond, eff)) [] At_End
-  | at_end_spec (Simple_Action_Schema (n, ps, pre, eff)) =
-    ground_non_action n At_End;
+fun at_end_spec (SimpleActionSchemaa (h, b)) = ground_non_action
+  | at_end_spec (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff)))
+    = inst_snap_action_body_elements [] cond deff (tsubst h []) zero_rat At_End;
 
-fun dels_spec (Ground_Action (n, anno, form, eff)) =
+fun dels_spec (GroundAction (form, eff)) =
   remdups equal_predicate (map to_predicate (dels eff));
 
-fun adds_spec (Ground_Action (n, anno, form, eff)) =
+fun adds_spec (GroundAction (form, eff)) =
   remdups equal_predicate (map to_predicate (adds eff));
 
-fun pre_spec (Ground_Action (n, anno, form, eff)) =
+fun pre_spec (GroundAction (form, eff)) =
   remdups equal_predicate (map to_predicate (to_literals form));
-
-fun prop_to_lock_impl prop_to_name p = "lock_" ^ prop_to_name p;
-
-fun prop_to_var_impl prop_to_name p = "var_" ^ prop_to_name p;
-
-fun snap_vars_spec snap =
-  let
-    val pre_vars =
-      map (prop_to_var_impl namea)
-        (pre_imp_list at_start_spec at_end_spec pre_spec snap);
-    val add_vars =
-      map (prop_to_var_impl namea)
-        (add_imp_list at_start_spec at_end_spec adds_spec snap);
-    val del_vars =
-      map_filter
-        (fn x =>
-          (if not (membera equal_predicate
-                    (add_imp_list at_start_spec at_end_spec adds_spec snap) x)
-            then SOME (prop_to_lock_impl namea x) else NONE))
-        (del_imp_list at_start_spec at_end_spec dels_spec snap) @
-        map (prop_to_var_impl namea)
-          (del_imp_list at_start_spec at_end_spec dels_spec snap);
-  in
-    set (ceq_literal, ccompare_literal, set_impl_literal)
-      (pre_vars @ add_vars @ del_vars)
-  end;
-
-fun inv_vars_spec invs =
-  let
-    val i = set (ceq_predicate, ccompare_predicate, set_impl_predicate) invs;
-  in
-    sup_seta (ceq_literal, ccompare_literal)
-      (image (ceq_predicate, ccompare_predicate)
-        (ceq_literal, ccompare_literal, set_impl_literal)
-        (prop_to_lock_impl namea) i)
-      (image (ceq_predicate, ccompare_predicate)
-        (ceq_literal, ccompare_literal, set_impl_literal)
-        (prop_to_var_impl namea) i)
-  end;
-
-fun over_all_snap (Durative_Action_Schema (n, ps, d, cond, eff)) =
-  inst_snap_action (Durative_Action_Schema (n, ps, d, cond, eff)) [] Over_All
-  | over_all_snap (Simple_Action_Schema (n, ps, pre, eff)) =
-    ground_non_action n Over_All;
-
-fun over_all_spec x = pre_spec (over_all_snap x);
-
-fun action_vars_spec a =
-  let
-    val inv_vars = inv_vars_spec (over_all_spec a);
-    val start_vars = snap_vars_spec (AtStart a);
-    val aa = snap_vars_spec (AtEnd a);
-  in
-    sup_seta (ceq_literal, ccompare_literal)
-      (sup_seta (ceq_literal, ccompare_literal) inv_vars start_vars) aa
-  end;
-
-fun init_spec p =
-  map_filter (fn x => (if is_predAtom x then SOME (to_predicate x) else NONE))
-    (inita p);
-
-fun props_spec p = map pred (predicates (domain p));
-
-fun goal_spec p =
-  remdups equal_predicate (map to_predicate (to_literals (goal p)));
-
-val planning_lock_impl : string = "planning_lock";
-
-val acts_active_impl : string = "acts_active";
-
-fun bounds_spec p =
-  let
-    val action_vars =
-      sup_setb
-        (finite_UNIV_literal, cenum_literal, ceq_literal,
-          cproper_interval_literal, set_impl_literal)
-        (image (ceq_ast_action_schema, ccompare_ast_action_schema)
-          (ceq_set
-             (cenum_literal, ceq_literal,
-               ccompare_cproper_interval cproper_interval_literal),
-            ccompare_set
-              (finite_UNIV_literal, ceq_literal, cproper_interval_literal,
-                set_impl_literal),
-            set_impl_set)
-          action_vars_spec
-          (set (ceq_ast_action_schema, ccompare_ast_action_schema,
-                 set_impl_ast_action_schema)
-            (actions_spec p)));
-    val init_vars =
-      image (ceq_predicate, ccompare_predicate)
-        (ceq_literal, ccompare_literal, set_impl_literal)
-        (prop_to_var_impl namea)
-        (set (ceq_predicate, ccompare_predicate, set_impl_predicate)
-          (init_spec p));
-    val goal_vars =
-      image (ceq_predicate, ccompare_predicate)
-        (ceq_literal, ccompare_literal, set_impl_literal)
-        (prop_to_var_impl namea)
-        (set (ceq_predicate, ccompare_predicate, set_impl_predicate)
-          (goal_spec p));
-    val vars_occ =
-      sup_seta (ceq_literal, ccompare_literal)
-        (sup_seta (ceq_literal, ccompare_literal) action_vars init_vars)
-        goal_vars;
-    val prop_lock_var_defs =
-      map (fn pa =>
-            (prop_to_lock_impl namea pa,
-              (zero_inta, int_of_nat (size_list (actions_spec p)))))
-        (props_spec p);
-    val prop_var_var_defs =
-      map (fn pa => (prop_to_var_impl namea pa, (zero_inta, one_inta)))
-        (props_spec p);
-    val prop_var_defs =
-      filter (fn x => member (ceq_literal, ccompare_literal) (fst x) vars_occ)
-        (prop_lock_var_defs @ prop_var_var_defs);
-    val acts_active_var =
-      (acts_active_impl, (zero_inta, int_of_nat (size_list (actions_spec p))));
-    val planning_lock_var =
-      (planning_lock_impl, (zero_inta, Int_of_integer (2 : Int.int)));
-  in
-    [acts_active_var, planning_lock_var] @ prop_var_defs
-  end;
-
-fun init_vars_spec p = map (map_prod id fst) (bounds_spec p);
-
-val init_loc_impl : nat = zero_nata;
-
-val off_loc_impl : nat = zero_nata;
-
-fun init_locs_spec p =
-  init_loc_impl :: map (fn _ => off_loc_impl) (actions_spec p);
-
-val broadcast_spec : string list = [];
 
 fun mutex_snap_action (B1_, B2_, B3_) =
   (fn pre => fn adds => fn dels => fn a => fn b =>
@@ -16578,73 +17865,89 @@ fun act_to_start_clock_impl act_to_name a = "start_" ^ act_to_name a;
 
 fun act_to_end_clock_impl act_to_name a = "end_" ^ act_to_name a;
 
-fun int_clocks_spec p a =
+fun net_int_clocks p a =
   map_filter
     (fn x =>
       (if mutex_snap_actiona a (AtStart x)
-        then SOME (act_to_start_clock_impl nameb x) else NONE))
+        then SOME (act_to_start_clock_impl (fn xa => nameb (heada xa)) x)
+        else NONE))
     (actions_spec p) @
     map_filter
       (fn x =>
         (if mutex_snap_actiona a (AtEnd x)
-          then SOME (act_to_end_clock_impl nameb x) else NONE))
+          then SOME (act_to_end_clock_impl (fn xa => nameb (heada xa)) x)
+          else NONE))
       (actions_spec p);
 
+val planning_lock_impl : string = "planning_lock";
+
 val starting_loc_impl : nat = one_nata;
+
+val ending_loc_impl : nat = nat_of_integer (3 : Int.int);
 
 fun map_upper_bound f (LT x1) = LT (f x1)
   | map_upper_bound f (LE x2) = LE (f x2);
 
 fun dc_list_upper xs = min_ub_opt linorder_rat (map dc_to_ub xs) NONE;
 
-fun upper_spec_impl (Simple_Action_Schema (n, ps, pre, eff)) =
-  SOME (LE zero_inta)
-  | upper_spec_impl (Durative_Action_Schema (n, ps, d, cond, eff)) =
-    map_option (map_upper_bound floor_rat) (dc_list_upper d);
+fun upper_spec_impl (SimpleActionSchemaa (h, b)) = SOME (LE zero_inta)
+  | upper_spec_impl
+    (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff))) =
+    map_option (map_upper_bound floor_rat) (dc_list_upper (map snd dc));
 
-fun u_dur_spec_impl a =
+fun u_dur_impl a =
   (case upper_spec_impl a of NONE => []
-    | SOME (LT n) => [LTa (act_to_start_clock_impl nameb a, n)]
-    | SOME (LE n) => [LEa (act_to_start_clock_impl nameb a, n)]);
+    | SOME (LT n) =>
+      [LTa (act_to_start_clock_impl (fn x => nameb (heada x)) a, n)]
+    | SOME (LE n) =>
+      [LEa (act_to_start_clock_impl (fn x => nameb (heada x)) a, n)]);
 
 fun map_lower_bound f (GT x1) = GT (f x1)
   | map_lower_bound f (GE x2) = GE (f x2);
 
 fun dc_list_lower xs = max_lb_opt linorder_rat (map dc_to_lb xs) NONE;
 
-fun lower_spec_impl (Simple_Action_Schema (n, ps, pre, eff)) =
-  SOME (GE zero_inta)
-  | lower_spec_impl (Durative_Action_Schema (n, ps, d, cond, eff)) =
-    map_option (map_lower_bound floor_rat) (dc_list_lower d);
+fun lower_spec_impl (SimpleActionSchemaa (h, b)) = SOME (GE zero_inta)
+  | lower_spec_impl
+    (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff))) =
+    map_option (map_lower_bound floor_rat) (dc_list_lower (map snd dc));
 
-fun l_dur_spec_impl a =
+fun l_dur_impl a =
   (case lower_spec_impl a of NONE => []
-    | SOME (GT n) => [GTa (act_to_start_clock_impl nameb a, n)]
-    | SOME (GE n) => [GEa (act_to_start_clock_impl nameb a, n)]);
+    | SOME (GT n) =>
+      [GTa (act_to_start_clock_impl (fn x => nameb (heada x)) a, n)]
+    | SOME (GE n) =>
+      [GEa (act_to_start_clock_impl (fn x => nameb (heada x)) a, n)]);
 
-val ending_loc_impl : nat = nat_of_integer (3 : Int.int);
-
-fun instant_trans_edge_spec A_ p a =
+fun instant_trans_edge A_ p a =
   let
     val end_snap = AtEnd a;
     val _ = AtStart a;
     val int_clocks =
-      map (fn x => GTa (x, zero_inta)) (int_clocks_spec p end_snap) @
-        map (fn x => GEa (x, zero_inta)) (int_clocks_spec p end_snap);
-    val guard = l_dur_spec_impl a @ u_dur_spec_impl a @ int_clocks;
-    val resets = [act_to_end_clock_impl nameb a];
+      map (fn x => GTa (x, zero_inta)) (net_int_clocks p end_snap) @
+        map (fn x => GEa (x, zero_inta)) (net_int_clocks p end_snap);
+    val guard = l_dur_impl a @ u_dur_impl a @ int_clocks;
+    val resets = [act_to_end_clock_impl (fn x => nameb (heada x)) a];
   in
     (starting_loc_impl,
       (Eqa (Var planning_lock_impl, Const (one A_)),
         (guard, (Sil "", ([], (resets, ending_loc_impl))))))
   end;
 
-fun start_edge_spec (A1_, A2_) B_ (C1_, C2_, C3_) p a =
+fun prop_to_lock_impl prop_to_name p = "lock_" ^ prop_to_name p;
+
+fun prop_to_var_impl prop_to_name p = "var_" ^ prop_to_name p;
+
+val acts_active_impl : string = "acts_active";
+
+val off_loc_impl : nat = zero_nata;
+
+fun start_edge (A1_, A2_) B_ (C1_, C2_, C3_) p a =
   let
     val start_snap = AtStart a;
     val guard =
-      map (fn x => GTa (x, zero B_)) (int_clocks_spec p start_snap) @
-        map (fn x => GEa (x, zero B_)) (int_clocks_spec p start_snap);
+      map (fn x => GTa (x, zero B_)) (net_int_clocks p start_snap) @
+        map (fn x => GEa (x, zero B_)) (net_int_clocks p start_snap);
     val not_locked_check =
       map_filter
         (fn x =>
@@ -16674,13 +17977,13 @@ fun start_edge_spec (A1_, A2_) B_ (C1_, C2_, C3_) p a =
       (acts_active_impl,
         Binop (plus C2_, Var acts_active_impl, Const (one C1_))) ::
         del_upds @ add_upds;
-    val resets = [act_to_start_clock_impl nameb a];
+    val resets = [act_to_start_clock_impl (fn x => nameb (heada x)) a];
   in
     (off_loc_impl,
       (var_check, (guard, (Sil "", (upds, (resets, starting_loc_impl))))))
   end;
 
-fun end_edge_spec (A1_, A2_) (C1_, C2_, C3_, C4_) a =
+fun end_edge (A1_, A2_) (C1_, C2_, C3_, C4_) a =
   let
     val end_instant = ending_loc_impl;
     val off = off_loc_impl;
@@ -16717,28 +18020,35 @@ fun end_edge_spec (A1_, A2_) (C1_, C2_, C3_, C4_) a =
     (end_instant, (check, ([], (Sil "", (upds, ([], off))))))
   end;
 
+fun over_all_snap (SimpleActionSchemaa (h, b)) = ground_non_action
+  | over_all_snap
+    (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff))) =
+    inst_snap_action_body_elements [] cond deff (tsubst h []) zero_rat Over_All;
+
+fun over_all_spec x = pre_spec (over_all_snap x);
+
 val running_loc_impl : nat = nat_of_integer (2 : Int.int);
 
-fun edge_3_spec A_ (B1_, B2_, B3_) p a =
+fun edge_3 A_ (B1_, B2_, B3_) p a =
   let
     val end_snap = AtEnd a;
     val int_clocks =
-      map (fn x => GTa (x, zero_inta)) (int_clocks_spec p end_snap) @
-        map (fn x => GEa (x, zero_inta)) (int_clocks_spec p end_snap);
-    val guard = l_dur_spec_impl a @ u_dur_spec_impl a @ int_clocks;
+      map (fn x => GTa (x, zero_inta)) (net_int_clocks p end_snap) @
+        map (fn x => GEa (x, zero_inta)) (net_int_clocks p end_snap);
+    val guard = l_dur_impl a @ u_dur_impl a @ int_clocks;
     val upds =
       map ((fn v =>
              (v, Binop (plus B2_, Var v, Const (uminus B3_ (one B1_))))) o
             prop_to_lock_impl namea)
         (over_all_spec a);
-    val resets = [act_to_end_clock_impl nameb a];
+    val resets = [act_to_end_clock_impl (fn x => nameb (heada x)) a];
   in
     (running_loc_impl,
       (Eqa (Var planning_lock_impl, Const (one A_)),
         (guard, (Sil "", (upds, (resets, ending_loc_impl))))))
   end;
 
-fun edge_2_spec A_ (C1_, C2_) a =
+fun edge_2 A_ (C1_, C2_) a =
   let
     val check_invs =
       bexp_and_all
@@ -16754,23 +18064,28 @@ fun edge_2_spec A_ (C1_, C2_) a =
       (check_invs, ([], (Sil "", (upds, ([], running_loc_impl))))))
   end;
 
-fun action_to_automaton_spec (B1_, B2_) (C1_, C2_, C3_, C4_) p a =
+fun action_to_automaton (B1_, B2_) (C1_, C2_, C3_, C4_) p a =
   let
     val committed_locs = [];
     val urgent_locs = [starting_loc_impl, ending_loc_impl];
     val edges =
-      [start_edge_spec (B1_, B2_) zero_int (C1_, C2_, C4_) p a,
-        edge_2_spec B1_ (C1_, C2_) a, edge_3_spec B1_ (C1_, C2_, C3_) p a,
-        end_edge_spec (B1_, B2_) (C1_, C2_, C3_, C4_) a,
-        instant_trans_edge_spec B1_ p a];
+      [start_edge (B1_, B2_) zero_int (C1_, C2_, C4_) p a,
+        edge_2 B1_ (C1_, C2_) a, edge_3 B1_ (C1_, C2_, C3_) p a,
+        end_edge (B1_, B2_) (C1_, C2_, C3_, C4_) a, instant_trans_edge B1_ p a];
     val invs = [];
   in
     (committed_locs, (urgent_locs, (edges, invs)))
   end;
 
+fun init_spec p =
+  map_filter (fn x => (if is_predAtom x then SOME (to_predicate x) else NONE))
+    (inita p);
+
 val planning_loc_impl : nat = one_nata;
 
-fun main_auto_init_edge_spec A_ (D1_, D2_) p =
+val init_loc_impl : nat = zero_nata;
+
+fun main_auto_init_edge A_ (D1_, D2_) p =
   let
     val can_start = Eqa (Var planning_lock_impl, Const (zero A_));
     val permit_planning = (planning_lock_impl, Const (one D1_));
@@ -16784,9 +18099,10 @@ fun main_auto_init_edge_spec A_ (D1_, D2_) p =
       (can_start, ([], (Sil "", (upds, ([], planning_loc_impl))))))
   end;
 
-val goal_loc_impl : nat = nat_of_integer (2 : Int.int);
+fun goal_spec p =
+  remdups equal_predicate (map to_predicate (to_literals (goal p)));
 
-fun main_auto_goal_edge_spec p =
+fun main_auto_goal_edge p =
   let
     val can_end =
       [Eqa (Var planning_lock_impl, Const one_inta),
@@ -16802,48 +18118,149 @@ fun main_auto_goal_edge_spec p =
       (cond, ([], (Sil "", ([lock_plan], ([], goal_loc_impl))))))
   end;
 
-val main_auto_loop_spec_impl :
+val main_auto_loop_impl :
   nat * ((string, inta) bexp *
           ((string, inta) acconstraint list *
             (string act *
               ((string * (string, inta) exp) list * (string list * nat)))))
   = (goal_loc_impl, (True, ([], (Sil "", ([], ([], goal_loc_impl))))));
 
-fun main_auto_spec p =
+fun main_auto p =
   let
     val committed_locs = [];
     val urgent_locs = [init_loc_impl, goal_loc_impl];
     val edges =
-      [main_auto_init_edge_spec zero_int (one_int, zero_int) p,
-        main_auto_goal_edge_spec p, main_auto_loop_spec_impl];
+      [main_auto_init_edge zero_int (one_int, zero_int) p,
+        main_auto_goal_edge p, main_auto_loop_impl];
     val invs = [];
   in
     (committed_locs, (urgent_locs, (edges, invs)))
   end;
 
-fun automata_spec p =
-  main_auto_spec p ::
-    map (action_to_automaton_spec (one_int, zero_int)
+fun net_automata p =
+  main_auto p ::
+    map (action_to_automaton (one_int, zero_int)
           (one_int, plus_int, uminus_int, zero_int) p)
       (actions_spec p);
 
-val formula_spec : (nat, nat, string, inta) formulaa =
-  EX (Loc (zero_nata, goal_loc_impl));
+fun snap_vars snap =
+  let
+    val pre_vars =
+      map (prop_to_var_impl namea)
+        (pre_imp_list at_start_spec at_end_spec pre_spec snap);
+    val add_vars =
+      map (prop_to_var_impl namea)
+        (add_imp_list at_start_spec at_end_spec adds_spec snap);
+    val del_vars =
+      map_filter
+        (fn x =>
+          (if not (membera equal_predicate
+                    (add_imp_list at_start_spec at_end_spec adds_spec snap) x)
+            then SOME (prop_to_lock_impl namea x) else NONE))
+        (del_imp_list at_start_spec at_end_spec dels_spec snap) @
+        map (prop_to_var_impl namea)
+          (del_imp_list at_start_spec at_end_spec dels_spec snap);
+  in
+    set (ceq_literal, ccompare_literal, set_impl_literal)
+      (pre_vars @ add_vars @ del_vars)
+  end;
+
+fun inv_vars invs =
+  let
+    val i = set (ceq_predicate, ccompare_predicate, set_impl_predicate) invs;
+  in
+    sup_seta (ceq_literal, ccompare_literal)
+      (image (ceq_predicate, ccompare_predicate)
+        (ceq_literal, ccompare_literal, set_impl_literal)
+        (prop_to_lock_impl namea) i)
+      (image (ceq_predicate, ccompare_predicate)
+        (ceq_literal, ccompare_literal, set_impl_literal)
+        (prop_to_var_impl namea) i)
+  end;
+
+fun action_vars a =
+  let
+    val inv_varsa = inv_vars (over_all_spec a);
+    val start_vars = snap_vars (AtStart a);
+    val aa = snap_vars (AtEnd a);
+  in
+    sup_seta (ceq_literal, ccompare_literal)
+      (sup_seta (ceq_literal, ccompare_literal) inv_varsa start_vars) aa
+  end;
+
+fun props_spec p = map pred (predicates (domain p));
+
+fun net_bounds p =
+  let
+    val action_varsa =
+      sup_setb
+        (finite_UNIV_literal, cenum_literal, ceq_literal,
+          cproper_interval_literal, set_impl_literal)
+        (image
+          (ceq_ast_temporal_action_schema, ccompare_ast_temporal_action_schema)
+          (ceq_set
+             (cenum_literal, ceq_literal,
+               ccompare_cproper_interval cproper_interval_literal),
+            ccompare_set
+              (finite_UNIV_literal, ceq_literal, cproper_interval_literal,
+                set_impl_literal),
+            set_impl_set)
+          action_vars
+          (set (ceq_ast_temporal_action_schema,
+                 ccompare_ast_temporal_action_schema,
+                 set_impl_ast_temporal_action_schema)
+            (actions_spec p)));
+    val init_vars =
+      image (ceq_predicate, ccompare_predicate)
+        (ceq_literal, ccompare_literal, set_impl_literal)
+        (prop_to_var_impl namea)
+        (set (ceq_predicate, ccompare_predicate, set_impl_predicate)
+          (init_spec p));
+    val goal_vars =
+      image (ceq_predicate, ccompare_predicate)
+        (ceq_literal, ccompare_literal, set_impl_literal)
+        (prop_to_var_impl namea)
+        (set (ceq_predicate, ccompare_predicate, set_impl_predicate)
+          (goal_spec p));
+    val vars_occ =
+      sup_seta (ceq_literal, ccompare_literal)
+        (sup_seta (ceq_literal, ccompare_literal) action_varsa init_vars)
+        goal_vars;
+    val prop_lock_var_defs =
+      map (fn pa =>
+            (prop_to_lock_impl namea pa,
+              (zero_inta, int_of_nat (size_list (actions_spec p)))))
+        (props_spec p);
+    val prop_var_var_defs =
+      map (fn pa => (prop_to_var_impl namea pa, (zero_inta, one_inta)))
+        (props_spec p);
+    val prop_var_defs =
+      filter (fn x => member (ceq_literal, ccompare_literal) (fst x) vars_occ)
+        (prop_lock_var_defs @ prop_var_var_defs);
+    val acts_active_var =
+      (acts_active_impl, (zero_inta, int_of_nat (size_list (actions_spec p))));
+    val planning_lock_var =
+      (planning_lock_impl, (zero_inta, Int_of_integer (2 : Int.int)));
+  in
+    [acts_active_var, planning_lock_var] @ prop_var_defs
+  end;
 
 fun clock_names p =
-  map (act_to_start_clock_impl nameb) (actions_spec p) @
-    map (act_to_end_clock_impl nameb) (actions_spec p);
+  map (act_to_start_clock_impl (fn x => nameb (heada x))) (actions_spec p) @
+    map (act_to_end_clock_impl (fn x => nameb (heada x))) (actions_spec p);
+
+fun init_vars p = map (map_prod id fst) (net_bounds p);
+
+fun init_locs p = init_loc_impl :: map (fn _ => off_loc_impl) (actions_spec p);
 
 fun make_network_impl p =
   let
-    val automata = automata_spec p;
-    val broadcast = broadcast_spec;
-    val bounds = bounds_spec p;
-    val init_locs = init_locs_spec p;
-    val init_vars = init_vars_spec p;
-    val formula = formula_spec;
-    val _ = clock_names p;
-    val _ = auto_names p;
+    val automata = net_automata p;
+    val broadcast = net_broadcast;
+    val bounds = net_bounds p;
+    val init_locsa = init_locs p;
+    val init_varsa = init_vars p;
+    val formula = reach_formula;
     val clock_namesa = clock_names p;
     val auto_namesa = auto_names p;
     val ids_to_names = auto_loc_ids_to_names;
@@ -16854,7 +18271,7 @@ fun make_network_impl p =
             (ids_to_names,
               (process_names_to_index,
                 (broadcast,
-                  (automata, (bounds, (formula, (init_locs, init_vars)))))))))
+                  (automata, (bounds, (formula, (init_locsa, init_varsa)))))))))
   end;
 
 fun check_and_make_network p =
@@ -16869,7 +18286,14 @@ fun make_certified_net problem certifier =
               | SOME a => Result a)
         (fn (renaming, cert) => Result (network, (renaming, cert))));
 
-fun predicate (PredAtm (x11, x12)) = x11;
+fun rat_of_digits_pair (ds_1, ds_2) =
+  let
+    val ds_1a = trim_ld_zs ds_1;
+    val ds_2a = trim_tr_zs ds_2;
+  in
+    fract (int_of_digits (ds_1a @ ds_2a) zero_inta)
+      (power power_int (Int_of_integer (10 : Int.int)) (size_list ds_2a))
+  end;
 
 fun dfs_map_impl A_ (B1_, B2_, B3_) succsi a_0i lei keyi copyi =
   (fn f_ => fn () => f_ ((ht_new (B2_, B3_) (heap_list A_)) ()) ())
@@ -17196,24 +18620,27 @@ and scan_0 l =
                             (alt (bindb
                                    (scan_infix_pair aexp aexp
                                      [Chara
-(false, true, true, true, true, true, false, false)])
+(true, false, true, true, true, true, false, false)])
                                    (fn x =>
                                      return
-                                       (uncurry (fn a => fn b => Gta (a, b))
+                                       (uncurry (fn a => fn b => Eqa (a, b))
  x)))
                               (bindb
                                 (alt (bindb
                                        (scan_infix_pair aexp aexp
- [Chara (false, true, true, true, true, true, false, false),
-   Chara (true, false, true, true, true, true, false, false)])
+ [Chara (false, true, true, true, true, true, false, false)])
                                        (fn x =>
- return (uncurry (fn a => fn b => Ge (a, b)) x)))
-                                  (scan_parens
-                                    [Chara (false, false, false, true, false,
-     true, false, false)]
-                                    [Chara (true, false, false, true, false,
-     true, false, false)]
-                                    scan_7))
+ return (uncurry (fn a => fn b => Gta (a, b)) x)))
+                                  (bindb
+                                    (alt (bindb
+   (scan_infix_pair aexp aexp
+     [Chara (false, true, true, true, true, true, false, false),
+       Chara (true, false, true, true, true, true, false, false)])
+   (fn x => return (uncurry (fn a => fn b => Ge (a, b)) x)))
+                                      (scan_parens
+[Chara (false, false, false, true, false, true, false, false)]
+[Chara (true, false, false, true, false, true, false, false)] scan_7))
+                                    (fn x => return (sum_join x))))
                                 (fn x => return (sum_join x))))
                             (fn x => return (sum_join x))))
                         (fn x => return (sum_join x))))
@@ -17245,15 +18672,6 @@ and scan_7 l =
               scan_6)
             (fn x => return (sum_join x))))
     (fn x => return (sum_join x)) l;
-
-fun rat_of_digits_pair (ds_1, ds_2) =
-  let
-    val ds_1a = trim_ld_zs ds_1;
-    val ds_2a = trim_tr_zs ds_2;
-  in
-    fract (int_of_digits (ds_1a @ ds_2a) zero_inta)
-      (power power_int (Int_of_integer (10 : Int.int)) (size_list ds_2a))
-  end;
 
 fun parse parser s =
   (case parse_all lx_ws parser s
@@ -17364,279 +18782,179 @@ fun rename_locs_formula f (EX phi) =
         binda (rename_locs_sexp f psi)
           (fn psia => Result (Leadsto (phia, psia))));
 
-fun sexp_to_acconstraint (Ltc (a, b)) = LTa (a, b)
-  | sexp_to_acconstraint (Leb (a, b)) = LEa (a, b)
-  | sexp_to_acconstraint (Eqb (a, b)) = EQ (a, b)
-  | sexp_to_acconstraint (Gea (a, b)) = GEa (a, b)
-  | sexp_to_acconstraint (Gtb (a, b)) = GTa (a, b);
+fun chop_bexp A_ clocks (Anda (a, b)) (cs, es) =
+  chop_bexp A_ clocks b (chop_bexp A_ clocks a (cs, es))
+  | chop_bexp A_ clocks (Ltb (Var a, Const b)) (cs, es) =
+    (if membera A_ clocks a then (LTa (a, b) :: cs, es)
+      else (cs, Ltb (Var a, Const b) :: es))
+  | chop_bexp A_ clocks (Lea (Var a, Const b)) (cs, es) =
+    (if membera A_ clocks a then (LEa (a, b) :: cs, es)
+      else (cs, Lea (Var a, Const b) :: es))
+  | chop_bexp A_ clocks (Eqa (Var a, Const b)) (cs, es) =
+    (if membera A_ clocks a then (EQa (a, b) :: cs, es)
+      else (cs, Eqa (Var a, Const b) :: es))
+  | chop_bexp A_ clocks (Ge (Var a, Const b)) (cs, es) =
+    (if membera A_ clocks a then (GEa (a, b) :: cs, es)
+      else (cs, Ge (Var a, Const b) :: es))
+  | chop_bexp A_ clocks (Gta (Var a, Const b)) (cs, es) =
+    (if membera A_ clocks a then (GTa (a, b) :: cs, es)
+      else (cs, Gta (Var a, Const b) :: es))
+  | chop_bexp A_ clocks True (cs, es) = (cs, True :: es)
+  | chop_bexp A_ clocks (Nota v) (cs, es) = (cs, Nota v :: es)
+  | chop_bexp A_ clocks (Ora (v, va)) (cs, es) = (cs, Ora (v, va) :: es)
+  | chop_bexp A_ clocks (Imply (v, va)) (cs, es) = (cs, Imply (v, va) :: es)
+  | chop_bexp A_ clocks (Eqa (Const vb, va)) (cs, es) =
+    (cs, Eqa (Const vb, va) :: es)
+  | chop_bexp A_ clocks (Eqa (If_then_else (vb, vc, vd), va)) (cs, es) =
+    (cs, Eqa (If_then_else (vb, vc, vd), va) :: es)
+  | chop_bexp A_ clocks (Eqa (Binop (vb, vc, vd), va)) (cs, es) =
+    (cs, Eqa (Binop (vb, vc, vd), va) :: es)
+  | chop_bexp A_ clocks (Eqa (Unop (vb, vc), va)) (cs, es) =
+    (cs, Eqa (Unop (vb, vc), va) :: es)
+  | chop_bexp A_ clocks (Eqa (v, Var vb)) (cs, es) = (cs, Eqa (v, Var vb) :: es)
+  | chop_bexp A_ clocks (Eqa (v, If_then_else (vb, vc, vd))) (cs, es) =
+    (cs, Eqa (v, If_then_else (vb, vc, vd)) :: es)
+  | chop_bexp A_ clocks (Eqa (v, Binop (vb, vc, vd))) (cs, es) =
+    (cs, Eqa (v, Binop (vb, vc, vd)) :: es)
+  | chop_bexp A_ clocks (Eqa (v, Unop (vb, vc))) (cs, es) =
+    (cs, Eqa (v, Unop (vb, vc)) :: es)
+  | chop_bexp A_ clocks (Lea (Const vb, va)) (cs, es) =
+    (cs, Lea (Const vb, va) :: es)
+  | chop_bexp A_ clocks (Lea (If_then_else (vb, vc, vd), va)) (cs, es) =
+    (cs, Lea (If_then_else (vb, vc, vd), va) :: es)
+  | chop_bexp A_ clocks (Lea (Binop (vb, vc, vd), va)) (cs, es) =
+    (cs, Lea (Binop (vb, vc, vd), va) :: es)
+  | chop_bexp A_ clocks (Lea (Unop (vb, vc), va)) (cs, es) =
+    (cs, Lea (Unop (vb, vc), va) :: es)
+  | chop_bexp A_ clocks (Lea (v, Var vb)) (cs, es) = (cs, Lea (v, Var vb) :: es)
+  | chop_bexp A_ clocks (Lea (v, If_then_else (vb, vc, vd))) (cs, es) =
+    (cs, Lea (v, If_then_else (vb, vc, vd)) :: es)
+  | chop_bexp A_ clocks (Lea (v, Binop (vb, vc, vd))) (cs, es) =
+    (cs, Lea (v, Binop (vb, vc, vd)) :: es)
+  | chop_bexp A_ clocks (Lea (v, Unop (vb, vc))) (cs, es) =
+    (cs, Lea (v, Unop (vb, vc)) :: es)
+  | chop_bexp A_ clocks (Ltb (Const vb, va)) (cs, es) =
+    (cs, Ltb (Const vb, va) :: es)
+  | chop_bexp A_ clocks (Ltb (If_then_else (vb, vc, vd), va)) (cs, es) =
+    (cs, Ltb (If_then_else (vb, vc, vd), va) :: es)
+  | chop_bexp A_ clocks (Ltb (Binop (vb, vc, vd), va)) (cs, es) =
+    (cs, Ltb (Binop (vb, vc, vd), va) :: es)
+  | chop_bexp A_ clocks (Ltb (Unop (vb, vc), va)) (cs, es) =
+    (cs, Ltb (Unop (vb, vc), va) :: es)
+  | chop_bexp A_ clocks (Ltb (v, Var vb)) (cs, es) = (cs, Ltb (v, Var vb) :: es)
+  | chop_bexp A_ clocks (Ltb (v, If_then_else (vb, vc, vd))) (cs, es) =
+    (cs, Ltb (v, If_then_else (vb, vc, vd)) :: es)
+  | chop_bexp A_ clocks (Ltb (v, Binop (vb, vc, vd))) (cs, es) =
+    (cs, Ltb (v, Binop (vb, vc, vd)) :: es)
+  | chop_bexp A_ clocks (Ltb (v, Unop (vb, vc))) (cs, es) =
+    (cs, Ltb (v, Unop (vb, vc)) :: es)
+  | chop_bexp A_ clocks (Ge (Const vb, va)) (cs, es) =
+    (cs, Ge (Const vb, va) :: es)
+  | chop_bexp A_ clocks (Ge (If_then_else (vb, vc, vd), va)) (cs, es) =
+    (cs, Ge (If_then_else (vb, vc, vd), va) :: es)
+  | chop_bexp A_ clocks (Ge (Binop (vb, vc, vd), va)) (cs, es) =
+    (cs, Ge (Binop (vb, vc, vd), va) :: es)
+  | chop_bexp A_ clocks (Ge (Unop (vb, vc), va)) (cs, es) =
+    (cs, Ge (Unop (vb, vc), va) :: es)
+  | chop_bexp A_ clocks (Ge (v, Var vb)) (cs, es) = (cs, Ge (v, Var vb) :: es)
+  | chop_bexp A_ clocks (Ge (v, If_then_else (vb, vc, vd))) (cs, es) =
+    (cs, Ge (v, If_then_else (vb, vc, vd)) :: es)
+  | chop_bexp A_ clocks (Ge (v, Binop (vb, vc, vd))) (cs, es) =
+    (cs, Ge (v, Binop (vb, vc, vd)) :: es)
+  | chop_bexp A_ clocks (Ge (v, Unop (vb, vc))) (cs, es) =
+    (cs, Ge (v, Unop (vb, vc)) :: es)
+  | chop_bexp A_ clocks (Gta (Const vb, va)) (cs, es) =
+    (cs, Gta (Const vb, va) :: es)
+  | chop_bexp A_ clocks (Gta (If_then_else (vb, vc, vd), va)) (cs, es) =
+    (cs, Gta (If_then_else (vb, vc, vd), va) :: es)
+  | chop_bexp A_ clocks (Gta (Binop (vb, vc, vd), va)) (cs, es) =
+    (cs, Gta (Binop (vb, vc, vd), va) :: es)
+  | chop_bexp A_ clocks (Gta (Unop (vb, vc), va)) (cs, es) =
+    (cs, Gta (Unop (vb, vc), va) :: es)
+  | chop_bexp A_ clocks (Gta (v, Var vb)) (cs, es) = (cs, Gta (v, Var vb) :: es)
+  | chop_bexp A_ clocks (Gta (v, If_then_else (vb, vc, vd))) (cs, es) =
+    (cs, Gta (v, If_then_else (vb, vc, vd)) :: es)
+  | chop_bexp A_ clocks (Gta (v, Binop (vb, vc, vd))) (cs, es) =
+    (cs, Gta (v, Binop (vb, vc, vd)) :: es)
+  | chop_bexp A_ clocks (Gta (v, Unop (vb, vc))) (cs, es) =
+    (cs, Gta (v, Unop (vb, vc)) :: es);
 
-fun sexp_to_bexp (Ltc (a, b)) = Result (Ltb (Var a, Const b))
-  | sexp_to_bexp (Leb (a, b)) = Result (Lea (Var a, Const b))
-  | sexp_to_bexp (Eqb (a, b)) = Result (Eqa (Var a, Const b))
-  | sexp_to_bexp (Gea (a, b)) = Result (Ge (Var a, Const b))
-  | sexp_to_bexp (Gtb (a, b)) = Result (Gta (Var a, Const b))
-  | sexp_to_bexp (Andb (a, b)) =
-    binda (sexp_to_bexp a)
-      (fn aa => binda (sexp_to_bexp b) (fn ba => Result (Anda (aa, ba))))
-  | sexp_to_bexp (Orb (a, b)) =
-    binda (sexp_to_bexp a)
-      (fn aa => binda (sexp_to_bexp b) (fn ba => Result (Ora (aa, ba))))
-  | sexp_to_bexp (Implya (a, b)) =
-    binda (sexp_to_bexp a)
-      (fn aa => binda (sexp_to_bexp b) (fn ba => Result (Imply (aa, ba))))
-  | sexp_to_bexp Truea = Error ["Illegal construct in binary operation"]
-  | sexp_to_bexp (Notb v) = Error ["Illegal construct in binary operation"]
-  | sexp_to_bexp (Loc (v, va)) =
-    Error ["Illegal construct in binary operation"];
-
-fun chop_sexp A_ clocks (Andb (a, b)) (cs, es) =
-  chop_sexp A_ clocks b (chop_sexp A_ clocks a (cs, es))
-  | chop_sexp A_ clocks (Eqb (a, b)) (cs, es) =
-    (if membera A_ clocks a then (Eqb (a, b) :: cs, es)
-      else (cs, Eqb (a, b) :: es))
-  | chop_sexp A_ clocks (Leb (a, b)) (cs, es) =
-    (if membera A_ clocks a then (Leb (a, b) :: cs, es)
-      else (cs, Leb (a, b) :: es))
-  | chop_sexp A_ clocks (Ltc (a, b)) (cs, es) =
-    (if membera A_ clocks a then (Ltc (a, b) :: cs, es)
-      else (cs, Ltc (a, b) :: es))
-  | chop_sexp A_ clocks (Gea (a, b)) (cs, es) =
-    (if membera A_ clocks a then (Gea (a, b) :: cs, es)
-      else (cs, Gea (a, b) :: es))
-  | chop_sexp A_ clocks (Gtb (a, b)) (cs, es) =
-    (if membera A_ clocks a then (Gtb (a, b) :: cs, es)
-      else (cs, Gtb (a, b) :: es))
-  | chop_sexp A_ clocks Truea (cs, es) = (cs, Truea :: es)
-  | chop_sexp A_ clocks (Notb v) (cs, es) = (cs, Notb v :: es)
-  | chop_sexp A_ clocks (Orb (v, va)) (cs, es) = (cs, Orb (v, va) :: es)
-  | chop_sexp A_ clocks (Implya (v, va)) (cs, es) = (cs, Implya (v, va) :: es)
-  | chop_sexp A_ clocks (Loc (v, va)) (cs, es) = (cs, Loc (v, va) :: es);
-
-fun compile_invariant clocks vars inv =
+fun compile_invariant (A1_, A2_, A3_, A4_, A5_, A6_) B_ clocks vars inv =
   let
-    val (cs, es) = chop_sexp equal_literal clocks inv ([], []);
-    val g = map sexp_to_acconstraint cs;
+    val (cs, es) = chop_bexp A4_ clocks inv ([], []);
   in
-    (if null es then Result (g, True)
+    (if null es then Result (cs, True)
       else let
-             val e = fold (fn a => fn b => Andb (a, b)) (tla es) (hda es);
+             val b = fold (fn a => fn b => Anda (a, b)) (tla es) (hda es);
            in
-             binda (sexp_to_bexp e)
-               (fn b =>
-                 binda (assert
-                         (less_eq_set
-                           (cenum_literal, ceq_literal, ccompare_literal)
-                           (set_bexp
-                             (ceq_literal, ccompare_literal, set_impl_literal)
-                             b)
-                           (set (ceq_literal, ccompare_literal,
-                                  set_impl_literal)
-                             vars))
-                         (implode
-                           ([Chara (true, false, true, false, true, false, true,
-                                     false),
-                              Chara (false, true, true, true, false, true, true,
-                                      false),
-                              Chara (true, true, false, true, false, true, true,
-                                      false),
-                              Chara (false, true, true, true, false, true, true,
-                                      false),
-                              Chara (true, true, true, true, false, true, true,
-                                      false),
-                              Chara (true, true, true, false, true, true, true,
-                                      false),
-                              Chara (false, true, true, true, false, true, true,
-                                      false),
-                              Chara (false, false, false, false, false, true,
-                                      false, false),
-                              Chara (false, true, true, false, true, true, true,
-                                      false),
-                              Chara (true, false, false, false, false, true,
-                                      true, false),
-                              Chara (false, true, false, false, true, true,
-                                      true, false),
-                              Chara (true, false, false, true, false, true,
-                                      true, false),
-                              Chara (true, false, false, false, false, true,
-                                      true, false),
-                              Chara (false, true, false, false, false, true,
-                                      true, false),
-                              Chara (false, false, true, true, false, true,
-                                      true, false),
-                              Chara (true, false, true, false, false, true,
-                                      true, false),
-                              Chara (false, false, false, false, false, true,
-                                      false, false),
-                              Chara (true, false, false, true, false, true,
-                                      true, false),
-                              Chara (false, true, true, true, false, true, true,
-                                      false),
-                              Chara (false, false, false, false, false, true,
-                                      false, false),
-                              Chara (false, true, false, false, false, true,
-                                      true, false),
-                              Chara (true, false, true, false, false, true,
-                                      true, false),
-                              Chara (false, false, false, true, true, true,
-                                      true, false),
-                              Chara (false, false, false, false, true, true,
-                                      true, false),
-                              Chara (false, true, false, true, true, true,
-                                      false, false),
-                              Chara (false, false, false, false, false, true,
-                                      false, false)] @
-                             shows_prec_bexp show_literal show_int zero_nata b
-                               [])))
-                   (fn _ => Result (g, b)))
+             binda (assert
+                     (less_eq_set (A1_, A2_, A3_) (set_bexp (A2_, A3_, A5_) b)
+                       (set (A2_, A3_, A5_) vars))
+                     (implode
+                       ([Chara (true, false, true, false, true, false, true,
+                                 false),
+                          Chara (false, true, true, true, false, true, true,
+                                  false),
+                          Chara (true, true, false, true, false, true, true,
+                                  false),
+                          Chara (false, true, true, true, false, true, true,
+                                  false),
+                          Chara (true, true, true, true, false, true, true,
+                                  false),
+                          Chara (true, true, true, false, true, true, true,
+                                  false),
+                          Chara (false, true, true, true, false, true, true,
+                                  false),
+                          Chara (false, false, false, false, false, true, false,
+                                  false),
+                          Chara (false, true, true, false, true, true, true,
+                                  false),
+                          Chara (true, false, false, false, false, true, true,
+                                  false),
+                          Chara (false, true, false, false, true, true, true,
+                                  false),
+                          Chara (true, false, false, true, false, true, true,
+                                  false),
+                          Chara (true, false, false, false, false, true, true,
+                                  false),
+                          Chara (false, true, false, false, false, true, true,
+                                  false),
+                          Chara (false, false, true, true, false, true, true,
+                                  false),
+                          Chara (true, false, true, false, false, true, true,
+                                  false),
+                          Chara (false, false, false, false, false, true, false,
+                                  false),
+                          Chara (true, false, false, true, false, true, true,
+                                  false),
+                          Chara (false, true, true, true, false, true, true,
+                                  false),
+                          Chara (false, false, false, false, false, true, false,
+                                  false),
+                          Chara (false, true, false, false, false, true, true,
+                                  false),
+                          Chara (true, false, true, false, false, true, true,
+                                  false),
+                          Chara (false, false, false, true, true, true, true,
+                                  false),
+                          Chara (false, false, false, false, true, true, true,
+                                  false),
+                          Chara (false, true, false, true, true, true, false,
+                                  false),
+                          Chara (false, false, false, false, false, true, false,
+                                  false)] @
+                         shows_prec_bexp A6_ B_ zero_nata b [])))
+               (fn _ => Result (cs, b))
            end)
   end;
 
-fun scan_acconstraint x =
-  bindb (alt (bindb (gen_token lx_ws scan_var)
-               (fn xa =>
-                 bindb (gen_token lx_ws
-                         (exactly (equal_char, show_char)
-                           [Chara (false, false, true, true, true, true, false,
-                                    false)]))
-                   (fn _ =>
-                     bindb (gen_token lx_ws lx_int)
-                       (fn xaa => return (Ltc (implode xa, xaa))))))
-          (bindb
-            (alt (bindb (gen_token lx_ws scan_var)
-                   (fn xa =>
-                     bindb (gen_token lx_ws
-                             (exactly (equal_char, show_char)
-                               [Chara (false, false, true, true, true, true,
-false, false),
-                                 Chara (true, false, true, true, true, true,
- false, false)]))
-                       (fn _ =>
-                         bindb (gen_token lx_ws lx_int)
-                           (fn xaa => return (Leb (implode xa, xaa))))))
-              (bindb
-                (alt (bindb (gen_token lx_ws scan_var)
-                       (fn xa =>
-                         bindb (gen_token lx_ws
-                                 (exactly (equal_char, show_char)
-                                   [Chara (true, false, true, true, true, true,
-    false, false),
-                                     Chara (true, false, true, true, true, true,
-     false, false)]))
-                           (fn _ =>
-                             bindb (gen_token lx_ws lx_int)
-                               (fn xaa => return (Eqb (implode xa, xaa))))))
-                  (bindb
-                    (alt (bindb (gen_token lx_ws scan_var)
-                           (fn xa =>
-                             bindb (gen_token lx_ws
-                                     (exactly (equal_char, show_char)
-                                       [Chara
-  (true, false, true, true, true, true, false, false)]))
-                               (fn _ =>
-                                 bindb (gen_token lx_ws lx_int)
-                                   (fn xaa => return (Eqb (implode xa, xaa))))))
-                      (bindb
-                        (alt (bindb (gen_token lx_ws scan_var)
-                               (fn xa =>
-                                 bindb (gen_token lx_ws
- (exactly (equal_char, show_char)
-   [Chara (false, true, true, true, true, true, false, false),
-     Chara (true, false, true, true, true, true, false, false)]))
-                                   (fn _ =>
-                                     bindb (gen_token lx_ws lx_int)
-                                       (fn xaa =>
- return (Gea (implode xa, xaa))))))
-                          (bindb (gen_token lx_ws scan_var)
-                            (fn xa =>
-                              bindb (gen_token lx_ws
-                                      (exactly (equal_char, show_char)
-[Chara (false, true, true, true, true, true, false, false)]))
-                                (fn _ =>
-                                  bindb (gen_token lx_ws lx_int)
-                                    (fn xaa =>
-                                      return (Gtb (implode xa, xaa)))))))
-                        (fn xa => return (sum_join xa))))
-                    (fn xa => return (sum_join xa))))
-                (fn xa => return (sum_join xa))))
-            (fn xa => return (sum_join xa))))
-    (fn xa => return (sum_join xa)) x;
-
-fun scan_loc x =
-  bindb (gen_token lx_ws scan_var)
-    (fn xa =>
-      bindb (exactly (equal_char, show_char)
-              [Chara (false, true, true, true, false, true, false, false)])
-        (fn _ =>
-          bindb scan_var (fn xaa => return (Loc (implode xa, implode xaa)))))
-    x;
-
-fun scan_bexp_elem x =
-  bindb (alt scan_acconstraint scan_loc) (fn xa => return (sum_join xa)) x;
-
-fun scan_7a elem imply or anda nota l =
-  bindb (alt (bindb
-               (scan_infix_pair (scan_6a elem imply or anda nota)
-                 (scan_7a elem imply or anda nota)
-                 [Chara (true, false, true, true, false, true, false, false),
-                   Chara (false, true, true, true, true, true, false, false)])
-               (fn x => return (uncurry imply x)))
-          (bindb
-            (alt (bindb
-                   (scan_infix_pair (scan_6a elem imply or anda nota)
-                     (scan_7a elem imply or anda nota)
-                     [Chara (false, false, true, true, true, true, true, false),
-                       Chara (false, false, true, true, true, true, true,
-                               false)])
-                   (fn x => return (uncurry or x)))
-              (scan_6a elem imply or anda nota))
-            (fn x => return (sum_join x))))
-    (fn x => return (sum_join x)) l
-and scan_0a elem imply or anda nota l =
-  bindb (alt (bindb
-               (gen_token lx_ws
-                 (bindb
-                   (alt (exactly (equal_char, show_char)
-                          [Chara (false, true, true, true, true, true, true,
-                                   false)])
-                     (exactly (equal_char, show_char)
-                       [Chara (true, false, false, false, false, true, false,
-                                false)]))
-                   (fn x => return (sum_join x))))
-               (fn _ =>
-                 bindb (scan_parens
-                         [Chara (false, false, false, true, false, true, false,
-                                  false)]
-                         [Chara (true, false, false, true, false, true, false,
-                                  false)]
-                         (scan_7a elem imply or anda nota))
-                   (fn x => return (nota x))))
-          (bindb
-            (alt elem
-              (scan_parens
-                [Chara (false, false, false, true, false, true, false, false)]
-                [Chara (true, false, false, true, false, true, false, false)]
-                (scan_7a elem imply or anda nota)))
-            (fn x => return (sum_join x))))
-    (fn x => return (sum_join x)) l
-and scan_6a elem imply or anda nota l =
-  bindb (alt (bindb
-               (scan_infix_pair (scan_0a elem imply or anda nota)
-                 (scan_6a elem imply or anda nota)
-                 [Chara (false, true, true, false, false, true, false, false),
-                   Chara (false, true, true, false, false, true, false, false)])
-               (fn x => return (uncurry anda x)))
-          (scan_0a elem imply or anda nota))
-    (fn x => return (sum_join x)) l;
-
 fun compile_invarianta clocks vars inv =
   (if ((inv : string) = "") then Result ([], True)
-    else binda (err_msg ("Failed to parse guard in " ^ inv)
-                 (parse
-                   (scan_7a scan_bexp_elem (fn a => fn b => Implya (a, b))
-                     (fn a => fn b => Orb (a, b)) (fn a => fn b => Andb (a, b))
-                     Notb)
-                   inv))
-           (compile_invariant clocks vars));
+    else binda (err_msg ("Failed to parse guard in " ^ inv) (parse scan_7 inv))
+           (compile_invariant
+             (cenum_literal, ceq_literal, ccompare_literal, equal_literal,
+               set_impl_literal, show_literal)
+             show_int clocks vars));
 
 fun of_string json =
   (case json of Object _ => Error ["of_array: expected sequence"]
@@ -17958,8 +19276,122 @@ Result
                         end))
               end)));
 
+fun scan_acconstraint x =
+  let
+    val scan =
+      (fn s => fn c =>
+        bindb (gen_token lx_ws scan_var)
+          (fn xa =>
+            bindb (gen_token lx_ws (exactly (equal_char, show_char) s))
+              (fn _ =>
+                bindb (gen_token lx_ws lx_int)
+                  (fn xaa => return (c (implode xa) xaa)))));
+  in
+    bindb (alt (scan [Chara (false, false, true, true, true, true, false,
+                              false)]
+                 (fn a => fn b => Ltc (a, b)))
+            (bindb
+              (alt (scan [Chara (false, false, true, true, true, true, false,
+                                  false),
+                           Chara (true, false, true, true, true, true, false,
+                                   false)]
+                     (fn a => fn b => Leb (a, b)))
+                (bindb
+                  (alt (scan [Chara (true, false, true, true, true, true, false,
+                                      false),
+                               Chara (true, false, true, true, true, true,
+                                       false, false)]
+                         (fn a => fn b => Eqb (a, b)))
+                    (bindb
+                      (alt (scan [Chara (true, false, true, true, true, true,
+  false, false)]
+                             (fn a => fn b => Eqb (a, b)))
+                        (bindb
+                          (alt (scan [Chara
+(false, true, true, true, true, true, false, false),
+                                       Chara
+ (true, false, true, true, true, true, false, false)]
+                                 (fn a => fn b => Gea (a, b)))
+                            (scan [Chara (false, true, true, true, true, true,
+   false, false)]
+                              (fn a => fn b => Gtb (a, b))))
+                          (fn xa => return (sum_join xa))))
+                      (fn xa => return (sum_join xa))))
+                  (fn xa => return (sum_join xa))))
+              (fn xa => return (sum_join xa))))
+      (fn xa => return (sum_join xa))
+  end
+    x;
+
+fun scan_loc x =
+  bindb (gen_token lx_ws scan_var)
+    (fn xa =>
+      bindb (exactly (equal_char, show_char)
+              [Chara (false, true, true, true, false, true, false, false)])
+        (fn _ =>
+          bindb scan_var (fn xaa => return (Loc (implode xa, implode xaa)))))
+    x;
+
+fun scan_bexp_elem x =
+  bindb (alt scan_acconstraint scan_loc) (fn xa => return (sum_join xa)) x;
+
 fun scan_prefix p head =
   bindb (gen_token lx_ws (exactly (equal_char, show_char) head)) (fn _ => p);
+
+fun scan_7a elem imply or anda nota l =
+  bindb (alt (bindb
+               (scan_infix_pair (scan_6a elem imply or anda nota)
+                 (scan_7a elem imply or anda nota)
+                 [Chara (true, false, true, true, false, true, false, false),
+                   Chara (false, true, true, true, true, true, false, false)])
+               (fn x => return (uncurry imply x)))
+          (bindb
+            (alt (bindb
+                   (scan_infix_pair (scan_6a elem imply or anda nota)
+                     (scan_7a elem imply or anda nota)
+                     [Chara (false, false, true, true, true, true, true, false),
+                       Chara (false, false, true, true, true, true, true,
+                               false)])
+                   (fn x => return (uncurry or x)))
+              (scan_6a elem imply or anda nota))
+            (fn x => return (sum_join x))))
+    (fn x => return (sum_join x)) l
+and scan_0a elem imply or anda nota l =
+  bindb (alt (bindb
+               (gen_token lx_ws
+                 (bindb
+                   (alt (exactly (equal_char, show_char)
+                          [Chara (false, true, true, true, true, true, true,
+                                   false)])
+                     (exactly (equal_char, show_char)
+                       [Chara (true, false, false, false, false, true, false,
+                                false)]))
+                   (fn x => return (sum_join x))))
+               (fn _ =>
+                 bindb (scan_parens
+                         [Chara (false, false, false, true, false, true, false,
+                                  false)]
+                         [Chara (true, false, false, true, false, true, false,
+                                  false)]
+                         (scan_7a elem imply or anda nota))
+                   (fn x => return (nota x))))
+          (bindb
+            (alt elem
+              (scan_parens
+                [Chara (false, false, false, true, false, true, false, false)]
+                [Chara (true, false, false, true, false, true, false, false)]
+                (scan_7a elem imply or anda nota)))
+            (fn x => return (sum_join x))))
+    (fn x => return (sum_join x)) l
+and scan_6a elem imply or anda nota l =
+  bindb (alt (bindb
+               (scan_infix_pair (scan_0a elem imply or anda nota)
+                 (scan_6a elem imply or anda nota)
+                 [Chara (false, true, true, false, false, true, false, false),
+                   Chara (false, true, true, false, false, true, false, false)])
+               (fn x => return (uncurry anda x)))
+          (scan_0a elem imply or anda nota))
+    (fn x => return (sum_join x)) l;
 
 fun scan_formula x =
   bindb (alt (bindb
@@ -18558,8 +19990,10 @@ x_a (zero_nata, zero_nata) (Lt zero_inta)
                      (image (ceq_nat, ccompare_nat)
                        (ceq_int, ccompare_int, set_impl_int)
                        (fn i => sub (sub (sub k_i i) (nth l i)) c)
-                       (set (ceq_nat, ccompare_nat, set_impl_nat)
-                         (upt zero_nata n_ps))))
+                       (atLeastLessThan
+                         (ceq_nat, ccompare_nat, equal_nat, interval_nat,
+                           set_impl_nat)
+                         zero_nata n_ps)))
               (upt zero_nata (plus_nata m one_nata)))
         end
         m)
@@ -19006,8 +20440,10 @@ else (fn f_ => fn () => f_
                                 (image (ceq_nat, ccompare_nat)
                                   (ceq_int, ccompare_int, set_impl_int)
                                   (fn i => sub (sub (sub k_i i) (nth l i)) c)
-                                  (set (ceq_nat, ccompare_nat, set_impl_nat)
-                                    (upt zero_nata n_ps))))
+                                  (atLeastLessThan
+                                    (ceq_nat, ccompare_nat, equal_nat,
+                                      interval_nat, set_impl_nat)
+                                    zero_nata n_ps)))
                          (upt zero_nata (plus_nata m one_nata)))
                    end
                m)
@@ -19388,8 +20824,10 @@ end));
                                   (image (ceq_nat, ccompare_nat)
                                     (ceq_int, ccompare_int, set_impl_int)
                                     (fn i => sub (sub (sub k_i i) (nth l i)) c)
-                                    (set (ceq_nat, ccompare_nat, set_impl_nat)
-                                      (upt zero_nata n_ps))))
+                                    (atLeastLessThan
+                                      (ceq_nat, ccompare_nat, equal_nat,
+interval_nat, set_impl_nat)
+                                      zero_nata n_ps)))
                            (upt zero_nata (plus_nata m one_nata)))
                      end
                      m)
@@ -19738,8 +21176,10 @@ end));
                                   (image (ceq_nat, ccompare_nat)
                                     (ceq_int, ccompare_int, set_impl_int)
                                     (fn i => sub (sub (sub k_i i) (nth l i)) c)
-                                    (set (ceq_nat, ccompare_nat, set_impl_nat)
-                                      (upt zero_nata n_ps))))
+                                    (atLeastLessThan
+                                      (ceq_nat, ccompare_nat, equal_nat,
+interval_nat, set_impl_nat)
+                                      zero_nata n_ps)))
                            (upt zero_nata (plus_nata m one_nata)))
                      end
                      m)
@@ -20130,8 +21570,10 @@ fun alw_ev_checker broadcast bounds automata m num_states num_actions k l_0 s_0
                                   (image (ceq_nat, ccompare_nat)
                                     (ceq_int, ccompare_int, set_impl_int)
                                     (fn i => sub (sub (sub k_i i) (nth l i)) c)
-                                    (set (ceq_nat, ccompare_nat, set_impl_nat)
-                                      (upt zero_nata n_ps))))
+                                    (atLeastLessThan
+                                      (ceq_nat, ccompare_nat, equal_nat,
+interval_nat, set_impl_nat)
+                                      zero_nata n_ps)))
                            (upt zero_nata (plus_nata m one_nata)))
                      end
                      m)

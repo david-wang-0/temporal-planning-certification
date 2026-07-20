@@ -92,12 +92,21 @@ truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NU
      (`interpret leaf_i; unfolding leaf_i.ndefs.net_broadcast_def` — the abstract/exec broadcasts are both `[]` but
      the constant is a parameterized locale-def). Also fixed a pre-existing MISSING theory-`end` in this file
      (never consolidated; batch-build would reject; nothing imports it so latent).
-   - **NEXT (the runnable tail):** upgrade `check_and_make_numeric_network` soundness to the bounds-discharged
-     `numeric_valid_ground_plan_cert` capstone (`…_Numeric_NTA_Reduction_Bounds`) by ALSO eval-checking
-     `nred.is_gbound_inv'` on the (ML-computed) `fluent_lo/hi` — needs an executable `is_gbound_inv'` +
-     the `infer_fluent_bounds` cross-session ML bridge; then `export_code` (DEFER the `proper_interval`/`Abs_literal`
-     String.literal code-gen instances per David if they rabbit-hole). Checker file for the cert-upgrade must sit
-     AFTER `…_Numeric_NTA_Reduction_Bounds` in ROOT.
+   - **(d) NO-PER-PLAN-BOUNDS soundness DONE & green (2026-07-12), UNCOMMITTED.** NEW file
+     `Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl.thy` (in ROOT after `…_Bounds`; imports WP-C Impl + WP-D Bounds;
+     fully_processed + consolidated, 0 errors/sorries; opened in the running jEdit WITHOUT a restart — imports
+     already loaded). `context numeric_ground_ast_problem_cert`: `num_model_checking_problem_refine_cert` (mirror
+     of the WP-C `num_model_checking_problem_refine` but firing the WP-D cert capstone
+     `num_net_form_not_sat_imp_no_valid_ground_plan`, which shadows the inherited WP-A one) — exec net unreachable
+     ⟹ ¬∃π. `numeric_valid_ground_plan_cert`. Global `check_and_make_numeric_network_and_plan_cert`: given the
+     check result + `numeric_ground_ast_problem_cert P fluent_lo fluent_hi` (leaf + `is_gbound_inv'` — the static
+     boundedness cert, an ASSUMPTION here), a Munta-unreachable exec net ⟹ NO valid numeric plan (no residual
+     per-plan `num_seq_in_bounds`). Proof reuses the per-plan assembly's chk/mk/eqs + broadcast bridge
+     (`interpret C; unfolding … C.ndefs.net_broadcast_def`).
+   - **NEXT (fully runnable):** make `is_gbound_inv'` EXECUTABLE + the `infer_fluent_bounds` cross-session ML
+     bridge, so `check_and_make_numeric_network` (or a `_cert` variant) *computes* `fluent_lo/hi` and *discharges*
+     the `numeric_ground_ast_problem_cert` hypothesis by eval instead of assuming it; then `export_code` (DEFER
+     the `proper_interval`/`Abs_literal` String.literal code-gen instances per David if they rabbit-hole).
 
 ### OPTIONAL / completeness (not a WP blocker)
 - **#9 — replace the over-approximating numeric mutex with the CORRECT (FPS `acts_non_intrf`) condition.**

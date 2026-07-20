@@ -562,3 +562,9 @@ CLAUDE.md
 CLAUDE.local.md
 GEMINI.md
 GEMINI.local.md
+
+# Gigante et al. (AAAI 2022) benchmark corpus, staged locally for testing only.
+# The artifact bundle is released "with the sole purpose of inspection by AAAI
+# reviewers. Any other use is forbidden." -> do NOT redistribute/commit. If a
+# permissively-licensed website/IPC copy is confirmed, revisit this line.
+examples/gigante/

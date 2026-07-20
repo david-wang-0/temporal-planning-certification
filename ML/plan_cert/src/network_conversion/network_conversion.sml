@@ -107,7 +107,7 @@ struct
         in (case constr of 
             Converter.LTa x => (Constraint.Lt (convert_pair x)) |
             Converter.LEa x => (Constraint.Le (convert_pair x)) |
-            Converter.EQ x => (Constraint.Eq (convert_pair x)) |
+            Converter.EQa x => (Constraint.Eq (convert_pair x)) |
             Converter.GEa x => (Constraint.Ge (convert_pair x)) |
             Converter.GTa x => (Constraint.Gt (convert_pair x))
         ) 
@@ -139,7 +139,7 @@ struct
         in (case constr of 
             Converter.LTa x => (Constraint.Lt (convert_pair x)) |
             Converter.LEa x => (Constraint.Le (convert_pair x)) |
-            Converter.EQ x => (Constraint.Eq (convert_pair x)) |
+            Converter.EQa x => (Constraint.Eq (convert_pair x)) |
             Converter.GEa x => (Constraint.Ge (convert_pair x)) |
             Converter.GTa x => (Constraint.Gt (convert_pair x))
         ) 
