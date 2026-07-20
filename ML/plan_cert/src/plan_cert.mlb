@@ -7,6 +7,15 @@ $(SML_LIB)/basis/mlton.mlb
 parsing/pddl_validate_plan.mlb
 
 network_conversion/network_conversion.mlb
+certificate_conversion/certificate_conversion.mlb
+local
+    ../../lib/mlunta/src/serialization/mlunta_certificate/prelude.sml
+    ../../lib/mlunta/src/serialization/mlunta_certificate/serializable.sml
+    ../../lib/mlunta/src/serialization/mlunta_certificate/certificate.sml
+in
+    signature BOUND
+    functor Deserializer64Bit
+end
 
 mlunta_adapter.sml
 tchecker_certify.sml
@@ -17,5 +26,6 @@ tchecker_certify.sml
 numeric_glue/numeric_code.mlb
 numeric_glue/numeric_bound_glue.sml
 
+inprocess_certify.sml
 plan_cert.sml
 Mlton_Main.sml

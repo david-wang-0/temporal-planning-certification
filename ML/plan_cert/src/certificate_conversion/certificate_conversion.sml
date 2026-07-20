@@ -1,8 +1,9 @@
 signature CERTIFICATE_CONVERSION =
 sig
-    include CERTIFICATE_CONVERSION_TYPES 
+    include CERTIFICATE_CONVERSION_TYPES
     val convert_certificate: ml_cert -> isa_cert
-    
+    val convert_renaming: ml_renaming -> isa_renaming
+
     structure Dbm : DBM
 end
 

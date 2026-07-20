@@ -200,6 +200,21 @@ fun certify_tchecker domain problem model renaming cert =
         println ("Verdict: " ^ TCheckerCertify.verdict_to_string v)
     end
 
+(* Part B': the SAME external tck-reach oracle, but the certificate is CHECKED IN-PROCESS by
+   the Isabelle-verified Converter.check_and_cert_pddl_problem_no_return (its convert_check),
+   not by an external muntac.  tck-reach only PRODUCES the certificate (oracle); the verified
+   in-process checker validates it -> "The planning problem is unsolvable." on Sat. *)
+fun certify_inprocess domain problem model renaming cert extra num_threads mode show_cert =
+    let
+        val () = log_conversion_config (domain, problem, model)
+        val pkg_root      = getEnvDefault "TCHECKER_PKG_ROOT" "."
+        val tck_reach_bin = getEnvDefault "TCK_REACH_BIN" "./tck-reach"
+        val extra_lu = (case extra of LU => true | Local => false)
+        val _ = InProcessCertify.check_and_cert
+                  {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin, extra_lu = extra_lu}
+                  domain problem model renaming cert mode num_threads show_cert
+    in () end
+
 (* Numeric bound-inference self-test: exercises the two extra Isabelle code exports
    (NumericBoundInference compute side + NumericProjection reduction side) linked into
    this binary alongside Converter, on hand-built draft data -- the guarded counter
@@ -234,6 +249,10 @@ fun check args =
         (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, _, _,
          SOME "tchecker", _, _, _) =>
             certify_tchecker domain problem model renaming cert |
+        (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, SOME extra, _,
+         SOME "inprocess", num_threads, mode, show_cert) =>
+            certify_inprocess domain problem model renaming cert extra
+              (the_default "1" num_threads) mode show_cert |
         (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, SOME extra, compression,
          certification, num_threads, mode, show_cert) =>
             check_and_cert_problem
