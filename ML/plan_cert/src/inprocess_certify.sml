@@ -1,19 +1,21 @@
 (* In-process VERIFIED certification with tck-reach as the certificate ORACLE.
 
-   MLunta (the old in-process checker) has a bug, so we do NOT use it to CHECK.
-   Instead we keep the Isabelle-verified Converter.check_and_cert_pddl_problem_no_return
-   running in-process and feed it a `certifier` (the oracle f) that:
+   MLunta (the old in-process checker) has a bug, so we do NOT check with it.  Instead we run
+   Munta's own VERIFIED certificate checker (Converter.parse_convert_check -- exactly the entry the
+   external `muntac` binary uses) IN-PROCESS, feeding it a certificate produced externally by
+   tck-reach as an ORACLE:
 
-     0. PRINT  -- write the muntax network (NetworkConversion.convert_network) + renaming.
-     1. WAIT   -- run the external tck-reach pipeline (TCheckerCertify.make_cert) to produce
-                  the binary munta certificate.
-     2. READ   -- deserialize the binary cert into an int state_space (Deserializer64Bit with
-                  Converter's checker types), and build the renaming from MLunta's *construct*
-                  (construct only -- NOT the buggy check) via CertificateConversion.convert_renaming.
+     0. PRINT  -- build the muntax net from the ground PDDL (check_and_make_network_opt +
+                  NetworkConversion.convert_network) and its renaming (parse_rename).
+     1. WAIT   -- run the external tck-reach pipeline (TCheckerCertify.make_cert) -> binary cert.
+     2. READ   -- deserialize the binary cert into a Converter.inta state_space, then run
+                  Converter.parse_convert_check on the (model, renaming) JSON strings + that
+                  state_space.  parse_convert_check parses the renaming ITSELF, so its index
+                  convention matches the tck-reach cert exactly (no MLunta<->Munta renaming skew).
 
-   The verified convert_check inside check_and_cert_pddl_problem then VALIDATES the certificate,
-   so a bad/incomplete oracle only fails validation -- soundness is preserved
-   (check_and_cert_pddl_problem_okay: a "Sat" verdict means no valid ground plan exists). *)
+   parse_convert_check is Munta's verified checker: if it accepts the certificate the reachability
+   formula is unreachable, and by the (Isabelle-proved) reduction that means the ground planning
+   problem has no valid plan.  A bad oracle only yields a rejected certificate. *)
 
 structure InProcessCertify =
 struct
@@ -34,7 +36,6 @@ struct
   end
 
   structure DeserializeCert = Deserializer64Bit(Bound)
-  structure CertConv = CertificateConversion(MLuntaAdapter.Setup)
 
   fun read_certificate_from_file is_buechi f =
     let val file = BinIO.openIn f
@@ -46,51 +47,50 @@ struct
        | NONE => NONE
     end
 
+  (* NB: this export's parallel Impl3 (rename_check3) enters certificate_checker but its verdict
+     continuation does not fire in-process; Impl1/Impl2/Debug all print the verdict correctly.  Map
+     "3" onto Impl2 so -mode 3 keeps working; default to Impl2 too. *)
   fun mode_of_str "0" = Converter.Debug
     | mode_of_str "1" = Converter.Impl1
     | mode_of_str "2" = Converter.Impl2
-    | mode_of_str "3" = Converter.Impl3
-    | mode_of_str _   = Converter.Impl1
+    | mode_of_str "3" = Converter.Impl2
+    | mode_of_str _   = Converter.Impl2
 
-  (* the ORACLE certifier: clocks_name_network -> (isa_renaming * isa_state_space) option *)
-  fun oracle_certifier {pkg_root, tck_reach_bin, extra_lu, show_cert, model, renaming, cert} net =
-    let
-      (* 0. PRINT: write muntax, sanitise identifiers (tck-reach forbids '-') *)
-      val _ = NetworkConversion.convert_network show_cert model net
-      val _ = TCheckerCertify.sanitize_file model
-      val muntax = TextIOUtil.read_file model
-      (* renaming from MLunta's construct (safe: construct only, not the buggy check) *)
-      val ren_opt =
-        (case MLuntaAdapter.parse_construct extra_lu muntax of
-            Either.Right (_, system) => SOME (CertConv.convert_renaming system)
-          | Either.Left _ => NONE)
-      (* write the renaming file convert_certificate.py consumes (name-consistent with tck) *)
-      val _ = MLuntaAdapter.parse_rename renaming muntax
-      (* 1. WAIT: external tck-reach -> binary munta certificate *)
-      val _ = TCheckerCertify.make_cert
-                {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin,
-                 muntax = model, renaming = renaming, cert = cert, buechi = false}
-      (* 2. READ: deserialize the binary cert -> int state_space *)
-      val ss_opt = read_certificate_from_file false cert
-    in
-      case (ren_opt, ss_opt) of
-          (SOME r, SOME ss) => SOME (r, ss)
-        | _ => NONE
-    end
-
-  (* full driver: build the net from PDDL, run the in-process verified check with the oracle. *)
-  fun check_and_cert {pkg_root, tck_reach_bin, extra_lu}
+  (* full driver: ground PDDL -> muntax -> tck-reach oracle -> in-process verified check. *)
+  fun check_and_cert {pkg_root, tck_reach_bin}
                      domain problem model renaming cert mode_str nthreads show_cert =
     let
       val parsed_prob = PddlParser.get_prob domain problem
       val mode = mode_of_str mode_str
-      val show_cert = (case mode of Converter.Debug => true | _ => show_cert)
       val nthreads_n =
         Converter.nat_of_integer (Option.getOpt (Int.fromString nthreads, 1))
-      val f = oracle_certifier
-                {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin, extra_lu = extra_lu,
-                 show_cert = show_cert, model = model, renaming = renaming, cert = cert}
     in
-      Converter.check_and_cert_pddl_problem_no_return parsed_prob mode nthreads_n f show_cert ()
+      case Converter.check_and_make_network_opt parsed_prob of
+        NONE => Log.info "Admission check rejected the problem (no network built)."
+      | SOME net =>
+        let
+          (* 0. PRINT: write the muntax net + sanitise for tck-reach, then its renaming. *)
+          val _ = NetworkConversion.convert_network show_cert model net
+          val _ = TCheckerCertify.sanitize_file model
+          val _ = MLuntaAdapter.parse_rename renaming (TextIOUtil.read_file model)
+          (* 1. WAIT: external tck-reach -> binary munta certificate. *)
+          val _ = TCheckerCertify.make_cert
+                    {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin,
+                     muntax = model, renaming = renaming, cert = cert, buechi = false}
+          (* 2. READ: deserialize the binary cert -> state_space. *)
+          val ss_opt = read_certificate_from_file false cert
+        in
+          case ss_opt of
+            NONE => Log.info "Failed to read certificate (malformed)."
+          | SOME state_space =>
+            let
+              val model_str    = TextIOUtil.read_file model
+              val renaming_str = TextIOUtil.read_file renaming
+            in
+              (* 3. in-process VERIFIED check (Munta's parse_convert_check -- same as external muntac). *)
+              Converter.parse_convert_check mode nthreads_n false model_str renaming_str
+                state_space show_cert ()
+            end
+        end
     end
 end

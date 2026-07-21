@@ -209,9 +209,9 @@ fun certify_inprocess domain problem model renaming cert extra num_threads mode 
         val () = log_conversion_config (domain, problem, model)
         val pkg_root      = getEnvDefault "TCHECKER_PKG_ROOT" "."
         val tck_reach_bin = getEnvDefault "TCK_REACH_BIN" "./tck-reach"
-        val extra_lu = (case extra of LU => true | Local => false)
+        val _ = extra
         val _ = InProcessCertify.check_and_cert
-                  {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin, extra_lu = extra_lu}
+                  {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin}
                   domain problem model renaming cert mode num_threads show_cert
     in () end
 

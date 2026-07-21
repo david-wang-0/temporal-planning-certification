@@ -237,6 +237,7 @@ structure Converter : sig
     SimpleActionSchemaa of ast_action_head * ast_simple_action_body |
     DurativeActionSchema of ast_action_head * ast_temporal_durative_action_body
   datatype ('a, 'b) sum = Inl of 'a | Inr of 'b
+  type time
   datatype 'a result = Result of 'a | Error of string list
   datatype predicate_decl = PredDecl of predicate * typea list
   datatype function_decl = FuncDecl of func * typea list
@@ -322,6 +323,10 @@ structure Converter : sig
                      ((nat -> string) * (nat -> nat -> nat)))))) *
               inta state_space) option) ->
             bool -> (unit -> unit)
+  val parse_convert_check :
+    mode ->
+      nat ->
+        bool -> string -> string -> inta state_space -> bool -> (unit -> unit)
 end = struct
 
 datatype inta = Int_of_integer of int;
@@ -21907,6 +21912,8 @@ fun check_and_cert_pddl_problem problem mode num_split certifier show_cert =
                     (fn () => (Error es))
                   end);
 
+fun show_str A_ = implode o (fn x => shows_prec A_ zero_nata x []);
+
 fun do_preproc_mc A_ =
   (fn dc => fn ids_to_names => fn (broadcast, (automata, bounds)) => fn l_0 =>
     fn s_0 => fn formula =>
@@ -21929,6 +21936,21 @@ fun do_preproc_mc A_ =
             | Error es =>
               err ("Error during preprocessing:\n" ^
                     concat_str (intersperse "\n" es))))));
+
+fun map_of_debug (A1_, A2_) prefix m =
+  let
+    val ma = map_of A1_ m;
+  in
+    (fn x =>
+      (case ma x
+        of NONE =>
+          let
+            val _ = writeln ("Key error(" ^ prefix ^ "): " ^ show_lit A2_ x);
+          in
+            NONE
+          end
+        | SOME a => SOME a))
+  end;
 
 fun shows_prec_JSON p x rest = shows_json zero_nata x @ rest;
 
@@ -21954,11 +21976,356 @@ fun parse_convert_run dc s =
            (broadcast, (automata, bounds)) l_0 s_0 formula
     | Error es => (fn () => (Error es)));
 
+fun list_of_json_object obj =
+  (case obj of Object a => Result a | Arraya _ => Error ["Not an object"]
+    | Stringa _ => Error ["Not an object"] | Int _ => Error ["Not an object"]
+    | Nata _ => Error ["Not an object"] | Rat _ => Error ["Not an object"]
+    | Boolean _ => Error ["Not an object"] | Null => Error ["Not an object"]);
+
+fun nat_renaming_of_json prefix max_id json =
+  binda (list_of_json_object json)
+    (fn vars =>
+      binda (combine_map
+              (fn (a, b) =>
+                binda (parse lx_nat (implode a))
+                  (fn aa => binda (of_nat b) (fn ba => Result (aa, ba))))
+              vars)
+        (fn varsa =>
+          let
+            val ids =
+              image (ceq_prod ceq_nat ceq_nat,
+                      ccompare_prod ccompare_nat ccompare_nat)
+                (ceq_nat, ccompare_nat, set_impl_nat) fst
+                (set (ceq_prod ceq_nat ceq_nat,
+                       ccompare_prod ccompare_nat ccompare_nat,
+                       set_impl_prod set_impl_nat set_impl_nat)
+                  varsa);
+            val missing =
+              filter (fn i => not (member (ceq_nat, ccompare_nat) i ids))
+                (upt zero_nata max_id);
+            val m = the o map_of_debug (equal_nat, show_nat) prefix varsa;
+            val ma =
+              extend_domain equal_nat (one_nat, plus_nat) m missing
+                (size_list varsa);
+          in
+            Result
+              (ma, the o map_of_debug (equal_nat, show_nat) prefix
+                           (map swap varsa))
+          end));
+
+fun renaming_of_jsona opt prefix json =
+  binda (list_of_json_object json)
+    (fn vars =>
+      binda (combine_map
+              (fn (a, b) => binda (of_nat b) (fn ba => Result (implode a, ba)))
+              vars)
+        (fn varsa =>
+          let
+            val varsb =
+              varsa @
+                (case opt of NONE => []
+                  | SOME x =>
+                    [(x, plus_nata (fold (max ord_nat o snd) varsa zero_nata)
+                           one_nata)]);
+          in
+            Result
+              (the o map_of_debug (equal_literal, show_literal) prefix varsb,
+                the o map_of_debug (equal_nat, show_nat) prefix
+                        (map swap varsb))
+          end));
+
+fun renaming_of_json x = renaming_of_jsona NONE x;
+
+fun convert_renaming ids_to_names process_names_to_index json =
+  binda (of_object json)
+    (fn jsona =>
+      binda (geta (show_list show_char) jsona
+              [Chara (false, true, true, false, true, true, true, false),
+                Chara (true, false, false, false, false, true, true, false),
+                Chara (false, true, false, false, true, true, true, false),
+                Chara (true, true, false, false, true, true, true, false)])
+        (fn vars =>
+          binda (renaming_of_json "var renaming" vars)
+            (fn (var_renaming, var_inv) =>
+              binda (geta (show_list show_char) jsona
+                      [Chara (true, true, false, false, false, true, true,
+                               false),
+                        Chara (false, false, true, true, false, true, true,
+                                false),
+                        Chara (true, true, true, true, false, true, true,
+                                false),
+                        Chara (true, true, false, false, false, true, true,
+                                false),
+                        Chara (true, true, false, true, false, true, true,
+                                false),
+                        Chara (true, true, false, false, true, true, true,
+                                false)])
+                (fn clocks =>
+                  binda (renaming_of_jsona (SOME "_urge") "clock renaming"
+                          clocks)
+                    (fn (clock_renaming, clock_inv) =>
+                      binda (geta (show_list show_char) jsona
+                              [Chara (false, false, false, false, true, true,
+                                       true, false),
+                                Chara (false, true, false, false, true, true,
+true, false),
+                                Chara (true, true, true, true, false, true,
+true, false),
+                                Chara (true, true, false, false, false, true,
+true, false),
+                                Chara (true, false, true, false, false, true,
+true, false),
+                                Chara (true, true, false, false, true, true,
+true, false),
+                                Chara (true, true, false, false, true, true,
+true, false),
+                                Chara (true, false, true, false, false, true,
+true, false),
+                                Chara (true, true, false, false, true, true,
+true, false)])
+                        (fn processes =>
+                          binda (renaming_of_json "process renaming" processes)
+                            (fn (process_renaming, _) =>
+                              binda (geta (show_list show_char) jsona
+                                      [Chara
+ (false, false, true, true, false, true, true, false),
+Chara (true, true, true, true, false, true, true, false),
+Chara (true, true, false, false, false, true, true, false),
+Chara (true, false, false, false, false, true, true, false),
+Chara (false, false, true, false, true, true, true, false),
+Chara (true, false, false, true, false, true, true, false),
+Chara (true, true, true, true, false, true, true, false),
+Chara (false, true, true, true, false, true, true, false),
+Chara (true, true, false, false, true, true, true, false)])
+                                (fn locations =>
+                                  binda (list_of_json_object locations)
+                                    (fn locationsa =>
+                                      binda
+(combine_map
+  (fn (name, renaming) =>
+    let
+      val p_num = process_names_to_index (implode name);
+    in
+      binda (assert (equal_nata (process_renaming (implode name)) p_num)
+              ("Process renamings do not agree on " ^ implode name))
+        (fn _ =>
+          let
+            val max_id = nat_of_integer (1000 : Int.int);
+          in
+            binda (nat_renaming_of_json ("process" ^ show_str show_nat p_num)
+                    max_id renaming)
+              (fn renaminga => Result (p_num, renaminga))
+          end)
+    end)
+  locationsa)
+(fn locationsb =>
+  let
+    val location_renaming =
+      the o map_of_debug (equal_nat, show_nat) "location"
+              (map (fn (i, (f, _)) => (i, f)) locationsb);
+    val location_inv =
+      the o map_of_debug (equal_nat, show_nat) "location inv"
+              (map (fn (i, (_, a)) => (i, a)) locationsb);
+  in
+    Result
+      (var_renaming,
+        (clock_renaming,
+          (location_renaming, (var_inv, (clock_inv, location_inv)))))
+  end))))))))));
+
+fun parse_compute model renaming =
+  binda (parse json model)
+    (fn modela =>
+      binda (convert modela)
+        (fn (ids_to_names,
+              (process_names_to_index,
+                (broadcast, (automata, (bounds, (formula, (l_0, s_0)))))))
+           =>
+          binda (parse json renaming)
+            (fn renaminga =>
+              binda (convert_renaming ids_to_names process_names_to_index
+                      renaminga)
+                (fn (var_renaming,
+                      (clock_renaming,
+                        (location_renaming,
+                          (inv_renum_vars,
+                            (inv_renum_clocks, inv_renum_states)))))
+                   =>
+                  binda (make_renaming
+                          (ceq_nat, ccompare_nat, equal_nat, set_impl_nat,
+                            show_nat)
+                          broadcast automata bounds)
+                    (fn (m, (num_states,
+                              (num_actions,
+                                (renum_acts,
+                                  (_, (renum_clocks, (_, (_, (_, _)))))))))
+                       =>
+                      binda (assert (equal_nata (renum_clocks "_urge") m)
+                              "Computed renaming: _urge is not last clock!")
+                        (fn _ =>
+                          let
+                            val renum_vars = var_renaming;
+                            val renum_clocksa = clock_renaming;
+                            val renum_states = location_renaming;
+                          in
+                            binda (assert (equal_nata (renum_clocksa "_urge") m)
+                                    "Given renaming: _urge is not last clock!")
+                              (fn _ =>
+                                let
+                                  val _ = writeln "Renaming";
+                                  val (broadcasta, (automataa, boundsa)) =
+                                    rename_network countable_literal
+                                      countable_literal countable_nat
+                                      countable_literal broadcast bounds
+                                      automata renum_acts renum_vars
+                                      renum_clocksa renum_states;
+                                  val _ = writeln "Calculating ceiling";
+                                  val k =
+                                    local_ceiling broadcasta boundsa automataa m
+                                      num_states;
+                                  val urgent_locations =
+                                    map (fn (_, (urgent, (_, _))) => urgent)
+                                      automataa;
+                                in
+                                  Result
+                                    (broadcast,
+                                      (bounds,
+(automata,
+  (urgent_locations,
+    (k, (l_0, (s_0, (formula,
+                      (m, (num_states,
+                            (num_actions,
+                              (renum_acts,
+                                (renum_vars,
+                                  (renum_clocksa,
+                                    (renum_states,
+                                      (inv_renum_states,
+(inv_renum_vars, inv_renum_clocks)))))))))))))))))
+                                end)
+                          end))))));
+
 fun check_and_cert_pddl_problem_no_return problem mode num_split certifier
   show_cert =
   (fn f_ => fn () => f_
     ((check_and_cert_pddl_problem problem mode num_split certifier show_cert)
     ()) ())
     (fn _ => (fn () => ()));
+
+fun parse_convert_check mode num_split dc model renaming state_space show_cert =
+  (case parse_compute model renaming
+    of Result
+         (broadcast,
+           (bounds,
+             (automata,
+               (urgent_locations,
+                 (k, (l_0, (s_0, (formula,
+                                   (m, (num_states,
+ (num_actions,
+   (renum_acts,
+     (renum_vars,
+       (renum_clocks,
+         (renum_states,
+           (inv_renum_states, (inv_renum_vars, inv_renum_clocks)))))))))))))))))
+      => let
+           val is_urgent =
+             (fn (l, _) =>
+               list_ex
+                 (fn (la, urgent) =>
+                   membera equal_int (map int_of_nat urgent) la)
+                 (zip l urgent_locations));
+           val inv_renum_clocksa =
+             (fn i => (if equal_nata i m then "_urge" else inv_renum_clocks i));
+           val t = Time.now ();
+           val state_spacea = convert_state_space m is_urgent state_space;
+           val ta = (fn x => fn y => Time.- (x, y)) (Time.now ()) t;
+           val _ =
+             writeln ("Time for converting state space: " ^
+                       (fn x => Time.toString x) ta);
+           val _ = Timing.start_timer ();
+           val _ = Timing.save_time "Time for converting DBMs in certificate";
+           val _ =
+             writeln ("Number of discrete states: " ^
+                       show_lit show_nat (len_of_state_space state_spacea));
+           val _ =
+             (if show_cert
+               then let
+                      val _ = print_sep ();
+                      val _ = writeln "Certificate";
+                      val _ = print_sep ();
+                      val _ =
+                        show_state_space m inv_renum_states inv_renum_vars
+                          inv_renum_clocksa state_spacea;
+                      val _ = print_sep ();
+                    in
+                      (fn () => ())
+                    end
+               else (fn () => ()));
+           val tb = Time.now ();
+         in
+           (fn f_ => fn () => f_
+             ((case mode
+                of Impl1 =>
+                  rename_check num_split dc broadcast bounds automata k l_0 s_0
+                    formula m num_states num_actions renum_acts renum_vars
+                    renum_clocks renum_states (reach_of state_spacea)
+                | Impl2 =>
+                  (fn () =>
+                    (rename_check2 num_split dc broadcast bounds automata k l_0
+                      s_0 formula m num_states num_actions renum_acts renum_vars
+                      renum_clocks renum_states (reach_of state_spacea)))
+                | Impl3 =>
+                  (fn () =>
+                    (rename_check3 num_split dc broadcast bounds automata k l_0
+                      s_0 formula m num_states num_actions renum_acts renum_vars
+                      renum_clocks renum_states (reach_of state_spacea)))
+                | Buechi =>
+                  (fn () =>
+                    (rename_check_buechi num_split broadcast bounds automata k
+                      l_0 s_0 formula m num_states num_actions renum_acts
+                      renum_vars renum_clocks renum_states
+                      (buechi_of state_spacea)))
+                | Debug =>
+                  rename_check_dbg show_nat show_literal show_literal num_split
+                    dc broadcast bounds automata k l_0 s_0 formula m num_states
+                    num_actions renum_acts renum_vars renum_clocks renum_states
+                    inv_renum_states inv_renum_vars inv_renum_clocksa
+                    (reach_of state_spacea))
+             ()) ())
+             (fn check =>
+               let
+                 val tc = (fn x => fn y => Time.- (x, y)) (Time.now ()) tb;
+                 val _ =
+                   writeln ("Time for certificate checking: " ^
+                             (fn x => Time.toString x) tc);
+               in
+                 (case check
+                   of Renaming_Failed => let
+   val _ = writeln "Renaming failed";
+ in
+   (fn () => ())
+ end
+                   | Preconds_Unsat =>
+                     let
+                       val _ = writeln "Preconditions were not met";
+                     in
+                       (fn () => ())
+                     end
+                   | Sat => let
+                              val _ = writeln "Certificate was accepted";
+                            in
+                              (fn () => ())
+                            end
+                   | Unsat => let
+                                val _ = writeln "Certificate was rejected";
+                              in
+                                (fn () => ())
+                              end)
+               end)
+         end
+    | Error es => let
+                    val _ = map (fn a => writeln a) es;
+                  in
+                    (fn () => ())
+                  end);
 
 end; (*struct Converter*)

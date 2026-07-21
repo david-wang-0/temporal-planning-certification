@@ -1268,6 +1268,9 @@ declare ast_cont_problem.wf_func_assign'.simps[code]
 export_code
   check_and_cert_pddl_problem_no_return check_and_make_network_opt
   parse_convert_run (* For model checking *)
+  parse_convert_check (* in-process VERIFIED certificate check: the muntac entry -- takes model+renaming
+                         JSON strings + a state_space cert, parses the renaming ITSELF (so it matches the
+                         tck-reach cert's index convention), and runs Munta's verified checker. *)
   rbt_to_list
   Inl Inr
   Result Error
