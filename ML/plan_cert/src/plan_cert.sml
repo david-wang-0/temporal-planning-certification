@@ -9,9 +9,11 @@ val usage = "Usage: $ plan_cert " ^ "\n" ^
             "[-compression <compression level>] " ^ "\n" ^
             "[-certify <certifier version>] " ^ "\n" ^
             "[-num-threads <number of threads>]" ^ "\n" ^
-            "[-show-cert <1>]" ^ "\n"
+            "[-show-cert <1>]" ^ "\n" ^
+            "[-ground-out <path> : dump the grounded propositional PDDL for inspection]" ^ "\n"
 
-(* Very low prio to-do: print the generated network *)
+(* Optional path to dump the grounded (propositional) PDDL for inspection (-ground-out). *)
+val ground_out_path = ref (NONE : string option)
 
 fun dissect_arguments p args =
     let
@@ -79,6 +81,9 @@ fun flags args =
             case dissect_arguments is_extra args of
                 NONE => (print "ok"; SOME Local) |
                 SOME str => extra_from_str str
+        val () =
+            ground_out_path :=
+                dissect_arguments (fn "-ground-out" => true | "-g" => true | _ => false) args
     in
       (domain, problem, network, renaming_path, cert_path, extra, compression, certification,
        num_threads, mode, show_cert)
@@ -162,7 +167,12 @@ fun make_network domain problem model =
     let
         val _ = log_conversion_config (domain, problem, model)
         val parsed_prob = PddlParser.get_prob domain problem
-        val res = Converter.check_and_make_network_opt (Grounder.ground_problem parsed_prob)
+        val ground_prob = Grounder.ground_problem parsed_prob
+        val () = case !ground_out_path of
+                     SOME f => (PddlParser.writeFile f (Grounder.problem_to_pddl ground_prob);
+                                println ("+ Wrote grounded PDDL to " ^ f))
+                   | NONE => ()
+        val res = Converter.check_and_make_network_opt ground_prob
             |> Option.map (NetworkConversion.convert_network true model)
         val _ = res
     in ()
