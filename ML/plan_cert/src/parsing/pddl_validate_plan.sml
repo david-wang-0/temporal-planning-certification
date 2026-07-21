@@ -1,72 +1,45 @@
-  (* This file contains the code for converting the types in the parsed domain to those used
-     by the validator exported by Isabelle in the file ../../../isabelle/code/PDDL_STRIPS_Checker_Exported.sml.
-     It also calls the function exported by Isabelle to check the validity of a plan.*)
+  (* Parsed-PDDL -> exported-Isabelle (Converter) conversion for the unsolvability certifier.
+
+     Vendored/adapted from Formal-PDDL-Semantics codeBase/planning/pddlParser/
+     pddl_validate_plan_temporal.sml (the newer, temporal-numeric-capable validator that
+     matches the newer pddl_refactor.sml grammar).  It builds a `Converter.Problem`
+     (Domain types preds funcs consts actions, objs, init, goal) with temporal action schemas
+     (SimpleActionSchemaa / DurativeActionSchema) for consumption by check_and_make_network_opt.
+
+     Deltas from the FPS source:
+       - variable ctor `Var` -> `Vara` (our export mangles it; AFP Datalog `Var` claims the
+         unsuffixed name);
+       - `structure PddlParser` wrapper exposing `get_prob dom_file prob_file`;
+       - plan parsing stubbed out (the certifier consumes domain+problem only; the temporal
+         plan-action ctors are not part of the Converter export). *)
 structure PddlParser =
 struct
 open PDDL
 
-  val IsabelleStringImplode = implode;
-  val IsabelleStringExplode = explode;
+  val IsabelleStringImplode = fn s => s;
+  val IsabelleStringExplode = fn s => s;
   val SMLCharImplode = String.implode;
   val SMLCharExplode = String.explode;
 
-  (* val stringToIsabelle = IsabelleStringExplode *)
-  val stringToIsabelle = (fn x => x) (* using native strings *)
-  fun stringListToIsabelle ss = (map stringToIsabelle ss)
+  val stringToIsabelle = fn s => s
+  fun stringListToIsabelle ss = ss
 
-  fun pddlVarToIsabelle (v:PDDL_VAR) = Converter.Vara (stringToIsabelle (pddl_var_name v))
-
-  fun intToIsaNat x = Converter.nat_of_integer (Int.fromInt x)
-
-  fun intToIsaInt x = Converter.Int_of_integer (Int.fromInt x)
-
-  (* TODO: find nicer way to handle floats with a lot of ending 0's. *)
-  (*fun trimEndingZeros (cs, zs) = 
-    case cs of
-      [] => []
-    | (c::cs') => 
-      if c = #"0" then trimEndingZeros (cs',#"0"::zs)
-      else zs@[c]@(trimEndingZeros (cs',[]))*)
-
-  (* decimal number parsed => String pair = s1 ^ '.' ^ s2 => RAT *)
-  (* fun stringPairToIsaRat (s1,s2) =
-    case s2 of
-      SOME s2' => Converter.fract (intToIsaInt (valOf (Int.fromString (s1 ^ s2')))) (int_of_integer (Int.pow (10, (size s2'))))
-    | NONE => Converter.of_int (intToIsaInt (valOf (Int.fromString s1))) *)
-
-  (* decimal number parsed => String pair = s1 ^ '.' ^ s2 => RAT *)
-  (*fun stringPairToIsaRat (s1,s2) =
-    case s2 of
-      SOME s2' => 
-        let val s2't = String.implode(trimEndingZeros (String.explode s2',[])) in
-          Converter.fract (intToIsaInt (valOf (Int.fromString (s1 ^ s2't)))) (int_of_integer (Int.pow (10, (size s2't))))
-        end
-    | NONE => Converter.of_int (intToIsaInt (valOf (Int.fromString s1)))*)
-
-  fun charToNat c = intToIsaNat (valOf (Int.fromString (str c)))
-
-  fun stringPairToIsaRat (s1,s2) =
-    case s2 of
-      SOME s2' => Converter.rat_of_digits_pair (map charToNat (String.explode s1), map charToNat (String.explode s2'))
-    | NONE => Converter.of_int (intToIsaInt (valOf (Int.fromString s1)))
-
-  (*fun ratToIsabelleRat r = case r of 
-    (n, d) => Converter.fract n d*)
+  (* our export names the FPS variable ctor `Vara` (AFP Datalog `Var` claims the plain name) *)
+  fun pddlVarToIsabelle (v:PDDL_VAR) = Vara (IsabelleStringExplode (pddl_var_name v))
 
   fun pddlObjConsToIsabelle (oc:PDDL_OBJ_CONS) =
     case oc of
-    PDDL_OBJ_CONS n => Converter.Obj (stringToIsabelle n)
-  | _ => exit_fail "duration/numeric entity in object position (current AST carries these in a numeric_expression, not an extended object)"
+    PDDL_OBJ_CONS n => Obj (stringToIsabelle n)
 
-  fun pddlTermToIsabelle term = 
+  fun pddlTermToIsabelle term =
     case term of VAR_TERM v => VAR (pddlVarToIsabelle v)
              | OBJ_CONS_TERM oc => CONST (pddlObjConsToIsabelle oc)
 
-  fun pddlVarTermToIsabelle term = 
+  fun pddlVarTermToIsabelle term =
     case term of VAR_TERM v => pddlVarToIsabelle v
              | _ => exit_fail ("Var expected, but object found: pddlVarTermToIsabelle " ^ (pddlObjConsTermToString term))
 
-  fun pddlObjConsTermToIsabelle term = 
+  fun pddlObjConsTermToIsabelle term =
     case term of OBJ_CONS_TERM v => pddlObjConsToIsabelle v
              | _ => exit_fail ("Object expected, but variable found: pddlObjConsTermToIsabelle " ^ (pddlVarTermToString term))
 
@@ -105,7 +78,7 @@ open PDDL
 
   fun pddlPredToIsabelle (pred, args) = PredDecl (Pred (stringToIsabelle (pddl_pred_name pred)), List.concat (pddlTypedListTypesToIsabelle args))
 
-  fun pddlFunToIsabelle ((func, args),()) = FuncDecl (Func (stringToIsabelle func), List.concat (pddlTypedListTypesToIsabelle args))
+  fun pddlFunToIsabelle ((func, args),()) = FuncDecl (func, List.concat (pddlTypedListTypesToIsabelle args))
 
   fun pddlPredDefToIsabelle pred_defOPT =
                    case pred_defOPT of
@@ -126,7 +99,8 @@ open PDDL
                  | Prop_not(prop: PDDL_TERM PDDL_PROP) =>  Not (pddlFormulaToASTPropIsabelle atom_fn prop)
                  | Prop_and(propList: PDDL_TERM PDDL_PROP list) => bigAnd (map (pddlFormulaToASTPropIsabelle atom_fn) propList)
                  | Prop_or(propList: PDDL_TERM PDDL_PROP list) => bigOr (map (pddlFormulaToASTPropIsabelle atom_fn) propList)
-                 | _ => Bot (*Fluents shall invalidate the problem*)
+                 | Prop_imply(a, b) => Imp (pddlFormulaToASTPropIsabelle atom_fn a, pddlFormulaToASTPropIsabelle atom_fn b)
+                 | _ => Bot
 
   fun pddlFormulaToASTPropIsabelleTerm phi = pddlFormulaToASTPropIsabelle pddlTermToIsabelle phi
 
@@ -134,113 +108,88 @@ open PDDL
 
   fun pddlPreGDToIsabelle PreGD =
       case PreGD of SOME (prop: PDDL_TERM PDDL_PROP) => pddlFormulaToASTPropIsabelleTerm prop
-                 | _ => Not Bot (*If we have no precondition, then it is a tautology*)
-
-  fun isProp_atom fmla = case fmla of Prop_atom(atom) => true | _ => false
-
-  fun isNegProp_atom fmla = case fmla of Prop_not(Prop_atom(atom)) => true | _ => false
+                 | _ => Not Bot
 
   fun strToVarAtom atom = map_atom (fn x => pddlTermToIsabelle x) atom
 
   fun strToObjAtom atom = map_atom (fn x => pddlObjConsTermToIsabelle x) atom
 
-  fun pddlPropLiteralToIsabelleAtom lit = 
+  fun pddlPropLiteralToIsabelleAtom lit =
       case lit of Prop_atom atom => Atom (strToVarAtom atom)
                | Prop_not(Prop_atom atom) => Atom (strToVarAtom atom)
                | _ => exit_fail "Literal expected"
 
-  (* Current AST: ast_effect = Effect of (adds: term atom formula list)
-                                        * (dels: term atom formula list)
-                                        * (numeric_effects: term numeric_effect list).
-     The reduction is numeric-free, so the third component is always []. *)
-  fun pddlPropToASTEffIsabelle (Prop: PDDL_TERM PDDL_PROP) =
-      case Prop of Prop_atom atom => ([Atom (strToVarAtom atom)], [], [])
-                 | Prop_not (Prop_atom atom) => ([], [Atom (strToVarAtom atom)], [])
-                 | Prop_and propList
-                     => (map pddlPropLiteralToIsabelleAtom (List.filter isProp_atom propList),
-                         map pddlPropLiteralToIsabelleAtom (List.filter isNegProp_atom propList),
-                         [])
+  fun logicOrNumericEffectToASTEffIsabelle eff =
+      case eff of LOGIC_EFFECT (Prop_atom atom) => ([Atom (strToVarAtom atom)], [], [])
+                 | LOGIC_EFFECT (Prop_not (Prop_atom atom)) => ([], [Atom (strToVarAtom atom)], [])
+                 | NUMERIC_EFFECT e => ([], [], [map_numeric_effect pddlTermToIsabelle e])
                  | _ => ([], [], [])
 
-  fun pddlCEffectToIsabelle CEff =
-      case CEff of SOME (prop: PDDL_TERM PDDL_PROP) => Converter.Effect (pddlPropToASTEffIsabelle prop)
-                 | _ => Converter.Effect ([], [], [])
+  fun flatten_effects nil = Effect ([], [], [])
+  |   flatten_effects (Effect (adds, dels, numerics) :: effs) =
+    (let val (Effect (adds', dels', numerics')) = flatten_effects effs
+     in Effect (adds @ adds', dels @ dels', numerics @ numerics')
+     end)
 
   fun actDefBodyPreToIsabelle pre = case pre of SOME (u, pre: PDDL_PRE_GD) => pddlPreGDToIsabelle pre
                                             | _ => Not Bot
-  fun actDefBodyEffToIsabelle eff = case eff of SOME (u, eff: C_EFFECT) => pddlCEffectToIsabelle eff
-                                            | _ => Converter.Effect ([], [], [])
-  (* fun pddlActDefBodyToIsabelle (pre, eff) = ((actDefBodyPreToIsabelle pre), (actDefBodyEffToIsabelle eff)) *)
+  fun actDefBodyEffToIsabelle effs = case effs of SOME (the_effs) => flatten_effects (map (Effect o logicOrNumericEffectToASTEffIsabelle) the_effs)
+                                                  | _ => Effect ([], [], [])
 
   fun pddlIsabelleActName actName = SMLCharImplode (map (fn c => if c = #"-" then #"_" else c) (SMLCharExplode actName))
 
-  (* extension for durative actions *)
+  fun pddlDurConstraintToIsabelle (t, DurationConstraint (d_op, r)) = (t, DurationConstraint (d_op, map_numeric_expression pddlTermToIsabelle r))
 
-  fun pddlTimeSpecToIsabelle timeSpec = 
-    case timeSpec of 
-      at_start => At_Start
-    | at_end => At_End
-    | over_all => Over_All
+  fun pddlTimedCondToIsabelle ((timeSpec, cond): PDDL_TIME_SPECIFIER * (PDDL_TERM PDDL_PROP)) =
+      (timeSpec, pddlFormulaToASTPropIsabelleTerm cond)
 
-  fun dOpToIsabelle d_op = (case d_op of d_op_leq => LEQ | d_op_eq => EQ | d_op_geq => GEQ)
-
-  fun durAnnotToIsabelle NONE      = At_Start
-    | durAnnotToIsabelle (SOME ts) = pddlTimeSpecToIsabelle ts
-
-  (* Current AST: DurativeActionBody's duration is a (temporal_annotation * term duration_constraint) list.
-     No_Const  -> NONE (no entry, filtered by List.mapPartial);
-     Time_Const -> DurationConstraint (dop, ConstantExpr rat);
-     Func_Const -> DurationConstraint (dop, FunctionExpr (PNE (func, term list))). *)
-  fun pddlDurConstraintToIsabelle (durConst: PDDL_DURATION_CONSTRAINT) =
-    case durConst of
-      No_Const_Def _ => NONE
-    | Time_Const_Def (timeSpec_obt, (d_op, d)) =>
-        SOME (durAnnotToIsabelle timeSpec_obt,
-              Converter.DurationConstraint (dOpToIsabelle d_op, Converter.ConstantExpr (stringPairToIsaRat d)))
-    | Func_Const_Def (timeSpec_obt, (d_op, (f, args))) =>
-        SOME (durAnnotToIsabelle timeSpec_obt,
-              Converter.DurationConstraint (dOpToIsabelle d_op,
-                Converter.FunctionExpr (Converter.PNE (Func (stringToIsabelle f), map pddlTermToIsabelle args))))
-        
-  fun pddlTimedCondToIsabelle ((timeSpec, cond): PDDL_TIME_SPECIFIER * (PDDL_TERM PDDL_PROP)) = 
-      (pddlTimeSpecToIsabelle timeSpec, pddlFormulaToASTPropIsabelleTerm cond)
-
-  fun pddlTimedListCondToIsabelle (cond_opt: (PDDL_TERM PDDL_PROP) PDDL_TIMED_LIST option) = 
+  fun pddlTimedListCondToIsabelle (cond_opt: (PDDL_TERM PDDL_PROP) PDDL_TIMED_LIST option) =
       case cond_opt of
         SOME cond => (map pddlTimedCondToIsabelle cond)
       | NONE => []
 
-  (* fun pddlDurActDefBodyCondToIsabelle (durConst, cond, eff) = (pddlTimedListCondToIsabelle cond) *)
+  fun pddlTimedEffToIsabelle (timeSpec, eff) =
+      (timeSpec, Effect (logicOrNumericEffectToASTEffIsabelle eff))
 
-  fun pddlTimedEffToIsabelle ((timeSpec, eff): PDDL_TIME_SPECIFIER * (PDDL_TERM PDDL_PROP)) = 
-      (pddlTimeSpecToIsabelle timeSpec, Converter.Effect (pddlPropToASTEffIsabelle eff))
+  fun snap_effects nil = nil
+  |   snap_effects ((SNAP_EFFECT se) :: effs) = se :: (snap_effects effs)
+  |   snap_effects ((CONTINUOUS_EFFECT _) :: effs) = snap_effects effs
 
-  fun pddlTimedListEffToIsabelle (eff_opt: (PDDL_TERM PDDL_PROP) PDDL_TIMED_LIST option) = 
+    fun continuous_effects nil = nil
+  |   continuous_effects ((SNAP_EFFECT _) :: effs) = continuous_effects effs
+  |   continuous_effects ((CONTINUOUS_EFFECT ce) :: effs) = ce :: continuous_effects effs
+
+  fun pddlTimedListEffToIsabelle (eff_opt) =
       case eff_opt of
-        SOME eff => (map pddlTimedEffToIsabelle eff)
+        SOME eff => (map pddlTimedEffToIsabelle (snap_effects eff))
       | NONE => []
 
-  (* fun pddlDurActDefBodyEffToIsabelle (durConst, cond, eff) = (pddlTimedListEffToIsabelle eff) *)
+  fun has_cont_change (eff_opt) =
+      case eff_opt of
+        SOME eff => Bool.not (null (continuous_effects eff))
+      | NONE => false
 
-  (* *)
-
-  fun pddlActToIsabelle (actName, (args, defBody: PDDL_ACTION_DEF_BODY)) =
-    let val head = Converter.ActionHead (stringToIsabelle actName, pddlTypedListVarsTypesToIsabelle args) in
+  (* Build temporal action schemas from the parsed PDDL. *)
+  fun pddlActToTemporalIsabelle (actName, (args, defBody: PDDL_ACTION_DEF_BODY)) =
     case defBody of
       Simple_Action_Def_Body (pre, eff) =>
-        Converter.SimpleActionSchemaa (head,
-          Converter.SimpleActionBody (actDefBodyPreToIsabelle pre, actDefBodyEffToIsabelle eff))
-    | Durative_Action_Def_Body (durConst, (cond, eff)) =>
-        Converter.DurativeActionSchema (head,
-          Converter.DurativeActionBody (List.mapPartial pddlDurConstraintToIsabelle durConst,
-            pddlTimedListCondToIsabelle cond,
-            pddlTimedListEffToIsabelle eff))
-    end
+        SimpleActionSchemaa(ActionHead(IsabelleStringExplode actName,
+          pddlTypedListVarsTypesToIsabelle args),
+          SimpleActionBody(actDefBodyPreToIsabelle pre,
+          actDefBodyEffToIsabelle eff))
+    | Durative_Action_Def_Body (durConst, cond, eff) =>
+        if (Bool.not (has_cont_change eff))
+        then DurativeActionSchema(ActionHead(IsabelleStringExplode actName,
+          pddlTypedListVarsTypesToIsabelle args),
+          DurativeActionBody(map pddlDurConstraintToIsabelle durConst,
+          pddlTimedListCondToIsabelle cond,
+          pddlTimedListEffToIsabelle eff))
+        else raise Fail "Continuous effects not supported."
 
 
-  fun pddlActionsDefToIsabelle (actsDef : PDDL_ACTION list) = (map pddlActToIsabelle actsDef)
+  fun pddlTemporalActionsDefToIsabelle (actsDef : PDDL_ACTION list) = (map pddlActToTemporalIsabelle actsDef)
 
-  fun pddlDomToIsabelle (reqs:PDDL_REQUIRE_DEF,
+  fun pddlTemporalDomToIsabelle (reqs:PDDL_REQUIRE_DEF,
                          (types_def,
                             (consts_def,
                                (pred_def,
@@ -252,22 +201,15 @@ open PDDL
                          (pddlPredDefToIsabelle pred_def),
                          (pddlFunDefToIsabelle fun_def),
                          (pddlConstsDefToIsabelle consts_def),
-                         (pddlActionsDefToIsabelle actions_def))
+                         (pddlTemporalActionsDefToIsabelle actions_def))
 
 
   fun objDefToIsabelle (objs:PDDL_OBJ_DEF) = pddlTypedListObjsConsTypesToIsabelle objs
 
-  fun isntFluent x = (case x of Fluent => false | _ => true)
-
-  fun isntTautology x = (case x of Not Bot => false | _ => true)
 
   fun initElToIsabelle (init_el:PDDL_INIT_EL) = pddlFormulaToASTPropIsabelleObj (pddl_prop_map OBJ_CONS_TERM init_el)
 
-
-  fun pddlInitToIsabelleWithObjEqs (init:PDDL_INIT) objs = (map initElToIsabelle (List.filter isntFluent init)) (*I don't want fluents in the init state. This is usually an init value for the plan-cost.*)
-                                                           @ (map (fn obj => Atom (pddlEqToIsabelleObj (obj, obj))) objs)
-
-  fun pddlInitToIsabelle (init:PDDL_INIT) objs = (map initElToIsabelle (List.filter isntFluent init)) (*I don't want fluents in the init state. This is usually an init value for the plan-cost.*)
+  fun pddlInitToIsabelle (init:PDDL_INIT) objs = (map initElToIsabelle init)
 
 
   fun pddlGoalToIsabelle (goal:PDDL_GOAL) = pddlFormulaToASTPropIsabelleObj goal
@@ -281,21 +223,25 @@ open PDDL
                                     (pddlInitToIsabelle init (List.concat (map #1 objs))),
                                     pddlGoalToIsabelle goal_form)
 
-
-
-  (* Plan parsing is not used by the unsolvability certifier (it consumes a domain+problem only).
-     The old temporal plan-action constructors are not part of the current Converter export. *)
+  (* Plan parsing is not used by the unsolvability certifier (it consumes domain+problem only);
+     the temporal plan-action ctors are not part of the Converter export. *)
   fun planActionToIsabelle (_: PDDL_PLAN_ACTION) =
       exit_fail "plan parsing not supported by the unsolvability certifier"
 
   fun planToIsabelle plan = map planActionToIsabelle plan
+
+(* strip a leading UTF-8 byte-order mark (EF BB BF) if present -- several gigante
+   domain/problem files begin with one, which is not valid PDDL content. *)
+fun stripBOM s =
+  if String.size s >= 3 andalso String.substring (s, 0, 3) = "\239\187\191"
+  then String.extract (s, 3, NONE) else s
 
 fun readFile file =
 let
     fun next_String input = (TextIO.inputAll input)
     val stream = TextIO.openIn file
 in
-    next_String stream
+    stripBOM (next_String stream)
 end
 
 fun writeFile file content =
@@ -311,15 +257,10 @@ fun parse_wrapper parser file =
 
 val parse_pddl_dom = parse_wrapper (PDDL.end_of_file PDDL.domain)
 val parse_pddl_prob = parse_wrapper (PDDL.end_of_file PDDL.problem)
-val parse_pddl_plan = parse_wrapper (PDDL.end_of_file PDDL.plan)
 
-fun get_prob dom_file prob_file = let
-  val parsedDom = parse_pddl_dom dom_file
-  val parsedProb = parse_pddl_prob prob_file
-
-  val isaProb = (Converter.Problem
-                  (let val (p1,p2,p3) = pddlProbToIsabelle parsedProb in
-                     (pddlDomToIsabelle parsedDom, p1,p2,p3) end))
-in isaProb
-end
+fun get_prob dom_file prob_file =
+  let val parsedDom = parse_pddl_dom dom_file
+      val parsedProb = parse_pddl_prob prob_file
+      val (objs, init, goal) = pddlProbToIsabelle parsedProb
+  in Converter.Problem (pddlTemporalDomToIsabelle parsedDom, objs, init, goal) end
 end

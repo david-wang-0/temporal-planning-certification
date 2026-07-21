@@ -1289,7 +1289,10 @@ export_code
   map_atom Domain Problem
   term.CONST term.VAR (* I want to export the entire type, but I can only export the constructor because term is already an isabelle keyword. *)
   PNE ConstantExpr DurationExpr FunctionExpr DurationConstraint ActionHead SimpleActionSchema DurativeActionSchema SimpleActionBody DurativeActionBody
-  String.explode String.implode 
+  Assign ScaleUp ScaleDown Increase Decrease NumericEffect
+  ContinuousIncrease ContinuousDecrease ContinuousEffect
+  map_numeric_effect map_numeric_expression
+  String.explode String.implode
   in Eval module_name Converter file_prefix Check_Unsolvability
 (* To do:
   - Change the parser for PDDL. (ML)`

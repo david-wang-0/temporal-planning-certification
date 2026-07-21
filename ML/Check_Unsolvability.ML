@@ -215,7 +215,12 @@ structure Converter : sig
     If_then_else of ('a, 'b) bexp * ('a, 'b) exp * ('a, 'b) exp |
     Binop of ('b -> 'b -> 'b) * ('a, 'b) exp * ('a, 'b) exp |
     Unop of ('b -> 'b) * ('a, 'b) exp
-  type 'a numeric_effect
+  datatype numeric_effect_op = Assign | ScaleUp | ScaleDown | Increase |
+    Decrease
+  datatype 'a numeric_effect =
+    NumericEffect of
+      numeric_effect_op * 'a primitive_numeric_expression *
+        'a numeric_expression
   datatype 'a ast_effect =
     Effect of
       'a atom formula list * 'a atom formula list * 'a numeric_effect list
@@ -250,6 +255,11 @@ structure Converter : sig
     Problem of
       'a ast_domain * (object * typea) list * object atom formula list *
         object atom formula
+  datatype continuous_effect_op = ContinuousIncrease | ContinuousDecrease
+  datatype 'a ast_continuous_effect =
+    ContinuousEffect of
+      continuous_effect_op * 'a primitive_numeric_expression *
+        'a numeric_expression
   type resulta
   datatype ('a, 'b, 'c, 'd) sexp = Truea | Notb of ('a, 'b, 'c, 'd) sexp |
     Andb of ('a, 'b, 'c, 'd) sexp * ('a, 'b, 'c, 'd) sexp |
@@ -270,9 +280,12 @@ structure Converter : sig
   val bigOr : 'a formula list -> 'a formula
   val implode : char list -> string
   val bigAnd : 'a formula list -> 'a formula
+  val map_numeric_expression :
+    ('a -> 'b) -> 'a numeric_expression -> 'b numeric_expression
   val map_atom : ('a -> 'b) -> 'a atom -> 'b atom
   val predicate : 'a atom -> predicate
   val rbt_to_list : ('a, 'b) rbt -> 'a list
+  val map_numeric_effect : ('a -> 'b) -> 'a numeric_effect -> 'b numeric_effect
   val rat_of_digits_pair : nat list * nat list -> rat
   val check_and_make_network_opt :
     ast_temporal_action_schema ast_problem ->
