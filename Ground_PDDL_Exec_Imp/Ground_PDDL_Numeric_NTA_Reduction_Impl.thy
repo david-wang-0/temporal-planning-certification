@@ -212,6 +212,10 @@ text \<open>The numeric twin of the propositional @{const check_ground_problem}:
   @{thm [source] numeric_tp_nta_reduction_defs.comp_struct_ok_sound}). This gives the FORWARD direction
   (check succeeds \<Longrightarrow> the numeric leaf holds), which is exactly what the soundness assembly needs.\<close>
 
+lemma list_all_notin_set_eq_disjoint:
+  "list_all (\<lambda>x. x \<notin> set ys) xs \<longleftrightarrow> set xs \<inter> set ys = {}"
+  by (auto simp: list_all_iff)
+
 context numeric_ground_ast_problem_defs
 begin
 
@@ -219,7 +223,7 @@ definition "check_numeric_ground_problem fluent_lo fluent_hi \<equiv> do {
   check_ground_problem_core P;
   check (distinct (map at_start_spec actions_spec)
          \<and> distinct (map at_end_spec actions_spec)
-         \<and> set (map at_start_spec actions_spec) \<inter> set (map at_end_spec actions_spec) = {})
+         \<and> list_all (\<lambda>s. s \<notin> set (map at_end_spec actions_spec)) (map at_start_spec actions_spec))
     (ERRS ''Ground snaps are not pairwise disjoint (start/end snap collision or duplicate snap)'');
   check_all_list (\<lambda>a. upds_functional_list (upds (at_start_spec a))) actions_spec
     ''Start-snap numeric updates are not functional (a fluent is written twice)'' (shows o ast_temporal_action_schema_name);
@@ -256,7 +260,7 @@ lemma check_numeric_ground_problem_return_iff:
    \<longleftrightarrow> ground_ast_problem_core P
      \<and> (distinct (map at_start_spec actions_spec)
         \<and> distinct (map at_end_spec actions_spec)
-        \<and> set (map at_start_spec actions_spec) \<inter> set (map at_end_spec actions_spec) = {})
+        \<and> list_all (\<lambda>s. s \<notin> set (map at_end_spec actions_spec)) (map at_start_spec actions_spec))
      \<and> (\<forall>a\<in>set actions_spec. upds_functional_list (upds (at_start_spec a)))
      \<and> (\<forall>a\<in>set actions_spec. upds_functional_list (upds (at_end_spec a)))
      \<and> (\<forall>a\<in>set actions_spec. upds_no_cross_read_list (upds (at_start_spec a)))
@@ -293,10 +297,12 @@ proof -
   from h have "D.check_numeric_ground_problem fluent_lo fluent_hi = Inr ()" by simp
   note C = this[unfolded D.check_numeric_ground_problem_return_iff]
   from C have core: "ground_ast_problem_core P" by simp
-  from C have sd: "distinct (map D.at_start_spec D.actions_spec)"
-      and se: "distinct (map D.at_end_spec D.actions_spec)"
-      and sde: "set (map D.at_start_spec D.actions_spec) \<inter> set (map D.at_end_spec D.actions_spec) = {}"
-    by simp+
+  have sd: "distinct (map D.at_start_spec D.actions_spec)"
+    and se: "distinct (map D.at_end_spec D.actions_spec)"
+    and sde0: "list_all (\<lambda>s. s \<notin> set (map D.at_end_spec D.actions_spec)) (map D.at_start_spec D.actions_spec)"
+    using C by simp+
+  have sde: "set (map D.at_start_spec D.actions_spec) \<inter> set (map D.at_end_spec D.actions_spec) = {}"
+    using sde0 by (simp only: list_all_notin_set_eq_disjoint)
   from C have
       uf_s: "\<forall>a\<in>set D.actions_spec. upds_functional_list (D.upds (D.at_start_spec a))"
       and uf_e: "\<forall>a\<in>set D.actions_spec. upds_functional_list (D.upds (D.at_end_spec a))"

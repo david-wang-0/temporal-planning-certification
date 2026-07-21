@@ -20,25 +20,32 @@
 
 structure NumericBoundGlue =
 struct
-  structure NP = NumericProjection
+  (* The reduction-side snap projection + trusted box re-check (numeric_draft_actions /
+     check_gbounds_opt) and the g_int/e_int constructors now live in the unified Converter
+     export (ML/Check_Unsolvability.ML) alongside the propositional + numeric network builders,
+     so they share the parser's problem type -- no separate NumericProjection module / AST
+     coercion.  The compute side (NumericBoundInference, HOL-IMP heap) stays separate. *)
+  structure NP = Converter
   structure NBI = NumericBoundInference
 
-  (* the raw result shape of NumericProjection.numeric_draft_actions *)
+  (* the raw result shape of Converter.numeric_draft_actions.  NB: the unified Converter export is
+     the int64 (native-int) build, so its Isabelle int type is `inta` (Int_of_integer of Int.int),
+     NOT the arbitrary-precision `int` the standalone NumericProjection module carried. *)
   type draft =
     string list
     * ((NP.g_int list * (string * NP.e_int) list) list
-       * (string * NP.int) list)
+       * (string * NP.inta) list)
 
-  (* an inferred box keyed by fluent name, values in NP.int -- exactly the shape
-     NumericProjection.check_gbounds_opt consumes *)
-  type box = (string * (NP.int * NP.int)) list
+  (* an inferred box keyed by fluent name, values in NP.inta -- exactly the shape
+     Converter.check_gbounds_opt / Converter.check_and_make_numeric_network_opt consume *)
+  type box = (string * (NP.inta * NP.inta)) list
 
-  (* --- integer bridging: NP.int <-> IntInf.int <-> NBI.int --- *)
-  fun npToII (i : NP.int) : IntInf.int = NP.integer_of_int i
+  (* --- integer bridging: NP.inta (native, int64 Converter) <-> IntInf.int <-> NBI.int (IntInf) --- *)
+  fun npToII (i : NP.inta) : IntInf.int = IntInf.fromInt (NP.integer_of_int i)
   fun iiToNbi (k : IntInf.int) : NBI.int = NBI.int_of_integer k
-  fun npToNbi (i : NP.int) : NBI.int = iiToNbi (npToII i)
-  fun npOff (i : NP.int) (d : IntInf.int) : NBI.int = iiToNbi (IntInf.+ (npToII i, d))
-  fun nbiToNp (i : NBI.int) : NP.int = NP.Int_of_integer (NBI.integer_of_int i)
+  fun npToNbi (i : NP.inta) : NBI.int = iiToNbi (npToII i)
+  fun npOff (i : NP.inta) (d : IntInf.int) : NBI.int = iiToNbi (IntInf.+ (npToII i, d))
+  fun nbiToNp (i : NBI.int) : NP.inta = NP.Int_of_integer (IntInf.toInt (NBI.integer_of_int i))
 
   (* --- datatype projection (reduction-side g_int/e_int -> compute-side gcomp/nexp) --- *)
   (* strict comparisons collapse to non-strict on integers *)

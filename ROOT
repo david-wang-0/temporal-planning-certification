@@ -94,9 +94,6 @@ session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp = TP_NTA_Reduction +
     Ground_PDDL_Numeric_NTA_Reduction_Correctness
     Ground_PDDL_Numeric_NTA_Reduction_Impl
     Check_Unsolvability
-    Unsolvability_Code_Compile
-  export_files (in "../") [1]
-    "PDDL_TP_Reduction.Unsolvability_Code_Compile:ML/Check_Unsolvability.ML"
 
 session bound_inference in bound_inference = PDDL_TP_Reduction +
   description \<open>Numeric bound machinery: discharge the num_seq_in_bounds locale assumption from
@@ -112,6 +109,10 @@ session bound_parsing in bound_parsing = bound_inference +
     boundedness re-check (is_gbound_inv_exec / check_gbounds_opt) on the inferred box.\<close>
   theories
     Ground_PDDL_Numeric_Code_Export
+    Numeric_Unsolvability_Export
+    Numeric_Unsolvability_Code_Compile
+  export_files (in "../") [1]
+    "bound_parsing.Numeric_Unsolvability_Code_Compile:ML/Check_Unsolvability.ML"
 
 session PDDL_TP_Reduction_Index = bound_parsing +
   theories Index

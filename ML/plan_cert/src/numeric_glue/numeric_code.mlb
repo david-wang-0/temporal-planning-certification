@@ -1,12 +1,16 @@
-(* Isolate the two Isabelle-generated code modules so their top-level helper
-   structures (Uint32/Uint64/Tracing, which also occur in Converter) do not leak
-   or clash: only the two named module structures are exported.
+(* Isolate the compute-side Isabelle code module so its top-level helper structures
+   (Uint32/Uint64/Tracing, which also occur in Converter) do not leak or clash: only the
+   named module structure is exported.
 
    - NumericBoundInference : compute side (threshold interval AI), HOL-IMP heap.
      Its signature was widened post-generation to expose the `equal`/`enum`/`finite`
      dictionary records (they are opaque as generated), so the glue can build a
      fluent-list-backed enum dict in SML.  See NUMERIC_BOUND_INFERENCE.md.
-   - NumericProjection    : reduction side (snap projection + trusted box re-check). *)
+
+   The reduction-side projection (formerly a separate NumericProjection module from
+   code/Numeric_Projection.ML) now lives in the unified Converter export
+   (ML/Check_Unsolvability.ML), so it is no longer linked here -- the glue reaches it as
+   `Converter.*`, sharing the parser's problem type. *)
 $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/basis/mlton.mlb
 
@@ -16,9 +20,7 @@ $(SML_LIB)/basis/mlton.mlb
 local
   ann "nonexhaustiveMatch ignore" "redundantMatch ignore" "nonexhaustiveBind ignore" in
     ../../../../code/Numeric_Bound_Inference.ML
-    ../../../../code/Numeric_Projection.ML
   end
 in
   structure NumericBoundInference
-  structure NumericProjection
 end

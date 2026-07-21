@@ -9,6 +9,10 @@ plan_cert/imports/mlunta.mlb
 
 local
     plan_cert/imports/munta.mlb
+    (* Term stub: the numeric Converter export emits typerep/heap machinery referencing the
+       real Isabelle Term.typ/Term.Type; supply a standalone datatype so it type-checks
+       (these typerep fns are never called on the certification path). *)
+    term_stub.sml
     ann "nonexhaustiveMatch ignore" in
       Check_Unsolvability.ML
     end

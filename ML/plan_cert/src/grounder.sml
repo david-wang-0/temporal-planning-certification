@@ -305,6 +305,118 @@ struct
         (C.Domain (types, prop_preds, prop_funcs, [], ground_actions), [], prop_init, prop_goal)
     end
 
+  (* ================ numeric-KEEPING grounding (for the numeric network builder) ================
+     Same instantiation + propositionalisation as ground_problem, but numeric preconditions and
+     numeric effects are KEPT (their func-applications inlined to 0-ary names) rather than
+     delete-relaxed.  Feeds Converter.check_and_make_numeric_network_opt, which reads the numeric
+     content directly.  Ground object (in)equalities are still folded (the reduction has no
+     constants), and statically-infeasible ground instances are still pruned. *)
+
+  (* fold ground object (in)equalities + simplify boolean structure, but KEEP numeric comparison
+     atoms (they are mangled to 0-ary funcs later by prop_term_atom / prop_obj_atom) *)
+  fun fold_eq_pre (C.Atom (C.PredAtm p)) = C.Atom (C.PredAtm p)
+    | fold_eq_pre (C.Atom (C.EqAtm (a, b))) =
+        (case eq_names (a, b) of SOME true => fTrue | SOME false => C.Bot
+                               | NONE => C.Atom (C.EqAtm (a, b)))
+    | fold_eq_pre (C.Atom a) = C.Atom a   (* numeric comparison atoms: keep *)
+    | fold_eq_pre C.Bot = C.Bot
+    | fold_eq_pre (C.Not f) =
+        (case fold_eq_pre f of C.Bot => fTrue | C.Not C.Bot => C.Bot | f' => C.Not f')
+    | fold_eq_pre (C.And (f, g)) =
+        (case (fold_eq_pre f, fold_eq_pre g) of
+            (C.Bot, _) => C.Bot | (_, C.Bot) => C.Bot
+          | (C.Not C.Bot, g') => g' | (f', C.Not C.Bot) => f'
+          | (f', g') => C.And (f', g'))
+    | fold_eq_pre (C.Or (f, g)) =
+        (case (fold_eq_pre f, fold_eq_pre g) of
+            (C.Not C.Bot, _) => fTrue | (_, C.Not C.Bot) => fTrue
+          | (C.Bot, g') => g' | (f', C.Bot) => f' | (f', g') => C.Or (f', g'))
+    | fold_eq_pre (C.Imp (f, g)) =
+        (case (fold_eq_pre f, fold_eq_pre g) of
+            (C.Bot, _) => fTrue | (_, C.Not C.Bot) => fTrue
+          | (C.Not C.Bot, g') => g' | (f', g') => C.Imp (f', g'))
+
+  (* numeric-keeping init: keep predicate atoms AND numeric assignments; drop static EqAtm *)
+  fun keep_init_form (C.Atom (C.PredAtm p))           = [C.Atom (C.PredAtm p)]
+    | keep_init_form (C.Atom (C.NumericEqAtm (x, y)))  = [C.Atom (C.NumericEqAtm (x, y))]
+    | keep_init_form (C.Atom (C.EqAtm _))             = []
+    | keep_init_form (C.Atom _)                        = []
+    | keep_init_form f                                 = [f]
+
+  fun ground_schema_numeric types objs_typed sch =
+    let
+      val (name, params, mk) =
+        (case sch of
+            C.SimpleActionSchemaa (C.ActionHead (n, ps), C.SimpleActionBody (pre, eff)) =>
+              (n, ps, fn (n', sg) =>
+                 let val pre' = fold_eq_pre (subst_form sg pre)
+                 in if isBot pre' then NONE
+                    else SOME (C.SimpleActionSchemaa
+                      (C.ActionHead (n', []),
+                       C.SimpleActionBody (map_form prop_term_atom pre',
+                                           prop_eff (subst_eff sg eff))))
+                 end)
+          | C.DurativeActionSchema (C.ActionHead (n, ps),
+                                    C.DurativeActionBody (durs, conds, effs)) =>
+              (n, ps, fn (n', sg) =>
+                 let val conds' = map (fn (ta, f) => (ta, fold_eq_pre (subst_form sg f))) conds
+                 in if List.exists (fn (_, f) => isBot f) conds' then NONE
+                    else SOME (C.DurativeActionSchema
+                      (C.ActionHead (n', []),
+                       C.DurativeActionBody
+                         (map (fn (ta, dc) => (ta, prop_dc (subst_dc sg dc))) durs,
+                          map (fn (ta, f)  => (ta, map_form prop_term_atom f)) conds',
+                          map (fn (ta, e)  => (ta, prop_eff (subst_eff sg e))) effs)))
+                 end))
+      val cand = map (fn (_, pty) => candidates types objs_typed pty) params
+    in
+      List.mapPartial (fn objs => mk (ground_name name objs, sigma_of params objs)) (cartesian cand)
+    end
+
+  (* func names occurring in a formula's numeric comparison atoms *)
+  fun atom_funcs acc (C.NumericEqAtm (x, y))      = nexp_funcs (nexp_funcs acc x) y
+    | atom_funcs acc (C.NumericLessAtm (x, y))    = nexp_funcs (nexp_funcs acc x) y
+    | atom_funcs acc (C.NumericLEAtm (x, y))      = nexp_funcs (nexp_funcs acc x) y
+    | atom_funcs acc (C.NumericGreaterAtm (x, y)) = nexp_funcs (nexp_funcs acc x) y
+    | atom_funcs acc (C.NumericGEAtm (x, y))      = nexp_funcs (nexp_funcs acc x) y
+    | atom_funcs acc _                             = acc
+  fun form_funcs acc (C.Atom a)     = atom_funcs acc a
+    | form_funcs acc C.Bot          = acc
+    | form_funcs acc (C.Not f)      = form_funcs acc f
+    | form_funcs acc (C.And (f, g)) = form_funcs (form_funcs acc f) g
+    | form_funcs acc (C.Or (f, g))  = form_funcs (form_funcs acc f) g
+    | form_funcs acc (C.Imp (f, g)) = form_funcs (form_funcs acc f) g
+  fun schema_funcs_num acc sch =
+    (case sch of
+        C.SimpleActionSchemaa (_, C.SimpleActionBody (pre, eff)) =>
+          eff_funcs (form_funcs acc pre) eff
+      | C.DurativeActionSchema (_, C.DurativeActionBody (durs, conds, effs)) =>
+          let val a0 = foldl (fn ((_, dc), ac) => dc_funcs ac dc) acc durs
+              val a1 = foldl (fn ((_, f), ac) => form_funcs ac f) a0 conds
+          in foldl (fn ((_, e), ac) => eff_funcs ac e) a1 effs end)
+
+  fun ground_problem_numeric
+        (C.Problem (C.Domain (types, _, _, consts, actions), objs, init, goal)) =
+    let
+      val all_objs = objs @ consts
+      val ground_actions = List.concat (map (ground_schema_numeric types all_objs) actions)
+      val num_init = map (map_form prop_obj_atom) (List.concat (map keep_init_form init))
+      val num_goal = map_form prop_obj_atom goal
+      val pnames =
+        foldl (fn (s, acc) => schema_preds acc s)
+          (form_preds (foldl (fn (f, acc) => form_preds acc f) [] num_init) num_goal)
+          ground_actions
+      val fnames =
+        foldl (fn (s, acc) => schema_funcs_num acc s)
+          (form_funcs (foldl (fn (f, acc) => form_funcs acc f) [] num_init) num_goal)
+          ground_actions
+      val prop_preds = map (fn nm => C.PredDecl (C.Pred nm, [])) pnames
+      val num_funcs  = map (fn nm => C.FuncDecl (C.Func nm, [])) fnames
+    in
+      C.Problem
+        (C.Domain (types, prop_preds, num_funcs, [], ground_actions), [], num_init, num_goal)
+    end
+
   (* ---------- pretty-print a GROUND (propositional) problem as PDDL, for inspection ----------
      Predicate/init/goal atoms are 0-ary (objects inlined); numeric content has been relaxed to
      definedness predicates.  Exact duration rat values are shown as `#` (the export exposes no
