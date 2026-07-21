@@ -395,6 +395,75 @@ struct
               val a1 = foldl (fn ((_, f), ac) => form_funcs ac f) a0 conds
           in foldl (fn ((_, e), ac) => eff_funcs ac e) a1 effs end)
 
+  (* ---- constant-fold STATIC numeric fluents (never assigned by any action) ----
+     A ground fluent that is on NO effect's LHS is static: its value stays its init assignment.
+     Substituting  NVar f -> NConst (its init value)  turns a relational var-vs-var guard like
+     (>= (battery-level r0) (distance p0 p1))  into var-vs-const  (>= (battery-level r0) 3) ,
+     which the interval bound inference AND the trusted refine_comp re-check both handle (both
+     only refine var-vs-const).  Sound: the fluent is provably constant. *)
+  fun mem x xs = List.exists (fn y => y = x) xs
+  fun assocv _ [] = NONE
+    | assocv x ((k, v) :: t) = if k = x then SOME v else assocv x t
+  fun eff_lhs (C.Effect (_, _, neffs)) =
+        foldl (fn (C.NumericEffect (_, C.PNE (C.Func f, _), _), a) => add f a) [] neffs
+  fun schema_assigned acc sch =
+    (case sch of
+        C.SimpleActionSchemaa (_, C.SimpleActionBody (_, e)) =>
+          foldl (fn (x, a) => add x a) acc (eff_lhs e)
+      | C.DurativeActionSchema (_, C.DurativeActionBody (_, _, effs)) =>
+          foldl (fn ((_, e), a) => foldl (fn (x, b) => add x b) a (eff_lhs e)) acc effs)
+
+  fun fold_nexp st cm e =
+    (case e of
+        C.FunctionExpr (C.PNE (C.Func f, _)) =>
+          if mem f st then (case assocv f cm of SOME v => C.ConstantExpr v | NONE => e) else e
+      | C.AddExpr (a, b) => C.AddExpr (fold_nexp st cm a, fold_nexp st cm b)
+      | C.SubExpr (a, b) => C.SubExpr (fold_nexp st cm a, fold_nexp st cm b)
+      | C.MulExpr (a, b) => C.MulExpr (fold_nexp st cm a, fold_nexp st cm b)
+      | C.DivExpr (a, b) => C.DivExpr (fold_nexp st cm a, fold_nexp st cm b)
+      | C.SinExpr a => C.SinExpr (fold_nexp st cm a)
+      | C.CosExpr a => C.CosExpr (fold_nexp st cm a)
+      | C.ExpExpr a => C.ExpExpr (fold_nexp st cm a)
+      | _ => e)
+  fun fold_atom st cm a =
+    (case a of
+        C.NumericEqAtm (x, y)      => C.NumericEqAtm (fold_nexp st cm x, fold_nexp st cm y)
+      | C.NumericLessAtm (x, y)    => C.NumericLessAtm (fold_nexp st cm x, fold_nexp st cm y)
+      | C.NumericLEAtm (x, y)      => C.NumericLEAtm (fold_nexp st cm x, fold_nexp st cm y)
+      | C.NumericGreaterAtm (x, y) => C.NumericGreaterAtm (fold_nexp st cm x, fold_nexp st cm y)
+      | C.NumericGEAtm (x, y)      => C.NumericGEAtm (fold_nexp st cm x, fold_nexp st cm y)
+      | other => other)
+  fun fold_eff st cm (C.Effect (adds, dels, neffs)) =
+        C.Effect (adds, dels, map (fn C.NumericEffect (o_, p, e) => C.NumericEffect (o_, p, fold_nexp st cm e)) neffs)
+  fun fold_dc st cm (C.DurationConstraint (dop, e)) = C.DurationConstraint (dop, fold_nexp st cm e)
+  fun fold_sch st cm sch =
+    (case sch of
+        C.SimpleActionSchemaa (h, C.SimpleActionBody (pre, eff)) =>
+          C.SimpleActionSchemaa (h, C.SimpleActionBody (map_form (fold_atom st cm) pre, fold_eff st cm eff))
+      | C.DurativeActionSchema (h, C.DurativeActionBody (durs, conds, effs)) =>
+          C.DurativeActionSchema (h, C.DurativeActionBody
+            (map (fn (ta, dc) => (ta, fold_dc st cm dc)) durs,
+             map (fn (ta, f)  => (ta, map_form (fold_atom st cm) f)) conds,
+             map (fn (ta, e)  => (ta, fold_eff st cm e)) effs)))
+
+  fun fold_static_fluents (C.Problem (C.Domain (types, preds, funcs, consts, actions), objs, init, goal)) =
+    let
+      val assigned = foldl (fn (s, a) => schema_assigned a s) [] actions
+      val cm = List.mapPartial
+        (fn C.Atom (C.NumericEqAtm (C.FunctionExpr (C.PNE (C.Func f, _)), C.ConstantExpr v)) =>
+                if mem f assigned then NONE else SOME (f, v)
+          | _ => NONE) init
+      val st = map #1 cm
+      val actions' = map (fold_sch st cm) actions
+      val goal'    = map_form (fold_atom st cm) goal
+      val funcs'   = List.filter (fn C.FuncDecl (C.Func f, _) => not (mem f st)) funcs
+      val init'    = List.filter
+        (fn C.Atom (C.NumericEqAtm (C.FunctionExpr (C.PNE (C.Func f, _)), _)) => not (mem f st)
+          | _ => true) init
+    in
+      C.Problem (C.Domain (types, preds, funcs', consts, actions'), objs, init', goal')
+    end
+
   fun ground_problem_numeric
         (C.Problem (C.Domain (types, _, _, consts, actions), objs, init, goal)) =
     let
@@ -413,8 +482,9 @@ struct
       val prop_preds = map (fn nm => C.PredDecl (C.Pred nm, [])) pnames
       val num_funcs  = map (fn nm => C.FuncDecl (C.Func nm, [])) fnames
     in
-      C.Problem
-        (C.Domain (types, prop_preds, num_funcs, [], ground_actions), [], num_init, num_goal)
+      fold_static_fluents
+        (C.Problem
+          (C.Domain (types, prop_preds, num_funcs, [], ground_actions), [], num_init, num_goal))
     end
 
   (* ---------- pretty-print a GROUND (propositional) problem as PDDL, for inspection ----------

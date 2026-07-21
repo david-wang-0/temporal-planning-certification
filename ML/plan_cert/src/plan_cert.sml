@@ -198,10 +198,24 @@ fun make_numeric_network domain problem model =
             case NumericBoundGlue.infer_box draft of
                 SOME b => b
               | NONE => exit_fail "numeric bound inference failed (a fluent is unbounded / out of scope)"
+        val () = println ("+ Inferred fluent box: "
+                   ^ String.concatWith ", "
+                       (List.map (fn (f, (lo, hi)) =>
+                          f ^ " in [" ^ Int.toString (Converter.integer_of_int lo)
+                          ^ "," ^ Int.toString (Converter.integer_of_int hi) ^ "]") box))
+        (* distinguish the two fail-closed causes: the trusted box re-check vs. the structural
+           numeric admission check (both make check_and_make_numeric_network_opt return NONE) *)
+        val boxOk = Converter.check_gbounds_opt ground_prob box
+        val () = println ("+ Box re-check (is_gbound_inv_exec): "
+                          ^ (if boxOk then "PASS" else "FAIL"))
         val net =
             case Converter.check_and_make_numeric_network_opt ground_prob box of
                 SOME n => n
-              | NONE => exit_fail "numeric admission check / static bound re-check rejected the problem"
+              | NONE =>
+                  exit_fail (if boxOk
+                             then "structural numeric admission check rejected the problem \
+                                  \(check_numeric_ground_problem: functional/no-cross-read/struct-ok/snaps-disjoint)"
+                             else "trusted static bound re-check rejected the inferred box (is_gbound_inv_exec)")
         val _ = NetworkConversion.convert_network true model net
     in () end
 
