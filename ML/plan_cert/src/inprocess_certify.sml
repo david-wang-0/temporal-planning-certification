@@ -65,7 +65,7 @@ struct
       val nthreads_n =
         Converter.nat_of_integer (Option.getOpt (Int.fromString nthreads, 1))
     in
-      case Converter.check_and_make_network_opt parsed_prob of
+      case Converter.check_and_make_network_opt (Grounder.ground_problem parsed_prob) of
         NONE => Log.info "Admission check rejected the problem (no network built)."
       | SOME net =>
         let

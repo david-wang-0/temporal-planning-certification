@@ -161,8 +161,8 @@ fun parse_check_and_cert_network _ _ _ _ _ _ _ =
 fun make_network domain problem model =
     let
         val _ = log_conversion_config (domain, problem, model)
-        val parsed_prob = PddlParser.get_prob domain problem 
-        val res = Converter.check_and_make_network_opt parsed_prob 
+        val parsed_prob = PddlParser.get_prob domain problem
+        val res = Converter.check_and_make_network_opt (Grounder.ground_problem parsed_prob)
             |> Option.map (NetworkConversion.convert_network true model)
         val _ = res
     in ()

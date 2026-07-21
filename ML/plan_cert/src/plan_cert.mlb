@@ -26,6 +26,7 @@ tchecker_certify.sml
 numeric_glue/numeric_code.mlb
 numeric_glue/numeric_bound_glue.sml
 
+grounder.sml
 inprocess_certify.sml
 plan_cert.sml
 Mlton_Main.sml
