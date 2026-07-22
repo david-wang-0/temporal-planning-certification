@@ -221,10 +221,6 @@ begin
 
 definition "check_numeric_ground_problem fluent_lo fluent_hi \<equiv> do {
   check_ground_problem_base P;
-  check (distinct (map at_start_spec actions_spec)
-         \<and> distinct (map at_end_spec actions_spec)
-         \<and> list_all (\<lambda>s. s \<notin> set (map at_end_spec actions_spec)) (map at_start_spec actions_spec))
-    (ERRS ''Ground snaps are not pairwise disjoint (start/end snap collision or duplicate snap)'');
   check_all_list (\<lambda>a. upds_functional_list (upds (at_start_spec a))) actions_spec
     ''Start-snap numeric updates are not functional (a fluent is written twice)'' (shows o ast_temporal_action_schema_name);
   check_all_list (\<lambda>a. upds_functional_list (upds (at_end_spec a))) actions_spec
@@ -260,30 +256,25 @@ text \<open>DIAGNOSTIC (temporary): 1-based index of the FIRST failing structura
   admission clause rejects a problem instead of a coarse NONE.\<close>
 definition "check_numeric_ground_problem_diag (fluent_lo :: func \<Rightarrow> int) (fluent_hi :: func \<Rightarrow> int) \<equiv> (
   if \<not> isOK (check_ground_problem_base P) then (1::nat)
-  else if \<not> (distinct (map at_start_spec actions_spec) \<and> distinct (map at_end_spec actions_spec)
-             \<and> list_all (\<lambda>s. s \<notin> set (map at_end_spec actions_spec)) (map at_start_spec actions_spec)) then 2
-  else if \<not> list_all (\<lambda>a. upds_functional_list (upds (at_start_spec a))) actions_spec then 3
-  else if \<not> list_all (\<lambda>a. upds_functional_list (upds (at_end_spec a))) actions_spec then 4
-  else if \<not> list_all (\<lambda>a. upds_no_cross_read_list (upds (at_start_spec a))) actions_spec then 5
-  else if \<not> list_all (\<lambda>a. upds_no_cross_read_list (upds (at_end_spec a))) actions_spec then 6
-  else if \<not> list_all (\<lambda>f. fluent_lo f \<le> fluent_hi f) nfluents then 7
-  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_start_spec a))) actions_spec then 8
-  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_end_spec a))) actions_spec then 9
-  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_start_spec a))) actions_spec then 10
-  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_end_spec a))) actions_spec then 11
-  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_inv a)) actions_spec then 12
-  else if \<not> list_all (\<lambda>f. is_int_rat (num_init f)) nfluents then 13
-  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_start_spec a))) actions_spec then 14
-  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_end_spec a))) actions_spec then 15
-  else if \<not> list_all (comp_struct_ok nfluents) num_goal then 16
+  else if \<not> list_all (\<lambda>a. upds_functional_list (upds (at_start_spec a))) actions_spec then 2
+  else if \<not> list_all (\<lambda>a. upds_functional_list (upds (at_end_spec a))) actions_spec then 3
+  else if \<not> list_all (\<lambda>a. upds_no_cross_read_list (upds (at_start_spec a))) actions_spec then 4
+  else if \<not> list_all (\<lambda>a. upds_no_cross_read_list (upds (at_end_spec a))) actions_spec then 5
+  else if \<not> list_all (\<lambda>f. fluent_lo f \<le> fluent_hi f) nfluents then 6
+  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_start_spec a))) actions_spec then 7
+  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_end_spec a))) actions_spec then 8
+  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_start_spec a))) actions_spec then 9
+  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_end_spec a))) actions_spec then 10
+  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_inv a)) actions_spec then 11
+  else if \<not> list_all (\<lambda>f. is_int_rat (num_init f)) nfluents then 12
+  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_start_spec a))) actions_spec then 13
+  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_end_spec a))) actions_spec then 14
+  else if \<not> list_all (comp_struct_ok nfluents) num_goal then 15
   else 0)"
 
 lemma check_numeric_ground_problem_return_iff:
   "check_numeric_ground_problem fluent_lo fluent_hi = Inr ()
    \<longleftrightarrow> ground_ast_problem_base P
-     \<and> (distinct (map at_start_spec actions_spec)
-        \<and> distinct (map at_end_spec actions_spec)
-        \<and> list_all (\<lambda>s. s \<notin> set (map at_end_spec actions_spec)) (map at_start_spec actions_spec))
      \<and> (\<forall>a\<in>set actions_spec. upds_functional_list (upds (at_start_spec a)))
      \<and> (\<forall>a\<in>set actions_spec. upds_functional_list (upds (at_end_spec a)))
      \<and> (\<forall>a\<in>set actions_spec. upds_no_cross_read_list (upds (at_start_spec a)))
@@ -320,12 +311,6 @@ proof -
   from h have "D.check_numeric_ground_problem fluent_lo fluent_hi = Inr ()" by simp
   note C = this[unfolded D.check_numeric_ground_problem_return_iff]
   from C have core: "ground_ast_problem_base P" by simp
-  have sd: "distinct (map D.at_start_spec D.actions_spec)"
-    and se: "distinct (map D.at_end_spec D.actions_spec)"
-    and sde0: "list_all (\<lambda>s. s \<notin> set (map D.at_end_spec D.actions_spec)) (map D.at_start_spec D.actions_spec)"
-    using C by simp+
-  have sde: "set (map D.at_start_spec D.actions_spec) \<inter> set (map D.at_end_spec D.actions_spec) = {}"
-    using sde0 by (simp only: list_all_notin_set_eq_disjoint)
   from C have
       uf_s: "\<forall>a\<in>set D.actions_spec. upds_functional_list (D.upds (D.at_start_spec a))"
       and uf_e: "\<forall>a\<in>set D.actions_spec. upds_functional_list (D.upds (D.at_end_spec a))"
@@ -343,47 +328,29 @@ proof -
       and cg: "list_all (comp_struct_ok D.nfluents) D.num_goal"
     by simp+
   interpret core: ground_ast_problem_base P by (rule core)
-  interpret ndefs: numeric_tp_nta_reduction_defs
+  \<comment> \<open>Primed base: the numeric reduction is built over the injective @{const AtStart}/@{const AtEnd}
+      snaps, so the leaf needs NO snap-distinctness.  Its @{locale temp_planning_problem_list_impl_int'}
+      obligations are exactly the ones @{locale ground_ast_problem_base} already discharges via its
+      @{text abstr_model_checking} sublocale (@{theory_text \<open>Ground_PDDL_Problem_Reduction\<close>}).\<close>
+  interpret ndefs: numeric_tp_nta_reduction_defs'
     D.init_spec D.goal_spec D.at_start_spec D.at_end_spec D.over_all_spec
     D.lower_spec D.upper_spec D.pre_spec D.adds_spec D.dels_spec 0
     D.props_spec D.actions_spec D.act_to_name_spec D.prop_to_name_spec
     D.n_pre D.n_inv D.upds D.num_init D.num_goal D.nfluents D.fluent_to_name_spec
     fluent_lo fluent_hi D.const_to_int
-    apply unfold_locales
-    subgoal using core.wf_domain_signature[unfolded D.wf_domain_signature_def] by (simp add: D.props_spec_def)
-    subgoal using core.distinct_act_names distinct_map by blast
-    subgoal by (simp add: D.pre_spec_alt)
-    subgoal
-      unfolding D.imp_defs.rat_impl.set_impl.snaps_disj_on_def
-      using sd se sde by (auto simp: distinct_map)
-    subgoal
-    proof (rule subsetI)
-      fix x assume "x \<in> set D.init_spec"
-      then obtain y where y: "y \<in> set (init P)" "is_predAtom y" "x = to_predicate y"
-        unfolding D.init_spec_def by auto
-      have nfa: "\<not> D.wf_func_assign y"
-        using y(2) by (cases y rule: D.wf_func_assign.cases) auto
-      have "D.wf_fmla_atom D.objT y \<or> D.wf_func_assign y"
-        using y(1) core.wf_temporal_problem unfolding D.wf_temporal_problem_def by blast
-      hence "D.wf_fmla_atom D.objT y" using nfa by blast
-      thus "x \<in> set D.props_spec"
-        using core.wf_fmla_atom_in_props y(3) by simp
-    qed
-    subgoal using core.goal_in_props .
-    subgoal
-      unfolding D.imp_defs.rat_impl.set_impl.act_ref_props_def
-                D.imp_defs.rat_impl.set_impl.snap_ref_props_def
-      using core.start_pre_in_props core.start_adds_in_props core.start_dels_in_props
-            core.end_pre_in_props core.end_adds_in_props core.end_dels_in_props
-            core.over_all_in_props
-      by (simp add: comp_def)
-    done
+    by unfold_locales
+       (fact core.abstr_model_checking.distinct_props
+             core.abstr_model_checking.distinct_actions
+             core.abstr_model_checking.distinct_over_all
+             core.abstr_model_checking.goal_consts_in_init_consts
+             core.abstr_model_checking.domain_acts_mod_props
+             core.abstr_model_checking.act_consts_in_init_consts)+
   have ne_ok: "\<forall>w. ndefs.num_val_ok w \<longrightarrow> (\<forall>(f, e)\<in>set us. ndefs.nexp_ok w e)"
     if "list_all (\<lambda>(f, e). nexp_struct_ok D.nfluents e) us" for us :: "(func \<times> (func, rat) nexp) list"
-    using that by (auto simp: list_all_iff intro: ndefs.nexp_struct_ok_sound)
+    using that by (auto simp: list_all_iff intro: ndefs.reduction_ref_impl.nexp_struct_ok_sound)
   have cp_ok: "\<forall>w. ndefs.num_val_ok w \<longrightarrow> (\<forall>c\<in>set cs. ndefs.comp_ok w c)"
     if "list_all (comp_struct_ok D.nfluents) cs" for cs :: "(func, rat) comp list"
-    using that by (auto simp: list_all_iff intro: ndefs.comp_struct_ok_sound)
+    using that by (auto simp: list_all_iff intro: ndefs.reduction_ref_impl.comp_struct_ok_sound)
   show "numeric_ground_ast_problem P fluent_lo fluent_hi"
     apply unfold_locales
     subgoal using uf_s .
@@ -420,8 +387,13 @@ lemma fluent_to_var_spec_eq: "fluent_to_var_spec = ndefs.fluent_to_var"
 
 text \<open>The computable numeric guards/updates coincide with the abstract @{text ndefs} ones: same numeric
   data, same encoders.\<close>
-lemma num_pre_guard_refine: "num_pre_guard' s = ndefs.num_pre_guard s"
-  unfolding num_pre_guard'_def ndefs.num_pre_guard_def fluent_to_var_spec_eq ..
+lemma num_pre_guard_refine_start: "num_pre_guard' (at_start_spec a) = ndefs.num_pre_guard (AtStart a)"
+  unfolding num_pre_guard'_def ndefs.num_pre_guard_def fluent_to_var_spec_eq
+  unfolding imp_defs.rat_impl.set_impl.app_snap.simps ..
+
+lemma num_pre_guard_refine_end: "num_pre_guard' (at_end_spec a) = ndefs.num_pre_guard (AtEnd a)"
+  unfolding num_pre_guard'_def ndefs.num_pre_guard_def fluent_to_var_spec_eq
+  unfolding imp_defs.rat_impl.set_impl.app_snap.simps ..
 
 lemma num_inv_guard_refine: "num_inv_guard' a = ndefs.num_inv_guard a"
   unfolding num_inv_guard'_def ndefs.num_inv_guard_def fluent_to_var_spec_eq ..
@@ -429,8 +401,13 @@ lemma num_inv_guard_refine: "num_inv_guard' a = ndefs.num_inv_guard a"
 lemma num_goal_guard_refine: "num_goal_guard' = ndefs.num_goal_guard"
   unfolding num_goal_guard'_def ndefs.num_goal_guard_def fluent_to_var_spec_eq ..
 
-lemma num_upd_refine: "num_upd' s = ndefs.num_upd s"
-  unfolding num_upd'_def ndefs.num_upd_def fluent_to_var_spec_eq ..
+lemma num_upd_refine_start: "num_upd' (at_start_spec a) = ndefs.num_upd (AtStart a)"
+  unfolding num_upd'_def ndefs.num_upd_def fluent_to_var_spec_eq
+  unfolding imp_defs.rat_impl.set_impl.app_snap.simps ..
+
+lemma num_upd_refine_end: "num_upd' (at_end_spec a) = ndefs.num_upd (AtEnd a)"
+  unfolding num_upd'_def ndefs.num_upd_def fluent_to_var_spec_eq
+  unfolding imp_defs.rat_impl.set_impl.app_snap.simps ..
 
 lemma num_init_upd_refine: "num_init_upd' = ndefs.num_init_upd"
   unfolding num_init_upd'_def ndefs.num_init_upd_def fluent_to_var_spec_eq ..
@@ -502,30 +479,70 @@ lemma ndefs_inc_prop_lock_ab: "ndefs.inc_prop_lock_ab n = (inc_var n) o (prop_to
 lemma ndefs_pl_is_1: "ndefs.pl_is_1 = var_is 1 planning_lock_impl"
   unfolding ndefs.pl_is_1_def ndefs_planning_lock ..
 
-text \<open>The abstract @{text ndefs} mutex test on RAW snaps coincides with the executable
-  @{const mutex_snap_action'} on the corresponding LABELLED snaps (bridged through @{text app_snap}).\<close>
-lemma ndefs_mutex_snap_ss:
-  "ndefs.mutex_effects (at_start_spec a) (at_start_spec b) = mutex_snap_action' (AtStart a) (AtStart b)"
-  "ndefs.mutex_effects (at_start_spec a) (at_end_spec b) = mutex_snap_action' (AtStart a) (AtEnd b)"
-  "ndefs.mutex_effects (at_end_spec a) (at_start_spec b) = mutex_snap_action' (AtEnd a) (AtStart b)"
-  "ndefs.mutex_effects (at_end_spec a) (at_end_spec b) = mutex_snap_action' (AtEnd a) (AtEnd b)"
+text \<open>The primed @{text ndefs} net is built over the RESTRICTED @{text pre_imp_restr_list} /
+  @{text over_all_restr_list}; on the reachable snap/action set (@{const AtStart}/@{const AtEnd} of
+  @{const actions_spec}) the restriction is the identity, because ground actions only reference
+  propositions.  These are the RAW analogues of the propositional @{text ground_ast_problem}
+  equivalences (@{text pre_imp_restr_equiv_pre_imp} / @{text over_all_restr_equiv_over_all}), re-proved
+  here off the @{locale ground_ast_problem_base} in-props facts.\<close>
+lemma pre_imp_restr_equiv_pre_imp:
+  assumes "a \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
+  shows "imp_defs.rat_impl.pre_imp_restr_list a = imp_defs.rat_impl.pre_imp_list a"
+proof -
+  have "set (imp_defs.rat_impl.pre_imp_list a) \<subseteq> set props_spec"
+  proof (intro subsetI)
+    fix x
+    assume "x \<in> set (imp_defs.rat_impl.pre_imp_list a)"
+    thus "x \<in> set props_spec"
+      using assms
+      apply (induction a)
+      unfolding imp_defs.rat_impl.pre_imp_list_def imp_defs.rat_impl.set_impl.app_snap.simps
+      using start_pre_in_props end_pre_in_props by blast+
+  qed
+  thus ?thesis
+    unfolding imp_defs.rat_impl.pre_imp_restr_list_def
+    by (force simp: filter_id_conv)
+qed
+
+lemma over_all_restr_equiv_over_all:
+  assumes "a \<in> set actions_spec"
+  shows "imp_defs.rat_impl.over_all_restr_list a = over_all_spec a"
+proof -
+  have "set (over_all_spec a) \<subseteq> set props_spec"
+    using over_all_in_props assms by simp
+  thus ?thesis unfolding imp_defs.rat_impl.over_all_restr_list_def
+    by (force simp: filter_id_conv)
+qed
+
+text \<open>The abstract @{text ndefs} mutex test on LABELLED snaps coincides with the executable
+  @{const mutex_snap_action'}; the primed net's @{text pre_imp_restr_list} collapses to
+  @{text pre_imp_list} on the reachable snaps via @{thm pre_imp_restr_equiv_pre_imp}.\<close>
+lemma ndefs_mutex_snap_refine:
+  assumes "a \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
+      and "b \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
+  shows "ndefs.mutex_effects a b = mutex_snap_action' a b"
   unfolding mutex_snap_action'_def
-  unfolding action_defs.mutex_snap_action_def
-  unfolding imp_defs.rat_impl.pre_imp_list_def imp_defs.rat_impl.add_imp_list_def imp_defs.rat_impl.del_imp_list_def
-  unfolding imp_defs.rat_impl.set_impl.app_snap.simps
-  by simp+
+  apply (subst abstr_model_checking.rat_imp'.prob_list_impl.set_impl.mutex_snap_action_def)
+  unfolding comp_def apply (subst pre_imp_restr_equiv_pre_imp, use assms in blast)+
+  apply (subst action_defs.mutex_snap_action_def[symmetric])
+  by simp
 
-lemma ndefs_net_int_clocks_start:
-  "ndefs.net_int_clocks (at_start_spec a) = net_int_clocks' (AtStart a)"
-  unfolding ndefs.net_int_clocks_def net_int_clocks'_def Let_def
-  unfolding ndefs_act_to_start_clock ndefs_act_to_end_clock
-  by (simp add: ndefs_mutex_snap_ss cong: filter_cong)
-
-lemma ndefs_net_int_clocks_end:
-  "ndefs.net_int_clocks (at_end_spec a) = net_int_clocks' (AtEnd a)"
-  unfolding ndefs.net_int_clocks_def net_int_clocks'_def Let_def
-  unfolding ndefs_act_to_start_clock ndefs_act_to_end_clock
-  by (simp add: ndefs_mutex_snap_ss cong: filter_cong)
+lemma ndefs_net_int_clocks_refine:
+  assumes "a \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
+  shows "ndefs.net_int_clocks a = net_int_clocks' a"
+proof -
+  have 1: "filter (\<lambda>aa. ndefs.mutex_effects a (AtStart aa)) actions_spec = filter (\<lambda>b. mutex_snap_action' a (AtStart b)) actions_spec"
+    apply (rule filter_eq_conv)
+    using ndefs_mutex_snap_refine[OF assms] by simp
+  have 2: "filter (\<lambda>aa. ndefs.mutex_effects a (AtEnd aa)) actions_spec = filter (\<lambda>aa. mutex_snap_action' a (AtEnd aa)) actions_spec"
+    apply (rule filter_eq_conv)
+    using ndefs_mutex_snap_refine[OF assms] by simp
+  show ?thesis
+    unfolding ndefs.net_int_clocks_def Let_def
+    unfolding 1 2 net_int_clocks'_def
+    unfolding ndefs_act_to_start_clock ndefs_act_to_end_clock
+    by blast
+qed
 
 text \<open>Each RAW abstract propositional edge (the @{text ndefs} interpretation, over @{const at_start_spec}
   / @{const pre_spec} / ...) coincides with the executable propositional edge (over @{const AtStart} /
@@ -533,28 +550,32 @@ text \<open>Each RAW abstract propositional edge (the @{text ndefs} interpretati
   refines above.  These are the RAW analogues of the propositional @{text ground_ast_problem} @{text
   \<open>*_refine\<close>} lemmas, re-proved here because the numeric net is built over the RAW net.\<close>
 
-lemma ndefs_start_edge_refine: "ndefs.start_edge a = start_edge' a"
+lemma ndefs_start_edge_refine:
+  assumes "a \<in> set actions_spec"
+  shows "ndefs.start_edge a = start_edge' a"
   unfolding ndefs.start_edge_def start_edge'_def Let_def
-  unfolding ndefs_net_int_clocks_start
   unfolding ndefs_is_prop_ab ndefs_is_prop_lock_ab ndefs_set_prop_ab
   unfolding ndefs_pl_is_1 ndefs_acts_active ndefs_off_loc ndefs_starting_loc
   unfolding ndefs_act_to_start_clock
-  unfolding imp_defs.rat_impl.pre_imp_list_def imp_defs.rat_impl.add_imp_list_def imp_defs.rat_impl.del_imp_list_def
-  unfolding imp_defs.rat_impl.set_impl.app_snap.simps
+  using ndefs_net_int_clocks_refine assms pre_imp_restr_equiv_pre_imp
   by simp
 
-lemma ndefs_end_edge_refine: "ndefs.end_edge a = end_edge' a"
+lemma ndefs_end_edge_refine:
+  assumes "a \<in> set actions_spec"
+  shows "ndefs.end_edge a = end_edge' a"
   unfolding ndefs.end_edge_def end_edge'_def Let_def
   unfolding ndefs_is_prop_ab ndefs_is_prop_lock_ab ndefs_set_prop_ab
   unfolding ndefs_pl_is_1 ndefs_acts_active ndefs_off_loc ndefs_ending_loc
-  unfolding imp_defs.rat_impl.pre_imp_list_def imp_defs.rat_impl.add_imp_list_def imp_defs.rat_impl.del_imp_list_def
-  unfolding imp_defs.rat_impl.set_impl.app_snap.simps
-  by simp
+  using pre_imp_restr_equiv_pre_imp assms
+  by auto
 
-lemma ndefs_edge_2_refine: "ndefs.edge_2 a = edge_2' a"
+lemma ndefs_edge_2_refine:
+  assumes "a \<in> set actions_spec"
+  shows "ndefs.edge_2 a = edge_2' a"
   unfolding ndefs.edge_2_def edge_2'_def Let_def
   unfolding ndefs_is_prop_ab ndefs_inc_prop_lock_ab
   unfolding ndefs_pl_is_1 ndefs_starting_loc ndefs_running_loc
+  using over_all_restr_equiv_over_all assms
   by simp
 
 lemma ndefs_lower_spec_refine: "lower_spec = lower_spec_impl"
@@ -575,19 +596,23 @@ lemma ndefs_u_dur_refine: "ndefs.u_dur a = u_dur_impl a"
   unfolding ndefs.u_dur_def u_dur_impl_def
   unfolding ndefs_upper_spec_refine ndefs_act_to_start_clock ..
 
-lemma ndefs_edge_3_refine: "ndefs.edge_3 a = edge_3' a"
+lemma ndefs_edge_3_refine:
+  assumes "a \<in> set actions_spec"
+  shows "ndefs.edge_3 a = edge_3' a"
   unfolding ndefs.edge_3_def edge_3'_def Let_def
-  unfolding ndefs_net_int_clocks_end
   unfolding ndefs_inc_prop_lock_ab ndefs_pl_is_1
   unfolding ndefs_running_loc ndefs_ending_loc ndefs_act_to_end_clock
   unfolding ndefs_l_dur_refine ndefs_u_dur_refine
+  using ndefs_net_int_clocks_refine over_all_restr_equiv_over_all assms
   by simp
 
-lemma ndefs_instant_trans_edge_refine: "ndefs.instant_trans_edge a = instant_trans_edge' a"
+lemma ndefs_instant_trans_edge_refine:
+  assumes "a \<in> set actions_spec"
+  shows "ndefs.instant_trans_edge a = instant_trans_edge' a"
   unfolding ndefs.instant_trans_edge_def instant_trans_edge'_def Let_def
-  unfolding ndefs_net_int_clocks_end
   unfolding ndefs_pl_is_1 ndefs_starting_loc ndefs_ending_loc ndefs_act_to_end_clock
   unfolding ndefs_l_dur_refine ndefs_u_dur_refine
+  using ndefs_net_int_clocks_refine assms
   by simp
 
 text \<open>The (unfiltered) @{const init_spec} coincides with the executable @{const init_spec'}: the
@@ -603,15 +628,40 @@ lemma ndefs_init_spec_eq: "init_spec = init_spec'"
    apply (rule inj_on_to_predicate)
   using init_preds_no_args unfolding list_all_iff by auto
 
+text \<open>The primed main automaton reads @{const init_spec} / @{const goal_spec} through the
+  props-restriction @{text \<open>list_inter props\<close>}; both lists are already @{text \<open>\<subseteq> props_spec\<close>}, so the
+  restriction is the identity (RAW analogues of the propositional @{text filter_props_init} /
+  @{text filter_props_goal}).\<close>
+lemma init_spec_in_props: "set init_spec \<subseteq> set props_spec"
+proof (rule subsetI)
+  fix x assume "x \<in> set init_spec"
+  then obtain y where y: "y \<in> set (init P)" "is_predAtom y" "x = to_predicate y"
+    unfolding init_spec_def by auto
+  have nfa: "\<not> wf_func_assign y"
+    using y(2) by (cases y rule: wf_func_assign.cases) auto
+  have "wf_fmla_atom objT y \<or> wf_func_assign y"
+    using y(1) wf_temporal_problem unfolding wf_temporal_problem_def by blast
+  hence "wf_fmla_atom objT y" using nfa by blast
+  thus "x \<in> set props_spec"
+    using wf_fmla_atom_in_props y(3) by simp
+qed
+
+lemma filter_props_init: "filter (\<lambda>p. p \<in> set props_spec) init_spec = init_spec'"
+  using init_spec_in_props ndefs_init_spec_eq by (simp add: filter_id_conv subset_eq)
+
+lemma filter_props_goal: "filter (\<lambda>p. p \<in> set props_spec) goal_spec = goal_spec"
+  using goal_in_props filter_id_conv by fast
+
 lemma ndefs_main_auto_init_edge_refine: "ndefs.main_auto_init_edge = main_auto_init_edge'"
   unfolding ndefs.main_auto_init_edge_def main_auto_init_edge'_def Let_def
   unfolding ndefs_set_prop_ab ndefs_planning_lock ndefs_acts_active ndefs_init_loc ndefs_planning_loc
-  unfolding ndefs_init_spec_eq
+  unfolding filter_props_init
   by simp
 
 lemma ndefs_main_auto_goal_edge_refine: "ndefs.main_auto_goal_edge = main_auto_goal_edge'"
   unfolding ndefs.main_auto_goal_edge_def main_auto_goal_edge'_def Let_def
   unfolding ndefs_is_prop_ab ndefs_planning_lock ndefs_acts_active ndefs_planning_loc ndefs_goal_loc
+  unfolding filter_props_goal
   by simp
 
 lemma ndefs_main_auto_loop_refine: "ndefs.main_auto_loop = main_auto_loop_impl"
@@ -624,27 +674,36 @@ text \<open>Each executable numeric edge = the abstract @{text ndefs} numeric ed
   (@{thm augment_edge_impl_eq}), same numeric guard/update (the guard/update refines above), and the
   underlying executable propositional edge equals the abstract one (the propositional edge refines).\<close>
 
-lemma num_start_edge_refine: "num_start_edge' a = ndefs.num_start_edge a"
+lemma num_start_edge_refine:
+  assumes "a \<in> set actions_spec"
+  shows "num_start_edge' a = ndefs.num_start_edge a"
   unfolding num_start_edge'_def ndefs.num_start_edge_def
-  unfolding augment_edge_impl_eq num_pre_guard_refine num_upd_refine ndefs_start_edge_refine ..
+  unfolding augment_edge_impl_eq num_pre_guard_refine_start num_upd_refine_start ndefs_start_edge_refine[OF assms] ..
 
-lemma num_end_edge_refine: "num_end_edge' a = ndefs.num_end_edge a"
+lemma num_end_edge_refine:
+  assumes "a \<in> set actions_spec"
+  shows "num_end_edge' a = ndefs.num_end_edge a"
   unfolding num_end_edge'_def ndefs.num_end_edge_def
-  unfolding augment_edge_impl_eq num_pre_guard_refine num_upd_refine ndefs_end_edge_refine ..
+  unfolding augment_edge_impl_eq num_pre_guard_refine_end num_upd_refine_end ndefs_end_edge_refine[OF assms] ..
 
-lemma num_edge_2_refine: "num_edge_2' a = ndefs.num_edge_2 a"
+lemma num_edge_2_refine:
+  assumes "a \<in> set actions_spec"
+  shows "num_edge_2' a = ndefs.num_edge_2 a"
   unfolding num_edge_2'_def ndefs.num_edge_2_def
-  unfolding augment_edge_impl_eq num_inv_guard_refine ndefs_edge_2_refine ..
+  unfolding augment_edge_impl_eq num_inv_guard_refine ndefs_edge_2_refine[OF assms] ..
 
-lemma num_edge_3_refine: "num_edge_3' a = ndefs.num_edge_3 a"
+lemma num_edge_3_refine:
+  assumes "a \<in> set actions_spec"
+  shows "num_edge_3' a = ndefs.num_edge_3 a"
   unfolding num_edge_3'_def ndefs.num_edge_3_def
-  unfolding augment_edge_impl_eq num_inv_guard_refine ndefs_edge_3_refine ..
+  unfolding augment_edge_impl_eq num_inv_guard_refine ndefs_edge_3_refine[OF assms] ..
 
 lemma num_action_to_automaton_refine:
-  "num_action_to_automaton' a = ndefs.num_action_to_automaton a"
+  assumes "a \<in> set actions_spec"
+  shows "num_action_to_automaton' a = ndefs.num_action_to_automaton a"
   unfolding num_action_to_automaton'_def ndefs.num_action_to_automaton_def Let_def
-  unfolding num_start_edge_refine num_edge_2_refine num_edge_3_refine num_end_edge_refine
-  unfolding ndefs_instant_trans_edge_refine
+  unfolding num_start_edge_refine[OF assms] num_edge_2_refine[OF assms] num_edge_3_refine[OF assms] num_end_edge_refine[OF assms]
+  unfolding ndefs_instant_trans_edge_refine[OF assms]
   unfolding ndefs_starting_loc ndefs_ending_loc ..
 
 lemma num_main_auto_init_edge_refine:
@@ -678,30 +737,31 @@ lemma ndefs_inv_vars_refine: "ndefs.inv_vars invs = inv_vars' invs"
   unfolding ndefs_prop_to_lock ndefs_prop_to_var
   by (simp add: image_Un)
 
-lemma ndefs_snap_vars_start_refine: "ndefs.snap_vars (at_start_spec a) = snap_vars' (AtStart a)"
-  unfolding ndefs.snap_vars_def snap_vars'_def Let_def
+lemma ndefs_snap_vars_refine:
+  assumes "snap \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
+  shows "ndefs.snap_vars snap = snap_vars' snap"
+  unfolding ndefs.snap_vars_def
+  unfolding pre_imp_restr_equiv_pre_imp[OF assms]
   unfolding ndefs_prop_to_var ndefs_prop_to_lock
-  unfolding imp_defs.rat_impl.pre_imp_list_def imp_defs.rat_impl.add_imp_list_def imp_defs.rat_impl.del_imp_list_def
-  unfolding imp_defs.rat_impl.set_impl.app_snap.simps
-  by simp
+  unfolding snap_vars'_def
+  by presburger
 
-lemma ndefs_snap_vars_end_refine: "ndefs.snap_vars (at_end_spec a) = snap_vars' (AtEnd a)"
-  unfolding ndefs.snap_vars_def snap_vars'_def Let_def
-  unfolding ndefs_prop_to_var ndefs_prop_to_lock
-  unfolding imp_defs.rat_impl.pre_imp_list_def imp_defs.rat_impl.add_imp_list_def imp_defs.rat_impl.del_imp_list_def
-  unfolding imp_defs.rat_impl.set_impl.app_snap.simps
-  by simp
-
-lemma ndefs_action_vars_refine: "ndefs.action_vars a = action_vars' a"
-  unfolding ndefs.action_vars_def action_vars'_def Let_def
-  unfolding ndefs_inv_vars_refine ndefs_snap_vars_start_refine ndefs_snap_vars_end_refine
-  by (simp add: sup_commute sup_left_commute)
+lemma ndefs_action_vars_refine:
+  assumes "a \<in> set actions_spec"
+  shows "ndefs.action_vars a = action_vars' a"
+  unfolding ndefs.action_vars_def
+  unfolding ndefs_inv_vars_refine
+  using assms ndefs_snap_vars_refine over_all_restr_equiv_over_all
+  unfolding action_vars'_def
+  by auto
 
 lemma ndefs_net_bounds_refine: "net_bounds' = ndefs.net_bounds"
   unfolding ndefs.all_vars_def net_bounds'_def Let_def
   unfolding ndefs_prop_to_lock ndefs_prop_to_var ndefs_acts_active ndefs_planning_lock
-  unfolding ndefs_action_vars_refine ndefs_init_spec_eq
-  by (simp add: fold_union')
+  unfolding filter_props_init filter_props_goal
+  unfolding fold_union' set_map
+  using ndefs_action_vars_refine
+  by auto
 
 lemma ndefs_init_locs_refine: "init_locs' = ndefs.init_locs"
   unfolding ndefs.init_locs_def init_locs'_def

@@ -32,28 +32,6 @@ text \<open>The numeric leaf @{locale numeric_ground_ast_problem} restates -- on
 context numeric_ground_ast_problem
 begin
 
-sublocale nred: numeric_tp_nta_reduction
-  init_spec goal_spec at_start_spec at_end_spec over_all_spec lower_spec upper_spec
-  pre_spec adds_spec dels_spec 0 props_spec actions_spec act_to_name_spec prop_to_name_spec
-  n_pre n_inv upds num_init num_goal nfluents fluent_to_name_spec fluent_lo fluent_hi const_to_int
-  apply unfold_locales
-  subgoal using fluent_to_name_spec_inj .
-  subgoal using upds_functional_start .
-  subgoal using upds_functional_end .
-  subgoal using upds_no_cross_read_start .
-  subgoal using upds_no_cross_read_end .
-  subgoal using fluent_bounds_valid .
-  subgoal using snap_upds_nexp_ok_start .
-  subgoal using snap_upds_nexp_ok_end .
-  subgoal using snap_pre_comp_ok_start .
-  subgoal using snap_pre_comp_ok_end .
-  subgoal using snap_inv_comp_ok .
-  subgoal using num_init_val_ok .
-  subgoal using const_to_int_of_int .
-  subgoal using snap_writes_nfluents_start .
-  subgoal using snap_writes_nfluents_end .
-  done
-
 text \<open>The numeric network's Munta semantics and pre-init configuration are functions of \<^emph>\<open>plan-free\<close>
   data only (the augmented automata @{const numeric_tp_nta_reduction_defs.num_timed_automaton_net} and
   variable bounds @{const numeric_tp_nta_reduction_defs.num_all_vars}, both from @{text nred}).  We hoist
@@ -89,7 +67,7 @@ text \<open>The numeric twin of @{locale valid_ground_plan}: the numeric admissi
 
 locale numeric_valid_ground_plan =
     numeric_ground_ast_problem P fluent_lo fluent_hi +
-    num_plan: numeric_temp_plan_for_problem_list_impl_int
+    num_plan: numeric_temp_plan_for_problem_list_impl_int'
       at_start_spec at_end_spec over_all_spec lower_spec upper_spec
       pre_spec adds_spec dels_spec init_spec goal_spec 0 props_spec actions_spec \<pi>
       "set o n_pre" "set o n_inv" "set o upds"
@@ -117,18 +95,23 @@ text \<open>Interpret the abstract numeric correctness locale @{locale numeric_t
   (a leaf assumption); @{text const_to_int_of_int} (a leaf lemma) is now inherited from the base
   @{locale numeric_tp_nta_reduction} and already discharged there via @{text nred}.\<close>
 
-sublocale ncorr: numeric_tp_nta_reduction_correctness
+sublocale ncorr: numeric_tp_nta_reduction_correctness'
   init_spec goal_spec at_start_spec at_end_spec over_all_spec lower_spec upper_spec
   pre_spec adds_spec dels_spec 0 props_spec actions_spec \<pi> act_to_name_spec prop_to_name_spec
   n_pre n_inv upds num_init num_goal nfluents fluent_to_name_spec fluent_lo fluent_hi const_to_int
-  apply unfold_locales
-  subgoal using num_valid_plan .
-  subgoal using num_seq_in_bounds .
-  subgoal using num_goal_comp_ok .
-  done
+  by unfold_locales
+     (fact num_plan.vp num_plan.nso num_plan.pap
+           upds_functional_start upds_functional_end
+           upds_no_cross_read_start upds_no_cross_read_end fluent_bounds_valid
+           snap_upds_nexp_ok_start snap_upds_nexp_ok_end
+           snap_pre_comp_ok_start snap_pre_comp_ok_end snap_inv_comp_ok
+           num_init_val_ok const_to_int_of_int
+           snap_writes_nfluents_start snap_writes_nfluents_end
+           num_valid_plan num_seq_in_bounds num_goal_comp_ok
+           fluent_to_name_spec_inj)+
 
 text \<open>The hypothesis-free abstract capstone, re-exported at this ground interpretation.\<close>
-lemmas num_valid_plan_imp_form_holds = ncorr.num_valid_plan_imp_form_holds
+lemmas num_valid_plan_imp_form_holds = ncorr.ref_correctness.num_valid_plan_imp_form_holds
 
 end
 
@@ -158,7 +141,7 @@ proof -
   then interpret x: numeric_valid_ground_plan P fluent_lo fluent_hi \<pi> .
   show ?thesis
     using x.num_valid_plan_imp_form_holds
-    unfolding num_a\<^sub>0_def x.ncorr.num_a\<^sub>0_def by simp
+    unfolding num_a\<^sub>0_def x.ncorr.ref_correctness.num_a\<^sub>0_def by simp
 qed
 
 corollary num_net_form_not_sat_imp_no_valid_ground_plan:
