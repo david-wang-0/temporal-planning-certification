@@ -2,7 +2,7 @@ theory Ground_PDDL_Problem_Reduction
   imports Ground_PDDL_Problem_Defs
 begin
 
-context ground_ast_problem_core
+context ground_ast_problem_base
 begin
 
 sublocale abstr_model_checking: tp_nta_reduction_model_checking'
@@ -53,18 +53,16 @@ proof
     proof (cases)
       case 1
       have a': "wf_ground_action (at_start_spec a)" using start_snaps_wf[OF a_in_acts] .
-      have b: "ground_act_pres_pos (at_start_spec a)" using start_snap_pre_pos_conj a_in_acts by blast
       have "(set \<circ> pre_spec) (at_start_spec a) \<union> (set \<circ> adds_spec) (at_start_spec a) \<union> (set \<circ> dels_spec) (at_start_spec a) \<subseteq> set props_spec"
         using wf_ground_action_pres_in_props wf_ground_action_dels_in_props wf_ground_action_adds_in_props
-        using a' b by simp
+        using a' by simp
       then show ?thesis using 1 unfolding action_and_prop_set.snap_consts_def by blast
     next
       case 2
       have a': "wf_ground_action (at_end_spec a)" using end_snaps_wf[OF a_in_acts] .
-      have b: "ground_act_pres_pos (at_end_spec a)" using end_snap_pre_pos_conj a_in_acts by blast
       have "(set \<circ> pre_spec) (at_end_spec a) \<union> (set \<circ> adds_spec) (at_end_spec a) \<union> (set \<circ> dels_spec) (at_end_spec a) \<subseteq> set props_spec"
         using wf_ground_action_pres_in_props wf_ground_action_dels_in_props wf_ground_action_adds_in_props
-        using a' b by simp
+        using a' by simp
       then show ?thesis using 2 unfolding action_and_prop_set.snap_consts_def by blast
     next
       case 3

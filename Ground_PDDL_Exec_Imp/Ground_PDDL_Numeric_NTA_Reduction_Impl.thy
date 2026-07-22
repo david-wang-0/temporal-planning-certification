@@ -220,7 +220,7 @@ context numeric_ground_ast_problem_defs
 begin
 
 definition "check_numeric_ground_problem fluent_lo fluent_hi \<equiv> do {
-  check_ground_problem_core P;
+  check_ground_problem_base P;
   check (distinct (map at_start_spec actions_spec)
          \<and> distinct (map at_end_spec actions_spec)
          \<and> list_all (\<lambda>s. s \<notin> set (map at_end_spec actions_spec)) (map at_start_spec actions_spec))
@@ -257,7 +257,7 @@ definition "check_numeric_ground_problem fluent_lo fluent_hi \<equiv> do {
 
 lemma check_numeric_ground_problem_return_iff:
   "check_numeric_ground_problem fluent_lo fluent_hi = Inr ()
-   \<longleftrightarrow> ground_ast_problem_core P
+   \<longleftrightarrow> ground_ast_problem_base P
      \<and> (distinct (map at_start_spec actions_spec)
         \<and> distinct (map at_end_spec actions_spec)
         \<and> list_all (\<lambda>s. s \<notin> set (map at_end_spec actions_spec)) (map at_start_spec actions_spec))
@@ -276,7 +276,7 @@ lemma check_numeric_ground_problem_return_iff:
      \<and> (\<forall>a\<in>set actions_spec. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_end_spec a)))
      \<and> list_all (comp_struct_ok nfluents) num_goal"
   unfolding check_numeric_ground_problem_def
-  by (simp add: return_iff isOK_check_ground_problem_core check_ground_problem_core_return_iff
+  by (simp add: return_iff isOK_check_ground_problem_base check_ground_problem_base_return_iff
                 is_int_rat_iff_Ints)
 
 end
@@ -296,7 +296,7 @@ proof -
   interpret D: numeric_ground_ast_problem_defs P .
   from h have "D.check_numeric_ground_problem fluent_lo fluent_hi = Inr ()" by simp
   note C = this[unfolded D.check_numeric_ground_problem_return_iff]
-  from C have core: "ground_ast_problem_core P" by simp
+  from C have core: "ground_ast_problem_base P" by simp
   have sd: "distinct (map D.at_start_spec D.actions_spec)"
     and se: "distinct (map D.at_end_spec D.actions_spec)"
     and sde0: "list_all (\<lambda>s. s \<notin> set (map D.at_end_spec D.actions_spec)) (map D.at_start_spec D.actions_spec)"
@@ -319,7 +319,7 @@ proof -
       and sw_e: "\<forall>a\<in>set D.actions_spec. list_all (\<lambda>(f, e). f \<in> set D.nfluents) (D.upds (D.at_end_spec a))"
       and cg: "list_all (comp_struct_ok D.nfluents) D.num_goal"
     by simp+
-  interpret core: ground_ast_problem_core P by (rule core)
+  interpret core: ground_ast_problem_base P by (rule core)
   interpret ndefs: numeric_tp_nta_reduction_defs
     D.init_spec D.goal_spec D.at_start_spec D.at_end_spec D.over_all_spec
     D.lower_spec D.upper_spec D.pre_spec D.adds_spec D.dels_spec 0
@@ -578,7 +578,7 @@ lemma ndefs_init_spec_eq: "init_spec = init_spec'"
   using wf_temporal_problem unfolding wf_temporal_problem_def apply simp
   apply (rule inj_on_subset)
    apply (rule inj_on_to_predicate)
-  using init_no_args unfolding list_all_iff by auto
+  using init_preds_no_args unfolding list_all_iff by auto
 
 lemma ndefs_main_auto_init_edge_refine: "ndefs.main_auto_init_edge = main_auto_init_edge'"
   unfolding ndefs.main_auto_init_edge_def main_auto_init_edge'_def Let_def

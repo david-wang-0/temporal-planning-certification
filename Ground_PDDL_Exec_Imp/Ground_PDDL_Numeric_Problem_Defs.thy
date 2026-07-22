@@ -144,7 +144,7 @@ subsection \<open>The numeric admission leaf\<close>
 
 locale numeric_ground_ast_problem =
     numeric_ground_ast_problem_defs P +
-    ground_ast_problem_core P +
+    ground_ast_problem_base P +
     ndefs: numeric_tp_nta_reduction_defs
       init_spec goal_spec at_start_spec at_end_spec over_all_spec lower_spec upper_spec
       pre_spec adds_spec dels_spec 0 props_spec actions_spec act_to_name_spec prop_to_name_spec
