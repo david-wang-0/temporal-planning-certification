@@ -1,6 +1,7 @@
 theory TP_NTA_Reduction_Numeric_Bounds
   imports
     TP_NTA_Reduction_Correctness_Numeric
+    TP_NTA_Reduction_Numeric_Model_Checking
 begin
 
 text \<open>WP-E: discharge @{text num_seq_in_bounds} from a static bound certificate over the reduction's
@@ -1083,6 +1084,201 @@ next
                        \<and> fluent_lo f \<le> const_to_int r \<and> const_to_int r \<le> fluent_hi f"
     using r by blast
 qed
+
+end
+
+
+text \<open>WP-E discharge locale over the PRIMED injective reduction (the @{const AtStart}/@{const AtEnd}
+  relabeled snaps): the exact analog of @{locale numeric_tp_nta_reduction_correctness'} but assuming
+  the \<^emph>\<open>checkable\<close> certificate @{text \<open>reduction_ref_impl.num_bound_inv\<close>} in place of the
+  reachability invariant @{text num_seq_in_bounds}. Re-obtains @{locale numeric_tp_nta_reduction_bounds}
+  at the injective snaps (which itself bridges to @{locale numeric_tp_nta_reduction_correctness}).\<close>
+locale numeric_tp_nta_reduction_bounds' =
+  tp_nta_reduction_correctness'
+    init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name +
+  numeric_tp_nta_reduction_defs'
+    init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
+    n_pre n_inv upds num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int +
+  num_plan: numeric_temp_plan_for_problem_list_impl_int'
+    at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>
+    "set o n_pre" "set o n_inv" "set o upds"
+    "\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None" "set num_goal" +
+  fluent_names: unique_names fluent_to_name "set nfluents"
+  for init :: "'proposition list"
+    and goal :: "'proposition list"
+    and at_start :: "'action \<Rightarrow> 'snap_action"
+    and at_end :: "'action \<Rightarrow> 'snap_action"
+    and over_all :: "'action \<Rightarrow> 'proposition list"
+    and lower :: "'action \<Rightarrow> int lower_bound option"
+    and upper :: "'action \<Rightarrow> int upper_bound option"
+    and pre :: "'snap_action \<Rightarrow> 'proposition list"
+    and adds :: "'snap_action \<Rightarrow> 'proposition list"
+    and dels :: "'snap_action \<Rightarrow> 'proposition list"
+    and \<epsilon> :: "int"
+    and props :: "'proposition list"
+    and actions :: "'action list"
+    and \<pi> :: "('i, 'action, int) temp_plan"
+    and act_to_name :: "'action \<Rightarrow> String.literal"
+    and prop_to_name :: "'proposition \<Rightarrow> String.literal"
+    and n_pre :: "'snap_action \<Rightarrow> ('n, 'r::linordered_field) comp list"
+    and n_inv :: "'action \<Rightarrow> ('n, 'r) comp list"
+    and upds :: "'snap_action \<Rightarrow> ('n \<times> ('n, 'r) nexp) list"
+    and num_init :: "'n \<Rightarrow> 'r"
+    and num_goal :: "('n, 'r) comp list"
+    and nfluents :: "'n list"
+    and fluent_to_name :: "'n \<Rightarrow> String.literal"
+    and fluent_lo :: "'n \<Rightarrow> int"
+    and fluent_hi :: "'n \<Rightarrow> int"
+    and const_to_int :: "'r \<Rightarrow> int" +
+  assumes upds_functional_start:   "\<forall>a \<in> set actions. upds_functional_list (upds (at_start a))"
+      and upds_functional_end:     "\<forall>a \<in> set actions. upds_functional_list (upds (at_end a))"
+      and upds_no_cross_read_start: "\<forall>a \<in> set actions. upds_no_cross_read_list (upds (at_start a))"
+      and upds_no_cross_read_end:   "\<forall>a \<in> set actions. upds_no_cross_read_list (upds (at_end a))"
+      and fluent_bounds_valid:      "\<forall>f \<in> set nfluents. fluent_lo f \<le> fluent_hi f"
+      and snap_upds_nexp_ok_start:
+            "\<forall>a \<in> set actions. \<forall>w. reduction_ref_impl.num_val_ok w \<longrightarrow> (\<forall>(f, e) \<in> set (upds (at_start a)). reduction_ref_impl.nexp_ok w e)"
+      and snap_upds_nexp_ok_end:
+            "\<forall>a \<in> set actions. \<forall>w. reduction_ref_impl.num_val_ok w \<longrightarrow> (\<forall>(f, e) \<in> set (upds (at_end a)). reduction_ref_impl.nexp_ok w e)"
+      and snap_pre_comp_ok_start:
+            "\<forall>a \<in> set actions. \<forall>w. reduction_ref_impl.num_val_ok w \<longrightarrow> (\<forall>c \<in> set (n_pre (at_start a)). reduction_ref_impl.comp_ok w c)"
+      and snap_pre_comp_ok_end:
+            "\<forall>a \<in> set actions. \<forall>w. reduction_ref_impl.num_val_ok w \<longrightarrow> (\<forall>c \<in> set (n_pre (at_end a)). reduction_ref_impl.comp_ok w c)"
+      and snap_inv_comp_ok:
+            "\<forall>a \<in> set actions. \<forall>w. reduction_ref_impl.num_val_ok w \<longrightarrow> (\<forall>c \<in> set (n_inv a). reduction_ref_impl.comp_ok w c)"
+      and num_init_val_ok: "\<forall>f \<in> set nfluents. num_init f \<in> \<int>"
+      and const_to_int_of_int: "const_to_int (Int.of_int m) = m"
+      and snap_writes_nfluents_start:
+            "\<forall>a \<in> set actions. fst ` set (upds (at_start a)) \<subseteq> set nfluents"
+      and snap_writes_nfluents_end:
+            "\<forall>a \<in> set actions. fst ` set (upds (at_end a)) \<subseteq> set nfluents"
+      and num_valid: "num_plan.num_rat_impl.num_valid_plan"
+      \<comment> \<open>The checkable static certificate over the PRIMED injective reduction. @{text num_bound_inv} lives in
+         the AXIOM locale @{locale numeric_tp_nta_reduction}, which has no interpretation at the injective
+         snaps (only the defs locale is interpreted there, as @{text reduction_ref_impl}); so it is named
+         here as the raw constant applied to the injective parameters -- exactly the @{text bound_inv}
+         obligation the @{text ref_bounds} sublocale below produces.\<close>
+      and bound_inv: "numeric_tp_nta_reduction.num_bound_inv AtStart AtEnd actions
+            (rat_impl.set_impl.app_snap n_pre) (rat_impl.set_impl.app_snap upds)
+            num_init nfluents fluent_lo fluent_hi const_to_int"
+      and num_goal_comp_ok:
+            "\<And>w. reduction_ref_impl.num_val_ok w \<Longrightarrow> (\<forall>c \<in> set num_goal. reduction_ref_impl.comp_ok w c)"
+begin
+
+text \<open>Instantiate the numeric snap-relabeling equivalence at the raw rat-refined numeric plan
+@{text num_plan.num_rat_impl}: its update sets are functional on plan happenings (grounder
+well-formedness) and it is numerically mutex-valid (a conjunct of @{text num_valid}).\<close>
+sublocale nre: num_relabel_equiv at_start at_end "set o over_all"
+  "map_option (map_lower_bound rat_of_int) o lower" "map_option (map_upper_bound rat_of_int) o upper"
+  "set o pre" "set o adds" "set o dels" "set init" "set goal"
+  "rat_of_int \<epsilon>" "map_option (map_prod id (map_prod rat_of_int rat_of_int)) o \<pi>"
+  "set o n_pre" "set o n_inv" "set o upds"
+  "\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None" "set num_goal"
+  apply unfold_locales
+  subgoal premises p for t s
+  proof -
+    have hts: "(t, s) \<in> rat_impl.plan_happ_seq" using p by (rule rat_impl.in_happ_atD)
+    from rat_impl.in_happ_seq_exD_act[OF hts] obtain a tt d where
+      a: "(a, tt, d) \<in> ran (map_option (map_prod id (map_prod rat_of_int rat_of_int)) o \<pi>)"
+      and s: "at_start a = s \<or> at_end a = s" by blast
+    have "a \<in> valid_plan_valid_2.plan2.plan_actions"
+      using a unfolding valid_plan_valid_2.plan2.plan_actions_def by blast
+    hence ain: "a \<in> set actions"
+      using pap unfolding restr_to_props_valid.plan_actions_in_problem_def by blast
+    show "upds_functional ((set o upds) s)"
+    proof (cases "at_start a = s")
+      case True
+      hence "upds_functional_list (upds (at_start a))" using ain upds_functional_start by blast
+      thus ?thesis using True by (simp add: upds_functional_set upds_functional_list_def)
+    next
+      case False
+      hence "at_end a = s" using s by simp
+      hence "upds_functional_list (upds (at_end a))" using ain upds_functional_end by blast
+      thus ?thesis using \<open>at_end a = s\<close> by (simp add: upds_functional_set upds_functional_list_def)
+    qed
+  qed
+  subgoal
+    using num_valid unfolding num_plan.num_rat_impl.num_valid_plan_def by blast
+  done
+
+sublocale ref_bounds: numeric_tp_nta_reduction_bounds
+  "rat_impl.list_inter props init" "rat_impl.list_inter props goal"
+  AtStart AtEnd rat_impl.over_all_restr_list lower upper
+  rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
+  \<epsilon> props actions \<pi> act_to_name prop_to_name
+  "rat_impl.set_impl.app_snap n_pre" n_inv "rat_impl.set_impl.app_snap upds"
+  num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int
+  apply unfold_locales
+                      apply (simp_all add: upds_functional_start upds_functional_end
+        upds_no_cross_read_start upds_no_cross_read_end fluent_bounds_valid
+        num_init_val_ok const_to_int_of_int
+        snap_writes_nfluents_start snap_writes_nfluents_end
+        snap_upds_nexp_ok_start snap_upds_nexp_ok_end
+        snap_pre_comp_ok_start snap_pre_comp_ok_end snap_inv_comp_ok num_goal_comp_ok)
+  \<comment> \<open>Remaining goals 1--2: the numeric plan-validity / state-sequence TRANSFER under the
+     restrict-to-props + @{const AtStart}/@{const AtEnd} relabeling (numeric analog of the
+     propositional @{text restr_to_props_valid}). Numeric conjuncts are transferred via the
+     @{locale num_relabel_equiv} interpretation \<open>nre\<close> (fold reparametrization + happening
+     reindexing); propositional conjuncts reuse the restrict-to-props machinery
+     (@{text conc_ref_impl}/\<open>vp\<close>) and the raw propositional plan (\<open>rat_impl.valid_plan\<close>).\<close>
+  subgoal
+  proof -
+    have bu: "(set \<circ>\<circ>\<circ> action_defs.app_snap at_start) at_end upds = num_plan.num_rat_impl.upds_imp"
+      by (rule ext, rename_tac x, case_tac x) (simp_all add: num_plan.num_rat_impl.upds_imp_def)
+    have bp: "(set \<circ>\<circ>\<circ> action_defs.app_snap at_start) at_end n_pre = num_plan.num_rat_impl.n_pre_imp"
+      by (rule ext, rename_tac x, case_tac x) (simp_all add: num_plan.num_rat_impl.n_pre_imp_def)
+    obtain M where
+      rvss: "num_plan.num_rat_impl.num_valid_state_sequence M"
+      and r0: "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
+      and rsg: "sat_comps (snd (M (length valid_plan_valid_2.plan2.htpl))) (set num_goal)"
+      and rnm: "num_plan.num_rat_impl.num_mutex_valid_plan"
+      using num_valid unfolding num_plan.num_rat_impl.num_valid_plan_def by blast
+    obtain MS where
+      pvss: "valid_plan_valid_2.plan2.valid_state_sequence MS"
+      and p0: "MS 0 = set (filter (\<lambda>p. p \<in> set props) init)"
+      and pg: "set (filter (\<lambda>p. p \<in> set props) goal) \<subseteq> MS (length valid_plan_valid_2.plan2.htpl)"
+      and pmx: "valid_plan_valid_2.plan2.mutex_valid_plan"
+      and pdg: "valid_plan_valid_2.plan2.durations_ge_0"
+      and pdv: "valid_plan_valid_2.plan2.durations_valid"
+      and pfp: "valid_plan_valid_2.plan2.finite_plan"
+      using conc_ref_impl.vp unfolding valid_plan_valid_2.plan2.valid_plan_def by blast
+    define M' where "M' = (\<lambda>i. (MS i, snd (M i)))"
+    have fin: "finite {s. (t, s) \<in> valid_plan_valid_2.plan2.plan_happ_seq}" for t
+    proof -
+      have "{s. (t, s) \<in> valid_plan_valid_2.plan2.plan_happ_seq} \<subseteq> snd ` valid_plan_valid_2.plan2.plan_happ_seq"
+        by force
+      thus ?thesis using valid_plan_ref_valid_2.valid_plan2.finite_happ_seq by (blast intro: finite_subset)
+    qed
+    have vss': "numeric_temp_plan_defs.num_valid_state_sequence AtStart AtEnd ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.over_all_restr_list) over_all props) ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.pre_imp_restr_list at_start at_end) pre props) ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.add_imp_list at_start) at_end adds) ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.del_imp_list at_start) at_end dels) (map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ> \<pi>) num_plan.num_rat_impl.n_pre_imp (set \<circ> n_inv) num_plan.num_rat_impl.upds_imp M'"
+      unfolding numeric_temp_plan_defs.num_valid_state_sequence_def[OF num_plan.num_rat_impl.numeric_temp_plan_defs_axioms] Let_def
+    proof (intro allI impI)
+      fix i assume ilt: "i < length valid_plan_valid_2.plan2.htpl"
+      from pvss ilt have PROP:
+        "ref_correctness.planning_sem.apply_effects (ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) (MS i) = MS (Suc i)
+         \<and> ref_correctness.planning_sem.invs_at valid_plan_valid_2.plan2.plan_inv_seq (valid_plan_valid_2.plan2.time_index i) \<subseteq> MS i
+         \<and> \<Union> ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.pre_imp_restr_list at_start at_end) pre props ` ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) \<subseteq> MS i"
+        unfolding valid_plan_valid_2.plan2.valid_state_sequence_def Let_def by blast
+      note NUM = nre.num_seq_transfer[OF rvss ilt fin]
+      show "ref_correctness.planning_sem.apply_effects (ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) (fst (M' i)) = fst (M' (Suc i))
+         \<and> ref_correctness.planning_sem.invs_at valid_plan_valid_2.plan2.plan_inv_seq (valid_plan_valid_2.plan2.time_index i) \<subseteq> fst (M' i)
+         \<and> \<Union> ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.pre_imp_restr_list at_start at_end) pre props ` ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) \<subseteq> fst (M' i)
+         \<and> nre.plan2.happening_num_update_set (ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) (snd (M' i)) = snd (M' (Suc i))
+         \<and> (\<forall>s\<in>ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i). sat_comps (snd (M' i)) (num_plan.num_rat_impl.n_pre_imp s))
+         \<and> (\<forall>a\<in>nre.plan2.active_actions (valid_plan_valid_2.plan2.time_index i). sat_comps (snd (M' i)) ((set \<circ> n_inv) a))"
+        using PROP NUM by (simp add: M'_def)
+    qed
+    have nmx': "numeric_temp_plan_defs.num_mutex_valid_plan AtStart AtEnd ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.pre_imp_restr_list at_start at_end) pre props) ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.add_imp_list at_start) at_end adds) ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.del_imp_list at_start) at_end dels) (rat_of_int \<epsilon>) (map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ> \<pi>) num_plan.num_rat_impl.n_pre_imp num_plan.num_rat_impl.upds_imp"
+      unfolding numeric_temp_plan_defs.num_mutex_valid_plan_def[OF num_plan.num_rat_impl.numeric_temp_plan_defs_axioms]
+      using pmx nre.num_clauses2[OF rnm] by blast
+    have pg': "{x \<in> set goal. x \<in> set props} \<subseteq> MS (length valid_plan_valid_2.plan2.htpl)"
+      using pg by (simp add: set_filter)
+    have p0': "MS 0 = {x \<in> set init. x \<in> set props}" using p0 by (simp add: set_filter)
+    show ?thesis
+      unfolding bu bp numeric_temp_plan_defs.num_valid_plan_def[OF num_plan.num_rat_impl.numeric_temp_plan_defs_axioms]
+      by (intro exI[of _ M'] conjI vss' nmx' pdg pdv pfp)
+         (simp_all add: M'_def r0 rsg p0' pg')
+  qed
+  subgoal by (fact bound_inv)
+  done
 
 end
 
