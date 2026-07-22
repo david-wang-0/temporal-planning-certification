@@ -75,11 +75,19 @@ truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NU
      `snaps_disj` or snap injectivity — so a primed twin `numeric_tp_nta_reduction_bounds'` re-deriving
      `numeric_tp_nta_reduction_correctness'` IS constructible via the same `num_relabel_equiv` machinery as `..._correctness'`
      (`8956184`). Real work, but the logic transfers.
-   - RECOMMENDED SHAPE (needs David's go before frozen-layer surgery): (A) intermediate `const_to_int_of_int` locale for
-     defs + soundness bridge; (B) primed `numeric_tp_nta_reduction_bounds'` twin; (C) re-point ground `Bounds.thy`/`Cert_Impl.thy`
-     to the primed path; (D) rebuild bound_parsing + export + majsp test. Alternative Shape B': skip the frozen-layer entirely
-     and re-prove `is_gbound_inv' ⟹ num_seq_in_bounds` at the GROUND level (const_to_int_of_int + snaps both concrete there) —
-     more bespoke, no base-tower reverify.
+   - RECOMMENDED SHAPE A' (refined 2026-07-22 after reading the ground cert files; David chose "A"): the plan-carrying
+     discharge `num_seq_in_bounds_derived` fundamentally needs `numeric_tp_nta_reduction_bounds` at the INJECTIVE snaps
+     (num_relabel_equiv machinery) — no frozen-free route for it. So the ONE needed frozen change is a single ADDITIVE locale
+     `numeric_tp_nta_reduction_bounds'` in `TP_NTA_Reduction_Numeric_Bounds.thy` that MIRRORS the already-proven
+     `numeric_tp_nta_reduction_correctness'` (`TP_NTA_Reduction_Numeric_Model_Checking.thy:527`), swapping `num_seq_in_bounds`
+     for `num_bound_inv` (via `is_gbound_inv'_imp_num_bound_inv`) and re-deriving `numeric_tp_nta_reduction_correctness'` through
+     its own `ref_bounds: numeric_tp_nta_reduction_bounds` sublocale at injective snaps. ADDITIVE (new locale, no edit to existing
+     base locales) ⇒ reverifies only itself + downstream, NOT the whole tower; NO intermediate `const_to_int_of_int` locale
+     needed (the twin's internal injective reduction interpretation carries `const_to_int_of_int` from the injective params).
+     Then GROUND re-point `bound_inference/{Bounds,Cert_Impl}.thy` EXACTLY mirroring the committed Correctness re-point (`92ba24b`):
+     `numeric_ground_ast_problem_cert` static cert via the injective reduction; `numeric_valid_ground_plan_cert` `num_plan`→primed
+     + `nbnd: numeric_tp_nta_reduction_bounds'`; capstone via `nbnd.ref_bounds.*` (like `ncorr.ref_correctness.*`). Then rebuild
+     bound_parsing + export + majsp test. NOT STARTED (paused at end of the 07-22 session; twin is the crux artifact).
    - Then re-point ground `Bounds.thy`/`Cert_Impl.thy` to the primed path (+ `_return_iff`/`_sound`), rebuild
      `bound_inference` → `-e bound_parsing` (re-export) → `cd ML && make build_certifier` → majsp test:
      `ML/out/plan_cert -domain examples/gigante/majsp-impossible-1/pddl21/domain_integers.pddl
