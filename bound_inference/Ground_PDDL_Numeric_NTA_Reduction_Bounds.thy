@@ -10,11 +10,11 @@ text \<open>\<^bold>\<open>NUMERIC_EXEC_PLAN WP-D INTEGRATION\<close> -- dischar
 
   WP-A (@{text Ground_PDDL_Numeric_NTA_Reduction_Correctness}) carried
   @{text num_seq_in_bounds} as a per-plan locale assumption of @{locale numeric_valid_ground_plan}.
-  Here it is \<^emph>\<open>derived\<close>: the plan-free static certificate @{text \<open>nred.is_gbound_inv'\<close>} (init in the
+  Here it is \<^emph>\<open>derived\<close>: the plan-free static certificate @{text \<open>nred'.is_gbound_inv'\<close>} (init in the
   fluent box; every relaxed snap update lands in bounds under interval evaluation of the guard-refined
-  box) implies the reduction-native @{text \<open>nred.num_bound_inv\<close>} via
+  box) implies the reduction-native @{text \<open>nred'.num_bound_inv\<close>} via
   @{text is_gbound_inv'_imp_num_bound_inv}, and the abstract discharge
-  locale @{locale numeric_tp_nta_reduction_bounds} turns that certificate into
+  locale @{locale numeric_tp_nta_reduction_bounds'} turns that certificate into
   @{locale numeric_tp_nta_reduction_correctness} (via @{text num_seq_in_bounds_derived}).
 
   So the ground plan predicate here (@{text numeric_valid_ground_plan_cert}) no longer bundles the
@@ -23,23 +23,55 @@ text \<open>\<^bold>\<open>NUMERIC_EXEC_PLAN WP-D INTEGRATION\<close> -- dischar
 
 subsection \<open>The static bound certificate at the ground problem (plan-free)\<close>
 
-text \<open>The eval-checkable certificate @{text \<open>nred.is_gbound_inv'\<close>} is a property of the plan-free
+text \<open>The eval-checkable certificate @{text \<open>nred'.is_gbound_inv'\<close>} is a property of the plan-free
   ground data (the inferred finite @{text fluent_lo}/@{text fluent_hi} box, @{text num_init}, and every
   relaxed snap's updates/guards). We assume it here and derive the reduction-native certificate
-  @{text \<open>nred.num_bound_inv\<close>}.\<close>
+  @{text \<open>nred'.num_bound_inv\<close>}.\<close>
+
+text \<open>Interpret the AXIOM numeric reduction @{locale numeric_tp_nta_reduction} at the injective
+  @{const AtStart}/@{const AtEnd} snaps -- the SAME parameters at which the leaf's
+  @{text ndefs.reduction_ref_impl} (a @{locale numeric_tp_nta_reduction_defs}) is instantiated -- so the
+  static bound certificate @{text \<open>is_gbound_inv'\<close>} and @{text num_bound_inv} (which live only in the axiom
+  locale @{locale numeric_tp_nta_reduction}) are in scope at the ground level.  The propositional
+  injective base (incl. \<open>snaps_disj\<close>) is inherited from @{text ndefs.reduction_ref_impl}; the 14
+  numeric-wf assumptions are discharged from the leaf assumptions (the raw-snap facts \<open>upds (at_start_spec a)\<close>
+  bridge to the injective \<open>app_snap upds (AtStart a)\<close> by \<open>app_snap.simps\<close>), and the
+  \<open>unique_names fluent_to_name_spec\<close> obligation from \<open>fluent_to_name_spec_inj\<close>.\<close>
+
+context numeric_ground_ast_problem
+begin
+
+sublocale nred': numeric_tp_nta_reduction
+  "imp_defs.rat_impl.list_inter props_spec init_spec" "imp_defs.rat_impl.list_inter props_spec goal_spec"
+  AtStart AtEnd imp_defs.rat_impl.over_all_restr_list lower_spec upper_spec
+  imp_defs.rat_impl.pre_imp_restr_list imp_defs.rat_impl.add_imp_list imp_defs.rat_impl.del_imp_list
+  0 props_spec actions_spec act_to_name_spec prop_to_name_spec
+  "imp_defs.rat_impl.set_impl.app_snap n_pre" n_inv "imp_defs.rat_impl.set_impl.app_snap upds"
+  num_init num_goal nfluents fluent_to_name_spec fluent_lo fluent_hi const_to_int
+  apply unfold_locales
+  apply (simp_all add: upds_functional_start upds_functional_end
+      upds_no_cross_read_start upds_no_cross_read_end fluent_bounds_valid
+      num_init_val_ok const_to_int_of_int
+      snap_writes_nfluents_start snap_writes_nfluents_end
+      snap_upds_nexp_ok_start snap_upds_nexp_ok_end
+      snap_pre_comp_ok_start snap_pre_comp_ok_end snap_inv_comp_ok
+      fluent_to_name_spec_inj)
+  done
+
+end
 
 locale numeric_ground_ast_problem_cert =
     numeric_ground_ast_problem P fluent_lo fluent_hi
   for P :: ast_temporal_problem
     and fluent_lo :: "func \<Rightarrow> int"
     and fluent_hi :: "func \<Rightarrow> int" +
-  assumes gbound_inv: "nred.is_gbound_inv'"
+  assumes gbound_inv: "nred'.is_gbound_inv'"
 begin
 
 text \<open>The static, eval-decidable interval certificate discharges the reduction-native
-  @{term \<open>nred.num_bound_inv\<close>} (still plan-free).\<close>
-lemma num_bound_inv: "nred.num_bound_inv"
-  using gbound_inv by (rule nred.is_gbound_inv'_imp_num_bound_inv)
+  @{term \<open>nred'.num_bound_inv\<close>} (still plan-free).\<close>
+lemma num_bound_inv: "nred'.num_bound_inv"
+  using gbound_inv by (rule nred'.is_gbound_inv'_imp_num_bound_inv)
 
 end
 
@@ -47,14 +79,14 @@ subsection \<open>The numeric plan-carrying locale, @{text num_seq_in_bounds} DI
 
 text \<open>The twin of @{locale numeric_valid_ground_plan}, but WITHOUT the @{text num_seq_in_bounds}
   assumption: it extends the certificate leaf @{locale numeric_ground_ast_problem_cert} (which supplies
-  @{thm [source] numeric_ground_ast_problem_cert.num_bound_inv}) together with the UNPRIMED numeric
-  plan-carrying locale @{locale numeric_temp_plan_for_problem_list_impl_int}, and interprets the abstract
-  discharge locale @{locale numeric_tp_nta_reduction_bounds} -- which re-derives
+  @{thm [source] numeric_ground_ast_problem_cert.num_bound_inv}) together with the PRIMED numeric
+  plan-carrying locale @{locale numeric_temp_plan_for_problem_list_impl_int'}, and interprets the abstract
+  discharge locale @{locale numeric_tp_nta_reduction_bounds'} -- which re-derives
   @{locale numeric_tp_nta_reduction_correctness} from the certificate.\<close>
 
 locale numeric_valid_ground_plan_cert =
     numeric_ground_ast_problem_cert P fluent_lo fluent_hi +
-    num_plan: numeric_temp_plan_for_problem_list_impl_int
+    num_plan: numeric_temp_plan_for_problem_list_impl_int'
       at_start_spec at_end_spec over_all_spec lower_spec upper_spec
       pre_spec adds_spec dels_spec init_spec goal_spec 0 props_spec actions_spec \<pi>
       "set o n_pre" "set o n_inv" "set o upds"
@@ -67,26 +99,31 @@ locale numeric_valid_ground_plan_cert =
 
 begin
 
-text \<open>Interpret the abstract discharge locale @{locale numeric_tp_nta_reduction_bounds} at the raw ground
-  parameters + the numeric plan \<open>\<pi>\<close>.  Its ancestors are present: @{locale numeric_tp_nta_reduction}
-  (via @{text nred}), the UNPRIMED numeric plan locale (via @{text num_plan}), and the UNPRIMED
-  @{locale tp_nta_reduction_correctness} (the propositional plan + the leaf's @{text unique_names}
-  discharges).  Its three own assumptions are @{text num_valid} (from @{thm num_valid_plan}),
-  @{text num_bound_inv} (the derived certificate, @{thm num_bound_inv}), and @{text num_goal_comp_ok}
-  (a leaf assumption).\<close>
+text \<open>Interpret the abstract discharge locale @{locale numeric_tp_nta_reduction_bounds'} at the raw ground
+  parameters + the numeric plan \<open>\<pi>\<close>.  Its ancestors are present: the PRIMED @{locale tp_nta_reduction_correctness'}
+  and the PRIMED numeric plan locale (via @{text num_plan}).  Its own assumptions are the leaf numeric-wf,
+  @{text num_valid} (from @{thm num_valid_plan}), @{text bound_inv} (the derived certificate
+  @{thm num_bound_inv}, i.e. @{text \<open>nred'.num_bound_inv\<close>}), and @{text num_goal_comp_ok} (a leaf
+  assumption).  Discharged order-independently, exactly as the committed correctness re-point discharges
+  @{text ncorr}, but with @{text num_seq_in_bounds} replaced by @{text num_bound_inv}.\<close>
 
-sublocale nbnd: numeric_tp_nta_reduction_bounds
+sublocale nbnd: numeric_tp_nta_reduction_bounds'
   init_spec goal_spec at_start_spec at_end_spec over_all_spec lower_spec upper_spec
   pre_spec adds_spec dels_spec 0 props_spec actions_spec \<pi> act_to_name_spec prop_to_name_spec
   n_pre n_inv upds num_init num_goal nfluents fluent_to_name_spec fluent_lo fluent_hi const_to_int
-  apply unfold_locales
-  subgoal using num_valid_plan .
-  subgoal using num_bound_inv .
-  subgoal using num_goal_comp_ok .
-  done
+  by unfold_locales
+     (fact num_plan.vp num_plan.nso num_plan.pap
+           upds_functional_start upds_functional_end
+           upds_no_cross_read_start upds_no_cross_read_end fluent_bounds_valid
+           snap_upds_nexp_ok_start snap_upds_nexp_ok_end
+           snap_pre_comp_ok_start snap_pre_comp_ok_end snap_inv_comp_ok
+           num_init_val_ok const_to_int_of_int
+           snap_writes_nfluents_start snap_writes_nfluents_end
+           num_valid_plan num_bound_inv num_goal_comp_ok
+           fluent_to_name_spec_inj)+
 
 text \<open>The hypothesis-free abstract capstone, re-exported at this ground interpretation.\<close>
-lemmas num_valid_plan_imp_form_holds = nbnd.num_valid_plan_imp_form_holds
+lemmas num_valid_plan_imp_form_holds = nbnd.ref_bounds.num_valid_plan_imp_form_holds
 
 end
 
@@ -109,7 +146,7 @@ proof -
   then interpret x: numeric_valid_ground_plan_cert P fluent_lo fluent_hi \<pi> .
   show ?thesis
     using x.num_valid_plan_imp_form_holds
-    unfolding num_a\<^sub>0_def x.nbnd.num_a\<^sub>0_def by simp
+    unfolding num_a\<^sub>0_def x.nbnd.ref_bounds.num_a\<^sub>0_def by simp
 qed
 
 corollary num_net_form_not_sat_imp_no_valid_ground_plan:
