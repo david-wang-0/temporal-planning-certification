@@ -904,6 +904,45 @@ text \<open>The static admission check for the classical (numeric-free) ground l
   nine @{locale ground_ast_problem_core} structural side-conditions (including the positivity-re-point's
   @{const act_conds_no_args}) plus @{text \<open>functions D = []\<close>} (the @{locale ground_ast_problem} leaf).\<close>
 
+text \<open>The numeric-tolerant BASE admission check: like \<open>check_ground_problem_core\<close> (below) but WITHOUT
+  the predAtm-only @{const act_conds_no_args} condition check, and with the init check weakened to
+  @{term \<open>\<lambda>x. is_predAtom x \<longrightarrow> form_preds_no_args x\<close>} (only the predicate init literals must be
+  nullary; numeric init assignments are exempt).  It characterizes @{locale ground_ast_problem_base},
+  which both the classical leaf (\<open>check_ground_problem_core\<close> = base + the two predAtm-only
+  checks) and the numeric leaf build on.\<close>
+definition "check_ground_problem_base P \<equiv> do {
+  let D = ast_problem.domain P;
+  check_wf_temporal_problem P;
+  check (is_pos_conj (goal P)) (ERRS ''Goal not a conjunction of positive literals'');
+  check_all_list pred_no_args (predicates D) ''Predicate not grounded (i.e. it has some argument)'' (shows o predicate.name o predicate_decl.pred);
+  check_all_list act_no_params (actions D) ''Action not grounded, it has a/some parameter(s)'' (shows o ast_temporal_action_schema_name);
+  check_all_list act_no_func_dcs (actions D) ''Action not grounded, it has a functional duration constraint'' (shows o ast_temporal_action_schema_name);
+  check_all_list act_dcs_integers (actions D) ''Action's duration constraint is not an integer'' (shows o ast_temporal_action_schema_name);
+  check_all_list act_pres_pos (actions D) ''Action has a condition that is not a conjunction of positive literals'' (shows o ast_temporal_action_schema_name);
+  check (consts D = []) (ERRS ''Domain has constants'');
+  check_all_list (\<lambda>x. is_predAtom x \<longrightarrow> form_preds_no_args x) (init P)
+    ''Initial predicate literal not grounded (it refers to constants)''
+    (\<lambda>(x::object atom Formulas.formula) (y::string). show y)
+}"
+
+lemma check_ground_problem_base_return_iff[return_iff]:
+  "check_ground_problem_base P = Inr () \<longleftrightarrow> ground_ast_problem_base P"
+proof -
+  interpret ast_temporal_problem P .
+  show ?thesis
+    unfolding check_ground_problem_base_def
+    unfolding ground_ast_problem_base_def ground_ast_problem_base_axioms_def
+    by (auto simp: return_iff list_all_iff)
+qed
+
+lemma isOK_check_ground_problem_base[simp]:
+  "isOK (check_ground_problem_base P) \<longleftrightarrow> ground_ast_problem_base P"
+proof -
+  have "isOK (check_ground_problem_base P) \<longleftrightarrow> check_ground_problem_base P = Inr ()"
+    by (cases "check_ground_problem_base P") (auto simp: isOK_def)
+  thus ?thesis by (simp add: check_ground_problem_base_return_iff)
+qed
+
 definition "check_ground_problem_core P \<equiv> do {
   let D = ast_problem.domain P;
   check_wf_temporal_problem P;
@@ -926,6 +965,7 @@ proof -
   show ?thesis
     unfolding check_ground_problem_core_def
     unfolding ground_ast_problem_core_def ground_ast_problem_core_axioms_def
+    unfolding ground_ast_problem_base_def ground_ast_problem_base_axioms_def
     by (auto simp: return_iff list_all_iff)
 qed
 

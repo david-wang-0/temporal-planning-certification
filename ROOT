@@ -83,6 +83,7 @@ session PDDL_TP_Reduction in Ground_PDDL_Exec_Imp = TP_NTA_Reduction +
     Error_Monad_Add
     PDDL_Checker_Common
     Temporal_Continuous_Reduction_Free
+    Ground_PDDL_Problem_Base
     Ground_PDDL_Problem_Defs
     Ground_PDDL_Problem_Reduction
     Ground_PDDL_Plan_Defs
