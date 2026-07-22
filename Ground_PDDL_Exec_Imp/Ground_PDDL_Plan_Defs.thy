@@ -3539,7 +3539,7 @@ proof (rule in_acts_of_plan_at_simplifiedE[OF assms], goal_cases)
   have sch: "SimpleActionSchema h (SimpleActionBody pre eff) \<in> set actions_spec"
     using resolve_action_in_actions[OF res] bb by simp
   have p: "act_pres_pos (SimpleActionSchema h (SimpleActionBody pre eff))"
-    using sch positive_act_pres unfolding actions_spec_def list_all_iff by auto
+    using act_pres_pos_spec sch by blast
   have n: "form_preds_no_args pre"
     using sch conds_no_args unfolding actions_spec_def list_all_iff by auto
   have "ground_act_pres_pos (instantiate_temporal_action_schema (SimpleActionSchema h (SimpleActionBody pre eff)) as)"

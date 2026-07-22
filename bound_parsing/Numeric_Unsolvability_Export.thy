@@ -81,6 +81,7 @@ text \<open>Locale constants carry no auto-generated code equations; wire the on
   accessors are already \<open>[code]\<close> via the classical \<open>ground_ast_problem_code\<close> bundle and the
   \<open>numeric_ground_data_code\<close> bundle in theory \<open>Ground_PDDL_Numeric_Code_Export\<close>).\<close>
 declare numeric_ground_ast_problem_defs.check_numeric_ground_problem_def[code]
+declare numeric_ground_ast_problem_defs.check_numeric_ground_problem_diag_def[code]
 
 export_code
   \<comment> \<open>--- propositional entries (verbatim from theory Check_Unsolvability) ---\<close>
@@ -111,6 +112,7 @@ export_code
   String.explode String.implode
   \<comment> \<open>--- numeric entries (this session) ---\<close>
   check_and_make_numeric_network_opt
+  check_numeric_admission_diag_opt
   check_gbounds_opt
   numeric_ground_ast_problem_defs.numeric_draft_actions
   numeric_ground_ast_problem_defs.is_gbound_inv_exec

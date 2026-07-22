@@ -25,6 +25,17 @@ lemma act_conds_no_args_spec:
   using assms unfolding actions_spec_def using conds_no_args unfolding list_all_iff
   by simp
 
+text \<open>In the classical (predAtm-only) core the numeric-tolerant base positivity
+  @{const act_pres_pos_num} upgrades to strict @{const act_pres_pos} -- there are no numeric
+  condition atoms to differ on -- so the classical no-args/pos-conj lemmas below (which take
+  @{const act_pres_pos}) are fed unchanged.\<close>
+lemma act_pres_pos_spec:
+  assumes "a \<in> set actions_spec"
+  shows "act_pres_pos a"
+  using act_pres_pos_num_spec[OF assms] act_conds_no_args_spec[OF assms]
+  by (cases a rule: act_pres_pos.cases)
+     (auto simp: is_pos_conj_num_no_args list_all_iff)
+
 lemma instantiate_action_schema_no_params:
   assumes "act_no_params (SimpleActionSchema h (SimpleActionBody pre eff))"
       and "wf_temporal_action_schema (SimpleActionSchema h (SimpleActionBody pre eff))"
@@ -190,7 +201,7 @@ proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
   obtain pre eff where b: "b = SimpleActionBody pre eff" by (cases b)
   have p: "act_pres_pos (SimpleActionSchema h (SimpleActionBody pre eff))"
-    using SimpleActionSchema positive_act_pres unfolding actions_spec_def list_all_iff b by auto
+    using act_pres_pos_spec SimpleActionSchema unfolding b by blast
   have n: "form_preds_no_args pre"
     using SimpleActionSchema conds_no_args unfolding actions_spec_def list_all_iff b by auto
   show ?case unfolding at_start_spec.simps b
@@ -199,7 +210,7 @@ next
   case (DurativeActionSchema h b)
   obtain dc cond deff where b: "b = DurativeActionBody dc cond deff" by (cases b)
   have p: "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff))"
-    using DurativeActionSchema positive_act_pres unfolding actions_spec_def list_all_iff b by auto
+    using act_pres_pos_spec DurativeActionSchema unfolding b by blast
   have n: "list_all form_preds_no_args (map snd cond)"
     using act_conds_no_args_spec[OF DurativeActionSchema] unfolding b by simp
   from inst_snap_act_pres_pos[OF p n] show ?case unfolding at_start_spec.simps b by blast
@@ -216,7 +227,7 @@ next
   case (DurativeActionSchema h b)
   obtain dc cond deff where b: "b = DurativeActionBody dc cond deff" by (cases b)
   have p: "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff))"
-    using DurativeActionSchema positive_act_pres unfolding actions_spec_def list_all_iff b by auto
+    using act_pres_pos_spec DurativeActionSchema unfolding b by blast
   have n: "list_all form_preds_no_args (map snd cond)"
     using act_conds_no_args_spec[OF DurativeActionSchema] unfolding b by simp
   from inst_snap_act_pres_pos[OF p n] show ?case unfolding at_end_spec.simps b by blast
@@ -233,7 +244,7 @@ next
   case (DurativeActionSchema h b)
   obtain dc cond deff where b: "b = DurativeActionBody dc cond deff" by (cases b)
   have p: "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff))"
-    using DurativeActionSchema positive_act_pres unfolding actions_spec_def list_all_iff b by auto
+    using act_pres_pos_spec DurativeActionSchema unfolding b by blast
   have n: "list_all form_preds_no_args (map snd cond)"
     using act_conds_no_args_spec[OF DurativeActionSchema] unfolding b by simp
   from inst_snap_act_pres_pos[OF p n] show ?case unfolding over_all_snap.simps b by blast

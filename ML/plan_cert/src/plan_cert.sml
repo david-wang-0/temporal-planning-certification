@@ -212,10 +212,17 @@ fun make_numeric_network domain problem model =
             case Converter.check_and_make_numeric_network_opt ground_prob box of
                 SOME n => n
               | NONE =>
-                  exit_fail (if boxOk
+                  let val diag = Converter.integer_of_nat
+                                   (Converter.check_numeric_admission_diag_opt ground_prob box)
+                  in exit_fail (if boxOk
                              then "structural numeric admission check rejected the problem \
-                                  \(check_numeric_ground_problem: functional/no-cross-read/struct-ok/snaps-disjoint)"
+                                  \(check_numeric_ground_problem first-failing clause #"
+                                  ^ Int.toString diag ^ "; 1=base-admission 2=snaps-disjoint \
+                                  \3/4=upds-functional 5/6=no-cross-read 7=empty-box 8/9=upd-struct-ok \
+                                  \10/11=pre-struct-ok 12=inv-struct-ok 13=init-int 14/15=writes-declared \
+                                  \16=goal-struct-ok)"
                              else "trusted static bound re-check rejected the inferred box (is_gbound_inv_exec)")
+                  end
         val _ = NetworkConversion.convert_network true model net
     in () end
 

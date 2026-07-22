@@ -107,6 +107,13 @@ definition check_and_make_numeric_network_opt where
        | Inr net \<Rightarrow> if numeric_ground_ast_problem_defs.is_gbound_inv_exec P lo hi
                     then Some net else None)"
 
+text \<open>DIAGNOSTIC (temporary) twin: report which structural admission clause rejects (0 = accept).\<close>
+definition check_numeric_admission_diag_opt where
+"check_numeric_admission_diag_opt P B \<equiv>
+   (let lo = (\<lambda>f. case map_of B (func.name f) of Some (l, _) \<Rightarrow> l | None \<Rightarrow> 0);
+        hi = (\<lambda>f. case map_of B (func.name f) of Some (_, h) \<Rightarrow> h | None \<Rightarrow> 0)
+    in numeric_ground_ast_problem_defs.check_numeric_ground_problem_diag P lo hi)"
+
 text \<open>A bool-returning slice of the gate: build the box bounds from the name-keyed assoc list
   \<open>B\<close> and run ONLY the trusted static certificate \<open>is_gbound_inv_exec\<close> (no net builder, so this
   code-generates).  The SML glue calls this to re-check an inferred box before trusting it.\<close>

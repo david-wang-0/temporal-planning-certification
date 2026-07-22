@@ -255,6 +255,29 @@ definition "check_numeric_ground_problem fluent_lo fluent_hi \<equiv> do {
     (ERRS ''Numeric goal is not structurally integer-faithful'')
 }"
 
+text \<open>DIAGNOSTIC (temporary): 1-based index of the FIRST failing structural check in
+  @{const check_numeric_ground_problem} (0 = all pass), so the SML glue can report which
+  admission clause rejects a problem instead of a coarse NONE.\<close>
+definition "check_numeric_ground_problem_diag (fluent_lo :: func \<Rightarrow> int) (fluent_hi :: func \<Rightarrow> int) \<equiv> (
+  if \<not> isOK (check_ground_problem_base P) then (1::nat)
+  else if \<not> (distinct (map at_start_spec actions_spec) \<and> distinct (map at_end_spec actions_spec)
+             \<and> list_all (\<lambda>s. s \<notin> set (map at_end_spec actions_spec)) (map at_start_spec actions_spec)) then 2
+  else if \<not> list_all (\<lambda>a. upds_functional_list (upds (at_start_spec a))) actions_spec then 3
+  else if \<not> list_all (\<lambda>a. upds_functional_list (upds (at_end_spec a))) actions_spec then 4
+  else if \<not> list_all (\<lambda>a. upds_no_cross_read_list (upds (at_start_spec a))) actions_spec then 5
+  else if \<not> list_all (\<lambda>a. upds_no_cross_read_list (upds (at_end_spec a))) actions_spec then 6
+  else if \<not> list_all (\<lambda>f. fluent_lo f \<le> fluent_hi f) nfluents then 7
+  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_start_spec a))) actions_spec then 8
+  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_end_spec a))) actions_spec then 9
+  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_start_spec a))) actions_spec then 10
+  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_end_spec a))) actions_spec then 11
+  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_inv a)) actions_spec then 12
+  else if \<not> list_all (\<lambda>f. is_int_rat (num_init f)) nfluents then 13
+  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_start_spec a))) actions_spec then 14
+  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_end_spec a))) actions_spec then 15
+  else if \<not> list_all (comp_struct_ok nfluents) num_goal then 16
+  else 0)"
+
 lemma check_numeric_ground_problem_return_iff:
   "check_numeric_ground_problem fluent_lo fluent_hi = Inr ()
    \<longleftrightarrow> ground_ast_problem_base P

@@ -205,6 +205,54 @@ fun act_pres_pos::"ast_temporal_action_schema \<Rightarrow> bool" where
 "act_pres_pos (SimpleActionSchema h (SimpleActionBody pre eff)) = (is_pos_conj pre)" |
 "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff)) = (list_all is_pos_conj (map snd cond))"
 
+text \<open>Numeric-TOLERANT positivity: like the reused \<open>is_pos_lit\<close>/\<open>is_pos_conj\<close> but the five positive
+  numeric-comparison atoms are ACCEPTED (they are projected to \<open>n_pre\<close>, not \<open>pre_spec\<close>); only NEGATED
+  \<open>predAtm\<close> literals are rejected.  The BASE locale assumes this weaker positivity, so numeric
+  conditions/goals are admitted; the CLASSICAL extension recovers strict \<open>is_pos_conj\<close> from the
+  predAtm-only side condition (\<open>is_pos_conj_num_no_args\<close> below).\<close>
+fun is_pos_lit_num :: "'a atom formula \<Rightarrow> bool" where
+  "is_pos_lit_num \<bottom> = True" |
+  "is_pos_lit_num (\<^bold>\<not>\<bottom>) = True" |
+  "is_pos_lit_num (Atom (predAtm n args)) = True" |
+  "is_pos_lit_num (\<^bold>\<not>(Atom (predAtm n args))) = False" |
+  "is_pos_lit_num (Atom (eqAtm a b)) = True" |
+  "is_pos_lit_num (\<^bold>\<not>(Atom (eqAtm a b))) = True" |
+  "is_pos_lit_num (Atom (numericEqAtm a b)) = True" |
+  "is_pos_lit_num (Atom (numericLessAtm a b)) = True" |
+  "is_pos_lit_num (Atom (numericLEAtm a b)) = True" |
+  "is_pos_lit_num (Atom (numericGreaterAtm a b)) = True" |
+  "is_pos_lit_num (Atom (numericGEAtm a b)) = True" |
+  "is_pos_lit_num _ = False"
+
+fun is_pos_conj_num :: "'a atom formula \<Rightarrow> bool" where
+  "is_pos_conj_num (x \<^bold>\<and> xs) \<longleftrightarrow> is_pos_lit_num x \<and> is_pos_conj_num xs" |
+  "is_pos_conj_num x \<longleftrightarrow> is_pos_lit_num x"
+
+fun act_pres_pos_num::"ast_temporal_action_schema \<Rightarrow> bool" where
+"act_pres_pos_num (SimpleActionSchema h (SimpleActionBody pre eff)) = (is_pos_conj_num pre)" |
+"act_pres_pos_num (DurativeActionSchema h (DurativeActionBody dc cond deff)) = (list_all is_pos_conj_num (map snd cond))"
+
+lemma is_pos_lit_imp_is_pos_lit_num: "is_pos_lit L \<Longrightarrow> is_pos_lit_num L"
+  by (cases L rule: is_pos_lit.cases) auto
+
+lemma is_pos_conj_imp_is_pos_conj_num: "is_pos_conj c \<Longrightarrow> is_pos_conj_num c"
+  by (induction c rule: is_pos_conj.induct) (auto simp: is_pos_lit_imp_is_pos_lit_num)
+
+lemma act_pres_pos_imp_num: "act_pres_pos a \<Longrightarrow> act_pres_pos_num a"
+  by (cases a rule: act_pres_pos.cases) (auto simp: is_pos_conj_imp_is_pos_conj_num list_all_iff)
+
+text \<open>Reverse (classical) bridge: on a predAtm-only (0-ary) formula the numeric-tolerant positivity
+  coincides with strict \<open>is_pos_conj\<close> (there are no numeric atoms to make a difference).\<close>
+lemma is_pos_lit_num_no_args_imp_is_pos_lit:
+  "is_pos_lit_num L \<Longrightarrow> (\<forall>a\<in>formula.atoms L. atom_no_args a) \<Longrightarrow> is_pos_lit L"
+  by (cases L rule: is_pos_lit_num.cases) (auto elim!: atom_no_args.elims)
+
+lemma is_pos_conj_num_no_args:
+  "is_pos_conj_num c \<Longrightarrow> form_preds_no_args c \<Longrightarrow> is_pos_conj c"
+  unfolding form_preds_no_args_def
+  by (induction c rule: is_pos_conj_num.induct)
+     (auto simp: is_pos_lit_num_no_args_imp_is_pos_lit)
+
 text \<open>The eqAtm-free side condition on preconditions/timed-conditions (predAtm-only, no eqAtm). Bundled
   with @{const act_pres_pos} it upgrades the grounder's @{const is_pos_conj} to @{const pos_conj_form}
   of the instantiated ground precondition. To be DISCHARGED once the grounder's eqAtm-elimination stage
@@ -775,12 +823,12 @@ locale ground_ast_problem_base =
     ground_ast_problem_defs P +
     wf_ast_temporal_problem P
   for P :: ast_temporal_problem +
-  assumes positive_goal: "is_pos_conj (goal P)"
+  assumes positive_goal: "is_pos_conj_num (goal P)"
       and preds_no_args: "list_all pred_no_args (predicates D)"
       and acts_no_params: "list_all act_no_params (actions D)"
       and acts_no_func_dcs: "list_all act_no_func_dcs (actions D)"
       and acts_dcs_integers: "list_all act_dcs_integers (actions D)"
-      and positive_act_pres: "list_all act_pres_pos (actions D)"
+      and positive_act_pres: "list_all act_pres_pos_num (actions D)"
       and no_consts: "consts D = []"
       and init_preds_no_args: "list_all (\<lambda>x. is_predAtom x \<longrightarrow> form_preds_no_args x) (init P)"
 
@@ -943,9 +991,9 @@ lemma act_no_params:
   using assms unfolding actions_spec_def using acts_no_params unfolding list_all_iff 
   by simp
 
-lemma act_pres_pos_spec:
+lemma act_pres_pos_num_spec:
   assumes "a \<in> set actions_spec"
-  shows "act_pres_pos a"
+  shows "act_pres_pos_num a"
   using assms unfolding actions_spec_def using positive_act_pres unfolding list_all_iff
   by simp
 
@@ -1159,7 +1207,7 @@ proof -
     using wf_temporal_problem unfolding wf_temporal_problem_def
     unfolding props_spec_def goal_spec_def by auto
   hence "list_all (wf_fmla_atom objT) (to_literals (goal P))"
-    using wf_pos_conj_fmla_imp_wf_atoms positive_goal by auto
+    using wf_fmla_imp_wf_to_literals by auto
   hence "set (map to_predicate (to_literals (goal P))) \<subseteq> set props_spec"
     using wf_fmla_atom_in_props unfolding set_map list_all_iff by auto
   thus ?thesis using goal_spec_def by auto
