@@ -12,6 +12,53 @@ The canonical task list. `#N` labels are the ones referenced in commits/memory; 
 truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NUMERIC_EXEC_PLAN.md`.
 
 ### IN PROGRESS / NEXT (ordered)
+
+0. **SNAP-DISTINCTNESS RELAXATION — admit mixed simple+durative numeric problems (majsp). FOUNDATION DONE & GREEN & COMMITTED (`8956184`); ground re-point REMAINS.**
+   *Why:* `check_numeric_ground_problem` rejects majsp at the snap-distinctness clause — every SIMPLE action's
+   `at_end_spec` is the constant `ground_non_action`, so `distinct (map at_end_spec actions_spec)` fails with ≥2
+   simple actions. The numeric reduction inherits `snaps_disj` from the propositional base; the propositional path
+   escapes it by building the net over the INJECTIVE `AtStart`/`AtEnd` snap_action datatype (primed layer
+   `tp_nta_reduction_defs'` → `reduction_ref_impl`). The numeric stack had no primed layer.
+   *DONE (committed `8956184`, both TA_Network files green, 0 sorries):*
+   - `TP_NTA_Reduction_Numeric_Defs.thy`: `numeric_tp_nta_reduction_defs'` (twin of `tp_nta_reduction_defs'`,
+     `reduction_ref_impl` at `AtStart`/`AtEnd`, numeric data via `rat_impl.set_impl.app_snap n_pre`/`upds`) + a
+     DROP-IN aliasing block (64 `abbreviation X = reduction_ref_impl.X` + 57 `lemmas X_def`) so a leaf switched to
+     `defs'` keeps every `ndefs.X`/`ndefs.X_def` resolving.
+   - `TP_NTA_Reduction_Numeric_Model_Checking.thy`: `numeric_tp_nta_reduction_correctness'` +
+     **`num_relabel_equiv`/`fold_reindex_collapse`** — the numeric analog of `plan_validity_equivalence`
+     (Temporal_Plans.thy:1876): `num_valid_plan`/`num_valid_state_sequence` invariant under restrict-to-props +
+     `AtStart` relabel. Crux: the non-injective relabel would double-apply the non-idempotent happening-fold, but
+     `num_mutex_valid_plan` forces any snap-collision to `upds={}` (a numeric no-op), so the fold reparametrizes.
+   *REMAINING = ground re-point (mechanical, ~40 refine lemmas; each `isabelle build -d . PDDL_TP_Reduction` ≈ 2 min):*
+   1. `Ground_PDDL_Numeric_Problem_Defs.thy:148` — `numeric_tp_nta_reduction_defs` → `numeric_tp_nta_reduction_defs'`
+      (identical arg list; build-verified clean — the primed base's obligations just accumulate, `ndefs.X` resolves
+      via aliases, `snaps_disj` drops from the leaf predicate).
+   2. `Ground_PDDL_Numeric_NTA_Reduction_Correctness.thy` — REMOVE the `nred: numeric_tp_nta_reduction` sublocale
+      (0 references; net now via the `ndefs.*` aliases); `num_plan` (~:92) → `numeric_temp_plan_for_problem_list_impl_int'`;
+      `ncorr` (~:120) → `numeric_tp_nta_reduction_correctness'`, discharged by
+      `by unfold_locales (fact upds_functional_start … num_goal_comp_ok fluent_to_name_spec_inj)+` (17 obligations =
+      14 leaf wf + leaf `const_to_int_of_int` + `num_valid_plan`/`num_seq_in_bounds` + `fluent_to_name_spec_inj`);
+      re-point the Rung-4 capstone to `ncorr.ref_correctness.num_valid_plan_imp_form_holds` +
+      `x.ncorr.ref_correctness.num_a\<^sub>0_def`. (These edits type-checked; not yet full-build-verified.)
+   3. `Ground_PDDL_Numeric_NTA_Reduction_Impl.thy` (**the substantial part**) — the `ndefs_*_refine` chain. With the
+      primed leaf, `ndefs.X` for SNAP-ARGUMENT accessors changes type `ground_action` → `_ snap_action`, so the
+      executable-vs-abstract refines TYPE-CLASH (first: `num_pre_guard_refine`, ~:423). MIRROR the propositional
+      template (`Ground_PDDL_NTA_Reduction_Impl.thy`, which re-pointed `abstr_model_checking.reduction_ref_impl.X = X_impl`):
+      re-state snap-arg refines PER SNAP — `ndefs.num_pre_guard (AtStart a) = num_pre_guard' (at_start_spec a)` + the
+      `AtEnd` twin (same for `num_upd`, `snap_vars`, `mutex_effects` ~:508, `net_int_clocks` ~:518) — proofs unfold the
+      `_def` + `fluent_to_var_spec_eq` + `imp_defs.rat_impl.set_impl.app_snap.simps`; then fix the `unfolding` lists of
+      the action-arg refines (`num_start_edge_refine` ~:627, `num_end_edge_refine`, `num_action_to_automaton_refine`
+      ~:643, `num_main_auto_refine`, `num_net_automata_refine`, `ndefs_action_vars_refine`). Watch the restricted-vs-
+      unrestricted mismatch (`reduction_ref_impl` uses `pre_imp_restr_list`; executable uses `pre_imp_list`) — align to
+      whatever the propositional executable settled on. THEN delete the snap-distinctness clause: `check_numeric_ground_problem`
+      (~:224-227), its `_diag` mirror (renumber the clause indices below it), the `_return_iff` conjunct, and in `_sound`
+      the `sd`/`se`/`sde` derivation + the `snaps_disj_on` subgoal (~:356) — instead discharge the primed base's
+      `distinct_props`/`distinct_actions`/`domain_acts_mod_props`/… (no `snaps_disj`) as the propositional `ground_ast_problem`
+      sound proof does. Confirm `check_numeric_ground_problem_diag` still compiles.
+   4. `isabelle build -d . PDDL_TP_Reduction` green → `isabelle build -d . -e bound_parsing` (re-export SML) →
+      `cd ML && make build_certifier` → test: `ML/out/plan_cert -domain examples/gigante/majsp-impossible-1/pddl21/domain_integers.pddl
+      -problem …/instances/instance_1_2_3_1.pddl -model /tmp/m.muntax -certify numeric` should now pass admission and emit a net.
+
 1. **WP-E — numeric bound inference (soundness-critical). BOTH SIDES DONE & GREEN** (committed). Structure
    (David's Option 1): **`is_gbound_inv' ⟹ num_bound_inv ⟹ num_seq_in_bounds`**.
    - **Reduction check — `TA_Network/TP_NTA_Reduction_Numeric_Bounds.thy` (in ROOT): 0 sorries.** `num_bound_inv`
