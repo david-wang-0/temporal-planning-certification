@@ -23,15 +23,22 @@ truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NU
    (a) FIXED (`ML/plan_cert/src/parsing/pddl_refactor.sml`, committed): the domain parser enforced a fixed
        section order; painter/sync reorder them (`:constants` after `:functions`; `:functions` before
        `:predicates`). Now the 5 header sections parse in ANY order.
-   (b) OPEN: both domains use `forall`-QUANTIFIED conditions AND effects (`(forall (?p - Parallel) …)` in
-       sync's c1 :condition/:effect, `(forall (?t - Treatment) …)` in painter's reset :effect). The harness
-       condition AST (`Prop_and/or/imply/not/atom`, no `Prop_forall`) and effect AST (`LOGIC_EFFECT`/
-       `NUMERIC_EFFECT`/`SNAP_EFFECT`, no quantified node) don't model them. FIX = add a quantifier node to
-       the parser AST + parse `(forall (typed-vars) body)` in `pre_GD`/`da_GD`/`effect`/`da_effect`, and EXPAND
-       it in `grounder.sml` (instantiate the bound var over the type's objects, conjoin — the grounder already
-       does exactly this for schema parameters via `candidates`/`cartesian`), so `forall` never reaches the
-       verified reduction. A real feature (parser AST + grounder), the next SML-harness task alongside the
-       nemo datalog-reachability integration (grounder task #22b).
+   (b) FIXED (`9029e43`): `forall`/`exists` quantifiers added to the SML PDDL AST (`Prop_all`/`Prop_ex`;
+       `FORALL_EFFECT`/`FORALL_SNAP`) + parser (conditions + effects, typed binders), eliminated by expansion
+       over the (subtype-aware) domain/problem objects with TWO selectable strategies (`QUANT_EXPAND=early|grounded`,
+       default early): EARLY expands at the PDDL→C boundary (grounder sees quantifier-free input — matches the
+       verified classical grounder, re-implementable in Isabelle); GROUNDED carries quantifiers past the C
+       translation in a grounder-internal forall-carrying type (`QAst`), instantiates schema params FIRST, then
+       expands + relax/fold per ground instance. Isabelle `Converter` types untouched. Also fixed two silent-drop
+       bugs + two incidental grammar gaps (empty `(and)` precond, conjunctive `(at start (and e1 e2 …))` snaps).
+   *POST-QUANTIFIER SMOKE (both strategies): sync-impossible NOW ✅ emits a net; majsp-1/2 + MatchCellar still ✅
+   (byte-identical across strategies); painter-impossible now PARSES + grounds (127 actions) but no net — blocked
+   by TWO quantifier-ORTHOGONAL limits: non-integer duration `15.004` (integer-duration net builder) + unbounded
+   `counter` fluent (numeric bound-inference returns NONE). So 4/5 unsolvable domains emit numeric nets end-to-end;
+   painter needs the (separate) non-integer-duration / unbounded-fluent handling. Compactness: early == grounded
+   for these (forall vars independent of schema params).*
+   *NEXT: nemo datalog-reachability integration in `grounder.sml` (task #22b); painter's non-integer-duration +
+   unbounded-fluent handling.*
    Cleanup: `check_numeric_ground_problem_diag` + the `+ [dbg]`-free plan_cert are the runnable glue; the
    `check_numeric_ground_problem_diag` is still labelled temporary.
    *(historical: the final blocker was `nexp_struct_ok`'s `NConst c => c : Ints` clause code-generating
