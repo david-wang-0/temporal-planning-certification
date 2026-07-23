@@ -13,8 +13,22 @@ truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NU
 
 ### IN PROGRESS / NEXT (ordered)
 
-0. **SNAP-DISTINCTNESS RELAXATION — admit mixed simple+durative numeric problems (majsp). GROUND RE-POINT DONE & GREEN (jEdit, all 3 exec-imp files consolidated, 0 sorries), UNCOMMITTED; only the step-4 build/export/majsp smoke-test REMAINS.**
-   *Why:* `check_numeric_ground_problem` rejects majsp at the snap-distinctness clause — every SIMPLE action's
+0. **SNAP-DISTINCTNESS RELAXATION — DONE END-TO-END & COMMITTED. The numeric certification pipeline emits nets for mixed simple+durative numeric problems (majsp) and the other parseable unsolvable domains.**
+   *COMMITS:* `92ba24b` reduction re-point, `c5297f9` bounds twin, `932a62c` bound_inference ground re-point,
+   Code_Export proof fix, `20ea933` harness Or-serializer fix, `22d2e30` nexp_struct_ok rat exec-twins.
+   *SMOKE TESTS (2026-07-23, `ML/out/plan_cert -certify numeric`, easiest instance each):*
+   majsp-impossible-1 ✅ net (144KB), majsp-impossible-2 ✅ net (3.8MB, box [0,25]),
+   MatchCellar-impossible ✅ net (160KB, empty box = durative-only). painter-impossible / sync-impossible ❌
+   fail EARLIER at a HARNESS PDDL-PARSER gap (`Parse error … Expected ')'` right after the typed `:functions`
+   section) — NOT the numeric pipeline. That parser gap (`ML/plan_cert/src/…` PddlParser / grounder parser)
+   is the next SML-harness task, alongside the nemo datalog-reachability integration (grounder task #22b).
+   Cleanup: `check_numeric_ground_problem_diag` + the `+ [dbg]`-free plan_cert are the runnable glue; the
+   `check_numeric_ground_problem_diag` is still labelled temporary.
+   *(historical: the final blocker was `nexp_struct_ok`'s `NConst c => c : Ints` clause code-generating
+   polymorphically with a ring_1 dict (image over UNIV -> abort); FIXED via rat exec-twins routed into the
+   admission check — Isabelle code-gen does NOT honour type-instance code equations, so a separate rat fun +
+   eta-form bridge in _return_iff was needed, not a [code] redirect. `22d2e30`.)*
+   *Why (original motivation):* `check_numeric_ground_problem` rejected majsp at the snap-distinctness clause — every SIMPLE action's
    `at_end_spec` is the constant `ground_non_action`, so `distinct (map at_end_spec actions_spec)` fails with ≥2
    simple actions. The numeric reduction inherits `snaps_disj` from the propositional base; the propositional path
    escapes it by building the net over the INJECTIVE `AtStart`/`AtEnd` snap_action datatype (primed layer
