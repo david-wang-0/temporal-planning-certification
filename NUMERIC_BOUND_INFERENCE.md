@@ -126,6 +126,56 @@ The reduction needs **finite** `int` bounds; a genuinely unbounded fluent must b
 | `:95` | `infer_fluent_bounds_greach_subset` | corollary | `\<gamma>_env`-level restatement (whole reachable set ⊆ box) |
 | `:104`–`:138` | `ivl_bounds_num_ivl`, `finite_ivl_num_ivl`, `ivl_bounds_top`, `not_finite_ivl_top`, `value` demos | lemma/value | sanity + demos: guarded counter → `Some (0,1)`; unguarded increment → `None` |
 
+### 1e. Relational (fluent-vs-fluent) guard refinement — **variant 2, PLANNED** (bounds painter's `counter`)
+
+Everything above refines a fluent only by a **var-vs-CONSTANT** comparison (`refine_gcomp`,
+`refine_comp`). painter's guard `(= (counter ?t) (item_id ?i))` is **var-vs-VAR**, so every layer
+drops it and `counter` stays unbounded → `numeric bound inference failed`. Variant 2 extends the
+refine step to compare a fluent against the *interval of the other operand's whole nexp*, evaluated
+over the current box with `aeval` (§2 `:516`). No "detect constant" pass and **no plan invariant**:
+soundness is a local interval meet, licensed by `comp_ok ⟹ both operands ∈ nfluents`
+(`TP_NTA_Reduction_Numeric_Defs.thy:83`), so the box already constrains the other operand.
+
+**Why it bounds `counter` for free.** `item_id` is assigned by *no* action, so the interval AI
+(§1a–1c) already gives it a **point box** `[c,c]` (`c` = its init value) with zero extra machinery.
+The only new part is transferring that point box across the `=` guard onto `counter`.
+
+**Worked example — deriving the threshold of `counter = item_id + 1`.** (painter's real guard is the
+offset-free `counter = item_id`; the `+ 1` case shows the general nexp-valued RHS.)
+
+```
+# Box entering the guard (from the interval AI over the actions):
+#   item_id : never assigned by any action        -> point interval  B[item_id] = [c, c]   (c = init)
+#   counter : incremented by some action, no const guard hit yet
+#                                                  -> B[counter] = [0, +inf]   (unbounded on its own)
+
+refine_comp B (Comp EQ (NVar counter) (NAdd (NVar item_id) (NConst 1))):
+    # 1. evaluate the OTHER operand's nexp over the current box (aeval, the §2 interval evaluator)
+    rhs = aeval B (NAdd (NVar item_id) (NConst 1))     # [c,c] +_ivl [1,1] = [c+1, c+1]
+    # 2. meet the fluent's box with it  (op = EQ -> two-sided meet)
+    B[counter] := B[counter]  meet  rhs                #  [0,+inf] meet [c+1,c+1] = [c+1, c+1]   <-- threshold!
+    # 3. symmetric leg for EQ: also refine any fluent on the RHS by (lhs-box solved back), i.e.
+    #    B[item_id] := B[item_id] meet aeval B (NSub (NVar counter) (NConst 1))   # here a no-op: already [c,c]
+    return B
+
+# op /= EQ uses the half-bounded meets instead of a two-sided one:
+#   LEQ : B[counter] := B[counter] meet ivl_le  (upper rhs)      # cap upper only
+#   LT  : ... meet ivl_le (upper rhs - 1)
+#   GEQ : B[counter] := B[counter] meet ivl_ge  (lower rhs)      # raise lower only
+#   GT  : ... meet ivl_ge (lower rhs + 1)
+```
+
+Result: `counter` is pinned to `[c+1, c+1]` (painter's real guard gives `[c,c]`), `extract_box`
+(§1d) succeeds, and the net is emitted. **Soundness obligation** (the only new proof, frozen-layer
+§2): any valuation `w` that is in the old box AND satisfies the guard is in the refined box —
+immediate from `aeval_sound` (§2 `:728`, `aeval` over-approximates `eval_nexp`) plus `meet`
+being interval intersection, needing `item_id ∈ nfluents` only so `B[item_id]` is meaningful (given
+by `comp_ok`). Contrast variant 1 (guard-fold): it would instead *detect* `item_id` static, prove a
+**global** reachability invariant `item_id = c`, and rewrite `NVar item_id → NConst c` — strictly
+more proof for a strictly narrower feature. The four implementation layers (draft projection,
+HOL-IMP AI + glue, trusted re-check, abstract cert) are enumerated in `HANDOVER.md` §"CURRENT NEXT
+STEP".
+
 ---
 
 ## 2. Reduction-native certificate + bridge — `TA_Network/TP_NTA_Reduction_Numeric_Bounds.thy`
