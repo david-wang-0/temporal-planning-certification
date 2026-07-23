@@ -295,11 +295,28 @@ fun numeric_selftest () =
         fun npi n = Converter.Int_of_integer n
         val guarded : NumericBoundGlue.draft =
           (["counter"],
-           ([([Converter.GLe_i ("counter", npi 0)],
+           ([([Converter.GCmp_i (Converter.Cle,
+                                 Converter.EV "counter", Converter.EC (npi 0))],
               [("counter",
                 Converter.EAdd (Converter.EV "counter",
                                         Converter.EC (npi 1)))])],
             [("counter", npi 0)]))
+        (* relational (var-vs-var, the painter shape, two items): item0/item1 static at 0/1
+           (point boxes), counter += 1 under guard  item_k = counter  -- fires once per item,
+           so counter in [0,2]; the static point boxes transfer across the = guards *)
+        val relational : NumericBoundGlue.draft =
+          (["item0", "item1", "counter"],
+           ([([Converter.GCmp_i (Converter.Ceq,
+                                 Converter.EV "item0", Converter.EV "counter")],
+              [("counter",
+                Converter.EAdd (Converter.EV "counter",
+                                        Converter.EC (npi 1)))]),
+             ([Converter.GCmp_i (Converter.Ceq,
+                                 Converter.EV "item1", Converter.EV "counter")],
+              [("counter",
+                Converter.EAdd (Converter.EV "counter",
+                                        Converter.EC (npi 1)))])],
+            [("item0", npi 0), ("item1", npi 1), ("counter", npi 0)]))
         fun showBox NONE = "<NONE: unbounded / out of scope>"
           | showBox (SOME box) =
               String.concatWith ", "
@@ -307,8 +324,10 @@ fun numeric_selftest () =
                    f ^ " in [" ^ Int.toString (Converter.integer_of_int lo)
                    ^ "," ^ Int.toString (Converter.integer_of_int hi) ^ "]") box)
     in
-        println ("numeric bound-inference self-test: "
-                 ^ showBox (NumericBoundGlue.infer_box guarded))
+        println ("numeric bound-inference self-test (guarded counter): "
+                 ^ showBox (NumericBoundGlue.infer_box guarded));
+        println ("numeric bound-inference self-test (relational var-vs-var): "
+                 ^ showBox (NumericBoundGlue.infer_box relational))
     end
 
 fun check args =

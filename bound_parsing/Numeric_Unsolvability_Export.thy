@@ -116,7 +116,7 @@ export_code
   check_gbounds_opt
   numeric_ground_ast_problem_defs.numeric_draft_actions
   numeric_ground_ast_problem_defs.is_gbound_inv_exec
-  GLe_i GGe_i GEq_i GLt_i GGt_i
+  GCmp_i Ceq Cle Cge Clt Cgt
   EC EV EAdd ESub EMul EDiv
   in Eval module_name Converter file_prefix Check_Unsolvability
 

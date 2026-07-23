@@ -185,6 +185,7 @@ structure Converter : sig
     And of 'a formula * 'a formula | Or of 'a formula * 'a formula |
     Imp of 'a formula * 'a formula
   type json
+  datatype cmp_op = Ceq | Cle | Cge | Clt | Cgt
   datatype func = Func of string
   datatype 'a primitive_numeric_expression = PNE of func * 'a list
   datatype 'a numeric_expression = ConstantExpr of rat | DurationExpr |
@@ -264,8 +265,7 @@ structure Converter : sig
         'a numeric_expression
   datatype e_int = EC of inta | EV of string | EAdd of e_int * e_int |
     ESub of e_int * e_int | EMul of e_int * e_int | EDiv of e_int * e_int
-  datatype g_int = GLe_i of string * inta | GGe_i of string * inta |
-    GEq_i of string * inta | GLt_i of string * inta | GGt_i of string * inta
+  datatype g_int = GCmp_i of cmp_op * e_int * e_int
   type resulta
   datatype ('a, 'b, 'c, 'd) sexp = Truea | Notb of ('a, 'b, 'c, 'd) sexp |
     Andb of ('a, 'b, 'c, 'd) sexp * ('a, 'b, 'c, 'd) sexp |
@@ -5253,8 +5253,7 @@ datatype 'a ast_continuous_effect =
 datatype e_int = EC of inta | EV of string | EAdd of e_int * e_int |
   ESub of e_int * e_int | EMul of e_int * e_int | EDiv of e_int * e_int;
 
-datatype g_int = GLe_i of string * inta | GGe_i of string * inta |
-  GEq_i of string * inta | GLt_i of string * inta | GGt_i of string * inta;
+datatype g_int = GCmp_i of cmp_op * e_int * e_int;
 
 datatype ast_cont_change_action_body =
   ContChangeActionBody of
@@ -20113,67 +20112,6 @@ binda (rename_locs_formula (fn i => geta show_literal (nth names i)) formulac)
                     end)
               end)));
 
-fun comp_to_gint nm cti (Comp (Cle, NVar f, NConst c)) =
-  SOME (GLe_i (nm f, cti c))
-  | comp_to_gint nm cti (Comp (Cge, NVar f, NConst c)) =
-    SOME (GGe_i (nm f, cti c))
-  | comp_to_gint nm cti (Comp (Ceq, NVar f, NConst c)) =
-    SOME (GEq_i (nm f, cti c))
-  | comp_to_gint nm cti (Comp (Clt, NVar f, NConst c)) =
-    SOME (GLt_i (nm f, cti c))
-  | comp_to_gint nm cti (Comp (Cgt, NVar f, NConst c)) =
-    SOME (GGt_i (nm f, cti c))
-  | comp_to_gint nm cti (Comp (Ceq, NConst v, vb)) = NONE
-  | comp_to_gint nm cti (Comp (Ceq, NAdd (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Ceq, NSub (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Ceq, NMul (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Ceq, NDiv (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Ceq, va, NVar v)) = NONE
-  | comp_to_gint nm cti (Comp (Ceq, va, NAdd (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Ceq, va, NSub (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Ceq, va, NMul (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Ceq, va, NDiv (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Cge, NConst v, vb)) = NONE
-  | comp_to_gint nm cti (Comp (Cge, NAdd (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Cge, NSub (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Cge, NMul (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Cge, NDiv (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Cge, va, NVar v)) = NONE
-  | comp_to_gint nm cti (Comp (Cge, va, NAdd (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Cge, va, NSub (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Cge, va, NMul (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Cge, va, NDiv (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Clt, NConst v, vb)) = NONE
-  | comp_to_gint nm cti (Comp (Clt, NAdd (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Clt, NSub (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Clt, NMul (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Clt, NDiv (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Clt, va, NVar v)) = NONE
-  | comp_to_gint nm cti (Comp (Clt, va, NAdd (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Clt, va, NSub (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Clt, va, NMul (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Clt, va, NDiv (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Cgt, NConst v, vb)) = NONE
-  | comp_to_gint nm cti (Comp (Cgt, NAdd (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Cgt, NSub (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Cgt, NMul (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Cgt, NDiv (v, vc), vb)) = NONE
-  | comp_to_gint nm cti (Comp (Cgt, va, NVar v)) = NONE
-  | comp_to_gint nm cti (Comp (Cgt, va, NAdd (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Cgt, va, NSub (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Cgt, va, NMul (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (Cgt, va, NDiv (v, vc))) = NONE
-  | comp_to_gint nm cti (Comp (v, NConst vc, vb)) = NONE
-  | comp_to_gint nm cti (Comp (v, NAdd (vc, vd), vb)) = NONE
-  | comp_to_gint nm cti (Comp (v, NSub (vc, vd), vb)) = NONE
-  | comp_to_gint nm cti (Comp (v, NMul (vc, vd), vb)) = NONE
-  | comp_to_gint nm cti (Comp (v, NDiv (vc, vd), vb)) = NONE
-  | comp_to_gint nm cti (Comp (v, va, NVar vc)) = NONE
-  | comp_to_gint nm cti (Comp (v, va, NAdd (vc, vd))) = NONE
-  | comp_to_gint nm cti (Comp (v, va, NSub (vc, vd))) = NONE
-  | comp_to_gint nm cti (Comp (v, va, NMul (vc, vd))) = NONE
-  | comp_to_gint nm cti (Comp (v, va, NDiv (vc, vd))) = NONE;
-
 fun nexp_to_eint nm cti (NConst c) = EC (cti c)
   | nexp_to_eint nm cti (NVar f) = EV (nm f)
   | nexp_to_eint nm cti (NAdd (a, b)) =
@@ -20184,6 +20122,9 @@ fun nexp_to_eint nm cti (NConst c) = EC (cti c)
     EMul (nexp_to_eint nm cti a, nexp_to_eint nm cti b)
   | nexp_to_eint nm cti (NDiv (a, b)) =
     EDiv (nexp_to_eint nm cti a, nexp_to_eint nm cti b);
+
+fun comp_to_gint nm cti (Comp (p, a, b)) =
+  SOME (GCmp_i (p, nexp_to_eint nm cti a, nexp_to_eint nm cti b));
 
 fun fw_upd_impl_int n =
   (fn ai => fn bib => fn bia => fn bi =>
@@ -22420,12 +22361,53 @@ fun refine_comp_exec B_ cti (Comp (Cle, NVar f, NConst c)) b =
   | refine_comp_exec B_ cti (Comp (Cgt, NVar f, NConst c)) b =
     fun_upd B_ b f
       (max ord_int (fst (b f)) (plus_inta (cti c) one_inta), snd (b f))
+  | refine_comp_exec B_ cti (Comp (p, NVar f, NVar g)) b =
+    (if equal_inta (fst (b g)) (snd (b g))
+      then (case p
+             of Ceq =>
+               fun_upd B_ b f
+                 (max ord_int (fst (b f)) (fst (b g)),
+                   min_int (snd (b f)) (fst (b g)))
+             | Cle =>
+               fun_upd B_ b f (fst (b f), min_int (snd (b f)) (fst (b g)))
+             | Cge =>
+               fun_upd B_ b f (max ord_int (fst (b f)) (fst (b g)), snd (b f))
+             | Clt =>
+               fun_upd B_ b f
+                 (fst (b f),
+                   min_int (snd (b f)) (minus_inta (fst (b g)) one_inta))
+             | Cgt =>
+               fun_upd B_ b f
+                 (max ord_int (fst (b f)) (plus_inta (fst (b g)) one_inta),
+                   snd (b f)))
+      else (if equal_inta (fst (b f)) (snd (b f))
+             then (case p
+                    of Ceq =>
+                      fun_upd B_ b g
+                        (max ord_int (fst (b g)) (fst (b f)),
+                          min_int (snd (b g)) (fst (b f)))
+                    | Cle =>
+                      fun_upd B_ b g
+                        (max ord_int (fst (b g)) (fst (b f)), snd (b g))
+                    | Cge =>
+                      fun_upd B_ b g
+                        (fst (b g), min_int (snd (b g)) (fst (b f)))
+                    | Clt =>
+                      fun_upd B_ b g
+                        (max ord_int (fst (b g))
+                           (plus_inta (fst (b f)) one_inta),
+                          snd (b g))
+                    | Cgt =>
+                      fun_upd B_ b g
+                        (fst (b g),
+                          min_int (snd (b g))
+                            (minus_inta (fst (b f)) one_inta)))
+             else b))
   | refine_comp_exec B_ cti (Comp (Ceq, NConst v, vb)) b = b
   | refine_comp_exec B_ cti (Comp (Ceq, NAdd (v, vc), vb)) b = b
   | refine_comp_exec B_ cti (Comp (Ceq, NSub (v, vc), vb)) b = b
   | refine_comp_exec B_ cti (Comp (Ceq, NMul (v, vc), vb)) b = b
   | refine_comp_exec B_ cti (Comp (Ceq, NDiv (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Ceq, va, NVar v)) b = b
   | refine_comp_exec B_ cti (Comp (Ceq, va, NAdd (v, vc))) b = b
   | refine_comp_exec B_ cti (Comp (Ceq, va, NSub (v, vc))) b = b
   | refine_comp_exec B_ cti (Comp (Ceq, va, NMul (v, vc))) b = b
@@ -22435,7 +22417,6 @@ fun refine_comp_exec B_ cti (Comp (Cle, NVar f, NConst c)) b =
   | refine_comp_exec B_ cti (Comp (Cge, NSub (v, vc), vb)) b = b
   | refine_comp_exec B_ cti (Comp (Cge, NMul (v, vc), vb)) b = b
   | refine_comp_exec B_ cti (Comp (Cge, NDiv (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cge, va, NVar v)) b = b
   | refine_comp_exec B_ cti (Comp (Cge, va, NAdd (v, vc))) b = b
   | refine_comp_exec B_ cti (Comp (Cge, va, NSub (v, vc))) b = b
   | refine_comp_exec B_ cti (Comp (Cge, va, NMul (v, vc))) b = b
@@ -22445,7 +22426,6 @@ fun refine_comp_exec B_ cti (Comp (Cle, NVar f, NConst c)) b =
   | refine_comp_exec B_ cti (Comp (Clt, NSub (v, vc), vb)) b = b
   | refine_comp_exec B_ cti (Comp (Clt, NMul (v, vc), vb)) b = b
   | refine_comp_exec B_ cti (Comp (Clt, NDiv (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Clt, va, NVar v)) b = b
   | refine_comp_exec B_ cti (Comp (Clt, va, NAdd (v, vc))) b = b
   | refine_comp_exec B_ cti (Comp (Clt, va, NSub (v, vc))) b = b
   | refine_comp_exec B_ cti (Comp (Clt, va, NMul (v, vc))) b = b
@@ -22455,7 +22435,6 @@ fun refine_comp_exec B_ cti (Comp (Cle, NVar f, NConst c)) b =
   | refine_comp_exec B_ cti (Comp (Cgt, NSub (v, vc), vb)) b = b
   | refine_comp_exec B_ cti (Comp (Cgt, NMul (v, vc), vb)) b = b
   | refine_comp_exec B_ cti (Comp (Cgt, NDiv (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cgt, va, NVar v)) b = b
   | refine_comp_exec B_ cti (Comp (Cgt, va, NAdd (v, vc))) b = b
   | refine_comp_exec B_ cti (Comp (Cgt, va, NSub (v, vc))) b = b
   | refine_comp_exec B_ cti (Comp (Cgt, va, NMul (v, vc))) b = b
@@ -22465,7 +22444,6 @@ fun refine_comp_exec B_ cti (Comp (Cle, NVar f, NConst c)) b =
   | refine_comp_exec B_ cti (Comp (v, NSub (vc, vd), vb)) b = b
   | refine_comp_exec B_ cti (Comp (v, NMul (vc, vd), vb)) b = b
   | refine_comp_exec B_ cti (Comp (v, NDiv (vc, vd), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (v, va, NVar vc)) b = b
   | refine_comp_exec B_ cti (Comp (v, va, NAdd (vc, vd))) b = b
   | refine_comp_exec B_ cti (Comp (v, va, NSub (vc, vd))) b = b
   | refine_comp_exec B_ cti (Comp (v, va, NMul (vc, vd))) b = b
@@ -22475,21 +22453,32 @@ fun refine_box_exec B_ cti cs b = fold (refine_comp_exec B_ cti) cs b;
 
 fun const_to_int r = floor_rat r;
 
+fun nfluents p = map func (functions (domain p));
+
 fun n_pre g =
   remdups (equal_comp equal_func equal_rat) (num_comps (precondition g));
 
 fun upds g = map upd_of_ne (numeric_effects (effect g));
 
-fun snap_ok_exec lo hi s =
-  list_all
-    (fn (f, e) =>
-      (case aeval_exec const_to_int
-              (refine_box_exec equal_func const_to_int (n_pre s)
-                (box_exec lo hi))
-              e
-        of NONE => false
-        | SOME (al, ah) => less_eq_int (lo f) al andalso less_eq_int ah (hi f)))
-    (upds s);
+fun snap_ok_exec p lo hi s =
+  list_ex
+    (fn g =>
+      less_int
+        (snd (refine_box_exec equal_func const_to_int (n_pre s) (box_exec lo hi)
+               g))
+        (fst (refine_box_exec equal_func const_to_int (n_pre s) (box_exec lo hi)
+               g)))
+    (nfluents p) orelse
+    list_all
+      (fn (f, e) =>
+        (case aeval_exec const_to_int
+                (refine_box_exec equal_func const_to_int (n_pre s)
+                  (box_exec lo hi))
+                e
+          of NONE => false
+          | SOME (al, ah) =>
+            less_eq_int (lo f) al andalso less_eq_int ah (hi f)))
+      (upds s);
 
 fun num_init_assignments p =
   map_filter
@@ -22533,8 +22522,6 @@ fun num_init p f =
   (case map_of equal_func (num_init_assignments p) f of NONE => zero_rat
     | SOME r => r);
 
-fun nfluents p = map func (functions (domain p));
-
 fun is_gbound_inv_exec p lo hi =
   list_all
     (fn f =>
@@ -22543,8 +22530,8 @@ fun is_gbound_inv_exec p lo hi =
     (nfluents p) andalso
     list_all
       (fn a =>
-        snap_ok_exec lo hi (at_start_spec a) andalso
-          snap_ok_exec lo hi (at_end_spec a))
+        snap_ok_exec p lo hi (at_start_spec a) andalso
+          snap_ok_exec p lo hi (at_end_spec a))
       (actions_spec p);
 
 fun check_gbounds_opt p b =

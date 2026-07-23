@@ -1,6 +1,0 @@
-$(SML_LIB)/basis/basis.mlb
-$(SML_LIB)/basis/mlton.mlb
-
-numeric_code.mlb
-numeric_bound_glue.sml
-glue_demo.sml

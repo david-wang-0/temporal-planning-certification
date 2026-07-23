@@ -146,17 +146,19 @@ definition check_gbounds_opt where
 section \<open>Deliverable (3): the neutral, INT-ified snap-draft projection\<close>
 
 text \<open>A purpose-built, serializable projection of the relaxed snaps that the (future SML)
-  bound-inference stage consumes.  It is INT-ified via \<open>const_to_int\<close> and stripped to the
-  var-vs-const guard shapes and the update-RHS expression trees.  This is an \<^emph>\<open>untrusted\<close>
-  projection (the trusted gate is \<open>is_gbound_inv'\<close>): a lossy/partial mapping is sound -- a
-  dropped guard only widens the inferred box.  The datatypes below are neutral (no \<open>func\<close>/
+  bound-inference stage consumes.  It is INT-ified via \<open>const_to_int\<close> and mirrors the abstract
+  \<open>comp = Comp cmp_op nexp nexp\<close> LOSSLESSLY: a guard is a comparison of two full expression
+  trees, so fluent-vs-fluent guards (painter's \<open>item_id = counter\<close>, majsp's
+  \<open>battery \<ge> distance\<close>) survive to the bound inference.  This is an \<^emph>\<open>untrusted\<close>
+  projection (the trusted gate is \<open>is_gbound_inv'\<close>): any mapping error is sound -- a wrong
+  draft merely proposes a box the gate rejects.  The datatypes below are neutral (no \<open>func\<close>/
   \<open>rat\<close>/\<open>nexp\<close> dependency), keyed by fluent name @{typ String.literal}.\<close>
-
-datatype g_int = GLe_i String.literal int | GGe_i String.literal int | GEq_i String.literal int
-  | GLt_i String.literal int | GGt_i String.literal int
 
 datatype e_int = EC int | EV String.literal
   | EAdd e_int e_int | ESub e_int e_int | EMul e_int e_int | EDiv e_int e_int
+
+datatype g_int = GCmp_i cmp_op e_int e_int
+  \<comment> \<open>reuses the reduction's @{type cmp_op} over two full \<open>e_int\<close> expression trees\<close>
 
 type_synonym snap_draft = "g_int list \<times> (String.literal \<times> e_int) list"
 
@@ -170,15 +172,12 @@ primrec nexp_to_eint :: "(func \<Rightarrow> String.literal) \<Rightarrow> (rat 
 | "nexp_to_eint nm cti (NMul a b) = EMul (nexp_to_eint nm cti a) (nexp_to_eint nm cti b)"
 | "nexp_to_eint nm cti (NDiv a b) = EDiv (nexp_to_eint nm cti a) (nexp_to_eint nm cti b)"
 
-text \<open>Partial guard projection: keep only the var-vs-const comparison shapes (where the
-  interval refinement lands); drop everything else (sound -- a wider box).\<close>
+text \<open>TOTAL guard projection: every comparison maps to \<open>GCmp_i\<close> over the two projected
+  expression trees -- nothing is dropped.  (Kept @{typ \<open>g_int option\<close>}-valued so the
+  \<open>map_filter\<close> consumer below is unchanged.)\<close>
 fun comp_to_gint :: "(func \<Rightarrow> String.literal) \<Rightarrow> (rat \<Rightarrow> int) \<Rightarrow> (func, rat) comp \<Rightarrow> g_int option" where
-  "comp_to_gint nm cti (Comp Cle (NVar f) (NConst c)) = Some (GLe_i (nm f) (cti c))"
-| "comp_to_gint nm cti (Comp Cge (NVar f) (NConst c)) = Some (GGe_i (nm f) (cti c))"
-| "comp_to_gint nm cti (Comp Ceq (NVar f) (NConst c)) = Some (GEq_i (nm f) (cti c))"
-| "comp_to_gint nm cti (Comp Clt (NVar f) (NConst c)) = Some (GLt_i (nm f) (cti c))"
-| "comp_to_gint nm cti (Comp Cgt (NVar f) (NConst c)) = Some (GGt_i (nm f) (cti c))"
-| "comp_to_gint nm cti _ = None"
+  "comp_to_gint nm cti (Comp p a b) =
+     Some (GCmp_i p (nexp_to_eint nm cti a) (nexp_to_eint nm cti b))"
 
 context numeric_ground_ast_problem_defs
 begin
@@ -233,7 +232,7 @@ export_code
   numeric_ground_ast_problem_defs.numeric_draft_actions
   numeric_ground_ast_problem_defs.is_gbound_inv_exec
   check_gbounds_opt
-  GLe_i GGe_i GEq_i GLt_i GGt_i
+  GCmp_i Ceq Cle Cge Clt Cgt
   EC EV EAdd ESub EMul EDiv
   Inl Inr nat_of_integer integer_of_int int_of_integer
   in SML module_name NumericProjection file "../code/Numeric_Projection.ML"

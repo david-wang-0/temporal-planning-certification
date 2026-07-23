@@ -17,7 +17,7 @@ export_code
   thr_set
   ginfer_thr
   NConst NVar NAdd NSub NMul NDiv
-  GLe GGe GEq
+  GCmp CEq CLe CGe CLt CGt
   nat_of_integer integer_of_nat int_of_integer integer_of_int
   in SML module_name NumericBoundInference file_prefix Numeric_Bound_Inference
 

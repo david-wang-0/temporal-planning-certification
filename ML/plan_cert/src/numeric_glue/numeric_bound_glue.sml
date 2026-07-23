@@ -44,23 +44,25 @@ struct
   fun npToII (i : NP.inta) : IntInf.int = IntInf.fromInt (NP.integer_of_int i)
   fun iiToNbi (k : IntInf.int) : NBI.int = NBI.int_of_integer k
   fun npToNbi (i : NP.inta) : NBI.int = iiToNbi (npToII i)
-  fun npOff (i : NP.inta) (d : IntInf.int) : NBI.int = iiToNbi (IntInf.+ (npToII i, d))
   fun nbiToNp (i : NBI.int) : NP.inta = NP.Int_of_integer (IntInf.toInt (NBI.integer_of_int i))
 
   (* --- datatype projection (reduction-side g_int/e_int -> compute-side gcomp/nexp) --- *)
-  (* strict comparisons collapse to non-strict on integers *)
-  fun pGint (NP.GLe_i (f, c)) = NBI.GLe (f, npToNbi c)
-    | pGint (NP.GGe_i (f, c)) = NBI.GGe (f, npToNbi c)
-    | pGint (NP.GEq_i (f, c)) = NBI.GEq (f, npToNbi c)
-    | pGint (NP.GLt_i (f, c)) = NBI.GLe (f, npOff c (~1))  (* x < c  <=>  x <= c-1 *)
-    | pGint (NP.GGt_i (f, c)) = NBI.GGe (f, npOff c 1)     (* x > c  <=>  x >= c+1 *)
-
   fun pEint (NP.EC c)        = NBI.NConst (npToNbi c)
     | pEint (NP.EV f)        = NBI.NVar f
     | pEint (NP.EAdd (a, b)) = NBI.NAdd (pEint a, pEint b)
     | pEint (NP.ESub (a, b)) = NBI.NSub (pEint a, pEint b)
     | pEint (NP.EMul (a, b)) = NBI.NMul (pEint a, pEint b)
     | pEint (NP.EDiv (a, b)) = NBI.NDiv (pEint a, pEint b)
+
+  (* lossless: a guard is a comparison of two full expression trees (all 5 operators native
+     on the compute side now -- no more strictness collapse into an adjusted constant) *)
+  fun pOp NP.Ceq = NBI.CEq
+    | pOp NP.Cle = NBI.CLe
+    | pOp NP.Cge = NBI.CGe
+    | pOp NP.Clt = NBI.CLt
+    | pOp NP.Cgt = NBI.CGt
+
+  fun pGint (NP.GCmp_i (p, a, b)) = NBI.GCmp (pOp p, pEint a, pEint b)
 
   fun pSnap (gs, ups) =
     (List.map pGint gs, List.map (fn (f, e) => (f, pEint e)) ups)
