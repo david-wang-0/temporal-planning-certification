@@ -1,5 +1,57 @@
 # HANDOVER — numeric reduction is proved abstractly; NEXT = make it executable
 
+## ⭐ SESSION STATUS (2026-07-23) — read this first
+
+**Numeric certification runs END-TO-END.** `ML/out/plan_cert -certify numeric` emits nets for **4 of 5**
+unsolvable gigante domains: majsp-impossible-1 (144260B), majsp-impossible-2 (3.8MB), MatchCellar-impossible
+(159993B), sync-impossible (15757B). All committed & green.
+
+**Landed & committed this session** (git `92ba24b … 0c8a49e`):
+- Item 0 (snap-distinctness relaxation) end-to-end: primed `AtStart`/`AtEnd` reduction re-point, additive
+  `numeric_tp_nta_reduction_bounds'` twin, `bound_inference` ground re-point, `nexp_struct_ok` rat exec-twins
+  (Isabelle code-gen ignores type-instance code eqs → separate rat fun + eta bridge), harness `Or`-serializer fix.
+- **PDDL quantifiers** (`forall`/`exists`) in the SML parser AST + two elimination strategies
+  (`QUANT_EXPAND=early|grounded`, default early = quantifier-free grounder input = re-implementable in Isabelle;
+  grounded = expand after schema-param instantiation). Fixed section-order parsing + empty `(and)` + conjunctive snaps.
+- **Duration scaling** (`0c8a49e`): grounder multiplies all durations by LCM-of-denominators → integers
+  (painter 4/5/6/15.004 → 1000/1250/1500/3751); K=1 no-op keeps others byte-identical. `quotient_of` added to the
+  `export_code` list (durable).
+
+**⏳ CURRENT NEXT STEP — relational fluent-fluent guard support (bounds painter's `counter`).** painter is the
+ONLY domain not emitting a net: it now PARSES + grounds + scales durations, but `-certify numeric` stops at
+`numeric bound inference failed` because `counter` is unbounded. Cause: its guard `(= (item_id ?i) (counter ?t))`
+is fluent-vs-fluent (`item_id` is static: init-set 0/1/2, never assigned), and EVERY layer that handles guards is
+fluent-vs-CONSTANT only, so it's dropped. FIX (chosen: **Approach 2 = relational interval refinement**, over the
+"detect it's a constant" alternative — see below): make each guard layer refine a fluent `f` by the OTHER operand
+`g`'s box interval `B g` (for `f = g`: refine BOTH to `B f ∩ B g`; painter's guard is `item_id = counter`, so the
+STATIC LHS must also refine the RHS `counter`). Since the interval AI already infers `item_id = [c,c]` (no updates),
+refining `counter` by it bounds `counter`. Soundness is LOCAL (interval meet), no plan invariant needed:
+`comp_ok w (Comp op (NVar f) (NVar g))` ⟹ `nexp_ok w (NVar f) ∧ nexp_ok w (NVar g)` ⟹ **both f,g ∈ nfluents**
+(`TP_NTA_Reduction_Numeric_Defs.thy:83`), so the box constrains `B g`.
+FOUR layers, each currently fluent-const-only with a `_ ⇒ (None|B)` catch-all:
+  1. **Draft projection** (untrusted, feeds SML bound inference): `g_int` datatype + `comp_to_gint`
+     (`bound_parsing/Ground_PDDL_Numeric_Code_Export.thy:135,155-161`, exported to `code/Numeric_Projection.ML`).
+     Add `(fluent,fluent)` `g_int` variants + project `Comp op (NVar f) (NVar g)`. **infer_box fails FIRST here**, so
+     this + layer 2 are needed just to PROPOSE a bounded box.
+  2. **The bound-inference AI itself** (verified HOL-IMP session `Numeric_Bound_Inference`) + SML glue
+     `ML/plan_cert/src/numeric_glue/numeric_bound_glue.sml` (`pGint`, ~:52): extend the guard type + the interval
+     refine to handle fluent-vs-fluent (refine by the other's interval). Re-verify + re-export.
+  3. **Trusted re-check** (`refine_comp_exec`/`is_gbound_inv_exec`, `Ground_PDDL_Numeric_Code_Export.thy:54-61`):
+     add the NVar-NVar cases so the proposed box VALIDATES (else rejected). Re-export.
+  4. **Abstract cert** (frozen `TA_Network/TP_NTA_Reduction_Numeric_Bounds.thy`): `refine_comp` (:533-540) + the
+     soundness lemma `refine_comp_pres` (:840) / `refine_box_sound` (:995) — add the 5 NVar-NVar cases + extend the
+     proof (uses `B g` + `g ∈ nfluents` from `comp_ok`), for the exec⟹abstract correspondence.
+Verify: painter emits a net under BOTH `QUANT_EXPAND`; majsp/MatchCellar/sync byte-identical. Then re-export
+bound_parsing (`-e`), `make build_certifier`, re-run all 5.
+*(NOTE for the fresh session: jEdit may be down — relaunch + rebuild the `Temporal_Planning_Base` heap for the
+frozen-layer `refine_comp` proof. The exec/draft/glue parts are SML/build-only.)*
+
+**Other open work:** the **nemo** datalog-reachability integration in `ML/plan_cert/src/grounder.sml` (grounder
+task #22b — the grounder already does TFD-style relaxation); the deferred WP-D full code-gen tail (Containers/
+`String.literal` typeclasses) if the numeric NETWORK builder ever needs to code-gen standalone.
+
+---
+
 > **RE-SEQUENCED (2026-07-10): do WP-E (numeric bound inference) BEFORE WP-D (executable export).**
 > The exported checker must COMPUTE `fluent_lo`/`fluent_hi` and discharge `num_seq_in_bounds` from the
 > problem `P`, so the boundedness plug has to land before the export assembly. A WP-D start was rolled
