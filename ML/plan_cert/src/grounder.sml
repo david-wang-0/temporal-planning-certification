@@ -32,6 +32,7 @@ structure Grounder =
 struct
 
   structure C = Converter
+  structure Q = QAst
 
   (* ---------- type hierarchy ---------- *)
   fun supertypes types t0 =
@@ -187,6 +188,43 @@ struct
           | (C.Not C.Bot, g') => g' | (f', g') => C.Imp (f', g'))
   fun isBot C.Bot = true | isBot _ = false
 
+  (* ---------- Strategy A ("grounded"): expand quantifiers AFTER a schema's own params are
+     substituted (sigma), so per-instance relaxation can prune.  `expand_gform`/`expand_geff`/
+     `expand_gteff` collapse the forall-carrying QAst into plain C formulas/effects; the empty
+     conjunction/disjunction is True/False -- the forall/exists semantics over an empty domain. *)
+  fun disj [] = C.Bot | disj [f] = f | disj (f :: fs) = C.Or (f, disj fs)
+  fun extend sigma pairs =
+    fn v => (case List.find (fn (v', _) => v' = v) pairs of SOME (_, ob) => SOME ob | NONE => sigma v)
+  fun q_assigns types objs sigma binder =
+    map (fn combo => extend sigma combo)
+      (cartesian (map (fn (v, ty) => map (fn ob => (v, ob)) (candidates types objs ty)) binder))
+  fun expand_gform types objs sigma g =
+    (case g of
+        Q.QF f          => subst_form sigma f
+      | Q.QNot g'       => C.Not (expand_gform types objs sigma g')
+      | Q.QAnd gs       => conj (map (expand_gform types objs sigma) gs)
+      | Q.QOr gs        => disj (map (expand_gform types objs sigma) gs)
+      | Q.QImp (a, b)   => C.Imp (expand_gform types objs sigma a, expand_gform types objs sigma b)
+      | Q.QAll (bnd, b) => conj (map (fn s' => expand_gform types objs s' b) (q_assigns types objs sigma bnd))
+      | Q.QEx (bnd, b)  => disj (map (fn s' => expand_gform types objs s' b) (q_assigns types objs sigma bnd)))
+  fun flatten_eff effs =
+    C.Effect (List.concat (map (fn C.Effect (a, _, _) => a) effs),
+              List.concat (map (fn C.Effect (_, d, _) => d) effs),
+              List.concat (map (fn C.Effect (_, _, n) => n) effs))
+  fun expand_geff types objs sigma e =
+    (case e of
+        Q.QE eff         => subst_eff sigma eff
+      | Q.QESeq es       => flatten_eff (map (expand_geff types objs sigma) es)
+      | Q.QEAll (bnd, b) =>
+          flatten_eff (List.concat (map (fn s' => map (expand_geff types objs s') b)
+                                         (q_assigns types objs sigma bnd))))
+  fun expand_gteff types objs sigma te =
+    (case te of
+        Q.QTE (ta, eff) => [(ta, subst_eff sigma eff)]
+      | Q.QTAll (bnd, b) =>
+          List.concat (map (fn s' => List.concat (map (expand_gteff types objs s') b))
+                           (q_assigns types objs sigma bnd)))
+
   (* relax an effect: keep adds/dels; DROP the numeric effects (the reduction's network entry is
      fully propositional -- no functions), but record definedness by ADDing def_<fluent>(args)
      for every fluent assigned by a numeric effect. *)
@@ -234,6 +272,37 @@ struct
     in
       List.mapPartial (fn objs => mk (ground_name name objs, sigma_of params objs)) (cartesian cand)
     end
+
+  (* Strategy A twin of ground_schema: params instantiated first, THEN quantifiers expanded. *)
+  fun ground_schema_q types objs sch =
+    (case sch of
+        Q.QSimple (n, ps, preG, effG) =>
+          let val cand = map (fn (_, pty) => candidates types objs pty) ps
+              fun mk objs_tuple =
+                let val sg = sigma_of ps objs_tuple
+                    val pre' = relax_pre (expand_gform types objs sg preG)
+                in if isBot pre' then NONE
+                   else SOME (C.SimpleActionSchemaa
+                     (C.ActionHead (ground_name n objs_tuple, []),
+                      C.SimpleActionBody (map_form prop_term_atom pre',
+                                          prop_eff (relax_eff (expand_geff types objs sg effG)))))
+                end
+          in List.mapPartial mk (cartesian cand) end
+      | Q.QDurative (n, ps, durs, condsG, effsG) =>
+          let val cand = map (fn (_, pty) => candidates types objs pty) ps
+              fun mk objs_tuple =
+                let val sg = sigma_of ps objs_tuple
+                    val conds' = map (fn (ta, g) => (ta, relax_pre (expand_gform types objs sg g))) condsG
+                in if List.exists (fn (_, f) => isBot f) conds' then NONE
+                   else SOME (C.DurativeActionSchema
+                     (C.ActionHead (ground_name n objs_tuple, []),
+                      C.DurativeActionBody
+                        (map (fn (ta, dc) => (ta, prop_dc (subst_dc sg dc))) durs,
+                         map (fn (ta, f)  => (ta, map_form prop_term_atom f)) conds',
+                         map (fn (ta, e)  => (ta, prop_eff (relax_eff e)))
+                             (List.concat (map (expand_gteff types objs sg) effsG)))))
+                end
+          in List.mapPartial mk (cartesian cand) end)
 
   (* ---------- init relaxation: numeric assignments -> definedness props ---------- *)
   fun relax_init_form (C.Atom (C.PredAtm p))          = [C.Atom (C.PredAtm p)]
@@ -285,11 +354,10 @@ struct
           in foldl (fn ((_, e), ac) => eff_funcs ac e) a1 effs end)
 
   (* ---------- ground the whole problem ---------- *)
-  fun ground_problem
-        (C.Problem (C.Domain (types, _, _, consts, actions), objs, init, goal)) =
+  (* shared assembly of the propositional (delete-relaxed) ground problem from already-grounded
+     actions; shared by the C-input entry (ground_problem) and the QAst entry (ground_problem_q). *)
+  fun assemble_prop types ground_actions init goal =
     let
-      val all_objs = objs @ consts
-      val ground_actions = List.concat (map (ground_schema types all_objs) actions)
       val prop_init = map (map_form prop_obj_atom) (List.concat (map relax_init_form init))
       val prop_goal = map_form prop_obj_atom goal
       val pnames =
@@ -304,6 +372,16 @@ struct
       C.Problem
         (C.Domain (types, prop_preds, prop_funcs, [], ground_actions), [], prop_init, prop_goal)
     end
+
+  fun ground_problem
+        (C.Problem (C.Domain (types, _, _, consts, actions), objs, init, goal)) =
+      assemble_prop types
+        (List.concat (map (ground_schema types (objs @ consts)) actions)) init goal
+
+  (* Strategy A entry: same output as ground_problem, from forall-carrying QAst schemas. *)
+  fun ground_problem_q (Q.QProblem (types, objs, consts, actions, init, goal)) =
+      assemble_prop types
+        (List.concat (map (ground_schema_q types (objs @ consts)) actions)) init goal
 
   (* ================ numeric-KEEPING grounding (for the numeric network builder) ================
      Same instantiation + propositionalisation as ground_problem, but numeric preconditions and
@@ -372,6 +450,37 @@ struct
     in
       List.mapPartial (fn objs => mk (ground_name name objs, sigma_of params objs)) (cartesian cand)
     end
+
+  (* Strategy A twin of ground_schema_numeric (KEEPS numeric pre/effects). *)
+  fun ground_schema_numeric_q types objs sch =
+    (case sch of
+        Q.QSimple (n, ps, preG, effG) =>
+          let val cand = map (fn (_, pty) => candidates types objs pty) ps
+              fun mk objs_tuple =
+                let val sg = sigma_of ps objs_tuple
+                    val pre' = fold_eq_pre (expand_gform types objs sg preG)
+                in if isBot pre' then NONE
+                   else SOME (C.SimpleActionSchemaa
+                     (C.ActionHead (ground_name n objs_tuple, []),
+                      C.SimpleActionBody (map_form prop_term_atom pre',
+                                          prop_eff (expand_geff types objs sg effG))))
+                end
+          in List.mapPartial mk (cartesian cand) end
+      | Q.QDurative (n, ps, durs, condsG, effsG) =>
+          let val cand = map (fn (_, pty) => candidates types objs pty) ps
+              fun mk objs_tuple =
+                let val sg = sigma_of ps objs_tuple
+                    val conds' = map (fn (ta, g) => (ta, fold_eq_pre (expand_gform types objs sg g))) condsG
+                in if List.exists (fn (_, f) => isBot f) conds' then NONE
+                   else SOME (C.DurativeActionSchema
+                     (C.ActionHead (ground_name n objs_tuple, []),
+                      C.DurativeActionBody
+                        (map (fn (ta, dc) => (ta, prop_dc (subst_dc sg dc))) durs,
+                         map (fn (ta, f)  => (ta, map_form prop_term_atom f)) conds',
+                         map (fn (ta, e)  => (ta, prop_eff e))
+                             (List.concat (map (expand_gteff types objs sg) effsG)))))
+                end
+          in List.mapPartial mk (cartesian cand) end)
 
   (* func names occurring in a formula's numeric comparison atoms *)
   fun atom_funcs acc (C.NumericEqAtm (x, y))      = nexp_funcs (nexp_funcs acc x) y
@@ -464,11 +573,10 @@ struct
       C.Problem (C.Domain (types, preds, funcs', consts, actions'), objs, init', goal')
     end
 
-  fun ground_problem_numeric
-        (C.Problem (C.Domain (types, _, _, consts, actions), objs, init, goal)) =
+  (* shared assembly of the numeric-KEEPING ground problem; shared by the C-input entry
+     (ground_problem_numeric) and the QAst entry (ground_problem_numeric_q). *)
+  fun assemble_numeric types ground_actions init goal =
     let
-      val all_objs = objs @ consts
-      val ground_actions = List.concat (map (ground_schema_numeric types all_objs) actions)
       val num_init = map (map_form prop_obj_atom) (List.concat (map keep_init_form init))
       val num_goal = map_form prop_obj_atom goal
       val pnames =
@@ -486,6 +594,16 @@ struct
         (C.Problem
           (C.Domain (types, prop_preds, num_funcs, [], ground_actions), [], num_init, num_goal))
     end
+
+  fun ground_problem_numeric
+        (C.Problem (C.Domain (types, _, _, consts, actions), objs, init, goal)) =
+      assemble_numeric types
+        (List.concat (map (ground_schema_numeric types (objs @ consts)) actions)) init goal
+
+  (* Strategy A entry (numeric-keeping): from forall-carrying QAst schemas. *)
+  fun ground_problem_numeric_q (Q.QProblem (types, objs, consts, actions, init, goal)) =
+      assemble_numeric types
+        (List.concat (map (ground_schema_numeric_q types (objs @ consts)) actions)) init goal
 
   (* ---------- pretty-print a GROUND (propositional) problem as PDDL, for inspection ----------
      Predicate/init/goal atoms are 0-ary (objects inlined); numeric content has been relaxed to

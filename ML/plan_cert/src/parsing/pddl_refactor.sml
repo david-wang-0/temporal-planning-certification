@@ -62,7 +62,7 @@ struct
                           "pi", "sin", "cos", "exp", (* Not really PDDL keywords *)
                           "=", "<=", ">=", ">", "<",
                           "+", "-", "*", "/", "#t",
-                          "and", "or", "not", "imply", "number",
+                          "and", "or", "not", "imply", "forall", "exists", "number",
                           "assign", "scale-up", "increase", "decrease", "total-cost",
                           "problem", ":domain", ":init", ":objects", ":goal", ":metric", "maximize", "minimize"
                           (*"at", "over", "start", "end", "all", "duration", "()", "eof" (* mark the end of a file *)*)]
@@ -121,6 +121,8 @@ struct
   | Prop_and of 'a PDDL_PROP list
   | Prop_or of 'a PDDL_PROP list
   | Prop_imply of 'a PDDL_PROP * 'a PDDL_PROP
+  | Prop_all of (PDDL_VAR * PDDL_PRIM_TYPE) list * 'a PDDL_PROP
+  | Prop_ex  of (PDDL_VAR * PDDL_PRIM_TYPE) list * 'a PDDL_PROP
 
   type PDDL_PRE_GD = PDDL_TERM PDDL_PROP option
 
@@ -128,9 +130,11 @@ struct
 
   datatype LOGIC_EFFECT_OR_NUMERIC_EFFECT = LOGIC_EFFECT of PDDL_TERM PDDL_PROP
                                             | NUMERIC_EFFECT of PDDL_TERM numeric_effect
+                                            | FORALL_EFFECT of (PDDL_VAR * PDDL_PRIM_TYPE) list * LOGIC_EFFECT_OR_NUMERIC_EFFECT list
 
-  datatype SNAP_EFFECT_OR_CONTINUOUS_EFFECT = SNAP_EFFECT of PDDL_TIME_SPECIFIER * LOGIC_EFFECT_OR_NUMERIC_EFFECT 
+  datatype SNAP_EFFECT_OR_CONTINUOUS_EFFECT = SNAP_EFFECT of PDDL_TIME_SPECIFIER * LOGIC_EFFECT_OR_NUMERIC_EFFECT
                                               | CONTINUOUS_EFFECT of PDDL_TERM Continuous_PDDL_Checker_Exported.ast_continuous_effect
+                                              | FORALL_SNAP of (PDDL_VAR * PDDL_PRIM_TYPE) list * SNAP_EFFECT_OR_CONTINUOUS_EFFECT list
 
 
   type 'a PDDL_TIMED_LIST = (PDDL_TIME_SPECIFIER * 'a) list
@@ -200,6 +204,14 @@ struct
                                 wth (fn parsed_typesOPT => (case parsed_typesOPT of (SOME parsed_types) => parsed_types
                                                                                      | _ => [])))
 
+  (* a quantifier binder `(?x ?y - T ?z - U ...)` -> flat [(?x,T),(?y,T),(?z,U),...];
+     a var with no explicit type defaults to `object`. *)
+  fun flatten_binder (tl : (PDDL_VAR list * PDDL_PRIM_TYPE list) list) =
+        List.concat (map (fn (vars, tys) =>
+             let val t = case tys of (h :: _) => h | [] => PDDL_PRIM_TYPE "object"
+             in map (fn v => (v, t)) vars end) tl)
+  val quant_binder = (in_paren (typed_list pddl_var) wth flatten_binder) ?? "quantifier binder"
+
   val atomic_formula_skeleton = (in_paren (predicate && optional_typed_list pddl_var)) ?? "predicate"
 
   val predicates_def = (in_paren(pddl_reserved ":predicates" >> (repeat (atomic_formula_skeleton)))) ?? "predicates def"
@@ -258,14 +270,17 @@ struct
   val f_exp = f_exp' 3 f_exp_base ?? "f_exp"
   val f_exp_da = f_exp' 3 f_exp_da_base ?? "f_exp_da"
 
-  fun GD x fe = fix (fn cont => literal x ||
+  fun GD x fe = fix (fn cont =>
+                in_paren(pddl_reserved "forall" >> (quant_binder && cont)) wth (fn (b, g) => Prop_all (b, g)) ||
+                in_paren(pddl_reserved "exists" >> (quant_binder && cont)) wth (fn (b, g) => Prop_ex (b, g)) ||
+                literal x ||
                 in_paren(pddl_reserved "=" && fe && fe) wth (fn (_, (expa, expb)) => Prop_atom (NumericEqAtm (expa, expb))) ||
                 in_paren(pddl_reserved "<" && fe && fe) wth (fn (_, (expa, expb)) => Prop_atom (NumericLessAtm (expa, expb))) ||
                 in_paren(pddl_reserved "<=" && fe && fe) wth (fn (_, (expa, expb)) => Prop_atom (NumericLEAtm (expa, expb))) ||
                 in_paren(pddl_reserved ">" && fe && fe) wth (fn (_, (expa, expb)) => Prop_atom (NumericGreaterAtm (expa, expb))) ||
                 in_paren(pddl_reserved ">=" && fe && fe) wth (fn (_, (expa, expb)) => Prop_atom (NumericGEAtm (expa, expb))) ||
-                in_paren(pddl_reserved "and" && repeat1 cont) wth (fn (_, gd) => Prop_and gd) ||
-                in_paren(pddl_reserved "or" && repeat1 cont) wth (fn (_, gd) => Prop_or gd) ||
+                in_paren(pddl_reserved "and" && repeat cont) wth (fn (_, gd) => Prop_and gd) ||
+                in_paren(pddl_reserved "or" && repeat cont) wth (fn (_, gd) => Prop_or gd) ||
                 in_paren(pddl_reserved "imply" && (cont && cont)) wth (fn (_, (gda, gdb)) => Prop_imply (gda, gdb))) ?? "GD"
 
   fun pre_GD x = GD x f_exp ?? "pre GD"
@@ -291,8 +306,13 @@ struct
   
   val c_effect_da = p_effect_da ?? "c_effect_da"
 
-  val effect = (c_effect wth (fn e => [e] )
-                || (in_paren(pddl_reserved "and" && repeat c_effect )) wth (fn (_, ceff) => ceff)) ?? "effect"
+  (* an effect is a (possibly nested / quantified) list of primitive effects.  `(forall (b) e)`
+     produces one FORALL_EFFECT carrying the (list of) sub-effects; `(and e ...)` flattens. *)
+  val effect = fix (fn eff =>
+                  c_effect wth (fn e => [e])
+                  || (in_paren(pddl_reserved "and" && repeat eff)) wth (fn (_, effs) => List.concat effs)
+                  || (in_paren(pddl_reserved "forall" >> (quant_binder && eff)))
+                       wth (fn (b, body) => [FORALL_EFFECT (b, body)])) ?? "effect"
 
   fun emptyOR x = opt x
 
@@ -343,11 +363,27 @@ struct
                  || in_paren(pddl_reserved "*" >> pddl_reserved "#t" >> f_exp)
                  || (pddl_reserved "#t") wth (fn _ => ConstantExpr (of_int (intToIsaInt 1)))) ?? "f-exp-t"
 
-  val timed_effect = ((string "at" >> (time_specifier && c_effect_da)) wth (fn (t, e) => SNAP_EFFECT (t, e))
-                     || (assign_op_t && f_head && f_exp_t) wth (fn (operator, (l, r)) => CONTINUOUS_EFFECT (ContinuousEffect (operator, (PNE l), r)))) ?? "timed effect"
+  (* payload after `at start/end`: a single primitive effect OR an `(and e ...)` conjunction.
+     A conjunction yields one SNAP_EFFECT per conjunct, all carrying the same time specifier
+     (equivalent to `(and (at start e1) (at start e2) ...)`, which the grammar already allows). *)
+  val c_effect_da_list = (c_effect_da wth (fn e => [e])
+                          || in_paren(pddl_reserved "and" >> repeat c_effect_da)) ?? "c_effect_da list"
 
-  val da_effect = in_paren (opt ((timed_effect wth (fn (teff) => [teff])) 
-                              || (pddl_reserved "and" >> (repeat (in_paren timed_effect) (* TODO: fix repeat *))))) ?? "da effect"
+  val timed_effect = ((string "at" >> (time_specifier && c_effect_da_list))
+                        wth (fn (t, es) => map (fn e => SNAP_EFFECT (t, e)) es)
+                     || (assign_op_t && f_head && f_exp_t)
+                        wth (fn (operator, (l, r)) => [CONTINUOUS_EFFECT (ContinuousEffect (operator, (PNE l), r))])) ?? "timed effect"
+
+  (* content of one da-effect paren-group (the enclosing parens already stripped): a single timed
+     effect, an `(and ...)` of parenthesised items, or a `(forall (b) <item>)` collecting the
+     (list of) sub timed-effects into a FORALL_SNAP. *)
+  val da_effect_item = fix (fn item =>
+                  timed_effect
+                  || (pddl_reserved "and" >> (repeat (in_paren item))) wth List.concat
+                  || (pddl_reserved "forall" >> (quant_binder && in_paren item))
+                       wth (fn (b, body) => [FORALL_SNAP (b, body)])) ?? "da effect item"
+
+  val da_effect = in_paren (opt da_effect_item) ?? "da effect"
 
   val durative_action_def_body = ((pddl_reserved ":duration" >> duration_constraint)
                                   && (pddl_reserved ":condition" >> da_GD)
@@ -551,6 +587,8 @@ fun pddl_prop_map f prop =
            | Prop_and props => Prop_and (map (pddl_prop_map f) props)
            | Prop_or props => Prop_or (map (pddl_prop_map f) props)
            | Prop_imply (a, b) => Prop_imply (pddl_prop_map f a, pddl_prop_map f b)
+           | Prop_all (binder, sub) => Prop_all (binder, pddl_prop_map f sub)
+           | Prop_ex  (binder, sub) => Prop_ex  (binder, pddl_prop_map f sub)
 
 (* The verified checkers reject any input whose enumerated set of primitive
    numeric expressions is empty ("Can't process plan without any numeric
@@ -584,3 +622,137 @@ fun ensureDummyPne (dom, prob) =
     ((reqs, (types_def, (consts_def, (pred_def, (fun_def', structs))))),
      (preqs, (objs, (dummy_init :: init, goal_metric))))
   end
+
+(* ============================================================================
+   Quantifier elimination by expansion over the domain/problem objects.
+   Shared by both strategies; operates on the parsed PDDL AST (term level), so
+   `forall`-bound variables that are ALSO schema parameters are left as VAR_TERMs
+   for the grounder to substitute later.  `Prop_all` -> `Prop_and` over the
+   cartesian product of the bound vars' typed objects (`Prop_ex` -> `Prop_or`);
+   the empty conjunction/disjunction is `Prop_and []` / `Prop_or []`, which
+   `pddlFormulaToASTPropIsabelle` maps to True / False -- exactly the forall/exists
+   semantics over an empty domain.
+   ============================================================================ *)
+
+(* type hierarchy (sub,sup) string pairs from (:types) *)
+fun typePairsOf (typesDefOPT : PDDL_TYPES_DEF) =
+  case typesDefOPT of
+     NONE => []
+   | SOME tds => List.concat (map (fn (subs, sup) =>
+        let val supn = case sup of (h :: _) => pddl_prim_type_name h | [] => "object"
+        in map (fn s => (pddl_prim_type_name s, supn)) subs end) tds)
+
+fun supertypesStr pairs t0 =
+  let fun step acc [] = acc
+        | step acc (x :: xs) =
+            let val ups = List.mapPartial
+                  (fn (sub, sup) => if sub = x andalso Bool.not (List.exists (fn y => y = sup) acc)
+                                    then SOME sup else NONE) pairs
+            in step (acc @ ups) (xs @ ups) end
+  in step [t0] [t0] end
+
+fun flatObjsTyped (typedList : PDDL_OBJ_CONS PDDL_TYPED_LIST) =
+  List.concat (map (fn (obs, tys) =>
+       let val tns = map pddl_prim_type_name tys
+       in map (fn ob => (ob, tns)) obs end) typedList)
+
+(* objectsOfType: every object whose declared type IS or is a SUBTYPE of the query
+   (the root `object` type matches all objects). *)
+fun objectsOfType pairs objsTyped queryTy =
+  let val qn = pddl_prim_type_name queryTy in
+    if qn = "object" then map #1 objsTyped
+    else List.mapPartial (fn (ob, tns) =>
+           if List.exists (fn tn => List.exists (fn s => s = qn) (supertypesStr pairs tn)) tns
+           then SOME ob else NONE) objsTyped
+  end
+
+fun objsOfForDomProb parsedDom parsedProb =
+  let val (_, (types_def, (consts_def, (_, (_, (_, _)))))) = parsedDom
+      val (_, (objs, (_, (_, _)))) = parsedProb
+      val pairs = typePairsOf types_def
+      val constObjs = case consts_def of SOME cs => flatObjsTyped cs | NONE => []
+  in objectsOfType pairs (flatObjsTyped objs @ constObjs) end
+
+(* ---- shadow-aware substitution of quantifier-bound vars -> objects ---- *)
+fun removeShadow binder asg =
+  List.filter (fn (v, _) => Bool.not (List.exists (fn (bv, _) => bv = v) binder)) asg
+
+fun substTermVars asg (VAR_TERM v) =
+      (case List.find (fn (v', _) => v' = v) asg of SOME (_, ob) => OBJ_CONS_TERM ob | NONE => VAR_TERM v)
+  | substTermVars _ t = t
+
+fun substPropVars asg prop =
+  case prop of
+     Prop_atom a          => Prop_atom (map_atom (substTermVars asg) a)
+   | Prop_not p           => Prop_not (substPropVars asg p)
+   | Prop_and ps          => Prop_and (map (substPropVars asg) ps)
+   | Prop_or ps           => Prop_or (map (substPropVars asg) ps)
+   | Prop_imply (a, b)    => Prop_imply (substPropVars asg a, substPropVars asg b)
+   | Prop_all (b, body)   => Prop_all (b, substPropVars (removeShadow b asg) body)
+   | Prop_ex  (b, body)   => Prop_ex  (b, substPropVars (removeShadow b asg) body)
+
+fun substLogNumEff asg e =
+  case e of
+     LOGIC_EFFECT p         => LOGIC_EFFECT (substPropVars asg p)
+   | NUMERIC_EFFECT n       => NUMERIC_EFFECT (map_numeric_effect (substTermVars asg) n)
+   | FORALL_EFFECT (b, ss)  => FORALL_EFFECT (b, map (substLogNumEff (removeShadow b asg)) ss)
+
+fun substSnapEff asg e =
+  case e of
+     SNAP_EFFECT (ta, le)   => SNAP_EFFECT (ta, substLogNumEff asg le)
+   | CONTINUOUS_EFFECT c    => CONTINUOUS_EFFECT c
+   | FORALL_SNAP (b, ss)    => FORALL_SNAP (b, map (substSnapEff (removeShadow b asg)) ss)
+
+fun cartesianP [] = [[]]
+  | cartesianP (xs :: rest) =
+      List.concat (map (fn x => map (fn tl => x :: tl) (cartesianP rest)) xs)
+
+fun binderAssignsP objsOf binder =
+  cartesianP (map (fn (v, ty) => map (fn ob => (v, ob)) (objsOf ty)) binder)
+
+(* ---- expansion (Strategy B "early": objsOf = ALL problem objects) ---- *)
+fun expandProp objsOf prop =
+  case prop of
+     Prop_all (binder, body) =>
+       Prop_and (map (fn asg => expandProp objsOf (substPropVars asg body)) (binderAssignsP objsOf binder))
+   | Prop_ex (binder, body) =>
+       Prop_or (map (fn asg => expandProp objsOf (substPropVars asg body)) (binderAssignsP objsOf binder))
+   | Prop_and ps       => Prop_and (map (expandProp objsOf) ps)
+   | Prop_or ps        => Prop_or (map (expandProp objsOf) ps)
+   | Prop_imply (a, b) => Prop_imply (expandProp objsOf a, expandProp objsOf b)
+   | Prop_not p        => Prop_not (expandProp objsOf p)
+   | Prop_atom a       => Prop_atom a
+
+fun expandLogNumEff objsOf e =
+  case e of
+     FORALL_EFFECT (binder, subs) =>
+       List.concat (map (fn asg =>
+           List.concat (map (fn s => expandLogNumEff objsOf (substLogNumEff asg s)) subs))
+         (binderAssignsP objsOf binder))
+   | other => [other]
+
+fun expandSnapEff objsOf e =
+  case e of
+     FORALL_SNAP (binder, subs) =>
+       List.concat (map (fn asg =>
+           List.concat (map (fn s => expandSnapEff objsOf (substSnapEff asg s)) subs))
+         (binderAssignsP objsOf binder))
+   | other => [other]
+
+fun expandDefBody objsOf defBody =
+  case defBody of
+     Simple_Action_Def_Body (pre, eff) =>
+       Simple_Action_Def_Body (
+         Option.map (fn (u, p) => (u, Option.map (expandProp objsOf) p)) pre,
+         Option.map (fn effs => List.concat (map (expandLogNumEff objsOf) effs)) eff)
+   | Durative_Action_Def_Body (durs, cond, eff) =>
+       Durative_Action_Def_Body (durs,
+         Option.map (map (fn (ta, p) => (ta, expandProp objsOf p))) cond,
+         Option.map (fn effs => List.concat (map (expandSnapEff objsOf) effs)) eff)
+
+fun expandDomainQuant objsOf (reqs, (td, (cd, (pd, (fd, (structs, invs)))))) =
+  let val structs' = map (fn (n, (args, body)) => (n, (args, expandDefBody objsOf body))) structs
+  in (reqs, (td, (cd, (pd, (fd, (structs', invs)))))) end
+
+fun expandProbQuant objsOf (preqs, (objs, (init, (goal, metric)))) =
+  (preqs, (objs, (init, (expandProp objsOf goal, metric))))

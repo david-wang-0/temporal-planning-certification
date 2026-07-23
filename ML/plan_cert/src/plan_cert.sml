@@ -164,11 +164,19 @@ fun check_and_cert_problem _ _ _ _ _ _ _ _ _ _ _ =
 fun parse_check_and_cert_network _ _ _ _ _ _ _ =
     exit_fail "in-process certification retired; use  -certify tchecker  (external tck-reach + muntac)"
 
+(* Quantifier-expansion strategy (QUANT_EXPAND): "grounded" (Strategy A: expand `forall`/`exists`
+   DURING grounding, after a schema's own params are instantiated) vs. "early" (Strategy B, the
+   default: expand BEFORE the grounder over ALL problem objects -- matches the verified grounder). *)
+fun quantStrategyGrounded () =
+    case OS.Process.getEnv "QUANT_EXPAND" of SOME s => (s = "grounded") | NONE => false
+
 fun make_network domain problem model =
     let
         val _ = log_conversion_config (domain, problem, model)
-        val parsed_prob = PddlParser.get_prob domain problem
-        val ground_prob = Grounder.ground_problem parsed_prob
+        val ground_prob =
+            if quantStrategyGrounded ()
+            then Grounder.ground_problem_q (PddlParser.get_prob_q domain problem)
+            else Grounder.ground_problem (PddlParser.get_prob domain problem)
         val () = case !ground_out_path of
                      SOME f => (PddlParser.writeFile f (Grounder.problem_to_pddl ground_prob);
                                 println ("+ Wrote grounded PDDL to " ^ f))
@@ -187,8 +195,10 @@ fun make_network domain problem model =
 fun make_numeric_network domain problem model =
     let
         val _ = log_conversion_config (domain, problem, model)
-        val parsed_prob = PddlParser.get_prob domain problem
-        val ground_prob = Grounder.ground_problem_numeric parsed_prob
+        val ground_prob =
+            if quantStrategyGrounded ()
+            then Grounder.ground_problem_numeric_q (PddlParser.get_prob_q domain problem)
+            else Grounder.ground_problem_numeric (PddlParser.get_prob domain problem)
         val () = case !ground_out_path of
                      SOME f => (PddlParser.writeFile f (Grounder.problem_to_pddl ground_prob);
                                 println ("+ Wrote grounded (numeric-kept) PDDL to " ^ f))

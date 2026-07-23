@@ -12,6 +12,51 @@
        - `structure PddlParser` wrapper exposing `get_prob dom_file prob_file`;
        - plan parsing stubbed out (the certifier consumes domain+problem only; the temporal
          plan-action ctors are not part of the Converter export). *)
+(* Grounder-internal quantifier-carrying representation (Strategy A, "grounded"): C-typed
+   formulas/effects that still carry `forall`/`exists` binders, so a schema's own parameters can
+   be instantiated FIRST (in the grounder) and the quantifiers expanded per ground instance --
+   letting the per-instance relaxation prune more than the pre-grounding expansion (Strategy B).
+   Kept out of the Isabelle `Converter` types (which have no quantifier syntax): this lives only
+   between the PDDL->C translation and the grounder. *)
+structure QAst =
+struct
+  datatype gform =
+      QF  of Converter.term Converter.atom Converter.formula   (* quantifier-free leaf *)
+    | QNot of gform
+    | QAnd of gform list
+    | QOr  of gform list
+    | QImp of gform * gform
+    | QAll of (string * Converter.typea) list * gform
+    | QEx  of (string * Converter.typea) list * gform
+
+  datatype geff =
+      QE    of Converter.term Converter.ast_effect
+    | QESeq of geff list
+    | QEAll of (string * Converter.typea) list * geff list
+
+  datatype gteff =
+      QTE   of Converter.temporal_annotation * Converter.term Converter.ast_effect
+    | QTAll of (string * Converter.typea) list * gteff list
+
+  datatype qschema =
+      QSimple   of string
+                 * (Converter.variable * Converter.typea) list
+                 * gform * geff
+    | QDurative of string
+                 * (Converter.variable * Converter.typea) list
+                 * (Converter.temporal_annotation * Converter.term Converter.duration_constraint) list
+                 * (Converter.temporal_annotation * gform) list
+                 * gteff list
+
+  datatype qproblem =
+      QProblem of (string * string) list                              (* type hierarchy *)
+                * (Converter.object * Converter.typea) list           (* objects *)
+                * (Converter.object * Converter.typea) list           (* constants *)
+                * qschema list                                            (* action schemas *)
+                * Converter.object Converter.atom Converter.formula list  (* init *)
+                * Converter.object Converter.atom Converter.formula       (* goal *)
+end
+
 structure PddlParser =
 struct
 open PDDL
@@ -100,7 +145,8 @@ open PDDL
                  | Prop_and(propList: PDDL_TERM PDDL_PROP list) => bigAnd (map (pddlFormulaToASTPropIsabelle atom_fn) propList)
                  | Prop_or(propList: PDDL_TERM PDDL_PROP list) => bigOr (map (pddlFormulaToASTPropIsabelle atom_fn) propList)
                  | Prop_imply(a, b) => Imp (pddlFormulaToASTPropIsabelle atom_fn a, pddlFormulaToASTPropIsabelle atom_fn b)
-                 | _ => Bot
+                 | Prop_all _ => exit_fail "unexpanded (forall ...) reached the C translation (should be pre-expanded)"
+                 | Prop_ex _  => exit_fail "unexpanded (exists ...) reached the C translation (should be pre-expanded)"
 
   fun pddlFormulaToASTPropIsabelleTerm phi = pddlFormulaToASTPropIsabelle pddlTermToIsabelle phi
 
@@ -123,6 +169,7 @@ open PDDL
       case eff of LOGIC_EFFECT (Prop_atom atom) => ([Atom (strToVarAtom atom)], [], [])
                  | LOGIC_EFFECT (Prop_not (Prop_atom atom)) => ([], [Atom (strToVarAtom atom)], [])
                  | NUMERIC_EFFECT e => ([], [], [map_numeric_effect pddlTermToIsabelle e])
+                 | FORALL_EFFECT _ => exit_fail "unexpanded (forall ...) effect reached the C translation (should be pre-expanded)"
                  | _ => ([], [], [])
 
   fun flatten_effects nil = Effect ([], [], [])
@@ -154,10 +201,12 @@ open PDDL
   fun snap_effects nil = nil
   |   snap_effects ((SNAP_EFFECT se) :: effs) = se :: (snap_effects effs)
   |   snap_effects ((CONTINUOUS_EFFECT _) :: effs) = snap_effects effs
+  |   snap_effects ((FORALL_SNAP _) :: _) = exit_fail "unexpanded (forall ...) effect reached the C translation (should be pre-expanded)"
 
     fun continuous_effects nil = nil
   |   continuous_effects ((SNAP_EFFECT _) :: effs) = continuous_effects effs
   |   continuous_effects ((CONTINUOUS_EFFECT ce) :: effs) = ce :: continuous_effects effs
+  |   continuous_effects ((FORALL_SNAP _) :: effs) = continuous_effects effs
 
   fun pddlTimedListEffToIsabelle (eff_opt) =
       case eff_opt of
@@ -258,9 +307,69 @@ fun parse_wrapper parser file =
 val parse_pddl_dom = parse_wrapper (PDDL.end_of_file PDDL.domain)
 val parse_pddl_prob = parse_wrapper (PDDL.end_of_file PDDL.problem)
 
+(* Strategy B ("early", default): expand every quantifier BEFORE the grounder, over ALL problem
+   objects, so the grounder sees quantifier-FREE input (this is the version that matches our
+   verified classical grounder, which has no quantifier syntax). *)
 fun get_prob dom_file prob_file =
   let val parsedDom = parse_pddl_dom dom_file
       val parsedProb = parse_pddl_prob prob_file
-      val (objs, init, goal) = pddlProbToIsabelle parsedProb
-  in Converter.Problem (pddlTemporalDomToIsabelle parsedDom, objs, init, goal) end
+      val objsOf = objsOfForDomProb parsedDom parsedProb
+      val parsedDom' = expandDomainQuant objsOf parsedDom
+      val parsedProb' = expandProbQuant objsOf parsedProb
+      val (objs, init, goal) = pddlProbToIsabelle parsedProb'
+  in Converter.Problem (pddlTemporalDomToIsabelle parsedDom', objs, init, goal) end
+
+(* ---- Strategy A ("grounded"): PDDL -> forall-carrying QAst; the grounder instantiates a
+   schema's own params first, then expands the quantifiers per ground instance.  The goal/init
+   carry no schema params so they are still expanded early. ---- *)
+fun binderToC binder = map (fn (v, ty) => (pddl_var_name v, Either [pddl_prim_type_name ty])) binder
+
+fun propToGform atom_fn phi =
+    case phi of
+       Prop_all (b, sub) => QAst.QAll (binderToC b, propToGform atom_fn sub)
+     | Prop_ex  (b, sub) => QAst.QEx  (binderToC b, propToGform atom_fn sub)
+     | Prop_and ps       => QAst.QAnd (map (propToGform atom_fn) ps)
+     | Prop_or  ps       => QAst.QOr  (map (propToGform atom_fn) ps)
+     | Prop_imply (a, b) => QAst.QImp (propToGform atom_fn a, propToGform atom_fn b)
+     | Prop_not p        => QAst.QNot (propToGform atom_fn p)
+     | Prop_atom atom    => QAst.QF (Atom (map_atom atom_fn atom))
+
+fun effToGeff (FORALL_EFFECT (b, subs)) = QAst.QEAll (binderToC b, map effToGeff subs)
+  | effToGeff other = QAst.QE (Effect (logicOrNumericEffectToASTEffIsabelle other))
+
+fun snapToGteff (SNAP_EFFECT (ta, eff)) = SOME (QAst.QTE (ta, Effect (logicOrNumericEffectToASTEffIsabelle eff)))
+  | snapToGteff (CONTINUOUS_EFFECT _)   = NONE   (* continuous effects unsupported; dropped (as in the C path) *)
+  | snapToGteff (FORALL_SNAP (b, subs)) = SOME (QAst.QTAll (binderToC b, List.mapPartial snapToGteff subs))
+
+fun pddlActToQ (actName, (args, defBody: PDDL_ACTION_DEF_BODY)) =
+    let val params = pddlTypedListVarsTypesToIsabelle args in
+      case defBody of
+        Simple_Action_Def_Body (pre, eff) =>
+          let val preG = case pre of SOME (_, SOME p) => propToGform pddlTermToIsabelle p
+                                   | _ => QAst.QF (Not Bot)
+              val effG = case eff of SOME effs => QAst.QESeq (map effToGeff effs)
+                                   | NONE => QAst.QESeq []
+          in QAst.QSimple (IsabelleStringExplode actName, params, preG, effG) end
+      | Durative_Action_Def_Body (durs, cond, eff) =>
+          let val durs'  = map pddlDurConstraintToIsabelle durs
+              val conds  = case cond of SOME cs => map (fn (ta, p) => (ta, propToGform pddlTermToIsabelle p)) cs
+                                      | NONE => []
+              val effs   = case eff of SOME es => List.mapPartial snapToGteff es | NONE => []
+          in QAst.QDurative (IsabelleStringExplode actName, params, durs', conds, effs) end
+    end
+
+fun get_prob_q dom_file prob_file =
+  let val parsedDom = parse_pddl_dom dom_file
+      val parsedProb = parse_pddl_prob prob_file
+      val objsOf = objsOfForDomProb parsedDom parsedProb
+      val (reqs, (types_def, (consts_def, (pred_def, (fun_def, (structs, invs)))))) = parsedDom
+      val (preqs, (objs, (init, (goal, metric)))) = parsedProb
+      val goal'  = expandProp objsOf goal
+      val types  = pddlTypesDefToIsabelle types_def
+      val objsC  = objDefToIsabelle objs
+      val constsC = pddlConstsDefToIsabelle consts_def
+      val initC  = pddlInitToIsabelle init (List.concat (map #1 objs))
+      val goalC  = pddlGoalToIsabelle goal'
+      val actionsQ = map pddlActToQ structs
+  in QAst.QProblem (types, objsC, constsC, actionsQ, initC, goalC) end
 end
