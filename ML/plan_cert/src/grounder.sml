@@ -611,7 +611,22 @@ struct
       | C.CosExpr a => C.CosExpr (fold_nexp st cm a)
       | C.ExpExpr a => C.ExpExpr (fold_nexp st cm a)
       | _ => e)
-  fun fold_atom st cm a =
+  (* Operand normalization: when exactly one side of a numeric comparison is a constant, put the
+     non-constant (fluent-bearing) side on the LEFT, flipping the comparator.  Semantically identical
+     (same comparison), and it is what the downstream var-vs-const projection/refine layers expect
+     (they only match  Comp op (NVar f) (NConst c)).  Fires after constant-folding a static fluent
+     like  (= (item_id ?i) (counter ?t))  ->  (= <const> (counter ?t)) , renormalized to
+     (= (counter ?t) <const>). *)
+  fun is_const_expr (C.ConstantExpr _) = true | is_const_expr _ = false
+  fun norm_cmp a =
+    (case a of
+        C.NumericEqAtm (x, y)      => if is_const_expr x andalso not (is_const_expr y) then C.NumericEqAtm (y, x) else a
+      | C.NumericLessAtm (x, y)    => if is_const_expr x andalso not (is_const_expr y) then C.NumericGreaterAtm (y, x) else a
+      | C.NumericLEAtm (x, y)      => if is_const_expr x andalso not (is_const_expr y) then C.NumericGEAtm (y, x) else a
+      | C.NumericGreaterAtm (x, y) => if is_const_expr x andalso not (is_const_expr y) then C.NumericLessAtm (y, x) else a
+      | C.NumericGEAtm (x, y)      => if is_const_expr x andalso not (is_const_expr y) then C.NumericLEAtm (y, x) else a
+      | other => other)
+  fun fold_atom st cm a = norm_cmp
     (case a of
         C.NumericEqAtm (x, y)      => C.NumericEqAtm (fold_nexp st cm x, fold_nexp st cm y)
       | C.NumericLessAtm (x, y)    => C.NumericLessAtm (fold_nexp st cm x, fold_nexp st cm y)
