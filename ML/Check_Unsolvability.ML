@@ -1515,203 +1515,6 @@ fun equal_rata a b =
 
 val equal_rat = {equal = equal_rata} : rat equal;
 
-val one_rata : rat = Frct (one_inta, one_inta);
-
-val one_rat = {one = one_rata} : rat one;
-
-fun uminus_rata p = Frct let
-                           val (a, b) = quotient_of p;
-                         in
-                           (uminus_inta a, b)
-                         end;
-
-fun divide_int k l =
-  Int_of_integer (divide_integer (integer_of_int k) (integer_of_int l));
-
-fun gcd_integer k l =
-  abs (if l = (0 : Int.int) then k
-        else gcd_integer l (modulo_integer (abs k) (abs l)));
-
-fun gcd_int (Int_of_integer x) (Int_of_integer y) =
-  Int_of_integer (gcd_integer x y);
-
-fun normalize p =
-  (if less_int zero_inta (snd p)
-    then let
-           val a = gcd_int (fst p) (snd p);
-         in
-           (divide_int (fst p) a, divide_int (snd p) a)
-         end
-    else (if equal_inta (snd p) zero_inta then (zero_inta, one_inta)
-           else let
-                  val a = uminus_inta (gcd_int (fst p) (snd p));
-                in
-                  (divide_int (fst p) a, divide_int (snd p) a)
-                end));
-
-fun times_rata p q = Frct let
-                            val (a, c) = quotient_of p;
-                            val (b, d) = quotient_of q;
-                          in
-                            normalize (times_inta a b, times_inta c d)
-                          end;
-
-fun minus_rata p q =
-  Frct let
-         val (a, c) = quotient_of p;
-         val (b, d) = quotient_of q;
-       in
-         normalize
-           (minus_inta (times_inta a d) (times_inta b c), times_inta c d)
-       end;
-
-val zero_rata : rat = Frct (zero_inta, one_inta);
-
-fun plus_rata p q =
-  Frct let
-         val (a, c) = quotient_of p;
-         val (b, d) = quotient_of q;
-       in
-         normalize (plus_inta (times_inta a d) (times_inta b c), times_inta c d)
-       end;
-
-type 'a ring =
-  {ab_group_add_ring : 'a ab_group_add,
-    semiring_0_cancel_ring : 'a semiring_0_cancel};
-val ab_group_add_ring = #ab_group_add_ring : 'a ring -> 'a ab_group_add;
-val semiring_0_cancel_ring = #semiring_0_cancel_ring :
-  'a ring -> 'a semiring_0_cancel;
-
-val plus_rat = {plus = plus_rata} : rat plus;
-
-val semigroup_add_rat = {plus_semigroup_add = plus_rat} : rat semigroup_add;
-
-val cancel_semigroup_add_rat =
-  {semigroup_add_cancel_semigroup_add = semigroup_add_rat} :
-  rat cancel_semigroup_add;
-
-val ab_semigroup_add_rat = {semigroup_add_ab_semigroup_add = semigroup_add_rat}
-  : rat ab_semigroup_add;
-
-val minus_rat = {minusa = minus_rata} : rat minus;
-
-val cancel_ab_semigroup_add_rat =
-  {ab_semigroup_add_cancel_ab_semigroup_add = ab_semigroup_add_rat,
-    cancel_semigroup_add_cancel_ab_semigroup_add = cancel_semigroup_add_rat,
-    minus_cancel_ab_semigroup_add = minus_rat}
-  : rat cancel_ab_semigroup_add;
-
-val zero_rat = {zero = zero_rata} : rat zero;
-
-val monoid_add_rat =
-  {semigroup_add_monoid_add = semigroup_add_rat, zero_monoid_add = zero_rat} :
-  rat monoid_add;
-
-val comm_monoid_add_rat =
-  {ab_semigroup_add_comm_monoid_add = ab_semigroup_add_rat,
-    monoid_add_comm_monoid_add = monoid_add_rat}
-  : rat comm_monoid_add;
-
-val cancel_comm_monoid_add_rat =
-  {cancel_ab_semigroup_add_cancel_comm_monoid_add = cancel_ab_semigroup_add_rat,
-    comm_monoid_add_cancel_comm_monoid_add = comm_monoid_add_rat}
-  : rat cancel_comm_monoid_add;
-
-val times_rat = {times = times_rata} : rat times;
-
-val mult_zero_rat = {times_mult_zero = times_rat, zero_mult_zero = zero_rat} :
-  rat mult_zero;
-
-val semigroup_mult_rat = {times_semigroup_mult = times_rat} :
-  rat semigroup_mult;
-
-val semiring_rat =
-  {ab_semigroup_add_semiring = ab_semigroup_add_rat,
-    semigroup_mult_semiring = semigroup_mult_rat}
-  : rat semiring;
-
-val semiring_0_rat =
-  {comm_monoid_add_semiring_0 = comm_monoid_add_rat,
-    mult_zero_semiring_0 = mult_zero_rat, semiring_semiring_0 = semiring_rat}
-  : rat semiring_0;
-
-val semiring_0_cancel_rat =
-  {cancel_comm_monoid_add_semiring_0_cancel = cancel_comm_monoid_add_rat,
-    semiring_0_semiring_0_cancel = semiring_0_rat}
-  : rat semiring_0_cancel;
-
-val uminus_rat = {uminus = uminus_rata} : rat uminus;
-
-val group_add_rat =
-  {cancel_semigroup_add_group_add = cancel_semigroup_add_rat,
-    minus_group_add = minus_rat, monoid_add_group_add = monoid_add_rat,
-    uminus_group_add = uminus_rat}
-  : rat group_add;
-
-val ab_group_add_rat =
-  {cancel_comm_monoid_add_ab_group_add = cancel_comm_monoid_add_rat,
-    group_add_ab_group_add = group_add_rat}
-  : rat ab_group_add;
-
-val ring_rat =
-  {ab_group_add_ring = ab_group_add_rat,
-    semiring_0_cancel_ring = semiring_0_cancel_rat}
-  : rat ring;
-
-val numeral_rat =
-  {one_numeral = one_rat, semigroup_add_numeral = semigroup_add_rat} :
-  rat numeral;
-
-val power_rat = {one_power = one_rat, times_power = times_rat} : rat power;
-
-type 'a neg_numeral =
-  {group_add_neg_numeral : 'a group_add, numeral_neg_numeral : 'a numeral};
-val group_add_neg_numeral = #group_add_neg_numeral :
-  'a neg_numeral -> 'a group_add;
-val numeral_neg_numeral = #numeral_neg_numeral : 'a neg_numeral -> 'a numeral;
-
-type 'a ring_1 =
-  {neg_numeral_ring_1 : 'a neg_numeral, ring_ring_1 : 'a ring,
-    semiring_1_cancel_ring_1 : 'a semiring_1_cancel};
-val neg_numeral_ring_1 = #neg_numeral_ring_1 : 'a ring_1 -> 'a neg_numeral;
-val ring_ring_1 = #ring_ring_1 : 'a ring_1 -> 'a ring;
-val semiring_1_cancel_ring_1 = #semiring_1_cancel_ring_1 :
-  'a ring_1 -> 'a semiring_1_cancel;
-
-val monoid_mult_rat =
-  {semigroup_mult_monoid_mult = semigroup_mult_rat,
-    power_monoid_mult = power_rat}
-  : rat monoid_mult;
-
-val semiring_numeral_rat =
-  {monoid_mult_semiring_numeral = monoid_mult_rat,
-    numeral_semiring_numeral = numeral_rat,
-    semiring_semiring_numeral = semiring_rat}
-  : rat semiring_numeral;
-
-val zero_neq_one_rat =
-  {one_zero_neq_one = one_rat, zero_zero_neq_one = zero_rat} : rat zero_neq_one;
-
-val semiring_1_rat =
-  {semiring_numeral_semiring_1 = semiring_numeral_rat,
-    semiring_0_semiring_1 = semiring_0_rat,
-    zero_neq_one_semiring_1 = zero_neq_one_rat}
-  : rat semiring_1;
-
-val semiring_1_cancel_rat =
-  {semiring_0_cancel_semiring_1_cancel = semiring_0_cancel_rat,
-    semiring_1_semiring_1_cancel = semiring_1_rat}
-  : rat semiring_1_cancel;
-
-val neg_numeral_rat =
-  {group_add_neg_numeral = group_add_rat, numeral_neg_numeral = numeral_rat} :
-  rat neg_numeral;
-
-val ring_1_rat =
-  {neg_numeral_ring_1 = neg_numeral_rat, ring_ring_1 = ring_rat,
-    semiring_1_cancel_ring_1 = semiring_1_cancel_rat}
-  : rat ring_1;
-
 fun less_eq_rat p q = let
                         val (a, c) = quotient_of p;
                         val (b, d) = quotient_of q;
@@ -1731,14 +1534,6 @@ val ord_rat = {less_eq = less_eq_rat, less = less_rat} : rat ord;
 val preorder_rat = {ord_preorder = ord_rat} : rat preorder;
 
 val order_rat = {preorder_order = preorder_rat} : rat order;
-
-val ceq_rata : (rat -> rat -> bool) option = SOME equal_rata;
-
-val ceq_rat = {ceq = ceq_rata} : rat ceq;
-
-val set_impl_rata : (rat, set_impla) phantom = Phantom Set_DList;
-
-val set_impl_rat = {set_impl = set_impl_rata} : rat set_impl;
 
 val linorder_rat = {order_linorder = order_rat} : rat linorder;
 
@@ -5551,6 +5346,30 @@ fun take n [] = []
     (if equal_nata n zero_nata then []
       else x :: take (minus_nata n one_nata) xs);
 
+fun divide_int k l =
+  Int_of_integer (divide_integer (integer_of_int k) (integer_of_int l));
+
+fun gcd_integer k l =
+  abs (if l = (0 : Int.int) then k
+        else gcd_integer l (modulo_integer (abs k) (abs l)));
+
+fun gcd_int (Int_of_integer x) (Int_of_integer y) =
+  Int_of_integer (gcd_integer x y);
+
+fun normalize p =
+  (if less_int zero_inta (snd p)
+    then let
+           val a = gcd_int (fst p) (snd p);
+         in
+           (divide_int (fst p) a, divide_int (snd p) a)
+         end
+    else (if equal_inta (snd p) zero_inta then (zero_inta, one_inta)
+           else let
+                  val a = uminus_inta (gcd_int (fst p) (snd p));
+                in
+                  (divide_int (fst p) a, divide_int (snd p) a)
+                end));
+
 fun fract a b = Frct (normalize (a, b));
 
 fun foldb A_ x xc = folda (fn a => fn _ => x a) (impl_ofa A_ xc);
@@ -6991,63 +6810,6 @@ fun subst_term psubst (VAR x) = psubst x
 
 fun tsubst h args = subst_term (psubst (parameters h) args);
 
-fun modulo_int k l =
-  Int_of_integer (modulo_integer (integer_of_int k) (integer_of_int l));
-
-fun numeral A_ One = one (one_numeral A_)
-  | numeral A_ (Bit0 n) =
-    let
-      val m = numeral A_ n;
-    in
-      plus ((plus_semigroup_add o semigroup_add_numeral) A_) m m
-    end
-  | numeral A_ (Bit1 n) =
-    let
-      val m = numeral A_ n;
-    in
-      plus ((plus_semigroup_add o semigroup_add_numeral) A_)
-        (plus ((plus_semigroup_add o semigroup_add_numeral) A_) m m)
-        (one (one_numeral A_))
-    end;
-
-fun of_inta A_ k =
-  (if equal_inta k zero_inta
-    then zero ((zero_mult_zero o mult_zero_semiring_0 o semiring_0_semiring_1 o
-                 semiring_1_semiring_1_cancel o semiring_1_cancel_ring_1)
-                A_)
-    else (if less_int k zero_inta
-           then uminus
-                  ((uminus_group_add o group_add_neg_numeral o
-                     neg_numeral_ring_1)
-                    A_)
-                  (of_inta A_ (uminus_inta k))
-           else let
-                  val l =
-                    times ((times_power o power_monoid_mult o
-                             monoid_mult_semiring_numeral o
-                             semiring_numeral_semiring_1 o
-                             semiring_1_semiring_1_cancel o
-                             semiring_1_cancel_ring_1)
-                            A_)
-                      (numeral ((numeral_neg_numeral o neg_numeral_ring_1) A_)
-                        (Bit0 One))
-                      (of_inta A_
-                        (divide_int k (Int_of_integer (2 : Int.int))));
-                  val j = modulo_int k (Int_of_integer (2 : Int.int));
-                in
-                  (if equal_inta j zero_inta then l
-                    else plus ((plus_semigroup_add o semigroup_add_numeral o
-                                 numeral_neg_numeral o neg_numeral_ring_1)
-                                A_)
-                           l (one ((one_numeral o numeral_neg_numeral o
-                                     neg_numeral_ring_1)
-                                    A_)))
-                end));
-
-fun ints (A1_, A2_, A3_, A4_) =
-  image (ceq_int, ccompare_int) (A1_, A2_, A4_) (of_inta A3_)
-    (top_set (ceq_int, ccompare_int, set_impl_int));
-
 fun map_index n f [] = []
   | map_index n f (x :: xs) = f n x :: map_index (suc n) f xs;
 
@@ -7968,6 +7730,8 @@ fun lx_lowercase x =
 
 fun lx_alpha x =
   bindb (alt lx_lowercase lx_uppercase) (fn xa => return (sum_join xa)) x;
+
+val zero_rat : rat = Frct (zero_inta, one_inta);
 
 fun is_predAtom (Atom (PredAtm (uu, uv))) = true
   | is_predAtom (Atom (EqAtm (va, vb))) = false
@@ -18405,16 +18169,14 @@ fun at_start_spec (SimpleActionSchemaa (h, b)) =
   instantiate_temporal_action_schema (SimpleActionSchemaa (h, b)) []
   | at_start_spec
     (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff))) =
-    inst_snap_action_body_elements [] cond deff (tsubst h []) zero_rata
-      At_Start;
+    inst_snap_action_body_elements [] cond deff (tsubst h []) zero_rat At_Start;
 
 val ground_non_action : ground_action =
   GroundAction (Not Bot, Effect ([], [], []));
 
 fun at_end_spec (SimpleActionSchemaa (h, b)) = ground_non_action
   | at_end_spec (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff)))
-    = inst_snap_action_body_elements [] cond deff (tsubst h []) zero_rata
-        At_End;
+    = inst_snap_action_body_elements [] cond deff (tsubst h []) zero_rat At_End;
 
 fun dels_spec (GroundAction (form, eff)) =
   remdups equal_predicate (map to_predicate (dels eff));
@@ -18618,8 +18380,7 @@ fun end_edge (A1_, A2_) (C1_, C2_, C3_, C4_) a =
 fun over_all_snap (SimpleActionSchemaa (h, b)) = ground_non_action
   | over_all_snap
     (DurativeActionSchema (h, DurativeActionBody (dc, cond, deff))) =
-    inst_snap_action_body_elements [] cond deff (tsubst h []) zero_rata
-      Over_All;
+    inst_snap_action_body_elements [] cond deff (tsubst h []) zero_rat Over_All;
 
 fun over_all_spec x = pre_spec (over_all_snap x);
 
@@ -19327,11 +19088,11 @@ fun nexp_of_pddl (ConstantExpr r) = NConst r
   | nexp_of_pddl (SubExpr (a, b)) = NSub (nexp_of_pddl a, nexp_of_pddl b)
   | nexp_of_pddl (MulExpr (a, b)) = NMul (nexp_of_pddl a, nexp_of_pddl b)
   | nexp_of_pddl (DivExpr (a, b)) = NDiv (nexp_of_pddl a, nexp_of_pddl b)
-  | nexp_of_pddl DurationExpr = NConst zero_rata
-  | nexp_of_pddl (SinExpr uv) = NConst zero_rata
-  | nexp_of_pddl (CosExpr uw) = NConst zero_rata
-  | nexp_of_pddl (ExpExpr ux) = NConst zero_rata
-  | nexp_of_pddl PiExpr = NConst zero_rata;
+  | nexp_of_pddl DurationExpr = NConst zero_rat
+  | nexp_of_pddl (SinExpr uv) = NConst zero_rat
+  | nexp_of_pddl (CosExpr uw) = NConst zero_rat
+  | nexp_of_pddl (ExpExpr ux) = NConst zero_rat
+  | nexp_of_pddl PiExpr = NConst zero_rat;
 
 fun num_comps (Atom (NumericEqAtm (l, r))) =
   [Comp (Ceq, nexp_of_pddl l, nexp_of_pddl r)]
@@ -22768,7 +22529,7 @@ fun num_init_assignments p =
     (inita p);
 
 fun num_init p f =
-  (case map_of equal_func (num_init_assignments p) f of NONE => zero_rata
+  (case map_of equal_func (num_init_assignments p) f of NONE => zero_rat
     | SOME r => r);
 
 fun nfluents p = map func (functions (domain p));
@@ -22827,24 +22588,6 @@ fun do_preproc_mc A_ =
                     concat_str (intersperse "\n" es))))));
 
 fun upds_functional_list A_ us = distinct A_ (map fst us);
-
-fun nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs (NConst c) =
-  member (B1_, B2_) c (ints (B1_, B2_, B3_, B4_))
-  | nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs (NVar f) = membera A_ fs f
-  | nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs (NAdd (a, b)) =
-    nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs a andalso
-      nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs b
-  | nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs (NSub (a, b)) =
-    nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs a andalso
-      nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs b
-  | nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs (NMul (a, b)) =
-    nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs a andalso
-      nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs b
-  | nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs (NDiv (a, b)) = false;
-
-fun comp_struct_ok A_ (B1_, B2_, B3_, B4_) fs (Comp (p, a, b)) =
-  nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs a andalso
-    nexp_struct_ok A_ (B1_, B2_, B3_, B4_) fs b;
 
 fun map_of_debug (A1_, A2_) prefix m =
   let
@@ -23146,6 +22889,19 @@ fun check_and_cert_pddl_problem_no_return problem mode num_split certifier
     ()) ())
     (fn _ => (fn () => ()));
 
+fun nexp_struct_ok_exec A_ fs (NConst c) = is_int_rat c
+  | nexp_struct_ok_exec A_ fs (NVar f) = membera A_ fs f
+  | nexp_struct_ok_exec A_ fs (NAdd (a, b)) =
+    nexp_struct_ok_exec A_ fs a andalso nexp_struct_ok_exec A_ fs b
+  | nexp_struct_ok_exec A_ fs (NSub (a, b)) =
+    nexp_struct_ok_exec A_ fs a andalso nexp_struct_ok_exec A_ fs b
+  | nexp_struct_ok_exec A_ fs (NMul (a, b)) =
+    nexp_struct_ok_exec A_ fs a andalso nexp_struct_ok_exec A_ fs b
+  | nexp_struct_ok_exec A_ fs (NDiv (a, b)) = false;
+
+fun comp_struct_ok_exec A_ fs (Comp (p, a, b)) =
+  nexp_struct_ok_exec A_ fs a andalso nexp_struct_ok_exec A_ fs b;
+
 val num_reach_formula : (nat, nat, string, inta) formulaa = reach_formula;
 
 fun fluent_to_name_spec x = name x;
@@ -23409,10 +23165,7 @@ fun check_numeric_ground_problem_diag p fluent_lo fluent_hi =
           (list_all
             (fn a =>
               list_all
-                (fn (_, aa) =>
-                  nexp_struct_ok equal_func
-                    (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat)
-                    (nfluents p) aa)
+                (fn (_, aa) => nexp_struct_ok_exec equal_func (nfluents p) aa)
                 (upds (at_start_spec a)))
             (actions_spec p))
       then nat_of_integer (7 : Int.int)
@@ -23420,36 +23173,27 @@ fun check_numeric_ground_problem_diag p fluent_lo fluent_hi =
                      (fn a =>
                        list_all
                          (fn (_, aa) =>
-                           nexp_struct_ok equal_func
-                             (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat)
-                             (nfluents p) aa)
+                           nexp_struct_ok_exec equal_func (nfluents p) aa)
                          (upds (at_end_spec a)))
                      (actions_spec p))
              then nat_of_integer (8 : Int.int)
              else (if not (list_all
                             (fn a =>
                               list_all
-                                (comp_struct_ok equal_func
-                                  (ceq_rat, ccompare_rat, ring_1_rat,
-                                    set_impl_rat)
-                                  (nfluents p))
+                                (comp_struct_ok_exec equal_func (nfluents p))
                                 (n_pre (at_start_spec a)))
                             (actions_spec p))
                     then nat_of_integer (9 : Int.int)
                     else (if not (list_all
                                    (fn a =>
                                      list_all
-                                       (comp_struct_ok equal_func
- (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p))
+                                       (comp_struct_ok_exec equal_func
+ (nfluents p))
                                        (n_pre (at_end_spec a)))
                                    (actions_spec p))
                            then nat_of_integer (10 : Int.int)
                            else (if not (list_all
-  (fn a =>
-    list_all
-      (comp_struct_ok equal_func
-        (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p))
-      (n_inv a))
+  (fn a => list_all (comp_struct_ok_exec equal_func (nfluents p)) (n_inv a))
   (actions_spec p))
                                   then nat_of_integer (11 : Int.int)
                                   else (if not
@@ -23469,10 +23213,7 @@ fun check_numeric_ground_problem_diag p fluent_lo fluent_hi =
                        (actions_spec p))
                then nat_of_integer (14 : Int.int)
                else (if not (list_all
-                              (comp_struct_ok equal_func
-                                (ceq_rat, ccompare_rat, ring_1_rat,
-                                  set_impl_rat)
-                                (nfluents p))
+                              (comp_struct_ok_exec equal_func (nfluents p))
                               (num_goal p))
                       then nat_of_integer (15 : Int.int)
                       else zero_nata)))))))))))))));
@@ -24012,8 +23753,8 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                                  (fn a =>
                                    list_all
                                      (fn (_, aa) =>
-                                       nexp_struct_ok equal_func
- (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p) aa)
+                                       nexp_struct_ok_exec equal_func
+ (nfluents p) aa)
                                      (upds (at_start_spec a)))
                                  (actions_spec p)
                                  [Chara (true, true, false, false, true, false,
@@ -24154,9 +23895,7 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                               bind (check_all_list (show_list show_char)
                                      (fn a =>
                                        list_all
- (fn (_, aa) =>
-   nexp_struct_ok equal_func (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat)
-     (nfluents p) aa)
+ (fn (_, aa) => nexp_struct_ok_exec equal_func (nfluents p) aa)
  (upds (at_end_spec a)))
                                      (actions_spec p)
                                      [Chara
@@ -24292,9 +24031,7 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                                 (fn _ =>
                                   bind (check_all_list (show_list show_char)
  (fn a =>
-   list_all
-     (comp_struct_ok equal_func
-       (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p))
+   list_all (comp_struct_ok_exec equal_func (nfluents p))
      (n_pre (at_start_spec a)))
  (actions_spec p)
  [Chara (true, true, false, false, true, false, true, false),
@@ -24370,9 +24107,7 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                                       bind
 (check_all_list (show_list show_char)
   (fn a =>
-    list_all
-      (comp_struct_ok equal_func
-        (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p))
+    list_all (comp_struct_ok_exec equal_func (nfluents p))
       (n_pre (at_end_spec a)))
   (actions_spec p)
   [Chara (true, false, true, false, false, false, true, false),
@@ -24445,10 +24180,7 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
 (fn _ =>
   bind (check_all_list (show_list show_char)
          (fn a =>
-           list_all
-             (comp_struct_ok equal_func
-               (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p))
-             (n_inv a))
+           list_all (comp_struct_ok_exec equal_func (nfluents p)) (n_inv a))
          (actions_spec p)
          [Chara (false, true, true, true, false, false, true, false),
            Chara (true, false, true, false, true, true, true, false),
@@ -24739,10 +24471,7 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                                false)]
                      (shows_prec_literal zero_nata o (fn x => nameb (heada x))))
                 (fn _ =>
-                  check (list_all
-                          (comp_struct_ok equal_func
-                            (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat)
-                            (nfluents p))
+                  check (list_all (comp_struct_ok_exec equal_func (nfluents p))
                           (num_goal p))
                     (fn _ =>
                       shows_prec_list show_char zero_nata

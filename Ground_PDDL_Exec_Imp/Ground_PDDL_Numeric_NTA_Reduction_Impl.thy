@@ -175,6 +175,39 @@ fun nexp_struct_ok :: "'n list \<Rightarrow> ('n, 'r::ring_1) nexp \<Rightarrow>
 fun comp_struct_ok :: "'n list \<Rightarrow> ('n, 'r::ring_1) comp \<Rightarrow> bool" where
   "comp_struct_ok fs (Comp p a b) \<longleftrightarrow> nexp_struct_ok fs a \<and> nexp_struct_ok fs b"
 
+text \<open>Executable @{typ rat} twins: @{const nexp_struct_ok}'s @{term \<open>NConst c\<close>} clause tests
+  @{term \<open>c \<in> \<int>\<close>}, which does NOT code-generate (@{term \<open>\<int>\<close>} = @{term \<open>range of_int\<close>}, an
+  @{const image} over @{const UNIV}) and forces the polymorphic @{class ring_1} form to abort at runtime.
+  On the exported @{typ rat} fragment it is the decidable @{const is_int_rat}.  These monomorphic twins
+  (used by \<open>check_numeric_ground_problem\<close> below, whose numeric data is @{typ rat}) code-generate
+  totally; \<open>nexp_struct_ok_exec_eq\<close> / \<open>comp_struct_ok_exec_eq\<close> bridge them to
+  the abstract predicates so the @{text return_iff}/soundness statements are unchanged.\<close>
+fun nexp_struct_ok_exec :: "'n list \<Rightarrow> ('n, rat) nexp \<Rightarrow> bool" where
+  "nexp_struct_ok_exec fs (NConst c) \<longleftrightarrow> is_int_rat c"
+| "nexp_struct_ok_exec fs (NVar f)   \<longleftrightarrow> f \<in> set fs"
+| "nexp_struct_ok_exec fs (NAdd a b) \<longleftrightarrow> nexp_struct_ok_exec fs a \<and> nexp_struct_ok_exec fs b"
+| "nexp_struct_ok_exec fs (NSub a b) \<longleftrightarrow> nexp_struct_ok_exec fs a \<and> nexp_struct_ok_exec fs b"
+| "nexp_struct_ok_exec fs (NMul a b) \<longleftrightarrow> nexp_struct_ok_exec fs a \<and> nexp_struct_ok_exec fs b"
+| "nexp_struct_ok_exec fs (NDiv a b) \<longleftrightarrow> False"
+
+fun comp_struct_ok_exec :: "'n list \<Rightarrow> ('n, rat) comp \<Rightarrow> bool" where
+  "comp_struct_ok_exec fs (Comp p a b) \<longleftrightarrow> nexp_struct_ok_exec fs a \<and> nexp_struct_ok_exec fs b"
+
+lemma nexp_struct_ok_exec_eq: "nexp_struct_ok_exec fs e = nexp_struct_ok fs e"
+  by (induction e) (auto simp: is_int_rat_iff_Ints)
+
+lemma comp_struct_ok_exec_eq: "comp_struct_ok_exec fs c = comp_struct_ok fs c"
+  by (cases c) (simp add: nexp_struct_ok_exec_eq)
+
+text \<open>Function-level (eta) forms, so \<open>simp\<close> rewrites the PARTIAL applications
+  @{term \<open>comp_struct_ok_exec nfluents\<close>} / @{term \<open>nexp_struct_ok_exec nfluents\<close>} that appear under
+  @{const list_all} in \<open>check_numeric_ground_problem\<close> back to the abstract predicates.\<close>
+lemma nexp_struct_ok_exec_eq_fun: "nexp_struct_ok_exec fs = nexp_struct_ok fs"
+  by (rule ext) (rule nexp_struct_ok_exec_eq)
+
+lemma comp_struct_ok_exec_eq_fun: "comp_struct_ok_exec fs = comp_struct_ok fs"
+  by (rule ext) (rule comp_struct_ok_exec_eq)
+
 context numeric_tp_nta_reduction_defs
 begin
 
@@ -231,15 +264,15 @@ definition "check_numeric_ground_problem fluent_lo fluent_hi \<equiv> do {
     ''End-snap numeric updates cross-read a co-written fluent'' (shows o ast_temporal_action_schema_name);
   check_all_list (\<lambda>f. fluent_lo f \<le> fluent_hi f) nfluents
     ''Numeric fluent has an empty bound interval (lo > hi)'' (shows o func.name);
-  check_all_list (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_start_spec a))) actions_spec
+  check_all_list (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok_exec nfluents e) (upds (at_start_spec a))) actions_spec
     ''Start-snap numeric update RHS is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
-  check_all_list (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_end_spec a))) actions_spec
+  check_all_list (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok_exec nfluents e) (upds (at_end_spec a))) actions_spec
     ''End-snap numeric update RHS is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
-  check_all_list (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_start_spec a))) actions_spec
+  check_all_list (\<lambda>a. list_all (comp_struct_ok_exec nfluents) (n_pre (at_start_spec a))) actions_spec
     ''Start-snap numeric precondition is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
-  check_all_list (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_end_spec a))) actions_spec
+  check_all_list (\<lambda>a. list_all (comp_struct_ok_exec nfluents) (n_pre (at_end_spec a))) actions_spec
     ''End-snap numeric precondition is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
-  check_all_list (\<lambda>a. list_all (comp_struct_ok nfluents) (n_inv a)) actions_spec
+  check_all_list (\<lambda>a. list_all (comp_struct_ok_exec nfluents) (n_inv a)) actions_spec
     ''Numeric over-all invariant is not structurally integer-faithful'' (shows o ast_temporal_action_schema_name);
   check_all_list (\<lambda>f. is_int_rat (num_init f)) nfluents
     ''Numeric fluent has a non-integer initial value'' (shows o func.name);
@@ -247,12 +280,12 @@ definition "check_numeric_ground_problem fluent_lo fluent_hi \<equiv> do {
     ''Start-snap numeric update writes an undeclared fluent'' (shows o ast_temporal_action_schema_name);
   check_all_list (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_end_spec a))) actions_spec
     ''End-snap numeric update writes an undeclared fluent'' (shows o ast_temporal_action_schema_name);
-  check (list_all (comp_struct_ok nfluents) num_goal)
+  check (list_all (comp_struct_ok_exec nfluents) num_goal)
     (ERRS ''Numeric goal is not structurally integer-faithful'')
 }"
 
 text \<open>DIAGNOSTIC (temporary): 1-based index of the FIRST failing structural check in
-  @{const check_numeric_ground_problem} (0 = all pass), so the SML glue can report which
+  \<open>check_numeric_ground_problem\<close> (0 = all pass), so the SML glue can report which
   admission clause rejects a problem instead of a coarse NONE.\<close>
 definition "check_numeric_ground_problem_diag (fluent_lo :: func \<Rightarrow> int) (fluent_hi :: func \<Rightarrow> int) \<equiv> (
   if \<not> isOK (check_ground_problem_base P) then (1::nat)
@@ -261,15 +294,15 @@ definition "check_numeric_ground_problem_diag (fluent_lo :: func \<Rightarrow> i
   else if \<not> list_all (\<lambda>a. upds_no_cross_read_list (upds (at_start_spec a))) actions_spec then 4
   else if \<not> list_all (\<lambda>a. upds_no_cross_read_list (upds (at_end_spec a))) actions_spec then 5
   else if \<not> list_all (\<lambda>f. fluent_lo f \<le> fluent_hi f) nfluents then 6
-  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_start_spec a))) actions_spec then 7
-  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok nfluents e) (upds (at_end_spec a))) actions_spec then 8
-  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_start_spec a))) actions_spec then 9
-  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_pre (at_end_spec a))) actions_spec then 10
-  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok nfluents) (n_inv a)) actions_spec then 11
+  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok_exec nfluents e) (upds (at_start_spec a))) actions_spec then 7
+  else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). nexp_struct_ok_exec nfluents e) (upds (at_end_spec a))) actions_spec then 8
+  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok_exec nfluents) (n_pre (at_start_spec a))) actions_spec then 9
+  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok_exec nfluents) (n_pre (at_end_spec a))) actions_spec then 10
+  else if \<not> list_all (\<lambda>a. list_all (comp_struct_ok_exec nfluents) (n_inv a)) actions_spec then 11
   else if \<not> list_all (\<lambda>f. is_int_rat (num_init f)) nfluents then 12
   else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_start_spec a))) actions_spec then 13
   else if \<not> list_all (\<lambda>a. list_all (\<lambda>(f, e). f \<in> set nfluents) (upds (at_end_spec a))) actions_spec then 14
-  else if \<not> list_all (comp_struct_ok nfluents) num_goal then 15
+  else if \<not> list_all (comp_struct_ok_exec nfluents) num_goal then 15
   else 0)"
 
 lemma check_numeric_ground_problem_return_iff:
@@ -291,7 +324,7 @@ lemma check_numeric_ground_problem_return_iff:
      \<and> list_all (comp_struct_ok nfluents) num_goal"
   unfolding check_numeric_ground_problem_def
   by (simp add: return_iff isOK_check_ground_problem_base check_ground_problem_base_return_iff
-                is_int_rat_iff_Ints)
+                is_int_rat_iff_Ints nexp_struct_ok_exec_eq_fun comp_struct_ok_exec_eq_fun)
 
 end
 
