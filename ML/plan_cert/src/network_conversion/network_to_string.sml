@@ -82,10 +82,10 @@ struct
     type t = X.t Syntax.Guard.guard
     open Syntax
     open Guard
-    fun to_string' True = "True" | 
+    fun to_string' True = "True" |
         to_string' (And (l, r)) = to_string' l ^ " && " ^ to_string' r |
-        to_string' (And (l, r)) = "(" ^ to_string' l ^ " || " ^ to_string' r ^ ")" |
-        to_string' (Constr c) = X.to_string c 
+        to_string' (Or (l, r)) = "(" ^ to_string' l ^ " || " ^ to_string' r ^ ")" |
+        to_string' (Constr c) = X.to_string c
 
     fun to_string True = "" | 
         to_string g = to_string' g

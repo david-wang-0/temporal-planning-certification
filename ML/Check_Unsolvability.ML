@@ -226,7 +226,6 @@ structure Converter : sig
       'a atom formula list * 'a atom formula list * 'a numeric_effect list
   datatype ('a, 'b) acconstraint = LTa of 'a * 'b | LEa of 'a * 'b |
     EQa of 'a * 'b | GTa of 'a * 'b | GEa of 'a * 'b
-  type ground_action
   datatype duration_op = EQ | LEQ | GEQ
   datatype 'a duration_constraint =
     DurationConstraint of duration_op * 'a numeric_expression
@@ -256,6 +255,7 @@ structure Converter : sig
     Problem of
       'a ast_domain * (object * typea) list * object atom formula list *
         object atom formula
+  type ground_action
   datatype continuous_effect_op = ContinuousIncrease | ContinuousDecrease
   datatype 'a ast_continuous_effect =
     ContinuousEffect of
@@ -5173,15 +5173,6 @@ fun ccompare_acconstrainta A_ B_ = SOME (compare_acconstraint A_ B_);
 fun ccompare_acconstraint A_ B_ = {ccompare = ccompare_acconstrainta A_ B_} :
   ('a, 'b) acconstraint ccompare;
 
-datatype ground_action =
-  GroundAction of object atom formula * object ast_effect;
-
-fun equal_ground_actiona (GroundAction (x1, x2)) (GroundAction (y1, y2)) =
-  equal_formulaa (equal_atom equal_object) x1 y1 andalso
-    equal_ast_effecta equal_object x2 y2;
-
-val equal_ground_action = {equal = equal_ground_actiona} : ground_action equal;
-
 datatype duration_op = EQ | LEQ | GEQ;
 
 fun equal_duration_op LEQ GEQ = false
@@ -5448,6 +5439,9 @@ datatype 'a ast_problem =
 
 datatype ('a, 'b) hashmap =
   HashMap of (('a * 'b) list) FArray.IsabelleMapping.ArrayType * nat;
+
+datatype ground_action =
+  GroundAction of object atom formula * object ast_effect;
 
 datatype 'a label = Del | Internal of 'a | Bin of 'a | Broad of 'a;
 
@@ -23380,47 +23374,47 @@ fun parse_convert_check mode num_split dc model renaming state_space show_cert =
 
 fun check_numeric_ground_problem_diag p fluent_lo fluent_hi =
   (if not (isOK (check_ground_problem_base p)) then one_nata
-    else (if not (distinct equal_ground_action
-                    (map at_start_spec (actions_spec p)) andalso
-                   (distinct equal_ground_action
-                      (map at_end_spec (actions_spec p)) andalso
-                     list_all
-                       (fn s =>
-                         not (membera equal_ground_action
-                               (map at_end_spec (actions_spec p)) s))
-                       (map at_start_spec (actions_spec p))))
+    else (if not (list_all
+                   (fn a =>
+                     upds_functional_list equal_func (upds (at_start_spec a)))
+                   (actions_spec p))
            then nat_of_integer (2 : Int.int)
            else (if not (list_all
                           (fn a =>
                             upds_functional_list equal_func
-                              (upds (at_start_spec a)))
+                              (upds (at_end_spec a)))
                           (actions_spec p))
                   then nat_of_integer (3 : Int.int)
                   else (if not (list_all
                                  (fn a =>
-                                   upds_functional_list equal_func
-                                     (upds (at_end_spec a)))
+                                   upds_no_cross_read_list
+                                     (card_UNIV_func, ceq_func,
+                                       cproper_interval_func, equal_func,
+                                       set_impl_func)
+                                     (ccompare_rat, equal_rat)
+                                     (upds (at_start_spec a)))
                                  (actions_spec p))
                          then nat_of_integer (4 : Int.int)
                          else (if not (list_all
 (fn a =>
   upds_no_cross_read_list
     (card_UNIV_func, ceq_func, cproper_interval_func, equal_func, set_impl_func)
-    (ccompare_rat, equal_rat) (upds (at_start_spec a)))
+    (ccompare_rat, equal_rat) (upds (at_end_spec a)))
 (actions_spec p))
                                 then nat_of_integer (5 : Int.int)
                                 else (if not
-   (list_all
-     (fn a =>
-       upds_no_cross_read_list
-         (card_UNIV_func, ceq_func, cproper_interval_func, equal_func,
-           set_impl_func)
-         (ccompare_rat, equal_rat) (upds (at_end_spec a)))
-     (actions_spec p))
+   (list_all (fn f => less_eq_int (fluent_lo f) (fluent_hi f)) (nfluents p))
                                        then nat_of_integer (6 : Int.int)
                                        else (if not
-          (list_all (fn f => less_eq_int (fluent_lo f) (fluent_hi f))
-            (nfluents p))
+          (list_all
+            (fn a =>
+              list_all
+                (fn (_, aa) =>
+                  nexp_struct_ok equal_func
+                    (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat)
+                    (nfluents p) aa)
+                (upds (at_start_spec a)))
+            (actions_spec p))
       then nat_of_integer (7 : Int.int)
       else (if not (list_all
                      (fn a =>
@@ -23429,18 +23423,17 @@ fun check_numeric_ground_problem_diag p fluent_lo fluent_hi =
                            nexp_struct_ok equal_func
                              (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat)
                              (nfluents p) aa)
-                         (upds (at_start_spec a)))
+                         (upds (at_end_spec a)))
                      (actions_spec p))
              then nat_of_integer (8 : Int.int)
              else (if not (list_all
                             (fn a =>
                               list_all
-                                (fn (_, aa) =>
-                                  nexp_struct_ok equal_func
-                                    (ceq_rat, ccompare_rat, ring_1_rat,
-                                      set_impl_rat)
-                                    (nfluents p) aa)
-                                (upds (at_end_spec a)))
+                                (comp_struct_ok equal_func
+                                  (ceq_rat, ccompare_rat, ring_1_rat,
+                                    set_impl_rat)
+                                  (nfluents p))
+                                (n_pre (at_start_spec a)))
                             (actions_spec p))
                     then nat_of_integer (9 : Int.int)
                     else (if not (list_all
@@ -23448,7 +23441,7 @@ fun check_numeric_ground_problem_diag p fluent_lo fluent_hi =
                                      list_all
                                        (comp_struct_ok equal_func
  (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p))
-                                       (n_pre (at_start_spec a)))
+                                       (n_pre (at_end_spec a)))
                                    (actions_spec p))
                            then nat_of_integer (10 : Int.int)
                            else (if not (list_all
@@ -23456,43 +23449,33 @@ fun check_numeric_ground_problem_diag p fluent_lo fluent_hi =
     list_all
       (comp_struct_ok equal_func
         (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p))
-      (n_pre (at_end_spec a)))
+      (n_inv a))
   (actions_spec p))
                                   then nat_of_integer (11 : Int.int)
                                   else (if not
-     (list_all
-       (fn a =>
-         list_all
-           (comp_struct_ok equal_func
-             (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p))
-           (n_inv a))
-       (actions_spec p))
+     (list_all (fn f => is_int_rat (num_init p f)) (nfluents p))
  then nat_of_integer (12 : Int.int)
- else (if not (list_all (fn f => is_int_rat (num_init p f)) (nfluents p))
+ else (if not (list_all
+                (fn a =>
+                  list_all (fn (f, _) => membera equal_func (nfluents p) f)
+                    (upds (at_start_spec a)))
+                (actions_spec p))
         then nat_of_integer (13 : Int.int)
         else (if not (list_all
                        (fn a =>
                          list_all
                            (fn (f, _) => membera equal_func (nfluents p) f)
-                           (upds (at_start_spec a)))
+                           (upds (at_end_spec a)))
                        (actions_spec p))
                then nat_of_integer (14 : Int.int)
                else (if not (list_all
-                              (fn a =>
-                                list_all
-                                  (fn (f, _) =>
-                                    membera equal_func (nfluents p) f)
-                                  (upds (at_end_spec a)))
-                              (actions_spec p))
+                              (comp_struct_ok equal_func
+                                (ceq_rat, ccompare_rat, ring_1_rat,
+                                  set_impl_rat)
+                                (nfluents p))
+                              (num_goal p))
                       then nat_of_integer (15 : Int.int)
-                      else (if not (list_all
-                                     (comp_struct_ok equal_func
-                                       (ceq_rat, ccompare_rat, ring_1_rat,
- set_impl_rat)
-                                       (nfluents p))
-                                     (num_goal p))
-                             then nat_of_integer (16 : Int.int)
-                             else zero_nata))))))))))))))));
+                      else zero_nata)))))))))))))));
 
 fun check_numeric_admission_diag_opt p b =
   let
@@ -23511,123 +23494,91 @@ fun check_numeric_admission_diag_opt p b =
 fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
   bind (check_ground_problem_base p)
     (fn _ =>
-      bind (check
-             (distinct equal_ground_action
-                (map at_start_spec (actions_spec p)) andalso
-               (distinct equal_ground_action
-                  (map at_end_spec (actions_spec p)) andalso
-                 list_all
-                   (fn s =>
-                     not (membera equal_ground_action
-                           (map at_end_spec (actions_spec p)) s))
-                   (map at_start_spec (actions_spec p))))
-             (fn _ =>
-               shows_prec_list show_char zero_nata
-                 [Chara (true, true, true, false, false, false, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (true, true, true, true, false, true, true, false),
-                   Chara (true, false, true, false, true, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (false, false, true, false, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (true, true, false, false, true, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, false, false, true, true, true, false),
-                   Chara (true, true, false, false, true, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (true, true, true, true, false, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, false, false, false, true, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (true, true, true, false, true, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (true, true, false, false, true, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, false, true, false, false, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (true, true, false, false, true, true, true, false),
-                   Chara (false, true, false, true, false, true, true, false),
-                   Chara (true, true, true, true, false, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, false, false, true, false, true, false, false),
-                   Chara (true, true, false, false, true, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (true, true, true, true, false, true, false, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (false, false, true, false, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (true, true, false, false, true, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, false, false, true, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (true, true, false, false, false, true, true, false),
-                   Chara (true, true, true, true, false, true, true, false),
-                   Chara (false, false, true, true, false, true, true, false),
-                   Chara (false, false, true, true, false, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (true, true, false, false, true, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (true, true, true, true, false, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (true, true, true, true, false, true, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, false, true, false, false, true, true, false),
-                   Chara (true, false, true, false, true, true, true, false),
-                   Chara (false, false, false, false, true, true, true, false),
-                   Chara (false, false, true, true, false, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (true, true, false, false, false, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (true, true, false, false, true, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, false, false, true, true, true, false),
-                   Chara (true, false, false, true, false, true, false,
-                           false)]))
+      bind (check_all_list (show_list show_char)
+             (fn a => upds_functional_list equal_func (upds (at_start_spec a)))
+             (actions_spec p)
+             [Chara (true, true, false, false, true, false, true, false),
+               Chara (false, false, true, false, true, true, true, false),
+               Chara (true, false, false, false, false, true, true, false),
+               Chara (false, true, false, false, true, true, true, false),
+               Chara (false, false, true, false, true, true, true, false),
+               Chara (true, false, true, true, false, true, false, false),
+               Chara (true, true, false, false, true, true, true, false),
+               Chara (false, true, true, true, false, true, true, false),
+               Chara (true, false, false, false, false, true, true, false),
+               Chara (false, false, false, false, true, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (false, true, true, true, false, true, true, false),
+               Chara (true, false, true, false, true, true, true, false),
+               Chara (true, false, true, true, false, true, true, false),
+               Chara (true, false, true, false, false, true, true, false),
+               Chara (false, true, false, false, true, true, true, false),
+               Chara (true, false, false, true, false, true, true, false),
+               Chara (true, true, false, false, false, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (true, false, true, false, true, true, true, false),
+               Chara (false, false, false, false, true, true, true, false),
+               Chara (false, false, true, false, false, true, true, false),
+               Chara (true, false, false, false, false, true, true, false),
+               Chara (false, false, true, false, true, true, true, false),
+               Chara (true, false, true, false, false, true, true, false),
+               Chara (true, true, false, false, true, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (true, false, false, false, false, true, true, false),
+               Chara (false, true, false, false, true, true, true, false),
+               Chara (true, false, true, false, false, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (false, true, true, true, false, true, true, false),
+               Chara (true, true, true, true, false, true, true, false),
+               Chara (false, false, true, false, true, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (false, true, true, false, false, true, true, false),
+               Chara (true, false, true, false, true, true, true, false),
+               Chara (false, true, true, true, false, true, true, false),
+               Chara (true, true, false, false, false, true, true, false),
+               Chara (false, false, true, false, true, true, true, false),
+               Chara (true, false, false, true, false, true, true, false),
+               Chara (true, true, true, true, false, true, true, false),
+               Chara (false, true, true, true, false, true, true, false),
+               Chara (true, false, false, false, false, true, true, false),
+               Chara (false, false, true, true, false, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (false, false, false, true, false, true, false, false),
+               Chara (true, false, false, false, false, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (false, true, true, false, false, true, true, false),
+               Chara (false, false, true, true, false, true, true, false),
+               Chara (true, false, true, false, true, true, true, false),
+               Chara (true, false, true, false, false, true, true, false),
+               Chara (false, true, true, true, false, true, true, false),
+               Chara (false, false, true, false, true, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (true, false, false, true, false, true, true, false),
+               Chara (true, true, false, false, true, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (true, true, true, false, true, true, true, false),
+               Chara (false, true, false, false, true, true, true, false),
+               Chara (true, false, false, true, false, true, true, false),
+               Chara (false, false, true, false, true, true, true, false),
+               Chara (false, false, true, false, true, true, true, false),
+               Chara (true, false, true, false, false, true, true, false),
+               Chara (false, true, true, true, false, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (false, false, true, false, true, true, true, false),
+               Chara (true, true, true, false, true, true, true, false),
+               Chara (true, false, false, true, false, true, true, false),
+               Chara (true, true, false, false, false, true, true, false),
+               Chara (true, false, true, false, false, true, true, false),
+               Chara (true, false, false, true, false, true, false, false)]
+             (shows_prec_literal zero_nata o (fn x => nameb (heada x))))
         (fn _ =>
           bind (check_all_list (show_list show_char)
                  (fn a =>
-                   upds_functional_list equal_func (upds (at_start_spec a)))
+                   upds_functional_list equal_func (upds (at_end_spec a)))
                  (actions_spec p)
-                 [Chara (true, true, false, false, true, false, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
+                 [Chara (true, false, true, false, false, false, true, false),
+                   Chara (false, true, true, true, false, true, true, false),
+                   Chara (false, false, true, false, false, true, true, false),
                    Chara (true, false, true, true, false, true, false, false),
                    Chara (true, true, false, false, true, true, true, false),
                    Chara (false, true, true, true, false, true, true, false),
@@ -23710,13 +23661,20 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
             (fn _ =>
               bind (check_all_list (show_list show_char)
                      (fn a =>
-                       upds_functional_list equal_func (upds (at_end_spec a)))
+                       upds_no_cross_read_list
+                         (card_UNIV_func, ceq_func, cproper_interval_func,
+                           equal_func, set_impl_func)
+                         (ccompare_rat, equal_rat) (upds (at_start_spec a)))
                      (actions_spec p)
-                     [Chara (true, false, true, false, false, false, true,
+                     [Chara (true, true, false, false, true, false, true,
                               false),
-                       Chara (false, true, true, true, false, true, true,
+                       Chara (false, false, true, false, true, true, true,
                                false),
-                       Chara (false, false, true, false, false, true, true,
+                       Chara (true, false, false, false, false, true, true,
+                               false),
+                       Chara (false, true, false, false, true, true, true,
+                               false),
+                       Chara (false, false, true, false, true, true, true,
                                false),
                        Chara (true, false, true, true, false, true, false,
                                false),
@@ -23762,67 +23720,35 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                                false),
                        Chara (false, false, false, false, false, true, false,
                                false),
-                       Chara (true, false, false, false, false, true, true,
+                       Chara (true, true, false, false, false, true, true,
                                false),
                        Chara (false, true, false, false, true, true, true,
                                false),
-                       Chara (true, false, true, false, false, true, true,
-                               false),
-                       Chara (false, false, false, false, false, true, false,
-                               false),
-                       Chara (false, true, true, true, false, true, true,
-                               false),
                        Chara (true, true, true, true, false, true, true, false),
-                       Chara (false, false, true, false, true, true, true,
-                               false),
-                       Chara (false, false, false, false, false, true, false,
-                               false),
-                       Chara (false, true, true, false, false, true, true,
-                               false),
-                       Chara (true, false, true, false, true, true, true,
-                               false),
-                       Chara (false, true, true, true, false, true, true,
-                               false),
-                       Chara (true, true, false, false, false, true, true,
-                               false),
-                       Chara (false, false, true, false, true, true, true,
-                               false),
-                       Chara (true, false, false, true, false, true, true,
-                               false),
-                       Chara (true, true, true, true, false, true, true, false),
-                       Chara (false, true, true, true, false, true, true,
-                               false),
-                       Chara (true, false, false, false, false, true, true,
-                               false),
-                       Chara (false, false, true, true, false, true, true,
-                               false),
-                       Chara (false, false, false, false, false, true, false,
-                               false),
-                       Chara (false, false, false, true, false, true, false,
-                               false),
-                       Chara (true, false, false, false, false, true, true,
-                               false),
-                       Chara (false, false, false, false, false, true, false,
-                               false),
-                       Chara (false, true, true, false, false, true, true,
-                               false),
-                       Chara (false, false, true, true, false, true, true,
-                               false),
-                       Chara (true, false, true, false, true, true, true,
-                               false),
-                       Chara (true, false, true, false, false, true, true,
-                               false),
-                       Chara (false, true, true, true, false, true, true,
-                               false),
-                       Chara (false, false, true, false, true, true, true,
-                               false),
-                       Chara (false, false, false, false, false, true, false,
-                               false),
-                       Chara (true, false, false, true, false, true, true,
+                       Chara (true, true, false, false, true, true, true,
                                false),
                        Chara (true, true, false, false, true, true, true,
                                false),
+                       Chara (true, false, true, true, false, true, false,
+                               false),
+                       Chara (false, true, false, false, true, true, true,
+                               false),
+                       Chara (true, false, true, false, false, true, true,
+                               false),
+                       Chara (true, false, false, false, false, true, true,
+                               false),
+                       Chara (false, false, true, false, false, true, true,
+                               false),
                        Chara (false, false, false, false, false, true, false,
+                               false),
+                       Chara (true, false, false, false, false, true, true,
+                               false),
+                       Chara (false, false, false, false, false, true, false,
+                               false),
+                       Chara (true, true, false, false, false, true, true,
+                               false),
+                       Chara (true, true, true, true, false, true, true, false),
+                       Chara (true, false, true, true, false, true, false,
                                false),
                        Chara (true, true, true, false, true, true, true, false),
                        Chara (false, true, false, false, true, true, true,
@@ -23839,16 +23765,17 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                                false),
                        Chara (false, false, false, false, false, true, false,
                                false),
-                       Chara (false, false, true, false, true, true, true,
+                       Chara (false, true, true, false, false, true, true,
                                false),
-                       Chara (true, true, true, false, true, true, true, false),
-                       Chara (true, false, false, true, false, true, true,
+                       Chara (false, false, true, true, false, true, true,
                                false),
-                       Chara (true, true, false, false, false, true, true,
+                       Chara (true, false, true, false, true, true, true,
                                false),
                        Chara (true, false, true, false, false, true, true,
                                false),
-                       Chara (true, false, false, true, false, true, false,
+                       Chara (false, true, true, true, false, true, true,
+                               false),
+                       Chara (false, false, true, false, true, true, true,
                                false)]
                      (shows_prec_literal zero_nata o (fn x => nameb (heada x))))
                 (fn _ =>
@@ -23857,17 +23784,13 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                            upds_no_cross_read_list
                              (card_UNIV_func, ceq_func, cproper_interval_func,
                                equal_func, set_impl_func)
-                             (ccompare_rat, equal_rat) (upds (at_start_spec a)))
+                             (ccompare_rat, equal_rat) (upds (at_end_spec a)))
                          (actions_spec p)
-                         [Chara (true, true, false, false, true, false, true,
+                         [Chara (true, false, true, false, false, false, true,
                                   false),
-                           Chara (false, false, true, false, true, true, true,
+                           Chara (false, true, true, true, false, true, true,
                                    false),
-                           Chara (true, false, false, false, false, true, true,
-                                   false),
-                           Chara (false, true, false, false, true, true, true,
-                                   false),
-                           Chara (false, false, true, false, true, true, true,
+                           Chara (false, false, true, false, false, true, true,
                                    false),
                            Chara (true, false, true, true, false, true, false,
                                    false),
@@ -23977,34 +23900,10 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                            (fn x => nameb (heada x))))
                     (fn _ =>
                       bind (check_all_list (show_list show_char)
-                             (fn a =>
-                               upds_no_cross_read_list
-                                 (card_UNIV_func, ceq_func,
-                                   cproper_interval_func, equal_func,
-                                   set_impl_func)
-                                 (ccompare_rat, equal_rat)
-                                 (upds (at_end_spec a)))
-                             (actions_spec p)
-                             [Chara (true, false, true, false, false, false,
+                             (fn f => less_eq A_ (fluent_lo f) (fluent_hi f))
+                             (nfluents p)
+                             [Chara (false, true, true, true, false, false,
                                       true, false),
-                               Chara (false, true, true, true, false, true,
-                                       true, false),
-                               Chara (false, false, true, false, false, true,
-                                       true, false),
-                               Chara (true, false, true, true, false, true,
-                                       false, false),
-                               Chara (true, true, false, false, true, true,
-                                       true, false),
-                               Chara (false, true, true, true, false, true,
-                                       true, false),
-                               Chara (true, false, false, false, false, true,
-                                       true, false),
-                               Chara (false, false, false, false, true, true,
-                                       true, false),
-                               Chara (false, false, false, false, false, true,
-                                       false, false),
-                               Chara (false, true, true, true, false, true,
-                                       true, false),
                                Chara (true, false, true, false, true, true,
                                        true, false),
                                Chara (true, false, true, true, false, true,
@@ -24016,70 +23915,6 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                                Chara (true, false, false, true, false, true,
                                        true, false),
                                Chara (true, true, false, false, false, true,
-                                       true, false),
-                               Chara (false, false, false, false, false, true,
-                                       false, false),
-                               Chara (true, false, true, false, true, true,
-                                       true, false),
-                               Chara (false, false, false, false, true, true,
-                                       true, false),
-                               Chara (false, false, true, false, false, true,
-                                       true, false),
-                               Chara (true, false, false, false, false, true,
-                                       true, false),
-                               Chara (false, false, true, false, true, true,
-                                       true, false),
-                               Chara (true, false, true, false, false, true,
-                                       true, false),
-                               Chara (true, true, false, false, true, true,
-                                       true, false),
-                               Chara (false, false, false, false, false, true,
-                                       false, false),
-                               Chara (true, true, false, false, false, true,
-                                       true, false),
-                               Chara (false, true, false, false, true, true,
-                                       true, false),
-                               Chara (true, true, true, true, false, true, true,
-                                       false),
-                               Chara (true, true, false, false, true, true,
-                                       true, false),
-                               Chara (true, true, false, false, true, true,
-                                       true, false),
-                               Chara (true, false, true, true, false, true,
-                                       false, false),
-                               Chara (false, true, false, false, true, true,
-                                       true, false),
-                               Chara (true, false, true, false, false, true,
-                                       true, false),
-                               Chara (true, false, false, false, false, true,
-                                       true, false),
-                               Chara (false, false, true, false, false, true,
-                                       true, false),
-                               Chara (false, false, false, false, false, true,
-                                       false, false),
-                               Chara (true, false, false, false, false, true,
-                                       true, false),
-                               Chara (false, false, false, false, false, true,
-                                       false, false),
-                               Chara (true, true, false, false, false, true,
-                                       true, false),
-                               Chara (true, true, true, true, false, true, true,
-                                       false),
-                               Chara (true, false, true, true, false, true,
-                                       false, false),
-                               Chara (true, true, true, false, true, true, true,
-                                       false),
-                               Chara (false, true, false, false, true, true,
-                                       true, false),
-                               Chara (true, false, false, true, false, true,
-                                       true, false),
-                               Chara (false, false, true, false, true, true,
-                                       true, false),
-                               Chara (false, false, true, false, true, true,
-                                       true, false),
-                               Chara (true, false, true, false, false, true,
-                                       true, false),
-                               Chara (false, true, true, true, false, true,
                                        true, false),
                                Chara (false, false, false, false, false, true,
                                        false, false),
@@ -24094,16 +23929,117 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                                Chara (false, true, true, true, false, true,
                                        true, false),
                                Chara (false, false, true, false, true, true,
-                                       true, false)]
-                             (shows_prec_literal zero_nata o
-                               (fn x => nameb (heada x))))
+                                       true, false),
+                               Chara (false, false, false, false, false, true,
+                                       false, false),
+                               Chara (false, false, false, true, false, true,
+                                       true, false),
+                               Chara (true, false, false, false, false, true,
+                                       true, false),
+                               Chara (true, true, false, false, true, true,
+                                       true, false),
+                               Chara (false, false, false, false, false, true,
+                                       false, false),
+                               Chara (true, false, false, false, false, true,
+                                       true, false),
+                               Chara (false, true, true, true, false, true,
+                                       true, false),
+                               Chara (false, false, false, false, false, true,
+                                       false, false),
+                               Chara (true, false, true, false, false, true,
+                                       true, false),
+                               Chara (true, false, true, true, false, true,
+                                       true, false),
+                               Chara (false, false, false, false, true, true,
+                                       true, false),
+                               Chara (false, false, true, false, true, true,
+                                       true, false),
+                               Chara (true, false, false, true, true, true,
+                                       true, false),
+                               Chara (false, false, false, false, false, true,
+                                       false, false),
+                               Chara (false, true, false, false, false, true,
+                                       true, false),
+                               Chara (true, true, true, true, false, true, true,
+                                       false),
+                               Chara (true, false, true, false, true, true,
+                                       true, false),
+                               Chara (false, true, true, true, false, true,
+                                       true, false),
+                               Chara (false, false, true, false, false, true,
+                                       true, false),
+                               Chara (false, false, false, false, false, true,
+                                       false, false),
+                               Chara (true, false, false, true, false, true,
+                                       true, false),
+                               Chara (false, true, true, true, false, true,
+                                       true, false),
+                               Chara (false, false, true, false, true, true,
+                                       true, false),
+                               Chara (true, false, true, false, false, true,
+                                       true, false),
+                               Chara (false, true, false, false, true, true,
+                                       true, false),
+                               Chara (false, true, true, false, true, true,
+                                       true, false),
+                               Chara (true, false, false, false, false, true,
+                                       true, false),
+                               Chara (false, false, true, true, false, true,
+                                       true, false),
+                               Chara (false, false, false, false, false, true,
+                                       false, false),
+                               Chara (false, false, false, true, false, true,
+                                       false, false),
+                               Chara (false, false, true, true, false, true,
+                                       true, false),
+                               Chara (true, true, true, true, false, true, true,
+                                       false),
+                               Chara (false, false, false, false, false, true,
+                                       false, false),
+                               Chara (false, true, true, true, true, true,
+                                       false, false),
+                               Chara (false, false, false, false, false, true,
+                                       false, false),
+                               Chara (false, false, false, true, false, true,
+                                       true, false),
+                               Chara (true, false, false, true, false, true,
+                                       true, false),
+                               Chara (true, false, false, true, false, true,
+                                       false, false)]
+                             (shows_prec_literal zero_nata o name))
                         (fn _ =>
                           bind (check_all_list (show_list show_char)
-                                 (fn f =>
-                                   less_eq A_ (fluent_lo f) (fluent_hi f))
-                                 (nfluents p)
-                                 [Chara (false, true, true, true, false, false,
+                                 (fn a =>
+                                   list_all
+                                     (fn (_, aa) =>
+                                       nexp_struct_ok equal_func
+ (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p) aa)
+                                     (upds (at_start_spec a)))
+                                 (actions_spec p)
+                                 [Chara (true, true, false, false, true, false,
   true, false),
+                                   Chara (false, false, true, false, true, true,
+   true, false),
+                                   Chara (true, false, false, false, false,
+   true, true, false),
+                                   Chara (false, true, false, false, true, true,
+   true, false),
+                                   Chara (false, false, true, false, true, true,
+   true, false),
+                                   Chara (true, false, true, true, false, true,
+   false, false),
+                                   Chara (true, true, false, false, true, true,
+   true, false),
+                                   Chara (false, true, true, true, false, true,
+   true, false),
+                                   Chara (true, false, false, false, false,
+   true, true, false),
+                                   Chara (false, false, false, false, true,
+   true, true, false),
+                                   Chara (false, false, false, false, false,
+   true, false, false),
+                                   Chara (false, true, true, true, false, true,
+   true, false),
                                    Chara (true, false, true, false, true, true,
    true, false),
                                    Chara (true, false, true, true, false, true,
@@ -24118,58 +24054,68 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
    true, false),
                                    Chara (false, false, false, false, false,
    true, false, false),
-                                   Chara (false, true, true, false, false, true,
-   true, false),
-                                   Chara (false, false, true, true, false, true,
-   true, false),
                                    Chara (true, false, true, false, true, true,
    true, false),
-                                   Chara (true, false, true, false, false, true,
-   true, false),
-                                   Chara (false, true, true, true, false, true,
-   true, false),
-                                   Chara (false, false, true, false, true, true,
-   true, false),
-                                   Chara (false, false, false, false, false,
-   true, false, false),
-                                   Chara (false, false, false, true, false,
+                                   Chara (false, false, false, false, true,
+   true, true, false),
+                                   Chara (false, false, true, false, false,
    true, true, false),
                                    Chara (true, false, false, false, false,
    true, true, false),
+                                   Chara (false, false, true, false, true, true,
+   true, false),
+                                   Chara (true, false, true, false, false, true,
+   true, false),
+                                   Chara (false, false, false, false, false,
+   true, false, false),
+                                   Chara (false, true, false, false, true,
+   false, true, false),
+                                   Chara (false, false, false, true, false,
+   false, true, false),
+                                   Chara (true, true, false, false, true, false,
+   true, false),
+                                   Chara (false, false, false, false, false,
+   true, false, false),
+                                   Chara (true, false, false, true, false, true,
+   true, false),
                                    Chara (true, true, false, false, true, true,
    true, false),
                                    Chara (false, false, false, false, false,
    true, false, false),
-                                   Chara (true, false, false, false, false,
-   true, true, false),
                                    Chara (false, true, true, true, false, true,
+   true, false),
+                                   Chara (true, true, true, true, false, true,
+   true, false),
+                                   Chara (false, false, true, false, true, true,
    true, false),
                                    Chara (false, false, false, false, false,
    true, false, false),
-                                   Chara (true, false, true, false, false, true,
+                                   Chara (true, true, false, false, true, true,
    true, false),
-                                   Chara (true, false, true, true, false, true,
-   true, false),
-                                   Chara (false, false, false, false, true,
-   true, true, false),
                                    Chara (false, false, true, false, true, true,
+   true, false),
+                                   Chara (false, true, false, false, true, true,
+   true, false),
+                                   Chara (true, false, true, false, true, true,
+   true, false),
+                                   Chara (true, true, false, false, false, true,
+   true, false),
+                                   Chara (false, false, true, false, true, true,
+   true, false),
+                                   Chara (true, false, true, false, true, true,
+   true, false),
+                                   Chara (false, true, false, false, true, true,
+   true, false),
+                                   Chara (true, false, false, false, false,
+   true, true, false),
+                                   Chara (false, false, true, true, false, true,
+   true, false),
+                                   Chara (false, false, true, true, false, true,
    true, false),
                                    Chara (true, false, false, true, true, true,
    true, false),
                                    Chara (false, false, false, false, false,
    true, false, false),
-                                   Chara (false, true, false, false, false,
-   true, true, false),
-                                   Chara (true, true, true, true, false, true,
-   true, false),
-                                   Chara (true, false, true, false, true, true,
-   true, false),
-                                   Chara (false, true, true, true, false, true,
-   true, false),
-                                   Chara (false, false, true, false, false,
-   true, true, false),
-                                   Chara (false, false, false, false, false,
-   true, false, false),
                                    Chara (true, false, false, true, false, true,
    true, false),
                                    Chara (false, true, true, true, false, true,
@@ -24178,35 +24124,32 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
    true, false),
                                    Chara (true, false, true, false, false, true,
    true, false),
+                                   Chara (true, true, true, false, false, true,
+   true, false),
+                                   Chara (true, false, true, false, false, true,
+   true, false),
                                    Chara (false, true, false, false, true, true,
    true, false),
-                                   Chara (false, true, true, false, true, true,
+                                   Chara (true, false, true, true, false, true,
+   false, false),
+                                   Chara (false, true, true, false, false, true,
    true, false),
                                    Chara (true, false, false, false, false,
    true, true, false),
-                                   Chara (false, false, true, true, false, true,
+                                   Chara (true, false, false, true, false, true,
    true, false),
-                                   Chara (false, false, false, false, false,
-   true, false, false),
-                                   Chara (false, false, false, true, false,
-   true, false, false),
-                                   Chara (false, false, true, true, false, true,
+                                   Chara (false, false, true, false, true, true,
    true, false),
-                                   Chara (true, true, true, true, false, true,
-   true, false),
-                                   Chara (false, false, false, false, false,
-   true, false, false),
-                                   Chara (false, true, true, true, true, true,
-   false, false),
-                                   Chara (false, false, false, false, false,
-   true, false, false),
                                    Chara (false, false, false, true, false,
    true, true, false),
-                                   Chara (true, false, false, true, false, true,
+                                   Chara (false, true, true, false, false, true,
    true, false),
-                                   Chara (true, false, false, true, false, true,
-   false, false)]
-                                 (shows_prec_literal zero_nata o name))
+                                   Chara (true, false, true, false, true, true,
+   true, false),
+                                   Chara (false, false, true, true, false, true,
+   true, false)]
+                                 (shows_prec_literal zero_nata o
+                                   (fn x => nameb (heada x))))
                             (fn _ =>
                               bind (check_all_list (show_list show_char)
                                      (fn a =>
@@ -24214,18 +24157,14 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
  (fn (_, aa) =>
    nexp_struct_ok equal_func (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat)
      (nfluents p) aa)
- (upds (at_start_spec a)))
+ (upds (at_end_spec a)))
                                      (actions_spec p)
                                      [Chara
-(true, true, false, false, true, false, true, false),
+(true, false, true, false, false, false, true, false),
                                        Chara
- (false, false, true, false, true, true, true, false),
+ (false, true, true, true, false, true, true, false),
                                        Chara
- (true, false, false, false, false, true, true, false),
-                                       Chara
- (false, true, false, false, true, true, true, false),
-                                       Chara
- (false, false, true, false, true, true, true, false),
+ (false, false, true, false, false, true, true, false),
                                        Chara
  (true, false, true, true, false, true, false, false),
                                        Chara
@@ -24354,14 +24293,15 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                                   bind (check_all_list (show_list show_char)
  (fn a =>
    list_all
-     (fn (_, aa) =>
-       nexp_struct_ok equal_func
-         (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p) aa)
-     (upds (at_end_spec a)))
+     (comp_struct_ok equal_func
+       (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p))
+     (n_pre (at_start_spec a)))
  (actions_spec p)
- [Chara (true, false, true, false, false, false, true, false),
-   Chara (false, true, true, true, false, true, true, false),
-   Chara (false, false, true, false, false, true, true, false),
+ [Chara (true, true, false, false, true, false, true, false),
+   Chara (false, false, true, false, true, true, true, false),
+   Chara (true, false, false, false, false, true, true, false),
+   Chara (false, true, false, false, true, true, true, false),
+   Chara (false, false, true, false, true, true, true, false),
    Chara (true, false, true, true, false, true, false, false),
    Chara (true, true, false, false, true, true, true, false),
    Chara (false, true, true, true, false, true, true, false),
@@ -24376,16 +24316,18 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
    Chara (true, false, false, true, false, true, true, false),
    Chara (true, true, false, false, false, true, true, false),
    Chara (false, false, false, false, false, true, false, false),
-   Chara (true, false, true, false, true, true, true, false),
    Chara (false, false, false, false, true, true, true, false),
-   Chara (false, false, true, false, false, true, true, false),
-   Chara (true, false, false, false, false, true, true, false),
-   Chara (false, false, true, false, true, true, true, false),
+   Chara (false, true, false, false, true, true, true, false),
    Chara (true, false, true, false, false, true, true, false),
-   Chara (false, false, false, false, false, true, false, false),
-   Chara (false, true, false, false, true, false, true, false),
-   Chara (false, false, false, true, false, false, true, false),
-   Chara (true, true, false, false, true, false, true, false),
+   Chara (true, true, false, false, false, true, true, false),
+   Chara (true, true, true, true, false, true, true, false),
+   Chara (false, true, true, true, false, true, true, false),
+   Chara (false, false, true, false, false, true, true, false),
+   Chara (true, false, false, true, false, true, true, false),
+   Chara (false, false, true, false, true, true, true, false),
+   Chara (true, false, false, true, false, true, true, false),
+   Chara (true, true, true, true, false, true, true, false),
+   Chara (false, true, true, true, false, true, true, false),
    Chara (false, false, false, false, false, true, false, false),
    Chara (true, false, false, true, false, true, true, false),
    Chara (true, true, false, false, true, true, true, false),
@@ -24431,13 +24373,11 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
     list_all
       (comp_struct_ok equal_func
         (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p))
-      (n_pre (at_start_spec a)))
+      (n_pre (at_end_spec a)))
   (actions_spec p)
-  [Chara (true, true, false, false, true, false, true, false),
-    Chara (false, false, true, false, true, true, true, false),
-    Chara (true, false, false, false, false, true, true, false),
-    Chara (false, true, false, false, true, true, true, false),
-    Chara (false, false, true, false, true, true, true, false),
+  [Chara (true, false, true, false, false, false, true, false),
+    Chara (false, true, true, true, false, true, true, false),
+    Chara (false, false, true, false, false, true, true, false),
     Chara (true, false, true, true, false, true, false, false),
     Chara (true, true, false, false, true, true, true, false),
     Chara (false, true, true, true, false, true, true, false),
@@ -24508,18 +24448,9 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
            list_all
              (comp_struct_ok equal_func
                (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat) (nfluents p))
-             (n_pre (at_end_spec a)))
+             (n_inv a))
          (actions_spec p)
-         [Chara (true, false, true, false, false, false, true, false),
-           Chara (false, true, true, true, false, true, true, false),
-           Chara (false, false, true, false, false, true, true, false),
-           Chara (true, false, true, true, false, true, false, false),
-           Chara (true, true, false, false, true, true, true, false),
-           Chara (false, true, true, true, false, true, true, false),
-           Chara (true, false, false, false, false, true, true, false),
-           Chara (false, false, false, false, true, true, true, false),
-           Chara (false, false, false, false, false, true, false, false),
-           Chara (false, true, true, true, false, true, true, false),
+         [Chara (false, true, true, true, false, false, true, false),
            Chara (true, false, true, false, true, true, true, false),
            Chara (true, false, true, true, false, true, true, false),
            Chara (true, false, true, false, false, true, true, false),
@@ -24527,18 +24458,24 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
            Chara (true, false, false, true, false, true, true, false),
            Chara (true, true, false, false, false, true, true, false),
            Chara (false, false, false, false, false, true, false, false),
-           Chara (false, false, false, false, true, true, true, false),
-           Chara (false, true, false, false, true, true, true, false),
+           Chara (true, true, true, true, false, true, true, false),
+           Chara (false, true, true, false, true, true, true, false),
            Chara (true, false, true, false, false, true, true, false),
-           Chara (true, true, false, false, false, true, true, false),
-           Chara (true, true, true, true, false, true, true, false),
-           Chara (false, true, true, true, false, true, true, false),
-           Chara (false, false, true, false, false, true, true, false),
+           Chara (false, true, false, false, true, true, true, false),
+           Chara (true, false, true, true, false, true, false, false),
+           Chara (true, false, false, false, false, true, true, false),
+           Chara (false, false, true, true, false, true, true, false),
+           Chara (false, false, true, true, false, true, true, false),
+           Chara (false, false, false, false, false, true, false, false),
            Chara (true, false, false, true, false, true, true, false),
+           Chara (false, true, true, true, false, true, true, false),
+           Chara (false, true, true, false, true, true, true, false),
+           Chara (true, false, false, false, false, true, true, false),
+           Chara (false, true, false, false, true, true, true, false),
+           Chara (true, false, false, true, false, true, true, false),
+           Chara (true, false, false, false, false, true, true, false),
+           Chara (false, true, true, true, false, true, true, false),
            Chara (false, false, true, false, true, true, true, false),
-           Chara (true, false, false, true, false, true, true, false),
-           Chara (true, true, true, true, false, true, true, false),
-           Chara (false, true, true, true, false, true, true, false),
            Chara (false, false, false, false, false, true, false, false),
            Chara (true, false, false, true, false, true, true, false),
            Chara (true, true, false, false, true, true, true, false),
@@ -24579,13 +24516,7 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
          (shows_prec_literal zero_nata o (fn x => nameb (heada x))))
     (fn _ =>
       bind (check_all_list (show_list show_char)
-             (fn a =>
-               list_all
-                 (comp_struct_ok equal_func
-                   (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat)
-                   (nfluents p))
-                 (n_inv a))
-             (actions_spec p)
+             (fn f => is_int_rat (num_init p f)) (nfluents p)
              [Chara (false, true, true, true, false, false, true, false),
                Chara (true, false, true, false, true, true, true, false),
                Chara (true, false, true, true, false, true, true, false),
@@ -24594,45 +24525,23 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                Chara (true, false, false, true, false, true, true, false),
                Chara (true, true, false, false, false, true, true, false),
                Chara (false, false, false, false, false, true, false, false),
-               Chara (true, true, true, true, false, true, true, false),
-               Chara (false, true, true, false, true, true, true, false),
+               Chara (false, true, true, false, false, true, true, false),
+               Chara (false, false, true, true, false, true, true, false),
+               Chara (true, false, true, false, true, true, true, false),
                Chara (true, false, true, false, false, true, true, false),
-               Chara (false, true, false, false, true, true, true, false),
-               Chara (true, false, true, true, false, true, false, false),
-               Chara (true, false, false, false, false, true, true, false),
-               Chara (false, false, true, true, false, true, true, false),
-               Chara (false, false, true, true, false, true, true, false),
-               Chara (false, false, false, false, false, true, false, false),
-               Chara (true, false, false, true, false, true, true, false),
-               Chara (false, true, true, true, false, true, true, false),
-               Chara (false, true, true, false, true, true, true, false),
-               Chara (true, false, false, false, false, true, true, false),
-               Chara (false, true, false, false, true, true, true, false),
-               Chara (true, false, false, true, false, true, true, false),
-               Chara (true, false, false, false, false, true, true, false),
                Chara (false, true, true, true, false, true, true, false),
                Chara (false, false, true, false, true, true, true, false),
                Chara (false, false, false, false, false, true, false, false),
-               Chara (true, false, false, true, false, true, true, false),
+               Chara (false, false, false, true, false, true, true, false),
+               Chara (true, false, false, false, false, true, true, false),
                Chara (true, true, false, false, true, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (true, false, false, false, false, true, true, false),
                Chara (false, false, false, false, false, true, false, false),
                Chara (false, true, true, true, false, true, true, false),
                Chara (true, true, true, true, false, true, true, false),
-               Chara (false, false, true, false, true, true, true, false),
-               Chara (false, false, false, false, false, true, false, false),
-               Chara (true, true, false, false, true, true, true, false),
-               Chara (false, false, true, false, true, true, true, false),
-               Chara (false, true, false, false, true, true, true, false),
-               Chara (true, false, true, false, true, true, true, false),
-               Chara (true, true, false, false, false, true, true, false),
-               Chara (false, false, true, false, true, true, true, false),
-               Chara (true, false, true, false, true, true, true, false),
-               Chara (false, true, false, false, true, true, true, false),
-               Chara (true, false, false, false, false, true, true, false),
-               Chara (false, false, true, true, false, true, true, false),
-               Chara (false, false, true, true, false, true, true, false),
-               Chara (true, false, false, true, true, true, true, false),
-               Chara (false, false, false, false, false, true, false, false),
+               Chara (false, true, true, true, false, true, true, false),
+               Chara (true, false, true, true, false, true, false, false),
                Chara (true, false, false, true, false, true, true, false),
                Chara (false, true, true, true, false, true, true, false),
                Chara (false, false, true, false, true, true, true, false),
@@ -24640,20 +24549,40 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                Chara (true, true, true, false, false, true, true, false),
                Chara (true, false, true, false, false, true, true, false),
                Chara (false, true, false, false, true, true, true, false),
-               Chara (true, false, true, true, false, true, false, false),
-               Chara (false, true, true, false, false, true, true, false),
-               Chara (true, false, false, false, false, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (true, false, false, true, false, true, true, false),
+               Chara (false, true, true, true, false, true, true, false),
                Chara (true, false, false, true, false, true, true, false),
                Chara (false, false, true, false, true, true, true, false),
-               Chara (false, false, false, true, false, true, true, false),
-               Chara (false, true, true, false, false, true, true, false),
+               Chara (true, false, false, true, false, true, true, false),
+               Chara (true, false, false, false, false, true, true, false),
+               Chara (false, false, true, true, false, true, true, false),
+               Chara (false, false, false, false, false, true, false, false),
+               Chara (false, true, true, false, true, true, true, false),
+               Chara (true, false, false, false, false, true, true, false),
+               Chara (false, false, true, true, false, true, true, false),
                Chara (true, false, true, false, true, true, true, false),
-               Chara (false, false, true, true, false, true, true, false)]
-             (shows_prec_literal zero_nata o (fn x => nameb (heada x))))
+               Chara (true, false, true, false, false, true, true, false)]
+             (shows_prec_literal zero_nata o name))
         (fn _ =>
           bind (check_all_list (show_list show_char)
-                 (fn f => is_int_rat (num_init p f)) (nfluents p)
-                 [Chara (false, true, true, true, false, false, true, false),
+                 (fn a =>
+                   list_all (fn (f, _) => membera equal_func (nfluents p) f)
+                     (upds (at_start_spec a)))
+                 (actions_spec p)
+                 [Chara (true, true, false, false, true, false, true, false),
+                   Chara (false, false, true, false, true, true, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, true, false, false, true, true, true, false),
+                   Chara (false, false, true, false, true, true, true, false),
+                   Chara (true, false, true, true, false, true, false, false),
+                   Chara (true, true, false, false, true, true, true, false),
+                   Chara (false, true, true, true, false, true, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, false, false, false, true, true, true, false),
+                   Chara (false, false, false, false, false, true, false,
+                           false),
+                   Chara (false, true, true, true, false, true, true, false),
                    Chara (true, false, true, false, true, true, true, false),
                    Chara (true, false, true, true, false, true, true, false),
                    Chara (true, false, true, false, false, true, true, false),
@@ -24662,65 +24591,56 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                    Chara (true, true, false, false, false, true, true, false),
                    Chara (false, false, false, false, false, true, false,
                            false),
+                   Chara (true, false, true, false, true, true, true, false),
+                   Chara (false, false, false, false, true, true, true, false),
+                   Chara (false, false, true, false, false, true, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, false, true, false, true, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (false, false, false, false, false, true, false,
+                           false),
+                   Chara (true, true, true, false, true, true, true, false),
+                   Chara (false, true, false, false, true, true, true, false),
+                   Chara (true, false, false, true, false, true, true, false),
+                   Chara (false, false, true, false, true, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (true, true, false, false, true, true, true, false),
+                   Chara (false, false, false, false, false, true, false,
+                           false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, true, true, true, false, true, true, false),
+                   Chara (false, false, false, false, false, true, false,
+                           false),
+                   Chara (true, false, true, false, true, true, true, false),
+                   Chara (false, true, true, true, false, true, true, false),
+                   Chara (false, false, true, false, false, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (true, true, false, false, false, true, true, false),
+                   Chara (false, false, true, true, false, true, true, false),
+                   Chara (true, false, false, false, false, true, true, false),
+                   Chara (false, true, false, false, true, true, true, false),
+                   Chara (true, false, true, false, false, true, true, false),
+                   Chara (false, false, true, false, false, true, true, false),
+                   Chara (false, false, false, false, false, true, false,
+                           false),
                    Chara (false, true, true, false, false, true, true, false),
                    Chara (false, false, true, true, false, true, true, false),
                    Chara (true, false, true, false, true, true, true, false),
                    Chara (true, false, true, false, false, true, true, false),
                    Chara (false, true, true, true, false, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, false, false, true, false, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (true, true, false, false, true, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (true, true, true, true, false, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (true, false, true, true, false, true, false, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (true, true, true, false, false, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false),
-                   Chara (false, true, false, false, true, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (false, true, true, true, false, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (false, false, true, false, true, true, true, false),
-                   Chara (true, false, false, true, false, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, true, true, false, true, true, false),
-                   Chara (false, false, false, false, false, true, false,
-                           false),
-                   Chara (false, true, true, false, true, true, true, false),
-                   Chara (true, false, false, false, false, true, true, false),
-                   Chara (false, false, true, true, false, true, true, false),
-                   Chara (true, false, true, false, true, true, true, false),
-                   Chara (true, false, true, false, false, true, true, false)]
-                 (shows_prec_literal zero_nata o name))
+                   Chara (false, false, true, false, true, true, true, false)]
+                 (shows_prec_literal zero_nata o (fn x => nameb (heada x))))
             (fn _ =>
               bind (check_all_list (show_list show_char)
                      (fn a =>
                        list_all (fn (f, _) => membera equal_func (nfluents p) f)
-                         (upds (at_start_spec a)))
+                         (upds (at_end_spec a)))
                      (actions_spec p)
-                     [Chara (true, true, false, false, true, false, true,
+                     [Chara (true, false, true, false, false, false, true,
                               false),
-                       Chara (false, false, true, false, true, true, true,
+                       Chara (false, true, true, true, false, true, true,
                                false),
-                       Chara (true, false, false, false, false, true, true,
-                               false),
-                       Chara (false, true, false, false, true, true, true,
-                               false),
-                       Chara (false, false, true, false, true, true, true,
+                       Chara (false, false, true, false, false, true, true,
                                false),
                        Chara (true, false, true, true, false, true, false,
                                false),
@@ -24819,223 +24739,111 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                                false)]
                      (shows_prec_literal zero_nata o (fn x => nameb (heada x))))
                 (fn _ =>
-                  bind (check_all_list (show_list show_char)
-                         (fn a =>
-                           list_all
-                             (fn (f, _) => membera equal_func (nfluents p) f)
-                             (upds (at_end_spec a)))
-                         (actions_spec p)
-                         [Chara (true, false, true, false, false, false, true,
-                                  false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, false, true, true,
-                                   false),
-                           Chara (true, false, true, true, false, true, false,
-                                   false),
-                           Chara (true, true, false, false, true, true, true,
-                                   false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false),
-                           Chara (true, false, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, false, false, true, true, true,
-                                   false),
-                           Chara (false, false, false, false, false, true,
-                                   false, false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false),
-                           Chara (true, false, true, false, true, true, true,
-                                   false),
-                           Chara (true, false, true, true, false, true, true,
-                                   false),
-                           Chara (true, false, true, false, false, true, true,
-                                   false),
-                           Chara (false, true, false, false, true, true, true,
-                                   false),
-                           Chara (true, false, false, true, false, true, true,
-                                   false),
-                           Chara (true, true, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, false, false, false, true,
-                                   false, false),
-                           Chara (true, false, true, false, true, true, true,
-                                   false),
-                           Chara (false, false, false, false, true, true, true,
-                                   false),
-                           Chara (false, false, true, false, false, true, true,
-                                   false),
-                           Chara (true, false, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, true, true, true,
-                                   false),
-                           Chara (true, false, true, false, false, true, true,
-                                   false),
-                           Chara (false, false, false, false, false, true,
-                                   false, false),
-                           Chara (true, true, true, false, true, true, true,
-                                   false),
-                           Chara (false, true, false, false, true, true, true,
-                                   false),
-                           Chara (true, false, false, true, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, true, true, true,
-                                   false),
-                           Chara (true, false, true, false, false, true, true,
-                                   false),
-                           Chara (true, true, false, false, true, true, true,
-                                   false),
-                           Chara (false, false, false, false, false, true,
-                                   false, false),
-                           Chara (true, false, false, false, false, true, true,
-                                   false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false),
-                           Chara (false, false, false, false, false, true,
-                                   false, false),
-                           Chara (true, false, true, false, true, true, true,
-                                   false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, false, true, true,
-                                   false),
-                           Chara (true, false, true, false, false, true, true,
-                                   false),
-                           Chara (true, true, false, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, true, false, true, true,
-                                   false),
-                           Chara (true, false, false, false, false, true, true,
-                                   false),
-                           Chara (false, true, false, false, true, true, true,
-                                   false),
-                           Chara (true, false, true, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, false, true, true,
-                                   false),
-                           Chara (false, false, false, false, false, true,
-                                   false, false),
-                           Chara (false, true, true, false, false, true, true,
-                                   false),
-                           Chara (false, false, true, true, false, true, true,
-                                   false),
-                           Chara (true, false, true, false, true, true, true,
-                                   false),
-                           Chara (true, false, true, false, false, true, true,
-                                   false),
-                           Chara (false, true, true, true, false, true, true,
-                                   false),
-                           Chara (false, false, true, false, true, true, true,
-                                   false)]
-                         (shows_prec_literal zero_nata o
-                           (fn x => nameb (heada x))))
+                  check (list_all
+                          (comp_struct_ok equal_func
+                            (ceq_rat, ccompare_rat, ring_1_rat, set_impl_rat)
+                            (nfluents p))
+                          (num_goal p))
                     (fn _ =>
-                      check (list_all
-                              (comp_struct_ok equal_func
-                                (ceq_rat, ccompare_rat, ring_1_rat,
-                                  set_impl_rat)
-                                (nfluents p))
-                              (num_goal p))
-                        (fn _ =>
-                          shows_prec_list show_char zero_nata
-                            [Chara (false, true, true, true, false, false, true,
-                                     false),
-                              Chara (true, false, true, false, true, true, true,
-                                      false),
-                              Chara (true, false, true, true, false, true, true,
-                                      false),
-                              Chara (true, false, true, false, false, true,
-                                      true, false),
-                              Chara (false, true, false, false, true, true,
-                                      true, false),
-                              Chara (true, false, false, true, false, true,
-                                      true, false),
-                              Chara (true, true, false, false, false, true,
-                                      true, false),
-                              Chara (false, false, false, false, false, true,
-                                      false, false),
-                              Chara (true, true, true, false, false, true, true,
-                                      false),
-                              Chara (true, true, true, true, false, true, true,
-                                      false),
-                              Chara (true, false, false, false, false, true,
-                                      true, false),
-                              Chara (false, false, true, true, false, true,
-                                      true, false),
-                              Chara (false, false, false, false, false, true,
-                                      false, false),
-                              Chara (true, false, false, true, false, true,
-                                      true, false),
-                              Chara (true, true, false, false, true, true, true,
-                                      false),
-                              Chara (false, false, false, false, false, true,
-                                      false, false),
-                              Chara (false, true, true, true, false, true, true,
-                                      false),
-                              Chara (true, true, true, true, false, true, true,
-                                      false),
-                              Chara (false, false, true, false, true, true,
-                                      true, false),
-                              Chara (false, false, false, false, false, true,
-                                      false, false),
-                              Chara (true, true, false, false, true, true, true,
-                                      false),
-                              Chara (false, false, true, false, true, true,
-                                      true, false),
-                              Chara (false, true, false, false, true, true,
-                                      true, false),
-                              Chara (true, false, true, false, true, true, true,
-                                      false),
-                              Chara (true, true, false, false, false, true,
-                                      true, false),
-                              Chara (false, false, true, false, true, true,
-                                      true, false),
-                              Chara (true, false, true, false, true, true, true,
-                                      false),
-                              Chara (false, true, false, false, true, true,
-                                      true, false),
-                              Chara (true, false, false, false, false, true,
-                                      true, false),
-                              Chara (false, false, true, true, false, true,
-                                      true, false),
-                              Chara (false, false, true, true, false, true,
-                                      true, false),
-                              Chara (true, false, false, true, true, true, true,
-                                      false),
-                              Chara (false, false, false, false, false, true,
-                                      false, false),
-                              Chara (true, false, false, true, false, true,
-                                      true, false),
-                              Chara (false, true, true, true, false, true, true,
-                                      false),
-                              Chara (false, false, true, false, true, true,
-                                      true, false),
-                              Chara (true, false, true, false, false, true,
-                                      true, false),
-                              Chara (true, true, true, false, false, true, true,
-                                      false),
-                              Chara (true, false, true, false, false, true,
-                                      true, false),
-                              Chara (false, true, false, false, true, true,
-                                      true, false),
-                              Chara (true, false, true, true, false, true,
-                                      false, false),
-                              Chara (false, true, true, false, false, true,
-                                      true, false),
-                              Chara (true, false, false, false, false, true,
-                                      true, false),
-                              Chara (true, false, false, true, false, true,
-                                      true, false),
-                              Chara (false, false, true, false, true, true,
-                                      true, false),
-                              Chara (false, false, false, true, false, true,
-                                      true, false),
-                              Chara (false, true, true, false, false, true,
-                                      true, false),
-                              Chara (true, false, true, false, true, true, true,
-                                      false),
-                              Chara (false, false, true, true, false, true,
-                                      true, false)]))))))))))))))));
+                      shows_prec_list show_char zero_nata
+                        [Chara (false, true, true, true, false, false, true,
+                                 false),
+                          Chara (true, false, true, false, true, true, true,
+                                  false),
+                          Chara (true, false, true, true, false, true, true,
+                                  false),
+                          Chara (true, false, true, false, false, true, true,
+                                  false),
+                          Chara (false, true, false, false, true, true, true,
+                                  false),
+                          Chara (true, false, false, true, false, true, true,
+                                  false),
+                          Chara (true, true, false, false, false, true, true,
+                                  false),
+                          Chara (false, false, false, false, false, true, false,
+                                  false),
+                          Chara (true, true, true, false, false, true, true,
+                                  false),
+                          Chara (true, true, true, true, false, true, true,
+                                  false),
+                          Chara (true, false, false, false, false, true, true,
+                                  false),
+                          Chara (false, false, true, true, false, true, true,
+                                  false),
+                          Chara (false, false, false, false, false, true, false,
+                                  false),
+                          Chara (true, false, false, true, false, true, true,
+                                  false),
+                          Chara (true, true, false, false, true, true, true,
+                                  false),
+                          Chara (false, false, false, false, false, true, false,
+                                  false),
+                          Chara (false, true, true, true, false, true, true,
+                                  false),
+                          Chara (true, true, true, true, false, true, true,
+                                  false),
+                          Chara (false, false, true, false, true, true, true,
+                                  false),
+                          Chara (false, false, false, false, false, true, false,
+                                  false),
+                          Chara (true, true, false, false, true, true, true,
+                                  false),
+                          Chara (false, false, true, false, true, true, true,
+                                  false),
+                          Chara (false, true, false, false, true, true, true,
+                                  false),
+                          Chara (true, false, true, false, true, true, true,
+                                  false),
+                          Chara (true, true, false, false, false, true, true,
+                                  false),
+                          Chara (false, false, true, false, true, true, true,
+                                  false),
+                          Chara (true, false, true, false, true, true, true,
+                                  false),
+                          Chara (false, true, false, false, true, true, true,
+                                  false),
+                          Chara (true, false, false, false, false, true, true,
+                                  false),
+                          Chara (false, false, true, true, false, true, true,
+                                  false),
+                          Chara (false, false, true, true, false, true, true,
+                                  false),
+                          Chara (true, false, false, true, true, true, true,
+                                  false),
+                          Chara (false, false, false, false, false, true, false,
+                                  false),
+                          Chara (true, false, false, true, false, true, true,
+                                  false),
+                          Chara (false, true, true, true, false, true, true,
+                                  false),
+                          Chara (false, false, true, false, true, true, true,
+                                  false),
+                          Chara (true, false, true, false, false, true, true,
+                                  false),
+                          Chara (true, true, true, false, false, true, true,
+                                  false),
+                          Chara (true, false, true, false, false, true, true,
+                                  false),
+                          Chara (false, true, false, false, true, true, true,
+                                  false),
+                          Chara (true, false, true, true, false, true, false,
+                                  false),
+                          Chara (false, true, true, false, false, true, true,
+                                  false),
+                          Chara (true, false, false, false, false, true, true,
+                                  false),
+                          Chara (true, false, false, true, false, true, true,
+                                  false),
+                          Chara (false, false, true, false, true, true, true,
+                                  false),
+                          Chara (false, false, false, true, false, true, true,
+                                  false),
+                          Chara (false, true, true, false, false, true, true,
+                                  false),
+                          Chara (true, false, true, false, true, true, true,
+                                  false),
+                          Chara (false, false, true, true, false, true, true,
+                                  false)])))))))))))))));
 
 fun check_and_make_numeric_network p fluent_lo fluent_hi =
   bind (check_numeric_ground_problem ord_int p fluent_lo fluent_hi)
