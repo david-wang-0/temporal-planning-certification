@@ -9,7 +9,9 @@ begin
 
 definition snap_ok :: "ground_action \<Rightarrow> bool" where
   "snap_ok s \<equiv>
-     list_all (\<lambda>(f, e).
+     list_ex (\<lambda>g. snd (nred'.refine_box (n_pre s) nred'.box g)
+                  < fst (nred'.refine_box (n_pre s) nred'.box g)) nfluents
+   \<or> list_all (\<lambda>(f, e).
         case nred'.aeval (nred'.refine_box (n_pre s) nred'.box) e of
           None \<Rightarrow> False
         | Some (al, ah) \<Rightarrow> fluent_lo f \<le> al \<and> ah \<le> fluent_hi f)
@@ -20,7 +22,7 @@ lemma nred_is_gbound_inv'_code:
      list_all (\<lambda>f. fluent_lo f \<le> const_to_int (num_init f) \<and> const_to_int (num_init f) \<le> fluent_hi f) nfluents
    \<and> list_all (\<lambda>a. snap_ok (at_start_spec a) \<and> snap_ok (at_end_spec a)) actions_spec"
   unfolding nred'.is_gbound_inv'_def nred'.all_snaps_def snap_ok_def
-  by (simp add: list_all_iff ball_Un case_prod_beta ball_conj_distrib)
+  by (simp add: list_all_iff list_ex_iff ball_Un case_prod_beta ball_conj_distrib)
 
 declare nred_is_gbound_inv'_code[code]
 
@@ -58,6 +60,22 @@ fun refine_comp_exec :: "('r \<Rightarrow> int) \<Rightarrow> ('n, 'r) comp \<Ri
      B(f := (max (fst (B f)) (cti c), min (snd (B f)) (cti c)))"
 | "refine_comp_exec cti (Comp Clt (NVar f) (NConst c)) B = B(f := (fst (B f), min (snd (B f)) (cti c - 1)))"
 | "refine_comp_exec cti (Comp Cgt (NVar f) (NConst c)) B = B(f := (max (fst (B f)) (cti c + 1), snd (B f)))"
+| "refine_comp_exec cti (Comp p (NVar f) (NVar g)) B =
+     (if fst (B g) = snd (B g) then
+        (case p of
+           Cle \<Rightarrow> B(f := (fst (B f), min (snd (B f)) (fst (B g))))
+         | Cge \<Rightarrow> B(f := (max (fst (B f)) (fst (B g)), snd (B f)))
+         | Ceq \<Rightarrow> B(f := (max (fst (B f)) (fst (B g)), min (snd (B f)) (fst (B g))))
+         | Clt \<Rightarrow> B(f := (fst (B f), min (snd (B f)) (fst (B g) - 1)))
+         | Cgt \<Rightarrow> B(f := (max (fst (B f)) (fst (B g) + 1), snd (B f))))
+      else if fst (B f) = snd (B f) then
+        (case p of
+           Cle \<Rightarrow> B(g := (max (fst (B g)) (fst (B f)), snd (B g)))
+         | Cge \<Rightarrow> B(g := (fst (B g), min (snd (B g)) (fst (B f))))
+         | Ceq \<Rightarrow> B(g := (max (fst (B g)) (fst (B f)), min (snd (B g)) (fst (B f))))
+         | Clt \<Rightarrow> B(g := (max (fst (B g)) (fst (B f) + 1), snd (B g)))
+         | Cgt \<Rightarrow> B(g := (fst (B g), min (snd (B g)) (fst (B f) - 1))))
+      else B)"
 | "refine_comp_exec cti _ B = B"
 
 definition refine_box_exec :: "('r \<Rightarrow> int) \<Rightarrow> ('n, 'r) comp list \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n \<Rightarrow> int \<times> int)" where
@@ -77,7 +95,9 @@ begin
 
 definition snap_ok_exec :: "(func \<Rightarrow> int) \<Rightarrow> (func \<Rightarrow> int) \<Rightarrow> ground_action \<Rightarrow> bool" where
   "snap_ok_exec lo hi s \<equiv>
-     list_all (\<lambda>(f, e).
+     list_ex (\<lambda>g. snd (refine_box_exec const_to_int (n_pre s) (box_exec lo hi) g)
+                  < fst (refine_box_exec const_to_int (n_pre s) (box_exec lo hi) g)) nfluents
+   \<or> list_all (\<lambda>(f, e).
         case aeval_exec const_to_int (refine_box_exec const_to_int (n_pre s) (box_exec lo hi)) e of
           None \<Rightarrow> False
         | Some (al, ah) \<Rightarrow> lo f \<le> al \<and> ah \<le> hi f)
