@@ -10,17 +10,17 @@ begin
 definition snap_ok :: "ground_action \<Rightarrow> bool" where
   "snap_ok s \<equiv>
      list_all (\<lambda>(f, e).
-        case nred.aeval (nred.refine_box (n_pre s) nred.box) e of
+        case nred'.aeval (nred'.refine_box (n_pre s) nred'.box) e of
           None \<Rightarrow> False
         | Some (al, ah) \<Rightarrow> fluent_lo f \<le> al \<and> ah \<le> fluent_hi f)
        (upds s)"
 
 lemma nred_is_gbound_inv'_code:
-  "nred.is_gbound_inv' \<longleftrightarrow>
+  "nred'.is_gbound_inv' \<longleftrightarrow>
      list_all (\<lambda>f. fluent_lo f \<le> const_to_int (num_init f) \<and> const_to_int (num_init f) \<le> fluent_hi f) nfluents
    \<and> list_all (\<lambda>a. snap_ok (at_start_spec a) \<and> snap_ok (at_end_spec a)) actions_spec"
-  unfolding nred.is_gbound_inv'_def nred.all_snaps_def snap_ok_def
-  by (auto simp: list_all_iff)
+  unfolding nred'.is_gbound_inv'_def nred'.all_snaps_def snap_ok_def
+  by (simp add: list_all_iff ball_Un case_prod_beta ball_conj_distrib)
 
 declare nred_is_gbound_inv'_code[code]
 
