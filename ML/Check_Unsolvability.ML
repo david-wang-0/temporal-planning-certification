@@ -175,6 +175,7 @@ structure Converter : sig
   val nat_of_integer : int -> nat
   type char
   type rat
+  val quotient_of : rat -> inta * inta
   type color
   type ('a, 'b) rbt
   datatype 'a dBMEntry = Le of 'a | Lt of 'a | INF

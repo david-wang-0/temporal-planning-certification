@@ -353,11 +353,88 @@ struct
           let val a1 = foldl (fn ((_, dc), ac) => dc_funcs ac dc) acc durs
           in foldl (fn ((_, e), ac) => eff_funcs ac e) a1 effs end)
 
+  (* ---------- uniform duration scaling: make every duration constant an integer ----------
+     Some domains give NON-integer durations (painter's domain_container: (= ?duration 15.004)
+     alongside integer 4/5/6).  The integer-duration network builder rejects non-integer
+     durations, so as a post-pass over the assembled ground actions we scale EVERY duration
+     constant uniformly by  K = lcm of all duration denominators  (15.004 = 15004/1000, the
+     others /1  =>  K = 1000  =>  x1000  ->  15004 / 4000 / 5000 / 6000).  Uniform scaling of
+     ALL durations preserves the temporal structure.
+
+     GATED: when every duration is already integer, K = 1 and the pass is a strict no-op
+     (the actions list is returned untouched -- durations are never rebuilt when K = 1), so
+     integer-duration problems produce byte-identical output.
+
+     Epsilon / min-separation: the grounder exposes NO epsilon on the SML boundary -- duration
+     constants are the ONLY time constants crossing into the reduction (they enter the locale
+     via lower/upper), and ground_schema* pass no separation constant -- so uniform duration
+     scaling is self-consistent here.  This assumes the reduction's internal min-separation
+     epsilon is 0 (or is scaled in lock-step); that constant is not visible/controllable from
+     SML, so a nonzero, un-scaled epsilon inside the reduction would need matching there.
+
+     The rat num/den come from C.quotient_of (rat -> inta * inta); scaled rats are rebuilt
+     with C.fract (which re-normalises).  Arithmetic is over the export's native `inta`. *)
+  fun rat_num_den r = let val (n, d) = C.quotient_of r
+                      in (C.integer_of_int n, C.integer_of_int d) end
+  fun igcd (a, 0) = Int.abs a
+    | igcd (a, b) = igcd (b, a mod b)
+  fun ilcm (a, b) = if a = 0 orelse b = 0 then 0
+                    else (Int.abs a div igcd (Int.abs a, Int.abs b)) * Int.abs b
+
+  (* fold the lcm of the denominators of every ConstantExpr leaf into k *)
+  fun nexp_dur_lcm k e =
+    (case e of
+        C.ConstantExpr r  => ilcm (k, #2 (rat_num_den r))
+      | C.AddExpr (a, b)  => nexp_dur_lcm (nexp_dur_lcm k a) b
+      | C.SubExpr (a, b)  => nexp_dur_lcm (nexp_dur_lcm k a) b
+      | C.MulExpr (a, b)  => nexp_dur_lcm (nexp_dur_lcm k a) b
+      | C.DivExpr (a, b)  => nexp_dur_lcm (nexp_dur_lcm k a) b
+      | C.SinExpr a       => nexp_dur_lcm k a
+      | C.CosExpr a       => nexp_dur_lcm k a
+      | C.ExpExpr a       => nexp_dur_lcm k a
+      | _                 => k)   (* DurationExpr, PiExpr, FunctionExpr: no constant leaf *)
+
+  (* multiply every ConstantExpr leaf by kK; NVar/FunctionExpr (fluent refs) left alone *)
+  fun scale_nexp kK e =
+    (case e of
+        C.ConstantExpr r  =>
+          let val (n, d) = rat_num_den r
+          in C.ConstantExpr (C.fract (C.Int_of_integer (n * kK)) (C.Int_of_integer d)) end
+      | C.AddExpr (a, b)  => C.AddExpr (scale_nexp kK a, scale_nexp kK b)
+      | C.SubExpr (a, b)  => C.SubExpr (scale_nexp kK a, scale_nexp kK b)
+      | C.MulExpr (a, b)  => C.MulExpr (scale_nexp kK a, scale_nexp kK b)
+      | C.DivExpr (a, b)  => C.DivExpr (scale_nexp kK a, scale_nexp kK b)
+      | C.SinExpr a       => C.SinExpr (scale_nexp kK a)
+      | C.CosExpr a       => C.CosExpr (scale_nexp kK a)
+      | C.ExpExpr a       => C.ExpExpr (scale_nexp kK a)
+      | C.FunctionExpr _  =>
+          (TextIO.output (TextIO.stdErr,
+             "WARNING: duration constraint references a fluent; not scaling that leaf\n");
+           e)
+      | _                 => e)   (* DurationExpr, PiExpr: unchanged *)
+
+  fun scale_dc kK (C.DurationConstraint (dop, e)) = C.DurationConstraint (dop, scale_nexp kK e)
+  fun action_durs (C.DurativeActionSchema (_, C.DurativeActionBody (durs, _, _))) = durs
+    | action_durs _ = []
+  fun scale_action kK (C.DurativeActionSchema (h, C.DurativeActionBody (durs, conds, effs))) =
+        C.DurativeActionSchema
+          (h, C.DurativeActionBody (map (fn (ta, dc) => (ta, scale_dc kK dc)) durs, conds, effs))
+    | scale_action _ a = a   (* simple (non-durative) actions carry no durations *)
+
+  fun scale_durations actions =
+    let val kK = foldl (fn (a, k) => foldl (fn ((_, C.DurationConstraint (_, e)), kk) =>
+                                              nexp_dur_lcm kk e) k (action_durs a))
+                       1 actions
+    in if kK = 1 then actions           (* all durations integer: strict no-op *)
+       else map (scale_action kK) actions
+    end
+
   (* ---------- ground the whole problem ---------- *)
   (* shared assembly of the propositional (delete-relaxed) ground problem from already-grounded
      actions; shared by the C-input entry (ground_problem) and the QAst entry (ground_problem_q). *)
-  fun assemble_prop types ground_actions init goal =
+  fun assemble_prop types ground_actions0 init goal =
     let
+      val ground_actions = scale_durations ground_actions0
       val prop_init = map (map_form prop_obj_atom) (List.concat (map relax_init_form init))
       val prop_goal = map_form prop_obj_atom goal
       val pnames =
@@ -575,8 +652,9 @@ struct
 
   (* shared assembly of the numeric-KEEPING ground problem; shared by the C-input entry
      (ground_problem_numeric) and the QAst entry (ground_problem_numeric_q). *)
-  fun assemble_numeric types ground_actions init goal =
+  fun assemble_numeric types ground_actions0 init goal =
     let
+      val ground_actions = scale_durations ground_actions0
       val num_init = map (map_form prop_obj_atom) (List.concat (map keep_init_form init))
       val num_goal = map_form prop_obj_atom goal
       val pnames =
@@ -607,8 +685,8 @@ struct
 
   (* ---------- pretty-print a GROUND (propositional) problem as PDDL, for inspection ----------
      Predicate/init/goal atoms are 0-ary (objects inlined); numeric content has been relaxed to
-     definedness predicates.  Exact duration rat values are shown as `#` (the export exposes no
-     rat destructor); the constraint operator + structure are shown. *)
+     definedness predicates.  Duration rat values are shown exactly (via C.quotient_of); the
+     constraint operator + structure are shown. *)
   fun predD_name (C.PredDecl (C.Pred p, _)) = p
   fun atom_str (C.PredAtm (C.Pred p, _)) = "(" ^ p ^ ")"
     | atom_str (C.EqAtm _) = "(= ?)"
@@ -629,8 +707,22 @@ struct
           (map lit_str adds @ map (fn f => "(not " ^ lit_str f ^ ")") dels) ^ ")"
   fun ta_str C.At_Start = "at start" | ta_str C.At_End = "at end" | ta_str C.Over_All = "over all"
   fun dop_str C.EQ = "=" | dop_str C.LEQ = "<=" | dop_str C.GEQ = ">="
-  fun dc_str (ta, C.DurationConstraint (dop, _)) =
-        "(" ^ dop_str dop ^ " ?duration #)"   (* exact rat not destructurable via the export *)
+  (* render a duration nexp; rat constants now destructurable via C.quotient_of *)
+  fun dnexp_str (C.ConstantExpr r) =
+        let val (n, d) = rat_num_den r
+        in if d = 1 then Int.toString n else Int.toString n ^ "/" ^ Int.toString d end
+    | dnexp_str C.DurationExpr = "?duration"
+    | dnexp_str C.PiExpr       = "pi"
+    | dnexp_str (C.AddExpr (a, b)) = "(+ " ^ dnexp_str a ^ " " ^ dnexp_str b ^ ")"
+    | dnexp_str (C.SubExpr (a, b)) = "(- " ^ dnexp_str a ^ " " ^ dnexp_str b ^ ")"
+    | dnexp_str (C.MulExpr (a, b)) = "(* " ^ dnexp_str a ^ " " ^ dnexp_str b ^ ")"
+    | dnexp_str (C.DivExpr (a, b)) = "(/ " ^ dnexp_str a ^ " " ^ dnexp_str b ^ ")"
+    | dnexp_str (C.SinExpr a)      = "(sin " ^ dnexp_str a ^ ")"
+    | dnexp_str (C.CosExpr a)      = "(cos " ^ dnexp_str a ^ ")"
+    | dnexp_str (C.ExpExpr a)      = "(exp " ^ dnexp_str a ^ ")"
+    | dnexp_str (C.FunctionExpr (C.PNE (C.Func f, _))) = "(" ^ f ^ ")"
+  fun dc_str (ta, C.DurationConstraint (dop, e)) =
+        "(" ^ dop_str dop ^ " ?duration " ^ dnexp_str e ^ ")"
   fun tcond_str (ta, f) = "(" ^ ta_str ta ^ " " ^ conj_str f ^ ")"
   fun teff_str (ta, e)  = "(" ^ ta_str ta ^ " " ^ eff_str e ^ ")"
   fun action_str (C.SimpleActionSchemaa (C.ActionHead (n, _), C.SimpleActionBody (pre, eff))) =

@@ -99,7 +99,7 @@ export_code
   exp.const exp.var exp.if_then_else exp.binop exp.unop
   acconstraint.LT acconstraint.LE acconstraint.EQ acconstraint.GT acconstraint.GE
   act.In act.Out act.Sil
-  Rat.Fract Rat.of_int rat_of_digits_pair
+  Rat.Fract Rat.of_int rat_of_digits_pair quotient_of
   predAtm eqAtm predicate Pred Func Either Var Obj PredDecl FuncDecl BigAnd BigOr
   formula.Not formula.Bot Effect duration_op.LEQ duration_op.EQ duration_op.GEQ
   At_Start At_End Over_All
