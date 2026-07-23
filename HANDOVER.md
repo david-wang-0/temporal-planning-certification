@@ -19,9 +19,19 @@ truth**. Per-task detail lives in the dated logs in the ARCHIVE below and in `NU
    *SMOKE TESTS (2026-07-23, `ML/out/plan_cert -certify numeric`, easiest instance each):*
    majsp-impossible-1 ✅ net (144KB), majsp-impossible-2 ✅ net (3.8MB, box [0,25]),
    MatchCellar-impossible ✅ net (160KB, empty box = durative-only). painter-impossible / sync-impossible ❌
-   fail EARLIER at a HARNESS PDDL-PARSER gap (`Parse error … Expected ')'` right after the typed `:functions`
-   section) — NOT the numeric pipeline. That parser gap (`ML/plan_cert/src/…` PddlParser / grounder parser)
-   is the next SML-harness task, alongside the nemo datalog-reachability integration (grounder task #22b).
+   still fail (in the HARNESS PDDL parser, NOT the numeric pipeline) — TWO gaps:
+   (a) FIXED (`ML/plan_cert/src/parsing/pddl_refactor.sml`, committed): the domain parser enforced a fixed
+       section order; painter/sync reorder them (`:constants` after `:functions`; `:functions` before
+       `:predicates`). Now the 5 header sections parse in ANY order.
+   (b) OPEN: both domains use `forall`-QUANTIFIED conditions AND effects (`(forall (?p - Parallel) …)` in
+       sync's c1 :condition/:effect, `(forall (?t - Treatment) …)` in painter's reset :effect). The harness
+       condition AST (`Prop_and/or/imply/not/atom`, no `Prop_forall`) and effect AST (`LOGIC_EFFECT`/
+       `NUMERIC_EFFECT`/`SNAP_EFFECT`, no quantified node) don't model them. FIX = add a quantifier node to
+       the parser AST + parse `(forall (typed-vars) body)` in `pre_GD`/`da_GD`/`effect`/`da_effect`, and EXPAND
+       it in `grounder.sml` (instantiate the bound var over the type's objects, conjoin — the grounder already
+       does exactly this for schema parameters via `candidates`/`cartesian`), so `forall` never reaches the
+       verified reduction. A real feature (parser AST + grounder), the next SML-harness task alongside the
+       nemo datalog-reachability integration (grounder task #22b).
    Cleanup: `check_numeric_ground_problem_diag` + the `+ [dbg]`-free plan_cert are the runnable glue; the
    `check_numeric_ground_problem_diag` is still labelled temporary.
    *(historical: the final blocker was `nexp_struct_ok`'s `NConst c => c : Ints` clause code-generating
