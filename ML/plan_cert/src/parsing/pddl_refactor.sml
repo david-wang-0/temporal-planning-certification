@@ -377,14 +377,28 @@ struct
                       && quantification
                       && constraints)?? "invariants def"
 
+  (* The 5 optional header sections (requirements/types/constants/predicates/functions) may appear
+     in ANY order in real PDDL domains (the BNF fixes an order, but gigante benchmarks vary it, e.g.
+     :constants after :functions, or :functions before :predicates).  Parse them order-independently:
+     each tagged section returns an update closure over the 5-slot option accumulator, then reduce.
+     The assembled result keeps the exact right-nested tuple shape the rest of the parser expects. *)
+  val dom_section =
+        (require_def    wth (fn v => fn (_, t, c, p, f) => (SOME v, t, c, p, f)))
+     || (types_def      wth (fn v => fn (r, _, c, p, f) => (r, SOME v, c, p, f)))
+     || (constants_def  wth (fn v => fn (r, t, _, p, f) => (r, t, SOME v, p, f)))
+     || (predicates_def wth (fn v => fn (r, t, c, _, f) => (r, t, c, SOME v, f)))
+     || (functions_def  wth (fn v => fn (r, t, c, p, _) => (r, t, c, p, SOME v)))
+     ?? "domain header section"
+
+  val domain_header = (repeat dom_section)
+        wth (fn updates => foldl (fn (u, acc) => u acc) (NONE, NONE, NONE, NONE, NONE) updates)
+
   val domain = in_paren(pddl_reserved "define" >> in_paren(pddl_reserved "domain" >> pddl_name)
-                                                  >> (opt require_def)
-                                                  && (opt types_def)
-                                                  && (opt constants_def)
-                                                  && (opt predicates_def)
-                                                  && (opt functions_def)
+                                                  >> domain_header
                                                   && (repeat structure_def)
-                                                  && (repeat invariant_def)) ?? "domain"
+                                                  && (repeat invariant_def))
+                          wth (fn ((r, t, c, p, f), (structs, invs)) =>
+                                 (r, (t, (c, (p, (f, (structs, invs))))))) ?? "domain"
 
   val object_declar = in_paren(pddl_reserved ":objects" >> (typed_list pddl_obj_cons))
 
