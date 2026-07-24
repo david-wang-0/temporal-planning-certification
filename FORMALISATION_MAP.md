@@ -1,7 +1,11 @@
 # Formalisation map & wiring (inspection guide)
 
 A short, current pointer into the formalisation and the end-to-end pipeline. Line numbers
-verified against the working tree on 2026-07-18. For the long narrative history see
+verified against the working tree on 2026-07-18 — the 2026-07-24 work (relational guard
+refinement in `TP_NTA_Reduction_Numeric_Bounds.thy`, the exec-twin equivalence +
+`GCmp_i` projection in `bound_parsing/Ground_PDDL_Numeric_Code_Export.thy`, and the verified
+capstone `check_and_cert_numeric_pddl_problem` in `bound_parsing/Numeric_Unsolvability_Export.thy`)
+postdates that verification, so re-anchor those files via isabelle-search. For the narrative see
 `HANDOVER.md`; this file is the navigation entry point.
 
 ---

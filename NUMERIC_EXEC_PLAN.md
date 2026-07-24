@@ -1,10 +1,16 @@
 # Numeric executable plan — exporting a certified *numeric*-net unsolvability checker
 
-Status: draft (2026-07-06). Companion to [NUMERIC_PLAN.md](NUMERIC_PLAN.md) (this is its executable
+**Status: COMPLETED (2026-07-24).** Every work package below landed (WP-A/C `fef6bc9`, WP-E
+`aeaba18`, WP-D `d8b8de6` capstone `check_and_cert_numeric_pddl_problem` + the per-stage-profiled
+`plan_cert -certify numeric-tchecker` driver); see `HANDOVER.md` for the current state. This file is
+kept because several theories cite its WP-section numbers in doc comments — treat it as the
+historical plan/rationale record, not a live task list. Line anchors are 2026-07-05-era; re-anchor
+via isabelle-search if needed.
+
+Originally: companion to [NUMERIC_PLAN.md](NUMERIC_PLAN.md) (this is its executable
 sequel — NUMERIC_PLAN half A/B built the *abstract* numeric net and proved it correct; this plan makes
 that net *executable* and Munta-checkable). Design docs: [ARCHITECTURE_pipeline.md](ARCHITECTURE_pipeline.md),
-[ARCHITECTURE_dependencies.md](ARCHITECTURE_dependencies.md). Line anchors are current as of the
-2026-07-05 reorg; re-anchor if files move.
+[ARCHITECTURE_dependencies.md](ARCHITECTURE_dependencies.md).
 
 ---
 

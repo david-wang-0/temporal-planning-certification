@@ -12,6 +12,17 @@ This `README` contains instructions for:
 - Building a verified encoder for ground PDDL temporal planning problems to a network of timed automata.
 - Building the pipeline and running it or individual components.
 
+## Numeric extension (post-paper)
+
+The development now also certifies unsolvability of **numeric** temporal problems end to end:
+interval bound inference with relational (fluent-vs-fluent) guard refinement, nemo
+datalog-reachability pruning in the grounder, and a verified certifier capstone
+(`check_and_cert_numeric_pddl_problem`) that hands the built network in-process to an external
+tck-reach oracle and checks the returned certificate with Munta's verified checker
+(`plan_cert -certify numeric-tchecker`, per-stage profiled). See `HANDOVER.md` (current state),
+`NUMERIC_BOUND_INFERENCE.md` (the bound-inference stack), and the sibling
+`unsolvability-benchmarks` repository (benchmark harness).
+
 # Note
 
 The Python files are originally from: https://doi.org/10.6084/m9.figshare.12620582

@@ -1,6 +1,10 @@
 # Plan: Datalog Delete-Relaxation Grounding for Temporal PDDL
 
-Status: draft (2026-06-18). Companion: [NUMERIC_PLAN.md](NUMERIC_PLAN.md) — the two interlock
+Status: draft (2026-06-18); **partially realized 2026-07-24** — the UNVERIFIED harness grounder
+(`ML/plan_cert/src/grounder.sml`) now does the TFD-style relaxation AND nemo datalog reachability
+pruning (`9534ef8`, task #22b; per-schema applicability predicates, fail-open); the VERIFIED
+datalog-certificate grounding this plan designs remains the Isabelle-PDDL-Grounding
+`Temporal_Grounding` effort. Companion: [NUMERIC_PLAN.md](NUMERIC_PLAN.md) — the two interlock
 (see §7). This plan covers bringing the classical grounder's *datalog certificate / delete-
 relaxation* grounding procedure into this project so that **lifted** temporal PDDL problems can be
 grounded to the nullary ground temporal PDDL that the NTA reduction already consumes.

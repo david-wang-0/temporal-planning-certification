@@ -4,7 +4,10 @@ One-page summary of the end-to-end pipeline. Companion design notes:
 [ARCHITECTURE_grounding.md](ARCHITECTURE_grounding.md) (the planned datalog grounding front-end) and
 the two plans [GROUNDING_PLAN.md](GROUNDING_PLAN.md) / [NUMERIC_PLAN.md](NUMERIC_PLAN.md). Build/run
 instructions live in [Readme.md](Readme.md); the ROOT files are authoritative. Last updated
-2026-06-18.
+2026-06-18 — **since then the numeric pipeline became fully executable and verified end-to-end**
+(relational guard bound inference, nemo reachability pruning, the verified certifier capstone
+`check_and_cert_numeric_pddl_problem` + `plan_cert -certify numeric-tchecker`); the `[planned]`
+markers in the diagram below understate the numeric column — see `HANDOVER.md` for current state.
 
 Legend: **[done]** proven/in-tree today · **[planned]** designed in the plans, not yet built.
 

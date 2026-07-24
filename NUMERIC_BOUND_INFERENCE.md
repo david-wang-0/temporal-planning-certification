@@ -272,27 +272,26 @@ result, with **no per-plan bounds** in the conclusion. (Imports the WP-C exec-ne
   `aeaba18` "WP-E numeric bound inference COMPLETE", 0 sorries). Sessions: `Numeric_Bound_Inference = "HOL-IMP"`
   and `TP_NTA_Reduction` in the main `ROOT`.
 - **Ground integration (§4): COMMITTED & green** (`cf3c0f0`).
-- **Cert-level executable soundness (§5): green, UNCOMMITTED** (2026-07-12).
+- **Cert-level executable soundness (§5): COMMITTED & green.**
 - **Locked facts (don't re-litigate):** HOL-IMP is **not** importable into the reduction (`option`-arity
   clash) — the inferred box crosses as data; `int` is **forced** by Munta (`Simple_Network_Impl`); the
   compute-side **termination proof is skipped by design**; `NDiv` is fail-closed (`aeval \<mapsto> None`).
 
-### Not yet done — the fully runnable tail
+### ~~Not yet done~~ — the fully runnable tail is DONE (2026-07-24)
 
-`is_gbound_inv'` is currently either an eval target (reduction side) or a **locale assumption**
-(`numeric_ground_ast_problem_cert`). To make the pipeline *runnable* end-to-end:
+Both items landed and then some: the executable gate `is_gbound_inv_exec` exists AND **provably
+decides** the cert-locale assumption (`is_gbound_inv_exec_eq` + the aeval/refine/box twin lemmas,
+`Ground_PDDL_Numeric_Code_Export.thy`, commit `d8b8de6`); the `infer_fluent_bounds` ML bridge runs
+in the `plan_cert` binary (§7); and the **verified certifier capstone**
+`check_and_cert_numeric_pddl_problem(_no_return)` (`Numeric_Unsolvability_Export.thy`) discharges
+`numeric_ground_ast_problem_cert` by evaluation and checks the external tck-reach certificate
+IN-PROCESS with Munta's verified `convert_check` — hypothesis-free
+`Result Sat ⟹ no valid numeric ground plan`. Driven by `plan_cert -certify numeric-tchecker`
+(per-stage profiled; see the `unsolvability-benchmarks` sibling repo).
 
-1. an **executable `is_gbound_inv'`** (code-generatable over the ground reduction data), and
-2. the **`infer_fluent_bounds` cross-session ML bridge** (compute `fluent_lo/hi` from `P`, eval-check the
-   cert) — needed because the compute side (HOL-IMP) and the reduction cannot be one theory;
+*Line anchors are historical (2026-07-12 era); re-anchor via isabelle-search if files moved.*
 
-so that `check_and_make_numeric_network(_cert)` **discharges** the `numeric_ground_ast_problem_cert`
-hypothesis by evaluation instead of assuming it. Then `export_code` (deferring the
-`proper_interval`/`Abs_literal` `String.literal` code-gen instances).
-
-*Line anchors current as of 2026-07-12; re-anchor if files move.*
-
-## 7. SML bound-inference glue — built & running (2026-07-13, UNCOMMITTED)
+## 7. SML bound-inference glue — built & running (COMMITTED)
 
 Both halves of the ML bridge from §6.2 are now emitted and **linked into one MLton binary**, with a
 standalone smoke test passing.
@@ -332,7 +331,7 @@ Isabelle `value` demo — and the unguarded counter is correctly rejected (`NONE
 top-level helpers).  `plan_cert -certify numeric-selftest` runs the counter demo in-binary and prints
 `counter in [0,1]`, retiring the "two exports in one binary" risk (no basic-type clash).
 
-## 8. Part B — external tchecker/muntac certification (2026-07-13, UNCOMMITTED)
+## 8. Part B — external tchecker/muntac certification (COMMITTED; the muntac CHECK step is superseded by the in-process verified capstone, see §6)
 
 `ML/plan_cert/src/tchecker_certify.sml` (`structure TCheckerCertify`) drives the repo's `run.sh`
 recipe from SML, replacing the non-terminating in-process MLunta path:

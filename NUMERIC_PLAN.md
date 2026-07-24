@@ -1,7 +1,11 @@
 # Numeric plan — numeric conditions/effects on the new `Temporal_Planning` semantics
 
-Status: draft (2026-06-25). Companion: [SEMANTICS_REPOINT_PLAN.md](SEMANTICS_REPOINT_PLAN.md) (this
-is its §5 expanded) and [GROUNDING_PLAN.md](GROUNDING_PLAN.md) (interlock, §7). **Supersedes** the
+**Status: REALIZED** — halves A/B are built, proven, executable and driven end-to-end (see
+`HANDOVER.md`; the executable sequel is `NUMERIC_EXEC_PLAN.md`, also completed). Kept because the
+theories cite this plan's A.x/B section numbers in doc comments; treat as the design/contract
+record. (Original draft 2026-06-25. The formerly-referenced `SEMANTICS_REPOINT_PLAN.md` was
+completed and removed in `ec10369` — see git history.) Companion:
+[GROUNDING_PLAN.md](GROUNDING_PLAN.md) (interlock, §7). **Supersedes** the
 retired `RUN_LIFT_PLAN.md` (numeric run-lift against the old `Temporal_AI_Planning_Languages_Semantics`);
 its proof *design* is salvaged in §3 below, with the old line/lemma anchors dropped because the
 re-point retype invalidates them.
