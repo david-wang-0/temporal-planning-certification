@@ -53,30 +53,34 @@ fun aeval_exec :: "('r \<Rightarrow> int) \<Rightarrow> ('n \<Rightarrow> int \<
        (aeval_exec cti B a) (aeval_exec cti B b)"
 | "aeval_exec cti B (NDiv a b) = None"
 
-fun refine_comp_exec :: "('r \<Rightarrow> int) \<Rightarrow> ('n, 'r) comp \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n \<Rightarrow> int \<times> int)" where
-  "refine_comp_exec cti (Comp Cle (NVar f) (NConst c)) B = B(f := (fst (B f), min (snd (B f)) (cti c)))"
-| "refine_comp_exec cti (Comp Cge (NVar f) (NConst c)) B = B(f := (max (fst (B f)) (cti c), snd (B f)))"
-| "refine_comp_exec cti (Comp Ceq (NVar f) (NConst c)) B =
-     B(f := (max (fst (B f)) (cti c), min (snd (B f)) (cti c)))"
-| "refine_comp_exec cti (Comp Clt (NVar f) (NConst c)) B = B(f := (fst (B f), min (snd (B f)) (cti c - 1)))"
-| "refine_comp_exec cti (Comp Cgt (NVar f) (NConst c)) B = B(f := (max (fst (B f)) (cti c + 1), snd (B f)))"
-| "refine_comp_exec cti (Comp p (NVar f) (NVar g)) B =
-     (if fst (B g) = snd (B g) then
-        (case p of
-           Cle \<Rightarrow> B(f := (fst (B f), min (snd (B f)) (fst (B g))))
-         | Cge \<Rightarrow> B(f := (max (fst (B f)) (fst (B g)), snd (B f)))
-         | Ceq \<Rightarrow> B(f := (max (fst (B f)) (fst (B g)), min (snd (B f)) (fst (B g))))
-         | Clt \<Rightarrow> B(f := (fst (B f), min (snd (B f)) (fst (B g) - 1)))
-         | Cgt \<Rightarrow> B(f := (max (fst (B f)) (fst (B g) + 1), snd (B f))))
-      else if fst (B f) = snd (B f) then
-        (case p of
-           Cle \<Rightarrow> B(g := (max (fst (B g)) (fst (B f)), snd (B g)))
-         | Cge \<Rightarrow> B(g := (fst (B g), min (snd (B g)) (fst (B f))))
-         | Ceq \<Rightarrow> B(g := (max (fst (B g)) (fst (B f)), min (snd (B g)) (fst (B f))))
-         | Clt \<Rightarrow> B(g := (max (fst (B g)) (fst (B f) + 1), snd (B g)))
-         | Cgt \<Rightarrow> B(g := (fst (B g), min (snd (B g)) (fst (B f) - 1))))
-      else B)"
-| "refine_comp_exec cti _ B = B"
+fun refine_left_exec :: "('r \<Rightarrow> int) \<Rightarrow> ('n, 'r) comp \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n \<Rightarrow> int \<times> int)" where
+  "refine_left_exec cti (Comp p (NVar f) e) B =
+     (case aeval_exec cti B e of
+        None \<Rightarrow> B
+      | Some (l, h) \<Rightarrow>
+          (case p of
+             Cle \<Rightarrow> B(f := (fst (B f), min (snd (B f)) h))
+           | Clt \<Rightarrow> B(f := (fst (B f), min (snd (B f)) (h - 1)))
+           | Cge \<Rightarrow> B(f := (max (fst (B f)) l, snd (B f)))
+           | Cgt \<Rightarrow> B(f := (max (fst (B f)) (l + 1), snd (B f)))
+           | Ceq \<Rightarrow> B(f := (max (fst (B f)) l, min (snd (B f)) h))))"
+| "refine_left_exec cti _ B = B"
+
+fun refine_right_exec :: "('r \<Rightarrow> int) \<Rightarrow> ('n, 'r) comp \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n \<Rightarrow> int \<times> int)" where
+  "refine_right_exec cti (Comp p e (NVar g)) B =
+     (case aeval_exec cti B e of
+        None \<Rightarrow> B
+      | Some (l, h) \<Rightarrow>
+          (case p of
+             Cle \<Rightarrow> B(g := (max (fst (B g)) l, snd (B g)))
+           | Clt \<Rightarrow> B(g := (max (fst (B g)) (l + 1), snd (B g)))
+           | Cge \<Rightarrow> B(g := (fst (B g), min (snd (B g)) h))
+           | Cgt \<Rightarrow> B(g := (fst (B g), min (snd (B g)) (h - 1)))
+           | Ceq \<Rightarrow> B(g := (max (fst (B g)) l, min (snd (B g)) h))))"
+| "refine_right_exec cti _ B = B"
+
+definition refine_comp_exec :: "('r \<Rightarrow> int) \<Rightarrow> ('n, 'r) comp \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n \<Rightarrow> int \<times> int)" where
+  "refine_comp_exec cti c B = refine_right_exec cti c (refine_left_exec cti c B)"
 
 definition refine_box_exec :: "('r \<Rightarrow> int) \<Rightarrow> ('n, 'r) comp list \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n \<Rightarrow> int \<times> int)" where
   "refine_box_exec cti cs B = fold (refine_comp_exec cti) cs B"

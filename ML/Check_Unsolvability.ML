@@ -22348,106 +22348,48 @@ fun check_and_cert_pddl_problem problem mode num_split certifier show_cert =
                     (fn () => (Error es))
                   end);
 
-fun refine_comp_exec B_ cti (Comp (Cle, NVar f, NConst c)) b =
-  fun_upd B_ b f (fst (b f), min_int (snd (b f)) (cti c))
-  | refine_comp_exec B_ cti (Comp (Cge, NVar f, NConst c)) b =
-    fun_upd B_ b f (max ord_int (fst (b f)) (cti c), snd (b f))
-  | refine_comp_exec B_ cti (Comp (Ceq, NVar f, NConst c)) b =
-    fun_upd B_ b f
-      (max ord_int (fst (b f)) (cti c), min_int (snd (b f)) (cti c))
-  | refine_comp_exec B_ cti (Comp (Clt, NVar f, NConst c)) b =
-    fun_upd B_ b f
-      (fst (b f), min_int (snd (b f)) (minus_inta (cti c) one_inta))
-  | refine_comp_exec B_ cti (Comp (Cgt, NVar f, NConst c)) b =
-    fun_upd B_ b f
-      (max ord_int (fst (b f)) (plus_inta (cti c) one_inta), snd (b f))
-  | refine_comp_exec B_ cti (Comp (p, NVar f, NVar g)) b =
-    (if equal_inta (fst (b g)) (snd (b g))
-      then (case p
-             of Ceq =>
-               fun_upd B_ b f
-                 (max ord_int (fst (b f)) (fst (b g)),
-                   min_int (snd (b f)) (fst (b g)))
-             | Cle =>
-               fun_upd B_ b f (fst (b f), min_int (snd (b f)) (fst (b g)))
-             | Cge =>
-               fun_upd B_ b f (max ord_int (fst (b f)) (fst (b g)), snd (b f))
-             | Clt =>
-               fun_upd B_ b f
-                 (fst (b f),
-                   min_int (snd (b f)) (minus_inta (fst (b g)) one_inta))
-             | Cgt =>
-               fun_upd B_ b f
-                 (max ord_int (fst (b f)) (plus_inta (fst (b g)) one_inta),
-                   snd (b f)))
-      else (if equal_inta (fst (b f)) (snd (b f))
-             then (case p
-                    of Ceq =>
-                      fun_upd B_ b g
-                        (max ord_int (fst (b g)) (fst (b f)),
-                          min_int (snd (b g)) (fst (b f)))
-                    | Cle =>
-                      fun_upd B_ b g
-                        (max ord_int (fst (b g)) (fst (b f)), snd (b g))
-                    | Cge =>
-                      fun_upd B_ b g
-                        (fst (b g), min_int (snd (b g)) (fst (b f)))
-                    | Clt =>
-                      fun_upd B_ b g
-                        (max ord_int (fst (b g))
-                           (plus_inta (fst (b f)) one_inta),
-                          snd (b g))
-                    | Cgt =>
-                      fun_upd B_ b g
-                        (fst (b g),
-                          min_int (snd (b g))
-                            (minus_inta (fst (b f)) one_inta)))
-             else b))
-  | refine_comp_exec B_ cti (Comp (Ceq, NConst v, vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Ceq, NAdd (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Ceq, NSub (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Ceq, NMul (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Ceq, NDiv (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Ceq, va, NAdd (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Ceq, va, NSub (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Ceq, va, NMul (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Ceq, va, NDiv (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Cge, NConst v, vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cge, NAdd (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cge, NSub (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cge, NMul (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cge, NDiv (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cge, va, NAdd (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Cge, va, NSub (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Cge, va, NMul (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Cge, va, NDiv (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Clt, NConst v, vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Clt, NAdd (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Clt, NSub (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Clt, NMul (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Clt, NDiv (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Clt, va, NAdd (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Clt, va, NSub (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Clt, va, NMul (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Clt, va, NDiv (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Cgt, NConst v, vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cgt, NAdd (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cgt, NSub (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cgt, NMul (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cgt, NDiv (v, vc), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (Cgt, va, NAdd (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Cgt, va, NSub (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Cgt, va, NMul (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (Cgt, va, NDiv (v, vc))) b = b
-  | refine_comp_exec B_ cti (Comp (v, NConst vc, vb)) b = b
-  | refine_comp_exec B_ cti (Comp (v, NAdd (vc, vd), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (v, NSub (vc, vd), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (v, NMul (vc, vd), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (v, NDiv (vc, vd), vb)) b = b
-  | refine_comp_exec B_ cti (Comp (v, va, NAdd (vc, vd))) b = b
-  | refine_comp_exec B_ cti (Comp (v, va, NSub (vc, vd))) b = b
-  | refine_comp_exec B_ cti (Comp (v, va, NMul (vc, vd))) b = b
-  | refine_comp_exec B_ cti (Comp (v, va, NDiv (vc, vd))) b = b;
+fun refine_right_exec B_ cti (Comp (p, e, NVar g)) b =
+  (case aeval_exec cti b e of NONE => b
+    | SOME (l, h) =>
+      (case p
+        of Ceq =>
+          fun_upd B_ b g (max ord_int (fst (b g)) l, min_int (snd (b g)) h)
+        | Cle => fun_upd B_ b g (max ord_int (fst (b g)) l, snd (b g))
+        | Cge => fun_upd B_ b g (fst (b g), min_int (snd (b g)) h)
+        | Clt =>
+          fun_upd B_ b g
+            (max ord_int (fst (b g)) (plus_inta l one_inta), snd (b g))
+        | Cgt =>
+          fun_upd B_ b g
+            (fst (b g), min_int (snd (b g)) (minus_inta h one_inta))))
+  | refine_right_exec B_ cti (Comp (v, va, NConst vc)) b = b
+  | refine_right_exec B_ cti (Comp (v, va, NAdd (vc, vd))) b = b
+  | refine_right_exec B_ cti (Comp (v, va, NSub (vc, vd))) b = b
+  | refine_right_exec B_ cti (Comp (v, va, NMul (vc, vd))) b = b
+  | refine_right_exec B_ cti (Comp (v, va, NDiv (vc, vd))) b = b;
+
+fun refine_left_exec B_ cti (Comp (p, NVar f, e)) b =
+  (case aeval_exec cti b e of NONE => b
+    | SOME (l, h) =>
+      (case p
+        of Ceq =>
+          fun_upd B_ b f (max ord_int (fst (b f)) l, min_int (snd (b f)) h)
+        | Cle => fun_upd B_ b f (fst (b f), min_int (snd (b f)) h)
+        | Cge => fun_upd B_ b f (max ord_int (fst (b f)) l, snd (b f))
+        | Clt =>
+          fun_upd B_ b f
+            (fst (b f), min_int (snd (b f)) (minus_inta h one_inta))
+        | Cgt =>
+          fun_upd B_ b f
+            (max ord_int (fst (b f)) (plus_inta l one_inta), snd (b f))))
+  | refine_left_exec B_ cti (Comp (v, NConst vc, vb)) b = b
+  | refine_left_exec B_ cti (Comp (v, NAdd (vc, vd), vb)) b = b
+  | refine_left_exec B_ cti (Comp (v, NSub (vc, vd), vb)) b = b
+  | refine_left_exec B_ cti (Comp (v, NMul (vc, vd), vb)) b = b
+  | refine_left_exec B_ cti (Comp (v, NDiv (vc, vd), vb)) b = b;
+
+fun refine_comp_exec B_ cti c b =
+  refine_right_exec B_ cti c (refine_left_exec B_ cti c b);
 
 fun refine_box_exec B_ cti cs b = fold (refine_comp_exec B_ cti) cs b;
 

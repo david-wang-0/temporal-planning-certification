@@ -502,9 +502,9 @@ text \<open>The eval-decidable check that discharges @{text num_bound_inv} (and 
   it by evaluation over the reduction's own @{typ \<open>('n, 'r) nexp\<close>}, so it also serves as WP-D's executable
   certificate check.
 
-  \<^bold>\<open>Status: 3 sorries (the soundness lemmas). Definitions are concrete/executable.\<close> The interval eval works
-  in the @{text const_to_int} encoding (code-generatable; reuses only @{text const_to_int_of_int} + the
-  @{text nexp_ok} fragment). \<open>None\<close> = "cannot bound" (fail-closed; only via an \<open>NDiv\<close> whose
+  \<^bold>\<open>Status: all soundness lemmas proved (0 sorries). Definitions are concrete/executable.\<close> The interval
+  eval works in the @{text const_to_int} encoding (code-generatable; reuses only @{text const_to_int_of_int}
+  + the @{text nexp_ok} fragment). \<open>None\<close> = "cannot bound" (fail-closed; only via an \<open>NDiv\<close> whose
   divisor interval straddles 0).\<close>
 
 context numeric_tp_nta_reduction
@@ -528,37 +528,39 @@ fun aeval :: "('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n, 'r) nexp \<
      none). Dropping the integer-division interval branch keeps @{text aeval_sound} vacuous on
      @{term NDiv} rather than requiring the truncating-division interval bound.\<close>
 
-text \<open>Guard refinement: tighten the box by the var-vs-const numeric preconditions (where threshold caps
-  land), and by var-vs-var preconditions whose OTHER operand's interval is a point \<open>[k, k]\<close> (a
-  never-assigned static fluent keeps its init value as a point box, so e.g. painter's
-  \<open>item_id = counter\<close> transfers the point onto \<open>counter\<close>). The point-box rule reuses the
-  var-vs-const update with \<open>k\<close> read off the other operand's box; a var-vs-var guard where NEITHER
-  side is a point is ignored for now -- sound, just a wider box (the general interval rule is the
-  planned variant-B generalization). All other comparison shapes are ignored likewise.\<close>
-fun refine_comp :: "('n, 'r) comp \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n \<Rightarrow> int \<times> int)" where
-  "refine_comp (Comp Cle (NVar f) (NConst c)) B = B(f := (fst (B f), min (snd (B f)) (const_to_int c)))"
-| "refine_comp (Comp Cge (NVar f) (NConst c)) B = B(f := (max (fst (B f)) (const_to_int c), snd (B f)))"
-| "refine_comp (Comp Ceq (NVar f) (NConst c)) B =
-     B(f := (max (fst (B f)) (const_to_int c), min (snd (B f)) (const_to_int c)))"
-| "refine_comp (Comp Clt (NVar f) (NConst c)) B = B(f := (fst (B f), min (snd (B f)) (const_to_int c - 1)))"
-| "refine_comp (Comp Cgt (NVar f) (NConst c)) B = B(f := (max (fst (B f)) (const_to_int c + 1), snd (B f)))"
-| "refine_comp (Comp p (NVar f) (NVar g)) B =
-     (if fst (B g) = snd (B g) then
-        (case p of
-           Cle \<Rightarrow> B(f := (fst (B f), min (snd (B f)) (fst (B g))))
-         | Cge \<Rightarrow> B(f := (max (fst (B f)) (fst (B g)), snd (B f)))
-         | Ceq \<Rightarrow> B(f := (max (fst (B f)) (fst (B g)), min (snd (B f)) (fst (B g))))
-         | Clt \<Rightarrow> B(f := (fst (B f), min (snd (B f)) (fst (B g) - 1)))
-         | Cgt \<Rightarrow> B(f := (max (fst (B f)) (fst (B g) + 1), snd (B f))))
-      else if fst (B f) = snd (B f) then
-        (case p of
-           Cle \<Rightarrow> B(g := (max (fst (B g)) (fst (B f)), snd (B g)))
-         | Cge \<Rightarrow> B(g := (fst (B g), min (snd (B g)) (fst (B f))))
-         | Ceq \<Rightarrow> B(g := (max (fst (B g)) (fst (B f)), min (snd (B g)) (fst (B f))))
-         | Clt \<Rightarrow> B(g := (max (fst (B g)) (fst (B f) + 1), snd (B g)))
-         | Cgt \<Rightarrow> B(g := (fst (B g), min (snd (B g)) (fst (B f) - 1))))
-      else B)"
-| "refine_comp _ B = B"
+text \<open>Guard refinement now interval-evaluates the OTHER side of a comparison (@{const aeval}) and
+  tightens a bare-\<open>NVar\<close> side by the op-appropriate endpoint(s) -- two-sided composition; subsumes the
+  old var-vs-const arms (\<open>aeval\<close> of \<open>NConst c\<close> is the point \<open>[c, c]\<close>) and the point-box var-vs-var rule
+  (\<open>aeval\<close> of \<open>NVar g\<close> is \<open>B g\<close>), and additionally exploits general operands like \<open>item_id + 1\<close>. \<open>None\<close>
+  from \<open>aeval\<close> (an \<open>NDiv\<close>) refines nothing. Sound: only shrinks toward values the guard forces.\<close>
+fun refine_left :: "('n, 'r) comp \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n \<Rightarrow> int \<times> int)" where
+  "refine_left (Comp p (NVar f) e) B =
+     (case aeval B e of
+        None \<Rightarrow> B
+      | Some (l, h) \<Rightarrow>
+          (case p of
+             Cle \<Rightarrow> B(f := (fst (B f), min (snd (B f)) h))
+           | Clt \<Rightarrow> B(f := (fst (B f), min (snd (B f)) (h - 1)))
+           | Cge \<Rightarrow> B(f := (max (fst (B f)) l, snd (B f)))
+           | Cgt \<Rightarrow> B(f := (max (fst (B f)) (l + 1), snd (B f)))
+           | Ceq \<Rightarrow> B(f := (max (fst (B f)) l, min (snd (B f)) h))))"
+| "refine_left _ B = B"
+
+fun refine_right :: "('n, 'r) comp \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n \<Rightarrow> int \<times> int)" where
+  "refine_right (Comp p e (NVar g)) B =
+     (case aeval B e of
+        None \<Rightarrow> B
+      | Some (l, h) \<Rightarrow>
+          (case p of
+             Cle \<Rightarrow> B(g := (max (fst (B g)) l, snd (B g)))
+           | Clt \<Rightarrow> B(g := (max (fst (B g)) (l + 1), snd (B g)))
+           | Cge \<Rightarrow> B(g := (fst (B g), min (snd (B g)) h))
+           | Cgt \<Rightarrow> B(g := (fst (B g), min (snd (B g)) (h - 1)))
+           | Ceq \<Rightarrow> B(g := (max (fst (B g)) l, min (snd (B g)) h))))"
+| "refine_right _ B = B"
+
+definition refine_comp :: "('n, 'r) comp \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n \<Rightarrow> int \<times> int)" where
+  "refine_comp c B = refine_right c (refine_left c B)"
 
 definition refine_box :: "('n, 'r) comp list \<Rightarrow> ('n \<Rightarrow> int \<times> int) \<Rightarrow> ('n \<Rightarrow> int \<times> int)" where
   "refine_box cs B = fold refine_comp cs B"
@@ -862,298 +864,302 @@ definition in_refine_box :: "('n \<rightharpoonup> 'r) \<Rightarrow> ('n \<Right
   "in_refine_box w B \<longleftrightarrow> (\<forall>h \<in> set nfluents. \<exists>r. w h = Some r \<and> r \<in> \<int>
        \<and> fst (B h) \<le> const_to_int r \<and> const_to_int r \<le> snd (B h))"
 
-text \<open>A single guard refinement preserves the fold invariant: @{const refine_comp} only shrinks the
-  bound of a var-vs-const comparison @{term \<open>Comp cmp (NVar f) (NConst k)\<close>} towards a value that
-  @{term \<open>sat_comp w c\<close>} already forces, and leaves every other fluent's box untouched. The
-  guard-constant integrality @{term \<open>k \<in> \<int>\<close>} comes from @{term \<open>comp_ok w c\<close>} (its @{term NConst}
-  clause forces the constant to be an integer, independently of @{term w}).\<close>
+text \<open>A single guard refinement preserves the fold invariant. @{const refine_comp} is the sequential
+  composition @{term \<open>refine_right c (refine_left c B)\<close>}: @{const refine_left} tightens a bare-\<open>NVar\<close> LHS
+  by the interval @{const aeval} computes for the RHS, and @{const refine_right} mirrors it for a bare-\<open>NVar\<close>
+  RHS. Each only shrinks a bound toward a value @{term \<open>sat_comp w c\<close>} already forces -- @{term \<open>comp_ok w c\<close>}
+  supplies the definedness and integrality of both sides (via @{text aeval_sound}) -- leaving every other
+  fluent's box untouched.\<close>
+lemma refine_left_pres:
+  assumes "in_refine_box w B"
+      and "sat_comp w c"
+      and "comp_ok w c"
+    shows "in_refine_box w (refine_left c B)"
+proof -
+  obtain p a e where c: "c = Comp p a e" by (cases c)
+  show ?thesis
+  proof (cases a)
+    case (NConst k)
+    have "refine_left c B = B" unfolding c NConst by simp
+    thus ?thesis using assms(1) by simp
+  next
+    case (NVar f)
+    show ?thesis
+    proof (cases "aeval B e")
+      case None
+      have "refine_left c B = B" unfolding c NVar using None by simp
+      thus ?thesis using assms(1) by simp
+    next
+      case (Some lh)
+      obtain l h where lh: "aeval B e = Some (l, h)" using Some by (cases lh) simp
+      have okf: "nexp_ok w (NVar f)" and oke: "nexp_ok w e"
+        using assms(3) unfolding c NVar by simp_all
+      have fin: "f \<in> set nfluents" using okf by simp
+      obtain rf where rf: "w f = Some rf" "rf \<in> \<int>"
+        and hlo: "fst (B f) \<le> const_to_int rf" and hhi: "const_to_int rf \<le> snd (B f)"
+        using assms(1) fin unfolding in_refine_box_def by blast
+      \<comment> \<open>every fluent read by the RHS has an in-box witness (needed by @{text aeval_sound})\<close>
+      have wit: "\<exists>r. w g = Some r \<and> r \<in> \<int> \<and> fst (B g) \<le> const_to_int r \<and> const_to_int r \<le> snd (B g)"
+        if "g \<in> nexp_fluents e" for g
+      proof -
+        have "g \<in> set nfluents" using nexp_ok_fluents_bnd[OF oke] that by blast
+        thus ?thesis using assms(1) unfolding in_refine_box_def by blast
+      qed
+      obtain re where re: "eval_nexp w e = Some re" "re \<in> \<int>"
+        and rlo: "l \<le> const_to_int re" and rhi: "const_to_int re \<le> h"
+        using aeval_sound[OF wit oke lh] by blast
+      have rel: "cmp_op_rel p rf re" using assms(2) rf(1) re(1) unfolding c NVar by simp
+      \<comment> \<open>updating only @{term f}'s box entry preserves the invariant when @{term rf}'s image stays inside\<close>
+      have box_upd: "in_refine_box w (B(f := nb))"
+        if nb_lo: "fst nb \<le> const_to_int rf" and nb_hi: "const_to_int rf \<le> snd nb" for nb
+      proof (unfold in_refine_box_def, rule ballI)
+        fix h' assume h'in: "h' \<in> set nfluents"
+        show "\<exists>r. w h' = Some r \<and> r \<in> \<int> \<and> fst ((B(f := nb)) h') \<le> const_to_int r \<and> const_to_int r \<le> snd ((B(f := nb)) h')"
+        proof (cases "h' = f")
+          case True
+          thus ?thesis using rf nb_lo nb_hi by auto
+        next
+          case False
+          thus ?thesis using assms(1) h'in unfolding in_refine_box_def by auto
+        qed
+      qed
+      \<comment> \<open>strict monotonicity of the integer encoding (used by the strict comparison arms)\<close>
+      have cti_lt: "const_to_int x < const_to_int y" if xi: "x \<in> \<int>" and yi: "y \<in> \<int>" and xy: "x < y" for x y
+      proof -
+        have le: "const_to_int x \<le> const_to_int y" using xi yi xy by (auto intro: const_to_int_mono)
+        have "const_to_int x \<noteq> const_to_int y"
+        proof
+          assume "const_to_int x = const_to_int y"
+          hence "of_int (const_to_int x) = (of_int (const_to_int y) :: 'r)" by simp
+          hence "x = y" using const_to_int_round_trip[OF xi] const_to_int_round_trip[OF yi] by simp
+          thus False using xy by simp
+        qed
+        thus ?thesis using le by simp
+      qed
+      show ?thesis
+      proof (cases p)
+        case Cle
+        have eq: "refine_left c B = B(f := (fst (B f), min (snd (B f)) h))"
+          unfolding c NVar using lh Cle by simp
+        have "rf \<le> re" using rel Cle by simp
+        hence "const_to_int rf \<le> const_to_int re" by (rule const_to_int_mono[OF rf(2) re(2)])
+        hence "const_to_int rf \<le> min (snd (B f)) h" using hhi rhi by simp
+        hence "in_refine_box w (B(f := (fst (B f), min (snd (B f)) h)))"
+          using box_upd[of "(fst (B f), min (snd (B f)) h)"] hlo by simp
+        thus ?thesis unfolding eq .
+      next
+        case Ceq
+        have eq: "refine_left c B = B(f := (max (fst (B f)) l, min (snd (B f)) h))"
+          unfolding c NVar using lh Ceq by simp
+        have "rf = re" using rel Ceq by simp
+        hence cti: "const_to_int rf = const_to_int re" by simp
+        have a1: "max (fst (B f)) l \<le> const_to_int rf" using hlo rlo cti by simp
+        have a2: "const_to_int rf \<le> min (snd (B f)) h" using hhi rhi cti by simp
+        have "in_refine_box w (B(f := (max (fst (B f)) l, min (snd (B f)) h)))"
+          using box_upd[of "(max (fst (B f)) l, min (snd (B f)) h)"] a1 a2 by simp
+        thus ?thesis unfolding eq .
+      next
+        case Cge
+        have eq: "refine_left c B = B(f := (max (fst (B f)) l, snd (B f)))"
+          unfolding c NVar using lh Cge by simp
+        have "re \<le> rf" using rel Cge by simp
+        hence "const_to_int re \<le> const_to_int rf" by (rule const_to_int_mono[OF re(2) rf(2)])
+        hence g1: "max (fst (B f)) l \<le> const_to_int rf" using hlo rlo by simp
+        have "in_refine_box w (B(f := (max (fst (B f)) l, snd (B f))))"
+          using box_upd[of "(max (fst (B f)) l, snd (B f))"] g1 hhi by simp
+        thus ?thesis unfolding eq .
+      next
+        case Clt
+        have eq: "refine_left c B = B(f := (fst (B f), min (snd (B f)) (h - 1)))"
+          unfolding c NVar using lh Clt by simp
+        have "rf < re" using rel Clt by simp
+        hence "const_to_int rf < const_to_int re" by (rule cti_lt[OF rf(2) re(2)])
+        hence "const_to_int rf \<le> h - 1" using rhi by linarith
+        hence "const_to_int rf \<le> min (snd (B f)) (h - 1)" using hhi by simp
+        hence "in_refine_box w (B(f := (fst (B f), min (snd (B f)) (h - 1))))"
+          using box_upd[of "(fst (B f), min (snd (B f)) (h - 1))"] hlo by simp
+        thus ?thesis unfolding eq .
+      next
+        case Cgt
+        have eq: "refine_left c B = B(f := (max (fst (B f)) (l + 1), snd (B f)))"
+          unfolding c NVar using lh Cgt by simp
+        have "re < rf" using rel Cgt by simp
+        hence "const_to_int re < const_to_int rf" by (rule cti_lt[OF re(2) rf(2)])
+        hence "l + 1 \<le> const_to_int rf" using rlo by linarith
+        hence "max (fst (B f)) (l + 1) \<le> const_to_int rf" using hlo by simp
+        hence "in_refine_box w (B(f := (max (fst (B f)) (l + 1), snd (B f))))"
+          using box_upd[of "(max (fst (B f)) (l + 1), snd (B f))"] hhi by simp
+        thus ?thesis unfolding eq .
+      qed
+    qed
+  next
+    case (NAdd a1 a2)
+    have "refine_left c B = B" unfolding c NAdd by simp
+    thus ?thesis using assms(1) by simp
+  next
+    case (NSub a1 a2)
+    have "refine_left c B = B" unfolding c NSub by simp
+    thus ?thesis using assms(1) by simp
+  next
+    case (NMul a1 a2)
+    have "refine_left c B = B" unfolding c NMul by simp
+    thus ?thesis using assms(1) by simp
+  next
+    case (NDiv a1 a2)
+    have "refine_left c B = B" unfolding c NDiv by simp
+    thus ?thesis using assms(1) by simp
+  qed
+qed
+
+text \<open>The mirror of @{thm [source] refine_left_pres} for @{const refine_right}: a bare-\<open>NVar\<close> RHS is
+  tightened by the interval @{const aeval} computes for the LHS, with the comparison read the other way
+  round.\<close>
+lemma refine_right_pres:
+  assumes "in_refine_box w B"
+      and "sat_comp w c"
+      and "comp_ok w c"
+    shows "in_refine_box w (refine_right c B)"
+proof -
+  obtain p e a where c: "c = Comp p e a" by (cases c)
+  show ?thesis
+  proof (cases a)
+    case (NConst k)
+    have "refine_right c B = B" unfolding c NConst by simp
+    thus ?thesis using assms(1) by simp
+  next
+    case (NAdd a1 a2)
+    have "refine_right c B = B" unfolding c NAdd by simp
+    thus ?thesis using assms(1) by simp
+  next
+    case (NSub a1 a2)
+    have "refine_right c B = B" unfolding c NSub by simp
+    thus ?thesis using assms(1) by simp
+  next
+    case (NMul a1 a2)
+    have "refine_right c B = B" unfolding c NMul by simp
+    thus ?thesis using assms(1) by simp
+  next
+    case (NDiv a1 a2)
+    have "refine_right c B = B" unfolding c NDiv by simp
+    thus ?thesis using assms(1) by simp
+  next
+    case (NVar g)
+    show ?thesis
+    proof (cases "aeval B e")
+      case None
+      have "refine_right c B = B" unfolding c NVar using None by simp
+      thus ?thesis using assms(1) by simp
+    next
+      case (Some lh)
+      obtain l h where lh: "aeval B e = Some (l, h)" using Some by (cases lh) simp
+      have okg: "nexp_ok w (NVar g)" and oke: "nexp_ok w e"
+        using assms(3) unfolding c NVar by simp_all
+      have gin: "g \<in> set nfluents" using okg by simp
+      obtain rg where rg: "w g = Some rg" "rg \<in> \<int>"
+        and glo: "fst (B g) \<le> const_to_int rg" and ghi: "const_to_int rg \<le> snd (B g)"
+        using assms(1) gin unfolding in_refine_box_def by blast
+      have wit: "\<exists>r. w x = Some r \<and> r \<in> \<int> \<and> fst (B x) \<le> const_to_int r \<and> const_to_int r \<le> snd (B x)"
+        if "x \<in> nexp_fluents e" for x
+      proof -
+        have "x \<in> set nfluents" using nexp_ok_fluents_bnd[OF oke] that by blast
+        thus ?thesis using assms(1) unfolding in_refine_box_def by blast
+      qed
+      obtain re where re: "eval_nexp w e = Some re" "re \<in> \<int>"
+        and rlo: "l \<le> const_to_int re" and rhi: "const_to_int re \<le> h"
+        using aeval_sound[OF wit oke lh] by blast
+      have rel: "cmp_op_rel p re rg" using assms(2) rg(1) re(1) unfolding c NVar by simp
+      have box_upd: "in_refine_box w (B(g := nb))"
+        if nb_lo: "fst nb \<le> const_to_int rg" and nb_hi: "const_to_int rg \<le> snd nb" for nb
+      proof (unfold in_refine_box_def, rule ballI)
+        fix h' assume h'in: "h' \<in> set nfluents"
+        show "\<exists>r. w h' = Some r \<and> r \<in> \<int> \<and> fst ((B(g := nb)) h') \<le> const_to_int r \<and> const_to_int r \<le> snd ((B(g := nb)) h')"
+        proof (cases "h' = g")
+          case True
+          thus ?thesis using rg nb_lo nb_hi by auto
+        next
+          case False
+          thus ?thesis using assms(1) h'in unfolding in_refine_box_def by auto
+        qed
+      qed
+      have cti_lt: "const_to_int x < const_to_int y" if xi: "x \<in> \<int>" and yi: "y \<in> \<int>" and xy: "x < y" for x y
+      proof -
+        have le: "const_to_int x \<le> const_to_int y" using xi yi xy by (auto intro: const_to_int_mono)
+        have "const_to_int x \<noteq> const_to_int y"
+        proof
+          assume "const_to_int x = const_to_int y"
+          hence "of_int (const_to_int x) = (of_int (const_to_int y) :: 'r)" by simp
+          hence "x = y" using const_to_int_round_trip[OF xi] const_to_int_round_trip[OF yi] by simp
+          thus False using xy by simp
+        qed
+        thus ?thesis using le by simp
+      qed
+      show ?thesis
+      proof (cases p)
+        case Cle
+        have eq: "refine_right c B = B(g := (max (fst (B g)) l, snd (B g)))"
+          unfolding c NVar using lh Cle by simp
+        have "re \<le> rg" using rel Cle by simp
+        hence "const_to_int re \<le> const_to_int rg" by (rule const_to_int_mono[OF re(2) rg(2)])
+        hence g1: "max (fst (B g)) l \<le> const_to_int rg" using glo rlo by simp
+        have "in_refine_box w (B(g := (max (fst (B g)) l, snd (B g))))"
+          using box_upd[of "(max (fst (B g)) l, snd (B g))"] g1 ghi by simp
+        thus ?thesis unfolding eq .
+      next
+        case Ceq
+        have eq: "refine_right c B = B(g := (max (fst (B g)) l, min (snd (B g)) h))"
+          unfolding c NVar using lh Ceq by simp
+        have "re = rg" using rel Ceq by simp
+        hence cti: "const_to_int rg = const_to_int re" by simp
+        have a1: "max (fst (B g)) l \<le> const_to_int rg" using glo rlo cti by simp
+        have a2: "const_to_int rg \<le> min (snd (B g)) h" using ghi rhi cti by simp
+        have "in_refine_box w (B(g := (max (fst (B g)) l, min (snd (B g)) h)))"
+          using box_upd[of "(max (fst (B g)) l, min (snd (B g)) h)"] a1 a2 by simp
+        thus ?thesis unfolding eq .
+      next
+        case Cge
+        have eq: "refine_right c B = B(g := (fst (B g), min (snd (B g)) h))"
+          unfolding c NVar using lh Cge by simp
+        have "rg \<le> re" using rel Cge by simp
+        hence "const_to_int rg \<le> const_to_int re" by (rule const_to_int_mono[OF rg(2) re(2)])
+        hence "const_to_int rg \<le> min (snd (B g)) h" using ghi rhi by simp
+        hence "in_refine_box w (B(g := (fst (B g), min (snd (B g)) h)))"
+          using box_upd[of "(fst (B g), min (snd (B g)) h)"] glo by simp
+        thus ?thesis unfolding eq .
+      next
+        case Clt
+        have eq: "refine_right c B = B(g := (max (fst (B g)) (l + 1), snd (B g)))"
+          unfolding c NVar using lh Clt by simp
+        have "re < rg" using rel Clt by simp
+        hence "const_to_int re < const_to_int rg" by (rule cti_lt[OF re(2) rg(2)])
+        hence "l + 1 \<le> const_to_int rg" using rlo by linarith
+        hence "max (fst (B g)) (l + 1) \<le> const_to_int rg" using glo by simp
+        hence "in_refine_box w (B(g := (max (fst (B g)) (l + 1), snd (B g))))"
+          using box_upd[of "(max (fst (B g)) (l + 1), snd (B g))"] ghi by simp
+        thus ?thesis unfolding eq .
+      next
+        case Cgt
+        have eq: "refine_right c B = B(g := (fst (B g), min (snd (B g)) (h - 1)))"
+          unfolding c NVar using lh Cgt by simp
+        have "rg < re" using rel Cgt by simp
+        hence "const_to_int rg < const_to_int re" by (rule cti_lt[OF rg(2) re(2)])
+        hence "const_to_int rg \<le> h - 1" using rhi by linarith
+        hence "const_to_int rg \<le> min (snd (B g)) (h - 1)" using ghi by simp
+        hence "in_refine_box w (B(g := (fst (B g), min (snd (B g)) (h - 1))))"
+          using box_upd[of "(fst (B g), min (snd (B g)) (h - 1))"] glo by simp
+        thus ?thesis unfolding eq .
+      qed
+    qed
+  qed
+qed
+
+text \<open>The two-sided composition preserves the invariant: fold @{const refine_left} then @{const refine_right}.\<close>
 lemma refine_comp_pres:
   assumes "in_refine_box w B"
       and "sat_comp w c"
       and "comp_ok w c"
     shows "in_refine_box w (refine_comp c B)"
-proof -
-  have base: "\<exists>r. w h = Some r \<and> r \<in> \<int>
-                  \<and> fst (refine_comp c B h) \<le> const_to_int r \<and> const_to_int r \<le> snd (refine_comp c B h)"
-    if h: "h \<in> set nfluents" for h
-  proof -
-    \<comment> \<open>the invariant already holds for @{term h} in the pre-refinement box @{term B}\<close>
-    obtain rh where rh: "w h = Some rh" "rh \<in> \<int>"
-      and hlo: "fst (B h) \<le> const_to_int rh" and hhi: "const_to_int rh \<le> snd (B h)"
-      using assms(1) h unfolding in_refine_box_def by blast
-    \<comment> \<open>whenever @{term \<open>refine_comp c B\<close>} does not touch @{term h}, the invariant is inherited\<close>
-    have unchanged: "?thesis" if "refine_comp c B h = B h"
-      using rh hlo hhi that by auto
-    obtain p a b where c: "c = Comp p a b" by (cases c)
-    show ?thesis
-    proof (cases a)
-      case (NVar f)
-      show ?thesis
-      proof (cases b)
-        case (NConst k)
-        have kint: "k \<in> \<int>" using assms(3) unfolding c NVar NConst by simp
-        show ?thesis
-        proof (cases "h = f")
-          case hf: True
-          \<comment> \<open>the refined fluent: its box shrinks toward a value the guard forces\<close>
-          have wf: "w f = Some rh" using rh(1) hf by simp
-          note bounds = rh hlo hhi
-          show ?thesis
-          proof (cases p)
-            case Cle
-            have "rh \<le> k" using assms(2) wf unfolding c NVar NConst Cle by simp
-            hence "const_to_int rh \<le> const_to_int k" by (rule const_to_int_mono[OF rh(2) kint])
-            hence "const_to_int rh \<le> min (snd (B f)) (const_to_int k)" using hhi hf by simp
-            thus ?thesis using rh hlo hf unfolding c NVar NConst Cle by simp
-          next
-            case Cge
-            have "k \<le> rh" using assms(2) wf unfolding c NVar NConst Cge by simp
-            hence "const_to_int k \<le> const_to_int rh" by (rule const_to_int_mono[OF kint rh(2)])
-            hence "max (fst (B f)) (const_to_int k) \<le> const_to_int rh" using hlo hf by simp
-            thus ?thesis using rh hhi hf unfolding c NVar NConst Cge by simp
-          next
-            case Ceq
-            have "rh = k" using assms(2) wf unfolding c NVar NConst Ceq by simp
-            hence "const_to_int rh = const_to_int k" by simp
-            thus ?thesis using rh hlo hhi hf unfolding c NVar NConst Ceq by simp
-          next
-            case Clt
-            have lt: "rh < k" using assms(2) wf unfolding c NVar NConst Clt by simp
-            hence "rh \<le> k" by simp
-            hence le: "const_to_int rh \<le> const_to_int k" by (rule const_to_int_mono[OF rh(2) kint])
-            have "const_to_int rh \<noteq> const_to_int k"
-            proof
-              assume "const_to_int rh = const_to_int k"
-              hence "of_int (const_to_int rh) = (of_int (const_to_int k) :: 'r)" by simp
-              hence "rh = k"
-                using const_to_int_round_trip[OF rh(2)] const_to_int_round_trip[OF kint] by simp
-              thus False using lt by simp
-            qed
-            hence "const_to_int rh \<le> const_to_int k - 1" using le by simp
-            hence "const_to_int rh \<le> min (snd (B f)) (const_to_int k - 1)" using hhi hf by simp
-            thus ?thesis using rh hlo hf unfolding c NVar NConst Clt by simp
-          next
-            case Cgt
-            have gt: "k < rh" using assms(2) wf unfolding c NVar NConst Cgt by simp
-            hence "k \<le> rh" by simp
-            hence ge: "const_to_int k \<le> const_to_int rh" by (rule const_to_int_mono[OF kint rh(2)])
-            have "const_to_int k \<noteq> const_to_int rh"
-            proof
-              assume "const_to_int k = const_to_int rh"
-              hence "of_int (const_to_int k) = (of_int (const_to_int rh) :: 'r)" by simp
-              hence "k = rh"
-                using const_to_int_round_trip[OF rh(2)] const_to_int_round_trip[OF kint] by simp
-              thus False using gt by simp
-            qed
-            hence "const_to_int k + 1 \<le> const_to_int rh" using ge by simp
-            hence "max (fst (B f)) (const_to_int k + 1) \<le> const_to_int rh" using hlo hf by simp
-            thus ?thesis using rh hhi hf unfolding c NVar NConst Cgt by simp
-          qed
-        next
-          case False
-          \<comment> \<open>a different fluent than the one refined: its box is untouched\<close>
-          have "refine_comp c B h = B h"
-            unfolding c NVar NConst using False by (cases p) simp_all
-          thus ?thesis by (rule unchanged)
-        qed
-      next
-        case (NVar g)
-          \<comment> \<open>var-vs-var point-box arm: if the OTHER operand's interval is a point @{term \<open>[k, k]\<close>}, the
-             guard pins THIS fluent exactly as a var-vs-const guard against @{term k}; otherwise the
-             box is unchanged.\<close>
-        have fin: "f \<in> set nfluents" and gin: "g \<in> set nfluents"
-          using assms(3) unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> by auto
-        obtain rf where rf: "w f = Some rf" "rf \<in> \<int>"
-          and flo: "fst (B f) \<le> const_to_int rf" and fhi: "const_to_int rf \<le> snd (B f)"
-          using assms(1) fin unfolding in_refine_box_def by blast
-        obtain rg where rg: "w g = Some rg" "rg \<in> \<int>"
-          and glo: "fst (B g) \<le> const_to_int rg" and ghi: "const_to_int rg \<le> snd (B g)"
-          using assms(1) gin unfolding in_refine_box_def by blast
-        show ?thesis
-        proof (cases "fst (B g) = snd (B g)")
-          case gpt: True
-          \<comment> \<open>@{term g} is a point: the guard pins @{term f} against @{term \<open>fst (B g)\<close>}.\<close>
-          have cg: "const_to_int rg = fst (B g)" using glo ghi gpt by linarith
-          show ?thesis
-          proof (cases "h = f")
-            case hf: True
-            have wf: "w f = Some rh" using rh(1) hf by simp
-            show ?thesis
-            proof (cases p)
-              case Cle
-              have "rh \<le> rg" using assms(2) wf rg(1) unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cle by simp
-              hence "const_to_int rh \<le> const_to_int rg" by (rule const_to_int_mono[OF rh(2) rg(2)])
-              hence "const_to_int rh \<le> min (snd (B f)) (fst (B g))" using hhi cg hf by simp
-              thus ?thesis using rh hlo hf gpt unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cle by simp
-            next
-              case Cge
-              have "rg \<le> rh" using assms(2) wf rg(1) unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cge by simp
-              hence "const_to_int rg \<le> const_to_int rh" by (rule const_to_int_mono[OF rg(2) rh(2)])
-              hence "max (fst (B f)) (fst (B g)) \<le> const_to_int rh" using hlo cg hf by simp
-              thus ?thesis using rh hhi hf gpt unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cge by simp
-            next
-              case Ceq
-              have "rh = rg" using assms(2) wf rg(1) unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Ceq by simp
-              hence "const_to_int rh = const_to_int rg" by simp
-              thus ?thesis using rh hlo hhi hf cg gpt unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Ceq by simp
-            next
-              case Clt
-              have lt: "rh < rg" using assms(2) wf rg(1) unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Clt by simp
-              hence "rh \<le> rg" by simp
-              hence le: "const_to_int rh \<le> const_to_int rg" by (rule const_to_int_mono[OF rh(2) rg(2)])
-              have "const_to_int rh \<noteq> const_to_int rg"
-              proof
-                assume "const_to_int rh = const_to_int rg"
-                hence "of_int (const_to_int rh) = (of_int (const_to_int rg) :: 'r)" by simp
-                hence "rh = rg"
-                  using const_to_int_round_trip[OF rh(2)] const_to_int_round_trip[OF rg(2)] by simp
-                thus False using lt by simp
-              qed
-              hence "const_to_int rh \<le> const_to_int rg - 1" using le by simp
-              hence "const_to_int rh \<le> min (snd (B f)) (fst (B g) - 1)" using hhi cg hf by simp
-              thus ?thesis using rh hlo hf gpt unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Clt by simp
-            next
-              case Cgt
-              have gt: "rg < rh" using assms(2) wf rg(1) unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cgt by simp
-              hence "rg \<le> rh" by simp
-              hence ge: "const_to_int rg \<le> const_to_int rh" by (rule const_to_int_mono[OF rg(2) rh(2)])
-              have "const_to_int rg \<noteq> const_to_int rh"
-              proof
-                assume "const_to_int rg = const_to_int rh"
-                hence "of_int (const_to_int rg) = (of_int (const_to_int rh) :: 'r)" by simp
-                hence "rg = rh"
-                  using const_to_int_round_trip[OF rg(2)] const_to_int_round_trip[OF rh(2)] by simp
-                thus False using gt by simp
-              qed
-              hence "const_to_int rg + 1 \<le> const_to_int rh" using ge by simp
-              hence "max (fst (B f)) (fst (B g) + 1) \<le> const_to_int rh" using hlo cg hf by simp
-              thus ?thesis using rh hhi hf gpt unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cgt by simp
-            qed
-          next
-            case hnf: False
-            \<comment> \<open>a fluent other than @{term f}: only @{term f}'s box is touched\<close>
-            have "refine_comp c B h = B h"
-              unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> using gpt hnf by (cases p) simp_all
-            thus ?thesis by (rule unchanged)
-          qed
-        next
-          case gnp: False
-          show ?thesis
-          proof (cases "fst (B f) = snd (B f)")
-            case fpt: True
-            \<comment> \<open>@{term f} is a point: the guard pins @{term g} with the FLIPPED comparison.\<close>
-            have cf: "const_to_int rf = fst (B f)" using flo fhi fpt by linarith
-            show ?thesis
-            proof (cases "h = g")
-              case hg: True
-              have wg: "w g = Some rh" using rh(1) hg by simp
-              show ?thesis
-              proof (cases p)
-                case Cle
-                have "rf \<le> rh" using assms(2) rf(1) wg unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cle by simp
-                hence "const_to_int rf \<le> const_to_int rh" by (rule const_to_int_mono[OF rf(2) rh(2)])
-                hence "max (fst (B g)) (fst (B f)) \<le> const_to_int rh" using hlo cf hg by simp
-                thus ?thesis using rh hhi hg gnp fpt unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cle by simp
-              next
-                case Cge
-                have "rh \<le> rf" using assms(2) rf(1) wg unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cge by simp
-                hence "const_to_int rh \<le> const_to_int rf" by (rule const_to_int_mono[OF rh(2) rf(2)])
-                hence "const_to_int rh \<le> min (snd (B g)) (fst (B f))" using hhi cf hg by simp
-                thus ?thesis using rh hlo hg gnp fpt unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cge by simp
-              next
-                case Ceq
-                have "rf = rh" using assms(2) rf(1) wg unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Ceq by simp
-                hence "const_to_int rh = const_to_int rf" by simp
-                thus ?thesis using rh hlo hhi hg cf gnp fpt unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Ceq by simp
-              next
-                case Clt
-                have lt: "rf < rh" using assms(2) rf(1) wg unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Clt by simp
-                hence "rf \<le> rh" by simp
-                hence le: "const_to_int rf \<le> const_to_int rh" by (rule const_to_int_mono[OF rf(2) rh(2)])
-                have "const_to_int rf \<noteq> const_to_int rh"
-                proof
-                  assume "const_to_int rf = const_to_int rh"
-                  hence "of_int (const_to_int rf) = (of_int (const_to_int rh) :: 'r)" by simp
-                  hence "rf = rh"
-                    using const_to_int_round_trip[OF rf(2)] const_to_int_round_trip[OF rh(2)] by simp
-                  thus False using lt by simp
-                qed
-                hence "const_to_int rf + 1 \<le> const_to_int rh" using le by simp
-                hence "max (fst (B g)) (fst (B f) + 1) \<le> const_to_int rh" using hlo cf hg by simp
-                thus ?thesis using rh hhi hg gnp fpt unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Clt by simp
-              next
-                case Cgt
-                have gt: "rh < rf" using assms(2) rf(1) wg unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cgt by simp
-                hence "rh \<le> rf" by simp
-                hence le: "const_to_int rh \<le> const_to_int rf" by (rule const_to_int_mono[OF rh(2) rf(2)])
-                have "const_to_int rh \<noteq> const_to_int rf"
-                proof
-                  assume "const_to_int rh = const_to_int rf"
-                  hence "of_int (const_to_int rh) = (of_int (const_to_int rf) :: 'r)" by simp
-                  hence "rh = rf"
-                    using const_to_int_round_trip[OF rh(2)] const_to_int_round_trip[OF rf(2)] by simp
-                  thus False using gt by simp
-                qed
-                hence "const_to_int rh \<le> const_to_int rf - 1" using le by simp
-                hence "const_to_int rh \<le> min (snd (B g)) (fst (B f) - 1)" using hhi cf hg by simp
-                thus ?thesis using rh hlo hg gnp fpt unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> Cgt by simp
-              qed
-            next
-              case hng: False
-              \<comment> \<open>a fluent other than @{term g}: only @{term g}'s box is touched\<close>
-              have "refine_comp c B h = B h"
-                unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> using gnp fpt hng by (cases p) simp_all
-              thus ?thesis by (rule unchanged)
-            qed
-          next
-            case fnp: False
-            \<comment> \<open>neither operand is a point: the box is unchanged\<close>
-            have "refine_comp c B h = B h"
-              unfolding c \<open>a = NVar f\<close> \<open>b = NVar g\<close> using gnp fnp by (cases p) simp_all
-            thus ?thesis by (rule unchanged)
-          qed
-        qed
-      next
-        case (NAdd b1 b2)
-        have "refine_comp c B h = B h" unfolding c NVar \<open>b = NAdd b1 b2\<close> by (cases p) simp_all
-        thus ?thesis by (rule unchanged)
-      next
-        case (NSub b1 b2)
-        have "refine_comp c B h = B h" unfolding c NVar \<open>b = NSub b1 b2\<close> by (cases p) simp_all
-        thus ?thesis by (rule unchanged)
-      next
-        case (NMul b1 b2)
-        have "refine_comp c B h = B h" unfolding c NVar \<open>b = NMul b1 b2\<close> by (cases p) simp_all
-        thus ?thesis by (rule unchanged)
-      next
-        case (NDiv b1 b2)
-        have "refine_comp c B h = B h" unfolding c NVar \<open>b = NDiv b1 b2\<close> by (cases p) simp_all
-        thus ?thesis by (rule unchanged)
-      qed
-    next
-      case (NConst k)  \<comment> \<open>LHS is not a variable: @{const refine_comp} is the identity\<close>
-      have "refine_comp c B h = B h" unfolding c \<open>a = NConst k\<close> by (cases p; cases b) simp_all
-      thus ?thesis by (rule unchanged)
-    next
-      case (NAdd a1 a2)
-      have "refine_comp c B h = B h" unfolding c \<open>a = NAdd a1 a2\<close> by (cases p; cases b) simp_all
-      thus ?thesis by (rule unchanged)
-    next
-      case (NSub a1 a2)
-      have "refine_comp c B h = B h" unfolding c \<open>a = NSub a1 a2\<close> by (cases p; cases b) simp_all
-      thus ?thesis by (rule unchanged)
-    next
-      case (NMul a1 a2)
-      have "refine_comp c B h = B h" unfolding c \<open>a = NMul a1 a2\<close> by (cases p; cases b) simp_all
-      thus ?thesis by (rule unchanged)
-    next
-      case (NDiv a1 a2)
-      have "refine_comp c B h = B h" unfolding c \<open>a = NDiv a1 a2\<close> by (cases p; cases b) simp_all
-      thus ?thesis by (rule unchanged)
-    qed
-  qed
-  show ?thesis unfolding in_refine_box_def using base by blast
-qed
+  unfolding refine_comp_def
+  using refine_right_pres[OF refine_left_pres[OF assms] assms(2,3)] .
 
 text \<open>Folding all guard refinements preserves the invariant.\<close>
 lemma refine_box_fold_pres:
