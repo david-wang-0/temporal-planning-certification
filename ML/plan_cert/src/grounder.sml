@@ -581,12 +581,15 @@ struct
               val a1 = foldl (fn ((_, f), ac) => form_funcs ac f) a0 conds
           in foldl (fn ((_, e), ac) => eff_funcs ac e) a1 effs end)
 
-  (* ---- constant-fold STATIC numeric fluents (never assigned by any action) ----
+  (* ---- STATIC numeric fluents: fold DURATIONS ONLY (never assigned by any action) ----
      A ground fluent that is on NO effect's LHS is static: its value stays its init assignment.
-     Substituting  NVar f -> NConst (its init value)  turns a relational var-vs-var guard like
-     (>= (battery-level r0) (distance p0 p1))  into var-vs-const  (>= (battery-level r0) 3) ,
-     which the interval bound inference AND the trusted refine_comp re-check both handle (both
-     only refine var-vs-const).  Sound: the fluent is provably constant. *)
+     The net format requires constant integer durations (per-action int clock bounds), so a
+     duration constraint referencing a static fluent (sync's  (= ?duration (dur_c1 r0)) ) MUST
+     be folded to its init constant.  Guards, effect RHSs and the goal are NOT folded: the
+     verified bound-inference/certificate layer handles true fluent-vs-fluent guards (static
+     point boxes + relational refinement), so the certified problem is the true grounded
+     problem everywhere except durations.  Statics left entirely unread after the duration
+     fold (sync's dur_ fluents) are dropped from funcs/init as dead. *)
   fun mem x xs = List.exists (fn y => y = x) xs
   fun assocv _ [] = NONE
     | assocv x ((k, v) :: t) = if k = x then SOME v else assocv x t
@@ -626,66 +629,63 @@ struct
       | C.NumericGreaterAtm (x, y) => if is_const_expr x andalso not (is_const_expr y) then C.NumericLessAtm (y, x) else a
       | C.NumericGEAtm (x, y)      => if is_const_expr x andalso not (is_const_expr y) then C.NumericLEAtm (y, x) else a
       | other => other)
-  fun fold_atom st cm a = norm_cmp
-    (case a of
-        C.NumericEqAtm (x, y)      => C.NumericEqAtm (fold_nexp st cm x, fold_nexp st cm y)
-      | C.NumericLessAtm (x, y)    => C.NumericLessAtm (fold_nexp st cm x, fold_nexp st cm y)
-      | C.NumericLEAtm (x, y)      => C.NumericLEAtm (fold_nexp st cm x, fold_nexp st cm y)
-      | C.NumericGreaterAtm (x, y) => C.NumericGreaterAtm (fold_nexp st cm x, fold_nexp st cm y)
-      | C.NumericGEAtm (x, y)      => C.NumericGEAtm (fold_nexp st cm x, fold_nexp st cm y)
-      | other => other)
+  fun fold_dc st cm (C.DurationConstraint (dop, e)) = C.DurationConstraint (dop, fold_nexp st cm e)
   fun fold_eff st cm (C.Effect (adds, dels, neffs)) =
         C.Effect (adds, dels, map (fn C.NumericEffect (o_, p, e) => C.NumericEffect (o_, p, fold_nexp st cm e)) neffs)
-  fun fold_dc st cm (C.DurationConstraint (dop, e)) = C.DurationConstraint (dop, fold_nexp st cm e)
-  fun fold_sch st cm sch =
+  (* GUARDS-ONLY unfold: statics are folded in DURATIONS (the net needs constant int clock
+     bounds) and EFFECT RHSs (the mlunta update grammar is x:=c | x:=x+-c | x:=v+-c -- a
+     variable offset like  battery := battery - distance  is inexpressible in the model
+     format), but NOT in guard comparisons: those stay true fluent-vs-fluent and are handled
+     by the verified relational bound-inference/certificate layer (static point boxes).
+     Guard comparisons are only operand-normalized (norm_cmp). *)
+  fun norm_fold_sch st cm sch =
     (case sch of
         C.SimpleActionSchemaa (h, C.SimpleActionBody (pre, eff)) =>
-          C.SimpleActionSchemaa (h, C.SimpleActionBody (map_form (fold_atom st cm) pre, fold_eff st cm eff))
+          C.SimpleActionSchemaa (h, C.SimpleActionBody (map_form norm_cmp pre, fold_eff st cm eff))
       | C.DurativeActionSchema (h, C.DurativeActionBody (durs, conds, effs)) =>
           C.DurativeActionSchema (h, C.DurativeActionBody
             (map (fn (ta, dc) => (ta, fold_dc st cm dc)) durs,
-             map (fn (ta, f)  => (ta, map_form (fold_atom st cm) f)) conds,
+             map (fn (ta, f)  => (ta, map_form norm_cmp f)) conds,
              map (fn (ta, e)  => (ta, fold_eff st cm e)) effs)))
 
-  fun fold_static_fluents (C.Problem (C.Domain (types, preds, funcs, consts, actions), objs, init, goal)) =
-    let
-      val assigned = foldl (fn (s, a) => schema_assigned a s) [] actions
-      val cm = List.mapPartial
-        (fn C.Atom (C.NumericEqAtm (C.FunctionExpr (C.PNE (C.Func f, _)), C.ConstantExpr v)) =>
-                if mem f assigned then NONE else SOME (f, v)
-          | _ => NONE) init
-      val st = map #1 cm
-      val actions' = map (fold_sch st cm) actions
-      val goal'    = map_form (fold_atom st cm) goal
-      val funcs'   = List.filter (fn C.FuncDecl (C.Func f, _) => not (mem f st)) funcs
-      val init'    = List.filter
-        (fn C.Atom (C.NumericEqAtm (C.FunctionExpr (C.PNE (C.Func f, _)), _)) => not (mem f st)
-          | _ => true) init
-    in
-      C.Problem (C.Domain (types, preds, funcs', consts, actions'), objs, init', goal')
+  (* the static map: (fluent, init value) for every fluent no action's effect assigns *)
+  fun static_cm actions init =
+    let val assigned = foldl (fn (s, a) => schema_assigned a s) [] actions
+    in List.mapPartial
+         (fn C.Atom (C.NumericEqAtm (C.FunctionExpr (C.PNE (C.Func f, _)), C.ConstantExpr v)) =>
+               if mem f assigned then NONE else SOME (f, v)
+           | _ => NONE) init
     end
 
   (* shared assembly of the numeric-KEEPING ground problem; shared by the C-input entry
      (ground_problem_numeric) and the QAst entry (ground_problem_numeric_q). *)
   fun assemble_numeric types ground_actions0 init goal =
     let
-      val ground_actions = scale_durations ground_actions0
       val num_init = map (map_form prop_obj_atom) (List.concat (map keep_init_form init))
-      val num_goal = map_form prop_obj_atom goal
+      val num_goal = map_form norm_cmp (map_form prop_obj_atom goal)
+      (* statics + their init values; fold DURATIONS before integer-scaling so a folded
+         rational duration is scaled like any literal *)
+      val cm = static_cm ground_actions0 num_init
+      val st = map #1 cm
+      val ground_actions = scale_durations (map (norm_fold_sch st cm) ground_actions0)
       val pnames =
         foldl (fn (s, acc) => schema_preds acc s)
           (form_preds (foldl (fn (f, acc) => form_preds acc f) [] num_init) num_goal)
           ground_actions
+      (* fluents referenced by the ACTIONS (guards/effects/remaining durations) or the GOAL:
+         a static read only in now-folded durations (sync's dur_ fluents) does not appear and is
+         dropped from funcs/init as dead; live statics (painter's item_id, majsp's distance)
+         stay declared + init'd and get point boxes from the bound inference *)
       val fnames =
-        foldl (fn (s, acc) => schema_funcs_num acc s)
-          (form_funcs (foldl (fn (f, acc) => form_funcs acc f) [] num_init) num_goal)
-          ground_actions
+        foldl (fn (s, acc) => schema_funcs_num acc s) (form_funcs [] num_goal) ground_actions
       val prop_preds = map (fn nm => C.PredDecl (C.Pred nm, [])) pnames
       val num_funcs  = map (fn nm => C.FuncDecl (C.Func nm, [])) fnames
+      val init' = List.filter
+        (fn C.Atom (C.NumericEqAtm (C.FunctionExpr (C.PNE (C.Func f, _)), _)) => mem f fnames
+          | _ => true) num_init
     in
-      fold_static_fluents
-        (C.Problem
-          (C.Domain (types, prop_preds, num_funcs, [], ground_actions), [], num_init, num_goal))
+      C.Problem
+        (C.Domain (types, prop_preds, num_funcs, [], ground_actions), [], init', num_goal)
     end
 
   fun ground_problem_numeric

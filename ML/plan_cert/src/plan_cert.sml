@@ -219,7 +219,7 @@ fun make_numeric_network domain problem model =
         val () = println ("+ Box re-check (is_gbound_inv_exec): "
                           ^ (if boxOk then "PASS" else "FAIL"))
         val net =
-            case Converter.check_and_make_numeric_network_opt ground_prob box of
+            (case Converter.check_and_make_numeric_network_opt ground_prob box of
                 SOME n => n
               | NONE =>
                   let val diag = Converter.integer_of_nat
@@ -232,8 +232,10 @@ fun make_numeric_network domain problem model =
                                   \10/11=pre-struct-ok 12=inv-struct-ok 13=init-int 14/15=writes-declared \
                                   \16=goal-struct-ok)"
                              else "trusted static bound re-check rejected the inferred box (is_gbound_inv_exec)")
-                  end
+                  end)
+            handle Exn.ERROR msg => exit_fail ("numeric net builder raised ERROR: " ^ msg)
         val _ = NetworkConversion.convert_network true model net
+                handle Exn.ERROR msg => exit_fail ("network conversion raised ERROR: " ^ msg)
     in () end
 
 fun make_renaming model renaming =

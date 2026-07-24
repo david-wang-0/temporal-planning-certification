@@ -73,7 +73,13 @@ def dict_to_tchecker_string(d):
         vars = vars.split(',')
         vars = [] if vars == [''] else vars
         vars = [split_var(v) for v in vars]
-        return ("\n".join("int:1:{}:{}:0:{}".format(l, u, name) for (name, l, u) in vars))
+        # declaration-level init must lie within [min, max] (tck-reach rejects init < min);
+        # the net assigns the real initial values on its first edge, so clamp 0 into range
+        # (a point-bounded static fluent like item_id[1:1] would otherwise fail with init 0)
+        def init_of(l, u):
+            return str(max(int(l), min(0, int(u))))
+        return ("\n".join("int:1:{}:{}:{}:{}".format(l, u, init_of(l, u), name)
+                          for (name, l, u) in vars))
 
     def mk_attributes(d):
         s = " : ".join("{}:{}".format(k, v) for k, v in d.items() if v != None)

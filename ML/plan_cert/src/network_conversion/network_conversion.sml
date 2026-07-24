@@ -77,7 +77,13 @@ struct
             Converter.Ge x  => (Constraint.Ge, x) |
             Converter.Gta x  => (Constraint.Gt, x) |
             _ => raise Unsupported "Invalid expression in guard or constraint of edge. Not a comparison."
-        ) |> (fn (f, (l, r)) => f (convert_exp_left l, convert_exp_right r)))
+        ) |> (fn (f, (l, r)) =>
+            (* var-vs-var comparison (fluent-vs-fluent guard, e.g. painter's
+               item_id = counter): emit as a variable DIFFERENCE constraint
+               l - r <op> 0, the shape the guard type/serializer already support *)
+            case (l, r) of
+                (Converter.Var x, Converter.Var y) => f (Difference.Diff (x, y), 0)
+              | _ => f (convert_exp_left l, convert_exp_right r)))
 
     fun convert_guard (vc: string) (guard: (string, inta) Converter.bexp): (string, int) guard = 
     let 
