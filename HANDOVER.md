@@ -1,50 +1,60 @@
 # HANDOVER — numeric reduction is proved abstractly; NEXT = make it executable
 
-## ⭐ SESSION STATUS (2026-07-23) — read this first
+## ⭐ SESSION STATUS (2026-07-24, overnight) — read this first
 
-**Numeric certification runs END-TO-END.** `ML/out/plan_cert -certify numeric` emits nets for **4 of 5**
-unsolvable gigante domains: majsp-impossible-1 (144260B), majsp-impossible-2 (3.8MB), MatchCellar-impossible
-(159993B), sync-impossible (15757B). All committed & green.
+**Relational fluent-vs-fluent guards are DONE (variants A + B) and ALL benchmark runs emit nets on
+their TRUE-guard problems.** `ML/out/plan_cert -certify numeric`: painter (both `QUANT_EXPAND`
+strategies; `counter [0,2]`, `item_id` point boxes transferred across the `=` guards), majsp-1
+(`battery [0,2]`, true `>=`-distance guards), **majsp-2 emits its FIRST net ever** (`battery [1,1]`;
+it is impossible BECAUSE battery < distance — the AI derives an EMPTY guard-refined interval and the
+new emptiness escape accepts the unfireable snap), sync + MatchCellar byte-identical. tck-reach on
+majsp-2's net: parses the new difference guards, 17 states, `REACHABLE false`. All green + committed.
 
-**Landed & committed this session** (git `92ba24b … 0c8a49e`):
-- Item 0 (snap-distinctness relaxation) end-to-end: primed `AtStart`/`AtEnd` reduction re-point, additive
-  `numeric_tp_nta_reduction_bounds'` twin, `bound_inference` ground re-point, `nexp_struct_ok` rat exec-twins
-  (Isabelle code-gen ignores type-instance code eqs → separate rat fun + eta bridge), harness `Or`-serializer fix.
-- **PDDL quantifiers** (`forall`/`exists`) in the SML parser AST + two elimination strategies
-  (`QUANT_EXPAND=early|grounded`, default early = quantifier-free grounder input = re-implementable in Isabelle;
-  grounded = expand after schema-param instantiation). Fixed section-order parsing + empty `(and)` + conjunctive snaps.
-- **Duration scaling** (`0c8a49e`): grounder multiplies all durations by LCM-of-denominators → integers
-  (painter 4/5/6/15.004 → 1000/1250/1500/3751); K=1 no-op keeps others byte-identical. `quotient_of` added to the
-  `export_code` list (durable).
+**Landed & committed this session** (git `1e6f0d1 … fca03cc`):
+- **Step 0** (`1e6f0d1`): grounder `norm_cmp` — const-left comparisons normalized fluent-left.
+- **Step 1a** (`454ed30`): L4 `refine_comp` var-vs-var POINT-BOX arms (both orientations) +
+  `refine_comp_pres` case; **`is_gbound_inv'` emptiness escape** (+ bridge case via
+  `refine_box_sound`) fixing majsp-2's spurious rejection; exec twins mirrored.
+- **Step 1b** (`e70f1d3`): LOSSLESS guard projection — `g_int = GCmp_i cmp_op e_int e_int`, total
+  `comp_to_gint`; compute side `gcomp = GCmp cmpop nexp nexp` (5 comparators native, no strictness
+  collapse) refined via HOL-IMP's proven `inv_less_ivl` (`refine_pair` + bare-`NVar` write-back);
+  **v0-based threshold extraction** (caps = `eval v0` of the other side, offsets `±eval v0 e`,
+  landings = cap+offset — mandatory for convergence); glue `pOp`/`pGint`; relational selftest
+  (painter-mini → `counter [0,2]`); `glue_demo` retired.
+- **Step 1c** (`e813347`): **guards-only unfold** — statics still fold in DURATIONS (net needs
+  constant int clock bounds; now folded BEFORE integer scaling) and EFFECT RHSs (**forced deviation**
+  from the planned durations-only scope: the mlunta update grammar `x:=c|x:=x±c|x:=v±c` cannot
+  express `battery := battery - distance`), but guard comparisons stay true fluent-vs-fluent;
+  dead statics dropped (sync unchanged). Net plumbing: var-vs-var guards compile to variable
+  DIFFERENCE constraints (`l - r ⊳ 0`, `network_conversion.sml`); `convert_models/convert.py`
+  clamps declaration inits into `[min,max]` (point-bounded statics like `item_id[1:1]`).
+- **Step 2** (`fca03cc`): **general aeval-based refinement** (variant B) — `refine_left`/
+  `refine_right`/`refine_comp = right ∘ left` tighten a bare-`NVar` side by the WHOLE other side's
+  `aeval` interval (subsumes const arms, point-box rule, and `item_id + 1`-style operands; realizes
+  NUMERIC_BOUND_INFERENCE.md §1e exactly); `refine_left_pres`/`refine_right_pres` proved; exec twins
+  mirrored. All six benchmark runs byte-identical to 1c.
 
-**⏳ CURRENT NEXT STEP — relational fluent-fluent guard support (bounds painter's `counter`).** painter is the
-ONLY domain not emitting a net: it now PARSES + grounds + scales durations, but `-certify numeric` stops at
-`numeric bound inference failed` because `counter` is unbounded. Cause: its guard `(= (item_id ?i) (counter ?t))`
-is fluent-vs-fluent (`item_id` is static: init-set 0/1/2, never assigned), and EVERY layer that handles guards is
-fluent-vs-CONSTANT only, so it's dropped. FIX (chosen: **Approach 2 = relational interval refinement**, over the
-"detect it's a constant" alternative — see below): make each guard layer refine a fluent `f` by the OTHER operand
-`g`'s box interval `B g` (for `f = g`: refine BOTH to `B f ∩ B g`; painter's guard is `item_id = counter`, so the
-STATIC LHS must also refine the RHS `counter`). Since the interval AI already infers `item_id = [c,c]` (no updates),
-refining `counter` by it bounds `counter`. Soundness is LOCAL (interval meet), no plan invariant needed:
-`comp_ok w (Comp op (NVar f) (NVar g))` ⟹ `nexp_ok w (NVar f) ∧ nexp_ok w (NVar g)` ⟹ **both f,g ∈ nfluents**
-(`TP_NTA_Reduction_Numeric_Defs.thy:83`), so the box constrains `B g`.
-FOUR layers, each currently fluent-const-only with a `_ ⇒ (None|B)` catch-all:
-  1. **Draft projection** (untrusted, feeds SML bound inference): `g_int` datatype + `comp_to_gint`
-     (`bound_parsing/Ground_PDDL_Numeric_Code_Export.thy:135,155-161`, exported to `code/Numeric_Projection.ML`).
-     Add `(fluent,fluent)` `g_int` variants + project `Comp op (NVar f) (NVar g)`. **infer_box fails FIRST here**, so
-     this + layer 2 are needed just to PROPOSE a bounded box.
-  2. **The bound-inference AI itself** (verified HOL-IMP session `Numeric_Bound_Inference`) + SML glue
-     `ML/plan_cert/src/numeric_glue/numeric_bound_glue.sml` (`pGint`, ~:52): extend the guard type + the interval
-     refine to handle fluent-vs-fluent (refine by the other's interval). Re-verify + re-export.
-  3. **Trusted re-check** (`refine_comp_exec`/`is_gbound_inv_exec`, `Ground_PDDL_Numeric_Code_Export.thy:54-61`):
-     add the NVar-NVar cases so the proposed box VALIDATES (else rejected). Re-export.
-  4. **Abstract cert** (frozen `TA_Network/TP_NTA_Reduction_Numeric_Bounds.thy`): `refine_comp` (:533-540) + the
-     soundness lemma `refine_comp_pres` (:840) / `refine_box_sound` (:995) — add the 5 NVar-NVar cases + extend the
-     proof (uses `B g` + `g ∈ nfluents` from `comp_ok`), for the exec⟹abstract correspondence.
-Verify: painter emits a net under BOTH `QUANT_EXPAND`; majsp/MatchCellar/sync byte-identical. Then re-export
-bound_parsing (`-e`), `make build_certifier`, re-run all 5.
-*(NOTE for the fresh session: jEdit may be down — relaunch + rebuild the `Temporal_Planning_Base` heap for the
-frozen-layer `refine_comp` proof. The exec/draft/glue parts are SML/build-only.)*
+**Follow-ups (short list):**
+1. **muntac certificate roundtrip for numeric nets is UNWIRED** — `certify_tchecker` only drives the
+   propositional `make_network`; the numeric path needs the renaming plumbing + a `-certify
+   numeric-tchecker`-style mode. (tck-reach side validated by hand on majsp-2: `REACHABLE false`.)
+   Also unknown: whether mlunta's muntax parser accepts the new difference guards.
+2. painter's zone graph exceeds 5 min under tck-reach (durations 1000–3751 after scaling) —
+   exploration cost, not a format problem.
+3. The exec gate `is_gbound_inv_exec` is an UNPROVEN verbatim twin of `nred'.is_gbound_inv'` (no
+   formal equivalence lemma) — trusted-by-construction; a small correspondence proof would close it.
+4. `code/` (generated `Numeric_Bound_Inference.ML` + `Numeric_Projection.ML` + `Makefile` +
+   `widen_nbi_sig.py`) is still UNTRACKED but the binary build links `code/Numeric_Bound_Inference.ML`
+   — decide whether to commit the artifacts/scripts.
+5. Stray backup `TA_Network/TP_NTA_Reduction_Numeric_Defs.thy~` (not in any ROOT) — delete?
+6. Older doc sections below still say "4 of 5 domains" / cite the pre-relational state and the
+   stale path `Ground_PDDL_Exec_Imp/Ground_PDDL_Numeric_Code_Export.thy` (the file lives in
+   `bound_parsing/`) — superseded by this block.
+
+**✅ DONE (2026-07-24): the relational fluent-vs-fluent guard feature planned here landed in full** —
+see the SESSION STATUS block above for the five commits and the follow-up list. The four layers
+(draft projection / compute AI + glue / trusted exec re-check / abstract cert) all speak the general
+`GCmp`-shaped comparison now, with the aeval-based two-sided refinement at the cert layers.
 
 **Other open work:** the **nemo** datalog-reachability integration in `ML/plan_cert/src/grounder.sml` (grounder
 task #22b — the grounder already does TFD-style relaxation); the deferred WP-D full code-gen tail (Containers/

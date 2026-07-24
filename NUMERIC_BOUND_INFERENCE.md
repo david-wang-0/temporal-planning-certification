@@ -126,11 +126,21 @@ The reduction needs **finite** `int` bounds; a genuinely unbounded fluent must b
 | `:95` | `infer_fluent_bounds_greach_subset` | corollary | `\<gamma>_env`-level restatement (whole reachable set ⊆ box) |
 | `:104`–`:138` | `ivl_bounds_num_ivl`, `finite_ivl_num_ivl`, `ivl_bounds_top`, `not_finite_ivl_top`, `value` demos | lemma/value | sanity + demos: guarded counter → `Some (0,1)`; unguarded increment → `None` |
 
-### 1e. Relational (fluent-vs-fluent) guard refinement — **variant 2, PLANNED** (bounds painter's `counter`)
+### 1e. Relational (fluent-vs-fluent) guard refinement — **IMPLEMENTED 2026-07-24** (bounds painter's `counter`)
 
-Everything above refines a fluent only by a **var-vs-CONSTANT** comparison (`refine_gcomp`,
-`refine_comp`). painter's guard `(= (counter ?t) (item_id ?i))` is **var-vs-VAR**, so every layer
-drops it and `counter` stays unbounded → `numeric bound inference failed`. Variant 2 extends the
+*Status: landed across all layers (commits `454ed30` 1a point-box + emptiness escape, `e70f1d3`
+1b lossless `GCmp` projection + compute refinement, `e813347` 1c guards-only unfold, `fca03cc`
+2 general aeval-based refine). Compute side: `gcomp = GCmp cmpop nexp nexp` refined via HOL-IMP's
+`inv_less_ivl` (`refine_pair`/`refine_var`, `Numeric_Bound_Inference_Guards.thy`). Reduction side:
+`refine_left`/`refine_right`/`refine_comp` + `refine_left_pres`/`refine_right_pres`
+(`TP_NTA_Reduction_Numeric_Bounds.thy`), exec twins mirrored. `is_gbound_inv'` also gained a
+per-snap EMPTINESS escape (an empty guard-refined interval ⟹ the snap can never fire ⟹ updates
+vacuously in bounds — what majsp-2's unfireable move needs). The walkthrough below is exactly the
+implemented algorithm.*
+
+Everything above (§1a–1d as originally built) refined a fluent only by a **var-vs-CONSTANT**
+comparison. painter's guard `(= (counter ?t) (item_id ?i))` is **var-vs-VAR**, so every layer
+dropped it and `counter` stayed unbounded → `numeric bound inference failed`. Variant 2 extends the
 refine step to compare a fluent against the *interval of the other operand's whole nexp*, evaluated
 over the current box with `aeval` (§2 `:516`). No "detect constant" pass and **no plan invariant**:
 soundness is a local interval meet, licensed by `comp_ok ⟹ both operands ∈ nfluents`
