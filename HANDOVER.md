@@ -34,18 +34,32 @@ majsp-2's net: parses the new difference guards, 17 states, `REACHABLE false`. A
   NUMERIC_BOUND_INFERENCE.md §1e exactly); `refine_left_pres`/`refine_right_pres` proved; exec twins
   mirrored. All six benchmark runs byte-identical to 1c.
 
+**LATER THE SAME DAY (2026-07-24 afternoon, `0e48091`/`d8b8de6`): the VERIFIED NUMERIC CAPSTONE.**
+`check_and_cert_numeric_pddl_problem(_no_return)` (Numeric_Unsolvability_Export) mirrors the
+propositional capstone: verified gate + admission + net build, the net handed IN-PROCESS to an
+untrusted SML `certifier` callback (external tck-reach oracle), certificate checked by Munta's
+verified `convert_check`; Hoare triple `Result Sat ⟹ no valid numeric ground plan` with NO residual
+hypotheses — the exec gate now PROVABLY equals `nred'.is_gbound_inv'` (`is_gbound_inv_exec_eq` etc.,
+closing the old unproven-twin gap). SML: `-certify numeric-tchecker` drives it with per-stage
+profiling (`+ STAGE <name>: <ms> ms`); the historical MLunta↔Munta renaming skew (why `064aa58`
+abandoned the capstone) is fixed: hyphen-free identifiers at the grounder mangle choke points,
+`_urge` special-cased, per-process location renamings totalized. **Verified end-to-end verdicts:
+majsp-2 0.18s, MatchCellar 0.35s, sync 0.28s** ("The numeric planning problem is unsolvable.").
+Benchmark harness: the NEW sibling repo `unsolvability-benchmarks` (setup.sh provisions the five
+gitignored families; `bench.py` collects per-stage CSVs).
+
 **Follow-ups (short list):**
-1. **muntac certificate roundtrip for numeric nets is UNWIRED** — `certify_tchecker` only drives the
-   propositional `make_network`; the numeric path needs the renaming plumbing + a `-certify
-   numeric-tchecker`-style mode. (tck-reach side validated by hand on majsp-2: `REACHABLE false`.)
-   Also unknown: whether mlunta's muntax parser accepts the new difference guards.
+1. ~~muntac certificate roundtrip for numeric nets~~ — **SUPERSEDED by the verified capstone**
+   (better than muntac: the check runs in-process on the un-serialized net). The plain
+   `parse_convert_check`/muntac JSON path CANNOT serve numeric nets (the muntax format has no
+   initial-variable section; point-bounded statics violate the implicit all-zeros start).
 2. painter's zone graph is the remaining oracle bottleneck: even after nemo pruning (37 → 17
    automata, `9534ef8`) a 20-min covreach run doesn't finish (~2.6GB zones; the LCM-250-scaled
    duration constants 1000–3751 dominate). aLU-covreach would explore it but its certificates are
    NOT admissible to the verified checker (covreach's are); the remaining levers are a checker
    extension for LU-subsumption certificates or accepting painter as oracle-hard.
-3. The exec gate `is_gbound_inv_exec` is an UNPROVEN verbatim twin of `nred'.is_gbound_inv'` (no
-   formal equivalence lemma) — trusted-by-construction; a small correspondence proof would close it.
+3. ~~exec-gate unproven twin~~ — **CLOSED** (`d8b8de6`): `is_gbound_inv_exec_eq` (+ the
+   aeval/refine/box twin lemmas) prove the executable gate decides the cert-locale assumption.
 4. `code/` (generated `Numeric_Bound_Inference.ML` + `Numeric_Projection.ML` + `Makefile` +
    `widen_nbi_sig.py`) is still UNTRACKED but the binary build links `code/Numeric_Bound_Inference.ML`
    — decide whether to commit the artifacts/scripts.
