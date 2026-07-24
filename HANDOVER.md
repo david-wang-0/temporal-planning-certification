@@ -39,8 +39,11 @@ majsp-2's net: parses the new difference guards, 17 states, `REACHABLE false`. A
    propositional `make_network`; the numeric path needs the renaming plumbing + a `-certify
    numeric-tchecker`-style mode. (tck-reach side validated by hand on majsp-2: `REACHABLE false`.)
    Also unknown: whether mlunta's muntax parser accepts the new difference guards.
-2. painter's zone graph exceeds 5 min under tck-reach (durations 1000–3751 after scaling) —
-   exploration cost, not a format problem.
+2. painter's zone graph is the remaining oracle bottleneck: even after nemo pruning (37 → 17
+   automata, `9534ef8`) a 20-min covreach run doesn't finish (~2.6GB zones; the LCM-250-scaled
+   duration constants 1000–3751 dominate). aLU-covreach would explore it but its certificates are
+   NOT admissible to the verified checker (covreach's are); the remaining levers are a checker
+   extension for LU-subsumption certificates or accepting painter as oracle-hard.
 3. The exec gate `is_gbound_inv_exec` is an UNPROVEN verbatim twin of `nred'.is_gbound_inv'` (no
    formal equivalence lemma) — trusted-by-construction; a small correspondence proof would close it.
 4. `code/` (generated `Numeric_Bound_Inference.ML` + `Numeric_Projection.ML` + `Makefile` +
@@ -56,8 +59,10 @@ see the SESSION STATUS block above for the five commits and the follow-up list. 
 (draft projection / compute AI + glue / trusted exec re-check / abstract cert) all speak the general
 `GCmp`-shaped comparison now, with the aeval-based two-sided refinement at the cert layers.
 
-**Other open work:** the **nemo** datalog-reachability integration in `ML/plan_cert/src/grounder.sml` (grounder
-task #22b — the grounder already does TFD-style relaxation); the deferred WP-D full code-gen tail (Containers/
+**Other open work:** ~~the **nemo** datalog-reachability integration (task #22b)~~ — **DONE
+2026-07-24** (`9534ef8`, `ML/plan_cert/src/nemo_reach.sml`: TFD-relaxed lifted datalog → nmo →
+per-schema instantiation filter; painter 37→17, majsp-1 48→20, majsp-2 16→9 automata, fail-open
+without `nmo`); the deferred WP-D full code-gen tail (Containers/
 `String.literal` typeclasses) if the numeric NETWORK builder ever needs to code-gen standalone.
 
 ---
