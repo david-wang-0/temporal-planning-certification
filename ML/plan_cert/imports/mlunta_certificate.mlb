@@ -1,0 +1,15 @@
+(* mlunta's binary-certificate (de)serialization layer only -- the BOUND signature and the
+   Deserializer64Bit functor plan_cert instantiates with Converter's checker types.  Kept as a
+   named import wrapper (like cmlib/isalib/mlunta/munta/parcom) instead of a raw file splice. *)
+$(SML_LIB)/basis/basis.mlb
+$(SML_LIB)/basis/mlton.mlb
+isalib.mlb
+
+local
+    ../../lib/mlunta/src/serialization/mlunta_certificate/prelude.sml
+    ../../lib/mlunta/src/serialization/mlunta_certificate/serializable.sml
+    ../../lib/mlunta/src/serialization/mlunta_certificate/certificate.sml
+in
+    signature BOUND
+    functor Deserializer64Bit
+end

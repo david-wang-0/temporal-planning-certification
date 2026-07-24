@@ -8,14 +8,7 @@ parsing/pddl_validate_plan.mlb
 
 network_conversion/network_conversion.mlb
 certificate_conversion/certificate_conversion.mlb
-local
-    ../../lib/mlunta/src/serialization/mlunta_certificate/prelude.sml
-    ../../lib/mlunta/src/serialization/mlunta_certificate/serializable.sml
-    ../../lib/mlunta/src/serialization/mlunta_certificate/certificate.sml
-in
-    signature BOUND
-    functor Deserializer64Bit
-end
+../imports/mlunta_certificate.mlb
 
 mlunta_adapter.sml
 tchecker_certify.sml

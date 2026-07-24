@@ -3,7 +3,7 @@ $(SML_LIB)/basis/mlton.mlb
 
 
 local 
-  ../../imports/cmlib.mlb
+  cmlib.mlb
 in 
 	signature COORD
   signature COORDINATED_STREAM
@@ -21,15 +21,15 @@ in
 end
 
 local
-    ../../../lib/parcom/src/parse.sig
-    ../../../lib/parcom/src/parse.sml
+    ../../lib/parcom/src/parse.sig
+    ../../lib/parcom/src/parse.sml
 
-    ../../../lib/parcom/src/charparse.sig
-    ../../../lib/parcom/src/charparse.sml
+    ../../lib/parcom/src/charparse.sig
+    ../../lib/parcom/src/charparse.sml
 
-    ../../../lib/parcom/src/tokparse.sig
-    ../../../lib/parcom/src/tokparse.sml
-    ../../../lib/parcom/src/langparse.sml
+    ../../lib/parcom/src/tokparse.sig
+    ../../lib/parcom/src/tokparse.sml
+    ../../lib/parcom/src/langparse.sml
 
 in
 
