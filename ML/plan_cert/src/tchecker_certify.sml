@@ -24,6 +24,17 @@ struct
     | verdict_to_string Rejected  = "rejected"
     | verdict_to_string NoVerdict = "no verdict"
 
+  (* per-stage wall-clock profiling: every named pipeline stage prints a machine-parseable
+     "+ STAGE <name>: <ms> ms" line (the unsolvability-benchmarks harness reads these) *)
+  fun timeStage name f =
+    let
+      val t = Timer.startRealTimer ()
+      val r = f ()
+      val ms = Time.toMilliseconds (Timer.checkRealTimer t)
+    in
+      print ("+ STAGE " ^ name ^ ": " ^ LargeInt.toString ms ^ " ms\n"); r
+    end
+
   (* run a program (PATH-searched via execvp), wait, capture stdout; stderr passes
      through to our stderr.  Returns (exit-succeeded?, captured-stdout). *)
   fun run_capture (cmd : string, args : string list) : bool * string =
@@ -94,22 +105,25 @@ struct
       val dot = certA ^ ".dot"
     in
       (* 1. muntax -> tck *)
-      py_step "muntax->tck (convert)" pkg_root "convert" (sq muntaxA ^ " " ^ sq tck);
+      timeStage "convert-tck" (fn () =>
+        py_step "muntax->tck (convert)" pkg_root "convert" (sq muntaxA ^ " " ^ sq tck));
       (* 2. tck -> dot (zone-graph certificate) *)
-      run_step "tck-reach"
-        (tck_reach_bin, ["-a", "covreach", "-C", "graph", "-s", "dfs", "-o", dot, tck]);
+      timeStage "tck" (fn () =>
+        run_step "tck-reach"
+          (tck_reach_bin, ["-a", "covreach", "-C", "graph", "-s", "dfs", "-o", dot, tck]));
       (* 3. dot -> munta cert *)
-      py_step "dot->cert (convert_certificate)" pkg_root "convert_certificate"
-        ((if buechi then "-b " else "") ^ "-m " ^ sq muntaxA ^ " "
-         ^ sq dot ^ " " ^ sq renamingA ^ " " ^ sq certA)
+      timeStage "convert-back" (fn () =>
+        py_step "dot->cert (convert_certificate)" pkg_root "convert_certificate"
+          ((if buechi then "-b " else "") ^ "-m " ^ sq muntaxA ^ " "
+           ^ sq dot ^ " " ^ sq renamingA ^ " " ^ sq certA))
     end
 
   (* step 3: muntac check -> verdict *)
   fun check_cert {muntac_bin : string, muntax, renaming, cert, buechi : bool} : verdict =
     let
       val mode = if buechi then "4" else "3"
-      val (_, out) = run_capture (muntac_bin,
-        ["-m", muntax, "-r", renaming, "-c", cert, "-i", mode])
+      val (_, out) = timeStage "check" (fn () => run_capture (muntac_bin,
+        ["-m", muntax, "-r", renaming, "-c", cert, "-i", mode]))
     in
       if      String.isSubstring "Certificate was accepted" out then Accepted
       else if String.isSubstring "Certificate was rejected" out then Rejected

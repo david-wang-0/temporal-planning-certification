@@ -114,6 +114,64 @@ definition is_gbound_inv_exec :: "(func \<Rightarrow> int) \<Rightarrow> (func \
 
 end
 
+section \<open>The exec twins EQUAL the locale interval check (closing the unproven-twin gap)\<close>
+
+text \<open>The global mirror funs were introduced as verbatim copies of the locale-internal
+  evaluator; here that correspondence is PROVED, so the executable gate
+  @{const numeric_ground_ast_problem_defs.is_gbound_inv_exec} literally decides the
+  certificate assumption \<open>nred'.is_gbound_inv'\<close> of @{locale numeric_ground_ast_problem_cert}
+  -- the ingredient that lets the numeric certifier capstone (theory
+  \<open>Numeric_Unsolvability_Export\<close>) discharge the cert locale by evaluation.\<close>
+
+text \<open>The exec twins take @{term const_to_int}/@{term fluent_lo}/@{term fluent_hi} explicitly; the
+  locale-internal evaluator's defining equations are conditional on the (all-parameter) locale
+  predicate, so the correspondence is proved INSIDE @{locale numeric_ground_ast_problem} against the
+  sublocale interpretation @{text nred'} (which discharges that predicate and fixes
+  @{text \<open>const_to_int := const_to_int\<close>}, @{text \<open>fluent_lo := fluent_lo\<close>}, @{text \<open>fluent_hi := fluent_hi\<close>}).\<close>
+
+context numeric_ground_ast_problem
+begin
+
+lemma aeval_exec_eq: "aeval_exec const_to_int B e = nred'.aeval B e"
+  by (induction e)
+     (simp_all add: nred'.aeval.simps map_ibnd2_exec_def nred'.map_ibnd2_def Min_insert Max_insert)
+
+lemma refine_left_exec_eq: "refine_left_exec const_to_int c B = nred'.refine_left c B"
+proof (cases c)
+  case (Comp p a b)
+  then show ?thesis
+    by (cases a) (simp_all add: nred'.refine_left.simps aeval_exec_eq)
+qed
+
+lemma refine_right_exec_eq: "refine_right_exec const_to_int c B = nred'.refine_right c B"
+proof (cases c)
+  case (Comp p a b)
+  then show ?thesis
+    by (cases b) (simp_all add: nred'.refine_right.simps aeval_exec_eq)
+qed
+
+lemma refine_comp_exec_eq: "refine_comp_exec const_to_int c B = nred'.refine_comp c B"
+  by (simp add: refine_comp_exec_def nred'.refine_comp_def refine_left_exec_eq refine_right_exec_eq)
+
+lemma refine_box_exec_eq: "refine_box_exec const_to_int cs B = nred'.refine_box cs B"
+proof -
+  have "refine_comp_exec const_to_int = nred'.refine_comp"
+    by (simp add: fun_eq_iff refine_comp_exec_eq)
+  then show ?thesis
+    by (simp add: refine_box_exec_def nred'.refine_box_def)
+qed
+
+lemma box_exec_eq: "box_exec fluent_lo fluent_hi = nred'.box"
+  by (simp add: box_exec_def nred'.box_def)
+
+lemma snap_ok_exec_eq: "snap_ok_exec fluent_lo fluent_hi s = snap_ok s"
+  by (simp add: snap_ok_exec_def snap_ok_def aeval_exec_eq refine_box_exec_eq box_exec_eq)
+
+lemma is_gbound_inv_exec_eq: "is_gbound_inv_exec fluent_lo fluent_hi \<longleftrightarrow> nred'.is_gbound_inv'"
+  by (simp add: is_gbound_inv_exec_def nred_is_gbound_inv'_code snap_ok_exec_eq)
+
+end
+
 section \<open>Deliverable (2): the P-taking numeric network-assembly optimum\<close>
 
 text \<open>Numeric twin of \<open>check_and_make_network_opt\<close> (from theory \<open>Check_Unsolvability\<close>):

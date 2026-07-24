@@ -72,7 +72,11 @@ struct
     open Syntax
     open Difference
     fun to_string (Single v) = X.to_string v
-      | to_string (Diff (u, v)) = X.to_string u ^ " - " ^ X.to_string v
+      | to_string (Diff (u, v)) =
+          (* parenthesized: Munta's guard grammar compares ATOMIC exps (aexp), and a
+             parenthesized additive expression is atomic -- "(a - b) >= 0" parses,
+             "a - b >= 0" does not; tchecker accepts both *)
+          "(" ^ X.to_string u ^ " - " ^ X.to_string v ^ ")"
 end
 
 functor GuardToString(

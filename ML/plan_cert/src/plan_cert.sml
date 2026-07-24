@@ -11,7 +11,9 @@ val usage = "Usage: $ plan_cert " ^ "\n" ^
             "[-num-threads <number of threads>]" ^ "\n" ^
             "[-show-cert <1>]" ^ "\n" ^
             "[-ground-out <path> : dump the grounded PDDL for inspection]" ^ "\n" ^
-            "[-certify numeric : build the numeric timed-automata net (keeps numeric fluents)]" ^ "\n"
+            "[-certify numeric : build the numeric timed-automata net (keeps numeric fluents)]" ^ "\n" ^
+            "[-certify numeric-tchecker : full numeric certification, per-stage profiled: \
+            \tck-reach oracle + VERIFIED in-process capstone check (needs -renaming/-certificate)]" ^ "\n"
 
 (* Optional path to dump the grounded (propositional) PDDL for inspection (-ground-out). *)
 val ground_out_path = ref (NONE : string option)
@@ -170,6 +172,11 @@ fun parse_check_and_cert_network _ _ _ _ _ _ _ =
 fun quantStrategyGrounded () =
     case OS.Process.getEnv "QUANT_EXPAND" of SOME s => (s = "grounded") | NONE => false
 
+(* print the emitted network JSON to stdout only on request (SHOW_NET=1); it is always
+   written to the -model file regardless *)
+fun showNet () =
+    case OS.Process.getEnv "SHOW_NET" of SOME "1" => true | _ => false
+
 fun make_network domain problem model =
     let
         val _ = log_conversion_config (domain, problem, model)
@@ -182,7 +189,7 @@ fun make_network domain problem model =
                                 println ("+ Wrote grounded PDDL to " ^ f))
                    | NONE => ()
         val res = Converter.check_and_make_network_opt ground_prob
-            |> Option.map (NetworkConversion.convert_network true model)
+            |> Option.map (NetworkConversion.convert_network (showNet ()) model)
         val _ = res
     in ()
     end
@@ -192,36 +199,42 @@ fun make_network domain problem model =
    numeric timed-automata net with the verified Converter.check_and_make_numeric_network_opt --
    which re-checks the box with the trusted is_gbound_inv_exec gate (fails closed) before trusting
    it.  Same downstream muntax as the propositional path (identical net type). *)
-fun make_numeric_network domain problem model =
+(* shared numeric front end: parse + ground (nemo-pruned) + infer & re-check the fluent box *)
+fun numeric_ground_and_box domain problem =
     let
-        val _ = log_conversion_config (domain, problem, model)
         (* nemo datalog reachability (task #22b): built from the quantifier-free C parse
            regardless of the grounding strategy (the lifted reachable set is the same);
            NONE (nmo missing / NEMO_PRUNE=0 / failure) = no pruning, full cross-product *)
-        val filt = NemoReach.reach_filter (PddlParser.get_prob domain problem)
-        val ground_prob =
-            if quantStrategyGrounded ()
-            then Grounder.ground_problem_numeric_q filt (PddlParser.get_prob_q domain problem)
-            else Grounder.ground_problem_numeric filt (PddlParser.get_prob domain problem)
+        val ground_prob = TCheckerCertify.timeStage "ground" (fn () =>
+            let val filt = NemoReach.reach_filter (PddlParser.get_prob domain problem)
+            in if quantStrategyGrounded ()
+               then Grounder.ground_problem_numeric_q filt (PddlParser.get_prob_q domain problem)
+               else Grounder.ground_problem_numeric filt (PddlParser.get_prob domain problem)
+            end)
         val () = case !ground_out_path of
                      SOME f => (PddlParser.writeFile f (Grounder.problem_to_pddl ground_prob);
                                 println ("+ Wrote grounded (numeric-kept) PDDL to " ^ f))
                    | NONE => ()
-        val draft = Converter.numeric_draft_actions ground_prob
-        val box =
-            case NumericBoundGlue.infer_box draft of
+        val box = TCheckerCertify.timeStage "infer-box" (fn () =>
+            case NumericBoundGlue.infer_box (Converter.numeric_draft_actions ground_prob) of
                 SOME b => b
-              | NONE => exit_fail "numeric bound inference failed (a fluent is unbounded / out of scope)"
+              | NONE => exit_fail "numeric bound inference failed (a fluent is unbounded / out of scope)")
         val () = println ("+ Inferred fluent box: "
                    ^ String.concatWith ", "
                        (List.map (fn (f, (lo, hi)) =>
                           f ^ " in [" ^ Int.toString (Converter.integer_of_int lo)
                           ^ "," ^ Int.toString (Converter.integer_of_int hi) ^ "]") box))
-        (* distinguish the two fail-closed causes: the trusted box re-check vs. the structural
-           numeric admission check (both make check_and_make_numeric_network_opt return NONE) *)
+        (* diagnostic pre-check (the verified capstone/builder re-run this gate internally) *)
         val boxOk = Converter.check_gbounds_opt ground_prob box
         val () = println ("+ Box re-check (is_gbound_inv_exec): "
                           ^ (if boxOk then "PASS" else "FAIL"))
+    in (ground_prob, box, boxOk) end
+
+fun make_numeric_network domain problem model =
+    let
+        val _ = log_conversion_config (domain, problem, model)
+        val (ground_prob, box, boxOk) = numeric_ground_and_box domain problem
+        val t_net = Timer.startRealTimer ()
         val net =
             (case Converter.check_and_make_numeric_network_opt ground_prob box of
                 SOME n => n
@@ -238,8 +251,11 @@ fun make_numeric_network domain problem model =
                              else "trusted static bound re-check rejected the inferred box (is_gbound_inv_exec)")
                   end)
             handle Exn.ERROR msg => exit_fail ("numeric net builder raised ERROR: " ^ msg)
-        val _ = NetworkConversion.convert_network true model net
+        val _ = NetworkConversion.convert_network (showNet ()) model net
                 handle Exn.ERROR msg => exit_fail ("network conversion raised ERROR: " ^ msg)
+        val () = print ("+ STAGE convert-net: "
+                        ^ LargeInt.toString (Time.toMilliseconds (Timer.checkRealTimer t_net))
+                        ^ " ms\n")
     in () end
 
 fun make_renaming model renaming =
@@ -272,6 +288,34 @@ fun certify_tchecker domain problem model renaming cert =
                    muntax = model, renaming = renaming, cert = cert, buechi = false}
     in
         println ("Verdict: " ^ TCheckerCertify.verdict_to_string v)
+    end
+
+(* Full NUMERIC certification through the VERIFIED capstone
+   (Converter.check_and_cert_numeric_pddl_problem_no_return): the Isabelle side re-checks the
+   static bound gate, builds the net, hands it IN-PROCESS to the untrusted oracle_certifier
+   closure (external tck-reach; stages renaming / convert-tck / tck / convert-back), and checks
+   the returned certificate with Munta's verified convert_check -- the net never round-trips
+   through the muntax JSON, so the explicit initial values of point-bounded static fluents
+   survive.  Stage lines: ground, infer-box, renaming, convert-tck, tck, convert-back, check
+   (= verified capstone time minus the oracle closure's own wall time). *)
+fun certify_numeric_tchecker domain problem model renaming cert mode_str nthreads show_cert =
+    let
+        val _ = log_conversion_config (domain, problem, model)
+        val (ground_prob, box, _) = numeric_ground_and_box domain problem
+        val pkg_root      = getEnvDefault "TCHECKER_PKG_ROOT" "."
+        val tck_reach_bin = getEnvDefault "TCK_REACH_BIN" "./tck-reach"
+        val oracle_ms = ref (0 : LargeInt.int)
+        val f = InProcessCertify.oracle_certifier
+                  {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin, show_cert = showNet (),
+                   model = model, renaming = renaming, cert = cert, oracle_ms = oracle_ms}
+        val t0 = Timer.startRealTimer ()
+        val () = Converter.check_and_cert_numeric_pddl_problem_no_return ground_prob box
+                   (InProcessCertify.mode_of_str mode_str)
+                   (Converter.nat_of_integer (Option.getOpt (Int.fromString nthreads, 1)))
+                   f show_cert ()
+        val total = Time.toMilliseconds (Timer.checkRealTimer t0)
+    in
+        print ("+ STAGE check: " ^ LargeInt.toString (total - !oracle_ms) ^ " ms\n")
     end
 
 (* Part B': the SAME external tck-reach oracle, but the certificate is CHECKED IN-PROCESS by
@@ -342,6 +386,10 @@ fun check args =
             numeric_selftest () |
         (SOME domain, SOME problem, SOME model, _, _, _, _, SOME "numeric", _, _, _) =>
             make_numeric_network domain problem model |
+        (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, _, _,
+         SOME "numeric-tchecker", num_threads, mode, show_cert) =>
+            certify_numeric_tchecker domain problem model renaming cert
+              mode (the_default "1" num_threads) show_cert |
         (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, _, _,
          SOME "tchecker", _, _, _) =>
             certify_tchecker domain problem model renaming cert |

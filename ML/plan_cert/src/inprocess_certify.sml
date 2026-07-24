@@ -36,6 +36,7 @@ struct
   end
 
   structure DeserializeCert = Deserializer64Bit(Bound)
+  structure CertConv = CertificateConversion(MLuntaAdapter.Setup)
 
   fun read_certificate_from_file is_buechi f =
     let val file = BinIO.openIn f
@@ -55,6 +56,42 @@ struct
     | mode_of_str "2" = Converter.Impl2
     | mode_of_str "3" = Converter.Impl2
     | mode_of_str _   = Converter.Impl2
+
+  (* The ORACLE certifier passed into the VERIFIED capstone
+     (Converter.check_and_cert_numeric_pddl_problem_no_return): receives the built net
+     IN-PROCESS (so the explicit initial variable values survive -- the muntax JSON cannot
+     express them), writes the muntax + renaming for the external toolchain, runs tck-reach,
+     and returns the renaming functions + deserialized certificate state space.  Every
+     external stage prints its "+ STAGE <name>: <ms> ms" line; the closure accumulates its
+     own wall time in `oracle_ms` so the caller can report the verified-check remainder.
+     A bad oracle only yields a rejected certificate (fail-closed). *)
+  fun oracle_certifier {pkg_root, tck_reach_bin, show_cert, model, renaming, cert, oracle_ms} net =
+    let
+      val t0 = Timer.startRealTimer ()
+      (* write muntax, sanitise identifiers (tck-reach forbids '-') *)
+      val _ = NetworkConversion.convert_network show_cert model net
+      val _ = TCheckerCertify.sanitize_file model
+      val muntax = TextIOUtil.read_file model
+      (* renaming functions from MLunta's construct (construct only, NOT its retired checker);
+         parse_rename writes the renaming file convert_certificate.py consumes -- both come
+         from the same MLunta parse, so they are name-consistent with the tck certificate *)
+      val ren_opt =
+        TCheckerCertify.timeStage "renaming" (fn () =>
+          (case MLuntaAdapter.parse_construct true muntax of
+              Either.Right (_, system) => SOME (CertConv.convert_renaming system)
+            | Either.Left _ => NONE))
+      val _ = MLuntaAdapter.parse_rename renaming muntax
+      (* external tck-reach -> binary munta certificate (stages convert-tck / tck / convert-back) *)
+      val _ = TCheckerCertify.make_cert
+                {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin,
+                 muntax = model, renaming = renaming, cert = cert, buechi = false}
+      val ss_opt = read_certificate_from_file false cert
+      val () = oracle_ms := Time.toMilliseconds (Timer.checkRealTimer t0)
+    in
+      case (ren_opt, ss_opt) of
+          (SOME r, SOME ss) => SOME (r, ss)
+        | _ => NONE
+    end
 
   (* full driver: ground PDDL -> muntax -> tck-reach oracle -> in-process verified check. *)
   fun check_and_cert {pkg_root, tck_reach_bin}

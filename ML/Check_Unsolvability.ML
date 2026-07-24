@@ -375,6 +375,36 @@ structure Converter : sig
                     ((string * (inta * inta)) list *
                       ((nat, nat, string, inta) formulaa *
                         (nat list * (string * inta) list))))))))) option
+  val check_and_cert_numeric_pddl_problem_no_return :
+    ast_temporal_action_schema ast_problem ->
+      (string * (inta * inta)) list ->
+        mode ->
+          nat ->
+            (string list *
+               (string list *
+                 ((nat -> nat -> string) *
+                   ((string -> nat) *
+                     (string list *
+                       ((nat list *
+                          (nat list *
+                            ((nat *
+                               ((string, inta) bexp *
+                                 ((string, inta) acconstraint list *
+                                   (string act *
+                                     ((string * (string, inta) exp) list *
+                                       (string list * nat)))))) list *
+                              (nat *
+                                (string, inta) acconstraint list) list))) list *
+                         ((string * (inta * inta)) list *
+                           ((nat, nat, string, inta) formulaa *
+                             (nat list * (string * inta) list)))))))) ->
+              (((string -> nat) *
+                 ((string -> nat) *
+                   ((nat -> nat -> nat) *
+                     ((nat -> string) *
+                       ((nat -> string) * (nat -> nat -> nat)))))) *
+                inta state_space) option) ->
+              bool -> (unit -> unit)
   val numeric_draft_actions :
     ast_temporal_action_schema ast_problem ->
       string list *
@@ -19122,6 +19152,16 @@ fun upd_of_ne (NumericEffect (Assign, PNE (f, uu), e)) = (f, nexp_of_pddl e)
   | upd_of_ne (NumericEffect (ScaleDown, PNE (f, uy), e)) =
     (f, NDiv (NVar f, nexp_of_pddl e));
 
+fun numeric_hi_of b =
+  (fn f =>
+    (case map_of equal_literal b (name f) of NONE => zero_inta
+      | SOME (_, h) => h));
+
+fun numeric_lo_of b =
+  (fn f =>
+    (case map_of equal_literal b (name f) of NONE => zero_inta
+      | SOME (l, _) => l));
+
 fun of_nat json =
   (case json of Object _ => Error ["of_nat: expected natural number"]
     | Arraya _ => Error ["of_nat: expected natural number"]
@@ -22805,19 +22845,9 @@ fun parse_compute model renaming =
                                 end)
                           end))))));
 
-fun augment_edge_impl g u e =
-  let
-    val (src, (b, (ac, (act, (upd, (rst, tgt)))))) = e;
-  in
-    (src, (Anda (b, g), (ac, (act, (upd @ u, (rst, tgt))))))
-  end;
+fun num_goal p = remdups (equal_comp equal_func equal_rat) (num_comps (goal p));
 
-fun check_and_cert_pddl_problem_no_return problem mode num_split certifier
-  show_cert =
-  (fn f_ => fn () => f_
-    ((check_and_cert_pddl_problem problem mode num_split certifier show_cert)
-    ()) ())
-    (fn _ => (fn () => ()));
+fun n_inv a = n_pre (over_all_snap a);
 
 fun nexp_struct_ok_exec A_ fs (NConst c) = is_int_rat c
   | nexp_struct_ok_exec A_ fs (NVar f) = membera A_ fs f
@@ -22831,336 +22861,6 @@ fun nexp_struct_ok_exec A_ fs (NConst c) = is_int_rat c
 
 fun comp_struct_ok_exec A_ fs (Comp (p, a, b)) =
   nexp_struct_ok_exec A_ fs a andalso nexp_struct_ok_exec A_ fs b;
-
-val num_reach_formula : (nat, nat, string, inta) formulaa = reach_formula;
-
-fun fluent_to_name_spec x = name x;
-
-fun fluent_to_var_spec f = "fluent_" ^ fluent_to_name_spec f;
-
-fun num_pre_guard s =
-  bexp_and_all (map (comp_to_bexp fluent_to_var_spec const_to_int) (n_pre s));
-
-fun num_upd s =
-  map (fn (f, e) =>
-        (fluent_to_var_spec f, nexp_to_exp fluent_to_var_spec const_to_int e))
-    (upds s);
-
-fun num_start_edge A_ p a =
-  augment_edge_impl (num_pre_guard (at_start_spec a))
-    (num_upd (at_start_spec a))
-    (start_edge (one_int, zero_int) A_ (one_int, plus_int, zero_int) p a);
-
-fun num_end_edge a =
-  augment_edge_impl (num_pre_guard (at_end_spec a)) (num_upd (at_end_spec a))
-    (end_edge (one_int, zero_int) (one_int, plus_int, uminus_int, zero_int) a);
-
-fun n_inv a = n_pre (over_all_snap a);
-
-fun num_inv_guard a =
-  bexp_and_all (map (comp_to_bexp fluent_to_var_spec const_to_int) (n_inv a));
-
-fun num_edge_3 (A1_, A2_, A3_) p a =
-  augment_edge_impl (num_inv_guard a) [] (edge_3 one_int (A1_, A2_, A3_) p a);
-
-fun num_edge_2 (B1_, B2_) a =
-  augment_edge_impl (num_inv_guard a) [] (edge_2 one_int (B1_, B2_) a);
-
-fun num_action_to_automaton p a =
-  let
-    val committed_locs = [];
-    val urgent_locs = [starting_loc_impl, ending_loc_impl];
-    val edges =
-      [num_start_edge zero_int p a, num_edge_2 (one_int, plus_int) a,
-        num_edge_3 (one_int, plus_int, uminus_int) p a, num_end_edge a,
-        instant_trans_edge one_int p a];
-    val invs = [];
-  in
-    (committed_locs, (urgent_locs, (edges, invs)))
-  end;
-
-fun num_init_upd p =
-  map (fn f => (fluent_to_var_spec f, Const (const_to_int (num_init p f))))
-    (nfluents p);
-
-fun num_main_auto_init_edge A_ p =
-  augment_edge_impl True (num_init_upd p)
-    (main_auto_init_edge A_ (one_int, zero_int) p);
-
-fun num_goal p = remdups (equal_comp equal_func equal_rat) (num_comps (goal p));
-
-fun num_goal_guard p =
-  bexp_and_all
-    (map (comp_to_bexp fluent_to_var_spec const_to_int) (num_goal p));
-
-fun num_main_auto_goal_edge p =
-  augment_edge_impl (num_goal_guard p) [] (main_auto_goal_edge p);
-
-fun num_main_auto p =
-  let
-    val committed_locs = [];
-    val urgent_locs = [init_loc_impl, goal_loc_impl];
-    val edges =
-      [num_main_auto_init_edge zero_int p, num_main_auto_goal_edge p,
-        main_auto_loop_impl];
-    val invs = [];
-  in
-    (committed_locs, (urgent_locs, (edges, invs)))
-  end;
-
-fun num_net_automata p =
-  num_main_auto p :: map (num_action_to_automaton p) (actions_spec p);
-
-fun num_fluent_vars p lo hi =
-  map (fn f => (fluent_to_var_spec f, (lo f, hi f))) (nfluents p);
-
-fun num_net_bounds p lo hi = net_bounds p @ num_fluent_vars p lo hi;
-
-fun num_init_vars p lo hi = map (map_prod id fst) (num_net_bounds p lo hi);
-
-fun num_init_locs p = init_locs p;
-
-fun num_make_network_impl p fluent_lo fluent_hi =
-  let
-    val automata = num_net_automata p;
-    val broadcast = net_broadcast;
-    val bounds = num_net_bounds p fluent_lo fluent_hi;
-    val init_locs = num_init_locs p;
-    val init_vars = num_init_vars p fluent_lo fluent_hi;
-    val formula = num_reach_formula;
-    val clock_namesa = clock_names p;
-    val auto_namesa = auto_names p;
-    val ids_to_names = auto_loc_ids_to_names;
-    val process_names_to_index = auto_names_to_index p;
-  in
-    Inr (clock_namesa,
-          (auto_namesa,
-            (ids_to_names,
-              (process_names_to_index,
-                (broadcast,
-                  (automata, (bounds, (formula, (init_locs, init_vars)))))))))
-  end;
-
-fun parse_convert_check mode num_split dc model renaming state_space show_cert =
-  (case parse_compute model renaming
-    of Result
-         (broadcast,
-           (bounds,
-             (automata,
-               (urgent_locations,
-                 (k, (l_0, (s_0, (formula,
-                                   (m, (num_states,
- (num_actions,
-   (renum_acts,
-     (renum_vars,
-       (renum_clocks,
-         (renum_states,
-           (inv_renum_states, (inv_renum_vars, inv_renum_clocks)))))))))))))))))
-      => let
-           val is_urgent =
-             (fn (l, _) =>
-               list_ex
-                 (fn (la, urgent) =>
-                   membera equal_int (map int_of_nat urgent) la)
-                 (zip l urgent_locations));
-           val inv_renum_clocksa =
-             (fn i => (if equal_nata i m then "_urge" else inv_renum_clocks i));
-           val t = Time.now ();
-           val state_spacea = convert_state_space m is_urgent state_space;
-           val ta = (fn x => fn y => Time.- (x, y)) (Time.now ()) t;
-           val _ =
-             writeln ("Time for converting state space: " ^
-                       (fn x => Time.toString x) ta);
-           val _ = Timing.start_timer ();
-           val _ = Timing.save_time "Time for converting DBMs in certificate";
-           val _ =
-             writeln ("Number of discrete states: " ^
-                       show_lit show_nat (len_of_state_space state_spacea));
-           val _ =
-             (if show_cert
-               then let
-                      val _ = print_sep ();
-                      val _ = writeln "Certificate";
-                      val _ = print_sep ();
-                      val _ =
-                        show_state_space m inv_renum_states inv_renum_vars
-                          inv_renum_clocksa state_spacea;
-                      val _ = print_sep ();
-                    in
-                      (fn () => ())
-                    end
-               else (fn () => ()));
-           val tb = Time.now ();
-         in
-           (fn f_ => fn () => f_
-             ((case mode
-                of Impl1 =>
-                  rename_check num_split dc broadcast bounds automata k l_0 s_0
-                    formula m num_states num_actions renum_acts renum_vars
-                    renum_clocks renum_states (reach_of state_spacea)
-                | Impl2 =>
-                  (fn () =>
-                    (rename_check2 num_split dc broadcast bounds automata k l_0
-                      s_0 formula m num_states num_actions renum_acts renum_vars
-                      renum_clocks renum_states (reach_of state_spacea)))
-                | Impl3 =>
-                  (fn () =>
-                    (rename_check3 num_split dc broadcast bounds automata k l_0
-                      s_0 formula m num_states num_actions renum_acts renum_vars
-                      renum_clocks renum_states (reach_of state_spacea)))
-                | Buechi =>
-                  (fn () =>
-                    (rename_check_buechi num_split broadcast bounds automata k
-                      l_0 s_0 formula m num_states num_actions renum_acts
-                      renum_vars renum_clocks renum_states
-                      (buechi_of state_spacea)))
-                | Debug =>
-                  rename_check_dbg show_nat show_literal show_literal num_split
-                    dc broadcast bounds automata k l_0 s_0 formula m num_states
-                    num_actions renum_acts renum_vars renum_clocks renum_states
-                    inv_renum_states inv_renum_vars inv_renum_clocksa
-                    (reach_of state_spacea))
-             ()) ())
-             (fn check =>
-               let
-                 val tc = (fn x => fn y => Time.- (x, y)) (Time.now ()) tb;
-                 val _ =
-                   writeln ("Time for certificate checking: " ^
-                             (fn x => Time.toString x) tc);
-               in
-                 (case check
-                   of Renaming_Failed => let
-   val _ = writeln "Renaming failed";
- in
-   (fn () => ())
- end
-                   | Preconds_Unsat =>
-                     let
-                       val _ = writeln "Preconditions were not met";
-                     in
-                       (fn () => ())
-                     end
-                   | Sat => let
-                              val _ = writeln "Certificate was accepted";
-                            in
-                              (fn () => ())
-                            end
-                   | Unsat => let
-                                val _ = writeln "Certificate was rejected";
-                              in
-                                (fn () => ())
-                              end)
-               end)
-         end
-    | Error es => let
-                    val _ = map (fn a => writeln a) es;
-                  in
-                    (fn () => ())
-                  end);
-
-fun check_numeric_ground_problem_diag p fluent_lo fluent_hi =
-  (if not (isOK (check_ground_problem_base p)) then one_nata
-    else (if not (list_all
-                   (fn a =>
-                     upds_functional_list equal_func (upds (at_start_spec a)))
-                   (actions_spec p))
-           then nat_of_integer (2 : Int.int)
-           else (if not (list_all
-                          (fn a =>
-                            upds_functional_list equal_func
-                              (upds (at_end_spec a)))
-                          (actions_spec p))
-                  then nat_of_integer (3 : Int.int)
-                  else (if not (list_all
-                                 (fn a =>
-                                   upds_no_cross_read_list
-                                     (card_UNIV_func, ceq_func,
-                                       cproper_interval_func, equal_func,
-                                       set_impl_func)
-                                     (ccompare_rat, equal_rat)
-                                     (upds (at_start_spec a)))
-                                 (actions_spec p))
-                         then nat_of_integer (4 : Int.int)
-                         else (if not (list_all
-(fn a =>
-  upds_no_cross_read_list
-    (card_UNIV_func, ceq_func, cproper_interval_func, equal_func, set_impl_func)
-    (ccompare_rat, equal_rat) (upds (at_end_spec a)))
-(actions_spec p))
-                                then nat_of_integer (5 : Int.int)
-                                else (if not
-   (list_all (fn f => less_eq_int (fluent_lo f) (fluent_hi f)) (nfluents p))
-                                       then nat_of_integer (6 : Int.int)
-                                       else (if not
-          (list_all
-            (fn a =>
-              list_all
-                (fn (_, aa) => nexp_struct_ok_exec equal_func (nfluents p) aa)
-                (upds (at_start_spec a)))
-            (actions_spec p))
-      then nat_of_integer (7 : Int.int)
-      else (if not (list_all
-                     (fn a =>
-                       list_all
-                         (fn (_, aa) =>
-                           nexp_struct_ok_exec equal_func (nfluents p) aa)
-                         (upds (at_end_spec a)))
-                     (actions_spec p))
-             then nat_of_integer (8 : Int.int)
-             else (if not (list_all
-                            (fn a =>
-                              list_all
-                                (comp_struct_ok_exec equal_func (nfluents p))
-                                (n_pre (at_start_spec a)))
-                            (actions_spec p))
-                    then nat_of_integer (9 : Int.int)
-                    else (if not (list_all
-                                   (fn a =>
-                                     list_all
-                                       (comp_struct_ok_exec equal_func
- (nfluents p))
-                                       (n_pre (at_end_spec a)))
-                                   (actions_spec p))
-                           then nat_of_integer (10 : Int.int)
-                           else (if not (list_all
-  (fn a => list_all (comp_struct_ok_exec equal_func (nfluents p)) (n_inv a))
-  (actions_spec p))
-                                  then nat_of_integer (11 : Int.int)
-                                  else (if not
-     (list_all (fn f => is_int_rat (num_init p f)) (nfluents p))
- then nat_of_integer (12 : Int.int)
- else (if not (list_all
-                (fn a =>
-                  list_all (fn (f, _) => membera equal_func (nfluents p) f)
-                    (upds (at_start_spec a)))
-                (actions_spec p))
-        then nat_of_integer (13 : Int.int)
-        else (if not (list_all
-                       (fn a =>
-                         list_all
-                           (fn (f, _) => membera equal_func (nfluents p) f)
-                           (upds (at_end_spec a)))
-                       (actions_spec p))
-               then nat_of_integer (14 : Int.int)
-               else (if not (list_all
-                              (comp_struct_ok_exec equal_func (nfluents p))
-                              (num_goal p))
-                      then nat_of_integer (15 : Int.int)
-                      else zero_nata)))))))))))))));
-
-fun check_numeric_admission_diag_opt p b =
-  let
-    val lo =
-      (fn f =>
-        (case map_of equal_literal b (name f) of NONE => zero_inta
-          | SOME (l, _) => l));
-    val a =
-      (fn f =>
-        (case map_of equal_literal b (name f) of NONE => zero_inta
-          | SOME (_, h) => h));
-  in
-    check_numeric_ground_problem_diag p lo a
-  end;
 
 fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
   bind (check_ground_problem_base p)
@@ -24504,9 +24204,428 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
                           Chara (false, false, true, true, false, true, true,
                                   false)])))))))))))))));
 
+val num_reach_formula : (nat, nat, string, inta) formulaa = reach_formula;
+
+fun fluent_to_name_spec x = name x;
+
+fun fluent_to_var_spec f = "fluent_" ^ fluent_to_name_spec f;
+
+fun num_pre_guard s =
+  bexp_and_all (map (comp_to_bexp fluent_to_var_spec const_to_int) (n_pre s));
+
+fun num_upd s =
+  map (fn (f, e) =>
+        (fluent_to_var_spec f, nexp_to_exp fluent_to_var_spec const_to_int e))
+    (upds s);
+
+fun augment_edge_impl g u e =
+  let
+    val (src, (b, (ac, (act, (upd, (rst, tgt)))))) = e;
+  in
+    (src, (Anda (b, g), (ac, (act, (upd @ u, (rst, tgt))))))
+  end;
+
+fun num_start_edge A_ p a =
+  augment_edge_impl (num_pre_guard (at_start_spec a))
+    (num_upd (at_start_spec a))
+    (start_edge (one_int, zero_int) A_ (one_int, plus_int, zero_int) p a);
+
+fun num_end_edge a =
+  augment_edge_impl (num_pre_guard (at_end_spec a)) (num_upd (at_end_spec a))
+    (end_edge (one_int, zero_int) (one_int, plus_int, uminus_int, zero_int) a);
+
+fun num_inv_guard a =
+  bexp_and_all (map (comp_to_bexp fluent_to_var_spec const_to_int) (n_inv a));
+
+fun num_edge_3 (A1_, A2_, A3_) p a =
+  augment_edge_impl (num_inv_guard a) [] (edge_3 one_int (A1_, A2_, A3_) p a);
+
+fun num_edge_2 (B1_, B2_) a =
+  augment_edge_impl (num_inv_guard a) [] (edge_2 one_int (B1_, B2_) a);
+
+fun num_action_to_automaton p a =
+  let
+    val committed_locs = [];
+    val urgent_locs = [starting_loc_impl, ending_loc_impl];
+    val edges =
+      [num_start_edge zero_int p a, num_edge_2 (one_int, plus_int) a,
+        num_edge_3 (one_int, plus_int, uminus_int) p a, num_end_edge a,
+        instant_trans_edge one_int p a];
+    val invs = [];
+  in
+    (committed_locs, (urgent_locs, (edges, invs)))
+  end;
+
+fun num_init_upd p =
+  map (fn f => (fluent_to_var_spec f, Const (const_to_int (num_init p f))))
+    (nfluents p);
+
+fun num_main_auto_init_edge A_ p =
+  augment_edge_impl True (num_init_upd p)
+    (main_auto_init_edge A_ (one_int, zero_int) p);
+
+fun num_goal_guard p =
+  bexp_and_all
+    (map (comp_to_bexp fluent_to_var_spec const_to_int) (num_goal p));
+
+fun num_main_auto_goal_edge p =
+  augment_edge_impl (num_goal_guard p) [] (main_auto_goal_edge p);
+
+fun num_main_auto p =
+  let
+    val committed_locs = [];
+    val urgent_locs = [init_loc_impl, goal_loc_impl];
+    val edges =
+      [num_main_auto_init_edge zero_int p, num_main_auto_goal_edge p,
+        main_auto_loop_impl];
+    val invs = [];
+  in
+    (committed_locs, (urgent_locs, (edges, invs)))
+  end;
+
+fun num_net_automata p =
+  num_main_auto p :: map (num_action_to_automaton p) (actions_spec p);
+
+fun num_fluent_vars p lo hi =
+  map (fn f => (fluent_to_var_spec f, (lo f, hi f))) (nfluents p);
+
+fun num_net_bounds p lo hi = net_bounds p @ num_fluent_vars p lo hi;
+
+fun num_init_vars p lo hi = map (map_prod id fst) (num_net_bounds p lo hi);
+
+fun num_init_locs p = init_locs p;
+
+fun num_make_network_impl p fluent_lo fluent_hi =
+  let
+    val automata = num_net_automata p;
+    val broadcast = net_broadcast;
+    val bounds = num_net_bounds p fluent_lo fluent_hi;
+    val init_locs = num_init_locs p;
+    val init_vars = num_init_vars p fluent_lo fluent_hi;
+    val formula = num_reach_formula;
+    val clock_namesa = clock_names p;
+    val auto_namesa = auto_names p;
+    val ids_to_names = auto_loc_ids_to_names;
+    val process_names_to_index = auto_names_to_index p;
+  in
+    Inr (clock_namesa,
+          (auto_namesa,
+            (ids_to_names,
+              (process_names_to_index,
+                (broadcast,
+                  (automata, (bounds, (formula, (init_locs, init_vars)))))))))
+  end;
+
 fun check_and_make_numeric_network p fluent_lo fluent_hi =
   bind (check_numeric_ground_problem ord_int p fluent_lo fluent_hi)
     (fn _ => num_make_network_impl p fluent_lo fluent_hi);
+
+fun make_certified_numeric_net p b certifier =
+  (if not (is_gbound_inv_exec p (numeric_lo_of b) (numeric_hi_of b))
+    then Error ["static bound certificate (is_gbound_inv_exec) rejected the box"]
+    else (case check_and_make_numeric_network p (numeric_lo_of b)
+                 (numeric_hi_of b)
+           of Inl _ => Error ["Could not make numeric network"]
+           | Inr (clocks,
+                   (autos,
+                     (ids_to_names,
+                       (process_names_to_index,
+                         (broadcast,
+                           (automata,
+                             (bounds, (formula, (init_locs, init_vars)))))))))
+             => binda (case certifier
+                              (clocks,
+                                (autos,
+                                  (ids_to_names,
+                                    (process_names_to_index,
+                                      (broadcast,
+(automata, (bounds, (formula, (init_locs, init_vars)))))))))
+                        of NONE => Error ["Certificate could not be generated"]
+                        | SOME a => Result a)
+                  (fn (renaming, cert) =>
+                    Result
+                      ((ids_to_names,
+                         (process_names_to_index,
+                           (broadcast,
+                             (automata,
+                               (bounds, (formula, (init_locs, init_vars))))))),
+                        (renaming, cert)))));
+
+fun check_and_cert_pddl_problem_no_return problem mode num_split certifier
+  show_cert =
+  (fn f_ => fn () => f_
+    ((check_and_cert_pddl_problem problem mode num_split certifier show_cert)
+    ()) ())
+    (fn _ => (fn () => ()));
+
+fun parse_convert_check mode num_split dc model renaming state_space show_cert =
+  (case parse_compute model renaming
+    of Result
+         (broadcast,
+           (bounds,
+             (automata,
+               (urgent_locations,
+                 (k, (l_0, (s_0, (formula,
+                                   (m, (num_states,
+ (num_actions,
+   (renum_acts,
+     (renum_vars,
+       (renum_clocks,
+         (renum_states,
+           (inv_renum_states, (inv_renum_vars, inv_renum_clocks)))))))))))))))))
+      => let
+           val is_urgent =
+             (fn (l, _) =>
+               list_ex
+                 (fn (la, urgent) =>
+                   membera equal_int (map int_of_nat urgent) la)
+                 (zip l urgent_locations));
+           val inv_renum_clocksa =
+             (fn i => (if equal_nata i m then "_urge" else inv_renum_clocks i));
+           val t = Time.now ();
+           val state_spacea = convert_state_space m is_urgent state_space;
+           val ta = (fn x => fn y => Time.- (x, y)) (Time.now ()) t;
+           val _ =
+             writeln ("Time for converting state space: " ^
+                       (fn x => Time.toString x) ta);
+           val _ = Timing.start_timer ();
+           val _ = Timing.save_time "Time for converting DBMs in certificate";
+           val _ =
+             writeln ("Number of discrete states: " ^
+                       show_lit show_nat (len_of_state_space state_spacea));
+           val _ =
+             (if show_cert
+               then let
+                      val _ = print_sep ();
+                      val _ = writeln "Certificate";
+                      val _ = print_sep ();
+                      val _ =
+                        show_state_space m inv_renum_states inv_renum_vars
+                          inv_renum_clocksa state_spacea;
+                      val _ = print_sep ();
+                    in
+                      (fn () => ())
+                    end
+               else (fn () => ()));
+           val tb = Time.now ();
+         in
+           (fn f_ => fn () => f_
+             ((case mode
+                of Impl1 =>
+                  rename_check num_split dc broadcast bounds automata k l_0 s_0
+                    formula m num_states num_actions renum_acts renum_vars
+                    renum_clocks renum_states (reach_of state_spacea)
+                | Impl2 =>
+                  (fn () =>
+                    (rename_check2 num_split dc broadcast bounds automata k l_0
+                      s_0 formula m num_states num_actions renum_acts renum_vars
+                      renum_clocks renum_states (reach_of state_spacea)))
+                | Impl3 =>
+                  (fn () =>
+                    (rename_check3 num_split dc broadcast bounds automata k l_0
+                      s_0 formula m num_states num_actions renum_acts renum_vars
+                      renum_clocks renum_states (reach_of state_spacea)))
+                | Buechi =>
+                  (fn () =>
+                    (rename_check_buechi num_split broadcast bounds automata k
+                      l_0 s_0 formula m num_states num_actions renum_acts
+                      renum_vars renum_clocks renum_states
+                      (buechi_of state_spacea)))
+                | Debug =>
+                  rename_check_dbg show_nat show_literal show_literal num_split
+                    dc broadcast bounds automata k l_0 s_0 formula m num_states
+                    num_actions renum_acts renum_vars renum_clocks renum_states
+                    inv_renum_states inv_renum_vars inv_renum_clocksa
+                    (reach_of state_spacea))
+             ()) ())
+             (fn check =>
+               let
+                 val tc = (fn x => fn y => Time.- (x, y)) (Time.now ()) tb;
+                 val _ =
+                   writeln ("Time for certificate checking: " ^
+                             (fn x => Time.toString x) tc);
+               in
+                 (case check
+                   of Renaming_Failed => let
+   val _ = writeln "Renaming failed";
+ in
+   (fn () => ())
+ end
+                   | Preconds_Unsat =>
+                     let
+                       val _ = writeln "Preconditions were not met";
+                     in
+                       (fn () => ())
+                     end
+                   | Sat => let
+                              val _ = writeln "Certificate was accepted";
+                            in
+                              (fn () => ())
+                            end
+                   | Unsat => let
+                                val _ = writeln "Certificate was rejected";
+                              in
+                                (fn () => ())
+                              end)
+               end)
+         end
+    | Error es => let
+                    val _ = map (fn a => writeln a) es;
+                  in
+                    (fn () => ())
+                  end);
+
+fun check_numeric_ground_problem_diag p fluent_lo fluent_hi =
+  (if not (isOK (check_ground_problem_base p)) then one_nata
+    else (if not (list_all
+                   (fn a =>
+                     upds_functional_list equal_func (upds (at_start_spec a)))
+                   (actions_spec p))
+           then nat_of_integer (2 : Int.int)
+           else (if not (list_all
+                          (fn a =>
+                            upds_functional_list equal_func
+                              (upds (at_end_spec a)))
+                          (actions_spec p))
+                  then nat_of_integer (3 : Int.int)
+                  else (if not (list_all
+                                 (fn a =>
+                                   upds_no_cross_read_list
+                                     (card_UNIV_func, ceq_func,
+                                       cproper_interval_func, equal_func,
+                                       set_impl_func)
+                                     (ccompare_rat, equal_rat)
+                                     (upds (at_start_spec a)))
+                                 (actions_spec p))
+                         then nat_of_integer (4 : Int.int)
+                         else (if not (list_all
+(fn a =>
+  upds_no_cross_read_list
+    (card_UNIV_func, ceq_func, cproper_interval_func, equal_func, set_impl_func)
+    (ccompare_rat, equal_rat) (upds (at_end_spec a)))
+(actions_spec p))
+                                then nat_of_integer (5 : Int.int)
+                                else (if not
+   (list_all (fn f => less_eq_int (fluent_lo f) (fluent_hi f)) (nfluents p))
+                                       then nat_of_integer (6 : Int.int)
+                                       else (if not
+          (list_all
+            (fn a =>
+              list_all
+                (fn (_, aa) => nexp_struct_ok_exec equal_func (nfluents p) aa)
+                (upds (at_start_spec a)))
+            (actions_spec p))
+      then nat_of_integer (7 : Int.int)
+      else (if not (list_all
+                     (fn a =>
+                       list_all
+                         (fn (_, aa) =>
+                           nexp_struct_ok_exec equal_func (nfluents p) aa)
+                         (upds (at_end_spec a)))
+                     (actions_spec p))
+             then nat_of_integer (8 : Int.int)
+             else (if not (list_all
+                            (fn a =>
+                              list_all
+                                (comp_struct_ok_exec equal_func (nfluents p))
+                                (n_pre (at_start_spec a)))
+                            (actions_spec p))
+                    then nat_of_integer (9 : Int.int)
+                    else (if not (list_all
+                                   (fn a =>
+                                     list_all
+                                       (comp_struct_ok_exec equal_func
+ (nfluents p))
+                                       (n_pre (at_end_spec a)))
+                                   (actions_spec p))
+                           then nat_of_integer (10 : Int.int)
+                           else (if not (list_all
+  (fn a => list_all (comp_struct_ok_exec equal_func (nfluents p)) (n_inv a))
+  (actions_spec p))
+                                  then nat_of_integer (11 : Int.int)
+                                  else (if not
+     (list_all (fn f => is_int_rat (num_init p f)) (nfluents p))
+ then nat_of_integer (12 : Int.int)
+ else (if not (list_all
+                (fn a =>
+                  list_all (fn (f, _) => membera equal_func (nfluents p) f)
+                    (upds (at_start_spec a)))
+                (actions_spec p))
+        then nat_of_integer (13 : Int.int)
+        else (if not (list_all
+                       (fn a =>
+                         list_all
+                           (fn (f, _) => membera equal_func (nfluents p) f)
+                           (upds (at_end_spec a)))
+                       (actions_spec p))
+               then nat_of_integer (14 : Int.int)
+               else (if not (list_all
+                              (comp_struct_ok_exec equal_func (nfluents p))
+                              (num_goal p))
+                      then nat_of_integer (15 : Int.int)
+                      else zero_nata)))))))))))))));
+
+fun check_numeric_admission_diag_opt p b =
+  let
+    val lo =
+      (fn f =>
+        (case map_of equal_literal b (name f) of NONE => zero_inta
+          | SOME (l, _) => l));
+    val a =
+      (fn f =>
+        (case map_of equal_literal b (name f) of NONE => zero_inta
+          | SOME (_, h) => h));
+  in
+    check_numeric_ground_problem_diag p lo a
+  end;
+
+fun check_and_cert_numeric_pddl_problem p b mode num_split certifier show_cert =
+  (case make_certified_numeric_net p b certifier
+    of Result (network, (renaming, cert)) =>
+      (fn f_ => fn () => f_
+        ((convert_check mode num_split false network renaming cert show_cert)
+        ()) ())
+        (fn res =>
+          let
+            val _ =
+              (case res
+                of Result Renaming_Failed =>
+                  let
+                    val _ = writeln "Something went wrong.";
+                  in
+                    (fn () => ())
+                  end
+                | Result Preconds_Unsat =>
+                  let
+                    val _ = writeln "Something went wrong.";
+                  in
+                    (fn () => ())
+                  end
+                | Result Sat =>
+                  let
+                    val _ =
+                      writeln "The numeric planning problem is unsolvable.";
+                  in
+                    (fn () => ())
+                  end
+                | Result Unsat => let
+                                    val _ = writeln "Something went wrong.";
+                                  in
+                                    (fn () => ())
+                                  end
+                | Error es => let
+                                val _ = map (fn a => writeln a) es;
+                              in
+                                (fn () => ())
+                              end);
+          in
+            (fn () => res)
+          end)
+    | Error es => let
+                    val _ = map (fn a => writeln a) es;
+                  in
+                    (fn () => (Error es))
+                  end);
 
 fun check_and_make_numeric_network_opt p b =
   let
@@ -24522,6 +24641,14 @@ fun check_and_make_numeric_network_opt p b =
     (case check_and_make_numeric_network p lo hi of Inl _ => NONE
       | Inr net => (if is_gbound_inv_exec p lo hi then SOME net else NONE))
   end;
+
+fun check_and_cert_numeric_pddl_problem_no_return p b mode num_split certifier
+  show_cert =
+  (fn f_ => fn () => f_
+    ((check_and_cert_numeric_pddl_problem p b mode num_split certifier
+       show_cert)
+    ()) ())
+    (fn _ => (fn () => ()));
 
 fun snap_draft_of s =
   (map_filter (comp_to_gint fluent_to_name_spec const_to_int) (n_pre s),

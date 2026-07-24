@@ -97,7 +97,11 @@ struct
     in fn v => Option.map #2 (List.find (fn (v', _) => v' = v) binds) end
 
   (* ---------- propositionalisation: object inlined into predicate / function NAMES ---------- *)
-  fun mangle p names = foldl (fn (nm, acc) => acc ^ "_" ^ nm) p names
+  (* Identifiers are emitted HYPHEN-FREE at the source: tck-reach's grammar forbids '-', and
+     sanitizing the muntax file after emission would desynchronize it from the in-process net
+     handed to the verified capstone (the historical MLunta<->Munta "renaming skew"). *)
+  fun sanitize_ident s = String.map (fn #"-" => #"_" | c => c) s
+  fun mangle p names = foldl (fn (nm, acc) => acc ^ "_" ^ sanitize_ident nm) (sanitize_ident p) names
   fun term_name (C.CONST (C.Obj o_)) = o_
     | term_name (C.VAR (C.Vara v))   = v   (* not expected post-grounding *)
   fun obj_name (C.Obj o_) = o_
@@ -241,7 +245,8 @@ struct
   fun prop_dc (C.DurationConstraint (dop, e)) = C.DurationConstraint (dop, mangle_nexp term_name e)
 
   (* ---------- ground one schema (instantiate + substitute + relax + propositionalise) ---------- *)
-  fun ground_name base objs = foldl (fn (C.Obj o_, acc) => acc ^ "_" ^ o_) base objs
+  fun ground_name base objs =
+    foldl (fn (C.Obj o_, acc) => acc ^ "_" ^ sanitize_ident o_) (sanitize_ident base) objs
 
   fun ground_schema types objs_typed sch =
     let
