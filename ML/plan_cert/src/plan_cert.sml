@@ -195,10 +195,14 @@ fun make_network domain problem model =
 fun make_numeric_network domain problem model =
     let
         val _ = log_conversion_config (domain, problem, model)
+        (* nemo datalog reachability (task #22b): built from the quantifier-free C parse
+           regardless of the grounding strategy (the lifted reachable set is the same);
+           NONE (nmo missing / NEMO_PRUNE=0 / failure) = no pruning, full cross-product *)
+        val filt = NemoReach.reach_filter (PddlParser.get_prob domain problem)
         val ground_prob =
             if quantStrategyGrounded ()
-            then Grounder.ground_problem_numeric_q (PddlParser.get_prob_q domain problem)
-            else Grounder.ground_problem_numeric (PddlParser.get_prob domain problem)
+            then Grounder.ground_problem_numeric_q filt (PddlParser.get_prob_q domain problem)
+            else Grounder.ground_problem_numeric filt (PddlParser.get_prob domain problem)
         val () = case !ground_out_path of
                      SOME f => (PddlParser.writeFile f (Grounder.problem_to_pddl ground_prob);
                                 println ("+ Wrote grounded (numeric-kept) PDDL to " ^ f))

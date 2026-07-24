@@ -498,7 +498,11 @@ struct
     | keep_init_form (C.Atom _)                        = []
     | keep_init_form f                                 = [f]
 
-  fun ground_schema_numeric types objs_typed sch =
+  (* filt: optional nemo-reachability filter (schema name, parameter tuple) -> keep? *)
+  fun keep_tuple filt name objs =
+    (case filt of NONE => true | SOME f => f (name, objs))
+
+  fun ground_schema_numeric filt types objs_typed sch =
     let
       val (name, params, mk) =
         (case sch of
@@ -525,11 +529,12 @@ struct
                  end))
       val cand = map (fn (_, pty) => candidates types objs_typed pty) params
     in
-      List.mapPartial (fn objs => mk (ground_name name objs, sigma_of params objs)) (cartesian cand)
+      List.mapPartial (fn objs => mk (ground_name name objs, sigma_of params objs))
+        (List.filter (keep_tuple filt name) (cartesian cand))
     end
 
   (* Strategy A twin of ground_schema_numeric (KEEPS numeric pre/effects). *)
-  fun ground_schema_numeric_q types objs sch =
+  fun ground_schema_numeric_q filt types objs sch =
     (case sch of
         Q.QSimple (n, ps, preG, effG) =>
           let val cand = map (fn (_, pty) => candidates types objs pty) ps
@@ -542,7 +547,7 @@ struct
                       C.SimpleActionBody (map_form prop_term_atom pre',
                                           prop_eff (expand_geff types objs sg effG))))
                 end
-          in List.mapPartial mk (cartesian cand) end
+          in List.mapPartial mk (List.filter (keep_tuple filt n) (cartesian cand)) end
       | Q.QDurative (n, ps, durs, condsG, effsG) =>
           let val cand = map (fn (_, pty) => candidates types objs pty) ps
               fun mk objs_tuple =
@@ -557,7 +562,7 @@ struct
                          map (fn (ta, e)  => (ta, prop_eff e))
                              (List.concat (map (expand_gteff types objs sg) effsG)))))
                 end
-          in List.mapPartial mk (cartesian cand) end)
+          in List.mapPartial mk (List.filter (keep_tuple filt n) (cartesian cand)) end)
 
   (* func names occurring in a formula's numeric comparison atoms *)
   fun atom_funcs acc (C.NumericEqAtm (x, y))      = nexp_funcs (nexp_funcs acc x) y
@@ -688,15 +693,15 @@ struct
         (C.Domain (types, prop_preds, num_funcs, [], ground_actions), [], init', num_goal)
     end
 
-  fun ground_problem_numeric
+  fun ground_problem_numeric filt
         (C.Problem (C.Domain (types, _, _, consts, actions), objs, init, goal)) =
       assemble_numeric types
-        (List.concat (map (ground_schema_numeric types (objs @ consts)) actions)) init goal
+        (List.concat (map (ground_schema_numeric filt types (objs @ consts)) actions)) init goal
 
   (* Strategy A entry (numeric-keeping): from forall-carrying QAst schemas. *)
-  fun ground_problem_numeric_q (Q.QProblem (types, objs, consts, actions, init, goal)) =
+  fun ground_problem_numeric_q filt (Q.QProblem (types, objs, consts, actions, init, goal)) =
       assemble_numeric types
-        (List.concat (map (ground_schema_numeric_q types (objs @ consts)) actions)) init goal
+        (List.concat (map (ground_schema_numeric_q filt types (objs @ consts)) actions)) init goal
 
   (* ---------- pretty-print a GROUND (propositional) problem as PDDL, for inspection ----------
      Predicate/init/goal atoms are 0-ary (objects inlined); numeric content has been relaxed to
