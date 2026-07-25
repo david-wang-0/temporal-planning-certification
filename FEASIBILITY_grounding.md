@@ -18,6 +18,12 @@ Status 2026-07-25. Question: are there ways to "ground better" so the certificat
   aLU-covreach. tck-reach's covreach applies NO extrapolation (plain zones + inclusion), which
   accounts for part of the gap — but the aLU probe shows the encoding shape itself is the painter
   bottleneck, not just the subsumption.
+- **The constants are irrelevant to painter's hardness (measured 2026-07-25).** Editing the clip
+  slack in `domain_container.pddl` and re-running the full pipeline: with `15.5` (LCM ×2,
+  constants {8,10,12,31}) covreach still does not finish in ~10 min; with `15` exactly (ε = 0,
+  ALL-integer constants ≤ 15, semantically a different, clip-broken problem — diagnostic only)
+  it still does not finish in 5 min. So neither the ×250 scaling nor the fractional misalignment
+  drives the blowup — the per-event interleaving structure with pairwise separation clocks does.
 
 ## Levers, ranked by cost/benefit
 
@@ -63,6 +69,10 @@ problem to "unsolvable", which is exactly the direction we certify. Both clocks 
   action count (painter: 17 actions is already minimal-ish; its hardness survives any pruning).
 - Rational-native arithmetic: see `FEASIBILITY_rational_durations.md` — scaling is a zone-graph
   isomorphism; nothing to gain.
+- Shrinking or removing painter's clip slack (`15.004` → `15.5`/`15`): measured above — the
+  zone blowup survives all-integer constants, and ε = 0 additionally breaks the clip
+  compilation's semantics (the container must end strictly after its inner pieces), so any
+  verdict would be about a different problem than the benchmark.
 
 ## Cleanup flag (not fixed)
 

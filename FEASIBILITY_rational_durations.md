@@ -10,11 +10,13 @@ would native rational support be — and would it help?
 Uniform scaling is a zone-graph isomorphism: multiplying every constant by the common
 denominator L and every clock valuation by L maps runs to runs and zones to zones bijectively
 (guards `x ⋈ c` become `x ⋈ L·c`, delays `d` become `L·d`). The scaled integer system explores
-EXACTLY as many zones as a rational-native exploration of the original would. painter is hard
-because of the *misalignment structure* of `{10, 12.5, 15, 15.004}` (the 0.004 offset composes
-into many distinct clock-difference classes), not because the integers got big. Native rationals
-would only change the arithmetic width of DBM entries, at extra constant-factor cost
-(rational normalization vs machine/bignum integer compares).
+EXACTLY as many zones as a rational-native exploration of the original would. Empirically
+confirmed harder than expected (2026-07-25, see `FEASIBILITY_grounding.md`): painter does not
+even depend on the misalignment — variants with clip slack `15.5` (constants ≤ 31) and `15`
+(all-integer, ≤ 15, diagnostic only) still blow up covreach. The hardness is the net's
+per-event interleaving/separation shape; constants — big, fractional, or small — are a
+non-factor. Native rationals would only change the arithmetic width of DBM entries, at extra
+constant-factor cost (rational normalization vs machine/bignum integer compares).
 
 ## Would it be sound? Yes — the checker is already real-valued inside.
 
