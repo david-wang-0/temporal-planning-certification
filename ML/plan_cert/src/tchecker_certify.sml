@@ -107,10 +107,15 @@ struct
       (* 1. muntax -> tck *)
       timeStage "convert-tck" (fn () =>
         py_step "muntax->tck (convert)" pkg_root "convert" (sq muntaxA ^ " " ^ sq tck));
-      (* 2. tck -> dot (zone-graph certificate) *)
+      (* 2. tck -> dot (zone-graph certificate).  TCK_ALGO overrides the reachability
+         algorithm (default covreach -- the one whose certificates the verified checker is
+         known to admit; aLU-covreach explores coarser but its certificates may not be
+         inclusion-closed, so the checker may reject them: fail-closed either way). *)
       timeStage "tck" (fn () =>
-        run_step "tck-reach"
-          (tck_reach_bin, ["-a", "covreach", "-C", "graph", "-s", "dfs", "-o", dot, tck]));
+        let val algo = Option.getOpt (OS.Process.getEnv "TCK_ALGO", "covreach")
+        in run_step "tck-reach"
+             (tck_reach_bin, ["-a", algo, "-C", "graph", "-s", "dfs", "-o", dot, tck])
+        end);
       (* 3. dot -> munta cert *)
       timeStage "convert-back" (fn () =>
         py_step "dot->cert (convert_certificate)" pkg_root "convert_certificate"

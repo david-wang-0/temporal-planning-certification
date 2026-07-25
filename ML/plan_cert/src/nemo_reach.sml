@@ -91,7 +91,11 @@ struct
 
   fun run_nemo (cprob as C.Problem (C.Domain (types, _, _, consts, schemas), objs, init, _)) =
     let
-      val tmp = "/tmp/plan_cert_nemo"
+      (* per-PROCESS scratch dir: concurrent plan_cert invocations must not share it -- a
+         shared dir let one run read another's reachability results, i.e. arbitrary
+         MIS-pruning (an unsound grounding, which no downstream gate detects) *)
+      val pid = SysWord.toString (Posix.Process.pidToWord (Posix.ProcEnv.getpid ()))
+      val tmp = "/tmp/plan_cert_nemo_" ^ pid
       val () = if OS.FileSys.access (tmp, []) then () else OS.FileSys.mkDir tmp
       val objs_typed = objs @ consts
       val objD  : dict = newDict ()   (* object name -> c<i> *)
