@@ -118,6 +118,10 @@ design; `FORMALISATION_MAP.md` — theory inventory; `NUMERIC_PLAN.md` — the n
 theories cite (A.x/B section numbers appear in `.thy` comments; keep); `GROUNDING_PLAN.md` —
 grounder plan incl. the recorded eqAtm/future-grounder decisions; `NUMERIC_BOUND_INFERENCE.md` —
 the bound-inference stack map (§1e = the implemented relational refinement);
-`gigante_benchmarks_conditions_effects.md` — benchmark fragment survey. The dated session logs
-formerly appended to this file live in git history (pruned 2026-07-24; earlier doc-pruning round:
-`ec10369`).
+`gigante_benchmarks_conditions_effects.md` — benchmark fragment survey;
+`FEASIBILITY_alu_subsumption.md` / `FEASIBILITY_rational_durations.md` /
+`FEASIBILITY_grounding.md` — 2026-07-25 feasibility studies (aLU certificate admission ~weeks via
+the Extra_LU-widen route, kernel already ⪯-parametric; rational durations = leaf retype, useless
+for speed, the valuable bit is a scaling-isomorphism lemma; net-shape levers ranked, single-clock-
+per-action first). The dated session logs formerly appended to this file live in git history
+(pruned 2026-07-24; earlier doc-pruning round: `ec10369`).
