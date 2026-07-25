@@ -21,14 +21,16 @@ Status 2026-07-25. Question: are there ways to "ground better" so the certificat
 
 ## Levers, ranked by cost/benefit
 
-1. **Single clock per action (verified reduction change) — best ratio.** Reset one clock at BOTH
-   the start and end events. Separation guards remain sound: separation from an action's most
-   recent event implies separation from all its earlier ones (elapsed times are ordered), and the
-   duration guard still reads time-since-start at the end transition because the last event at
-   that moment IS the start. Halves DBM dimension: certificates shrink ~4× (majsp-1: 3.5 GB →
-   ~0.9 GB; combined with aLU admission, ~0.15 GB), zones get coarser too. Scope: `TP_NTA_Reduction`
-   and its separation/duration lemmas — weeks of Isabelle work, no grounder change.
-2. **Stronger untrusted pruning (cheap, incremental).** nemo currently does TFD-relaxed FORWARD
+**Dead end — clock-count reduction (2026-07-25).** Merging `start_X`/`end_X` into one
+per-action clock (or sharing clocks across mutex actions) is UNSOUND here: the separation sets
+are snap-level and asymmetric — measured across the emitted nets, 27/27 of painter's
+separation-carrying guards, 32/36 of majsp-1's and 9/9 of MatchCellar's constrain one of
+`start_Y`/`end_Y` without the other. A merged clock cannot distinguish which happening it was
+reset by, so it would forbid schedules the semantics allows (e.g. a snap at the instant of Y's
+end when only separation from Y's start is required); excluding legal plans can flip a solvable
+problem to "unsolvable", which is exactly the direction we certify. Both clocks stay.
+
+1. **Stronger untrusted pruning (cheap, incremental).** nemo currently does TFD-relaxed FORWARD
    reachability (painter 37→17, majsp-1 48→20, majsp-2 16→9 automata). Add:
    - *backward relevance* (regression from the goal through the same relaxation): drops actions
      that cannot contribute to any goal path; symmetric datalog pass, days of SML.
@@ -39,18 +41,20 @@ Status 2026-07-25. Question: are there ways to "ground better" so the certificat
      reasons), but prunes elsewhere.
    Pruning has the same trust status as the rest of the untrusted grounder (the verified verdict
    is about the emitted ground problem; lifted-faithfulness is the grounder's contract).
-3. **Clock sharing across mutex actions (verified, middle step).** Actions guarded by the same
-   lock never overlap and could share one clock. Subsumed by 1 + harder bookkeeping; only worth
-   it after 1 if profiles still show clock-dominated certificates.
-4. **Paper-style re-encoding (verified, big).** A reduction in the style of the AAAI-22 UPPAAL
+2. **Paper-style re-encoding (verified, big).** A reduction in the style of the AAAI-22 UPPAAL
    encoding — simultaneous event batches separated by strictly-positive waits, one clock per
    action, fluents as bounded variables — is what makes painter 1-second-easy for UPPAAL. For us
    it is a NEW `TP_NTA_Reduction` with a new soundness proof (months). It is the only identified
-   path to painter certification besides accepting it as oracle-hard.
-5. **Certificate-tail engineering (no semantics).** The dot→binary conversion dominates large
+   path to painter certification besides accepting it as oracle-hard. (Note its clock economy is
+   bought by a DIFFERENT separation discipline — whole event batches at one instant, then a
+   strictly positive wait — not by merging our per-snap clocks, so it does not contradict the
+   dead end above.)
+3. **Certificate-tail engineering (no semantics).** The dot→binary conversion dominates large
    certs (majsp-1: 557 s pydot parse of 3.5 GB). Emitting the binary Munta certificate directly
    from the tck-reach graph (or a streaming converter) is untrusted glue — days — and combines
-   multiplicatively with 1/aLU. The verified check itself already parallelizes (`-num-threads`).
+   multiplicatively with aLU admission. The verified check itself already parallelizes
+   (`-num-threads`); when RAM is the binding constraint (the majsp-1 in-process check has been
+   OOM-killed at this scale), certificate size is the lever, not threads.
 
 ## Non-levers
 
