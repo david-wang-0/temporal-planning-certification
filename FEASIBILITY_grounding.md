@@ -3,6 +3,17 @@
 Status 2026-07-25. Question: are there ways to "ground better" so the certification oracle
 (tck-reach covreach) and the certificate tail (convert + verified check) handle more instances?
 
+## UPDATE 2026-07-26: the snap-split shipped and painter now certifies
+
+The nemo snap-action split (below, item 1's spirit but in the grounder's datalog) landed:
+durative actions are split into start/end applicability predicates, so at-end/over-all conditions
+on dynamic fluents can be required as sound reachability joins. painter drops from 17 to 11 ground
+actions (matching POPF), its net from 18 automata/34 clocks to 12/22, and **covreach finishes in
+~7 s where it previously did not finish in 10 h** — painter `instance_1_2` now certifies end-to-end
+in ~46 s (verified checker accepts). painter is no longer oracle-hard; the sections below are
+retained as the original analysis (their "painter is encoding-bound / oracle-hard" framing is
+superseded for `instance_1_2`; larger painter instances are untested).
+
 ## Where the cost actually is (measured)
 
 - The net emitted per ground problem: one 4-location automaton per ground action + `main`, and
