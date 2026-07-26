@@ -114,7 +114,8 @@ start. The capstone's in-process net hand-off is what makes numeric certificatio
 ## Doc map
 
 `ARCHITECTURE_pipeline.md` / `ARCHITECTURE_grounding.md` / `ARCHITECTURE_dependencies.md` —
-design; `FORMALISATION_MAP.md` — theory inventory; `NUMERIC_PLAN.md` — the numeric contract the
+design of the verified reduction; `ARCHITECTURE_sml.md` — the untrusted `plan_cert` SML harness
+(modules, trust boundary, end-to-end data flow); `FORMALISATION_MAP.md` — theory inventory; `NUMERIC_PLAN.md` — the numeric contract the
 theories cite (A.x/B section numbers appear in `.thy` comments; keep); `GROUNDING_PLAN.md` —
 grounder plan incl. the recorded eqAtm/future-grounder decisions; `NUMERIC_BOUND_INFERENCE.md` —
 the bound-inference stack map (§1e = the implemented relational refinement);
