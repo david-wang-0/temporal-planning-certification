@@ -260,6 +260,167 @@ next
     by auto
 qed
 
+subsection \<open>Bounds-free unsolvability corollary\<close>
+
+text \<open>The public capstone @{thm [source] check_and_cert_numeric_pddl_problem_okay} concludes
+  @{term \<open>\<nexists>\<pi>. numeric_valid_ground_plan_cert P (numeric_lo_of B) (numeric_hi_of B) \<pi>\<close>} -- the inferred
+  fluent box @{term B} appears in the conclusion, so it reads as "no plan \<^emph>\<open>within the box\<close>".  But the
+  box is an \<^emph>\<open>input\<close> to the certifier, not part of the unsolvability claim: @{locale numeric_valid_ground_plan_cert}
+  is the \<^bold>\<open>genuine, unrestricted\<close> numeric plan predicate -- its per-plan @{text num_seq_in_bounds}
+  reachability assumption was \<^emph>\<open>dropped\<close> in WP-D (see the header of theory
+  \<open>Ground_PDDL_Numeric_NTA_Reduction_Bounds\<close>), with boundedness supplied once, statically, at the
+  problem level via the certificate leaf @{locale numeric_ground_ast_problem_cert}.
+
+  Concretely @{thm [source] numeric_valid_ground_plan_cert_def} factors as
+  @{term \<open>numeric_ground_ast_problem_cert P lo hi\<close>} (the box-carrying, \<open>\<pi>\<close>-independent part, decided by the
+  runtime gate @{const numeric_ground_ast_problem_defs.is_gbound_inv_exec}) conjoined with a
+  \<^bold>\<open>bounds-free\<close> plan-validity part built only from the @{locale numeric_ground_ast_problem_defs} accessors
+  of @{term P}.  We name that bounds-free part \<open>num_ground_plan_valid\<close> and, since the box part is
+  established (checked) in the @{term \<open>Result Sat\<close>} case, re-export the capstone with a conclusion that no
+  longer mentions @{term B}.\<close>
+
+definition num_ground_plan_valid :: "ast_temporal_problem \<Rightarrow> (nat, ast_temporal_action_schema, int) temp_plan \<Rightarrow> bool" where
+  "num_ground_plan_valid P \<pi> \<equiv>
+     numeric_temp_plan_for_problem_list_impl_int'
+       ground_ast_problem_defs.at_start_spec ground_ast_problem_defs.at_end_spec
+       ground_ast_problem_defs.over_all_spec ground_ast_problem_defs.lower_spec
+       ground_ast_problem_defs.upper_spec ground_ast_problem_defs.pre_spec
+       ground_ast_problem_defs.adds_spec ground_ast_problem_defs.dels_spec
+       (ground_ast_problem_defs.init_spec P) (ground_ast_problem_defs.goal_spec P)
+       0 (ground_ast_problem_defs.props_spec P) (ground_ast_problem_defs.actions_spec P) \<pi>
+     \<and> numeric_valid_ground_plan_cert_axioms P \<pi>"
+
+text \<open>Given the (checked) box-carrying certificate leaf, the full bounded plan-cert predicate and the
+  bounds-free @{const num_ground_plan_valid} coincide.\<close>
+lemma numeric_valid_ground_plan_cert_iff_num_ground_plan_valid:
+  assumes "numeric_ground_ast_problem_cert P lo hi"
+  shows "numeric_valid_ground_plan_cert P lo hi \<pi> \<longleftrightarrow> num_ground_plan_valid P \<pi>"
+  using assms unfolding numeric_valid_ground_plan_cert_def num_ground_plan_valid_def by blast
+
+text \<open>A successful @{const make_certified_numeric_net} run establishes the box-carrying certificate leaf
+  @{locale numeric_ground_ast_problem_cert} (the gate
+  @{const numeric_ground_ast_problem_defs.is_gbound_inv_exec} passed and the numeric network was built):
+  the \<open>\<pi>\<close>-independent half of @{thm [source] make_certified_numeric_net_okay}.\<close>
+lemma make_certified_numeric_net_cert:
+  assumes "make_certified_numeric_net P B certifier = Result R"
+  shows "numeric_ground_ast_problem_cert P (numeric_lo_of B) (numeric_hi_of B)"
+proof (cases "numeric_ground_ast_problem_defs.is_gbound_inv_exec P (numeric_lo_of B) (numeric_hi_of B)")
+  case gate: True
+  show ?thesis
+  proof (cases "check_and_make_numeric_network P (numeric_lo_of B) (numeric_hi_of B)")
+    case (Inl a)
+    thus ?thesis using assms gate unfolding make_certified_numeric_net_def by simp
+  next
+    case inr: (Inr k)
+    have chk: "numeric_ground_ast_problem_defs.check_numeric_ground_problem P (numeric_lo_of B) (numeric_hi_of B) = Inr ()"
+      by (cases "numeric_ground_ast_problem_defs.check_numeric_ground_problem P (numeric_lo_of B) (numeric_hi_of B)")
+         (use inr in \<open>auto simp: check_and_make_numeric_network_def\<close>)
+    have leaf: "numeric_ground_ast_problem P (numeric_lo_of B) (numeric_hi_of B)"
+      using chk by (rule check_numeric_ground_problem_sound)
+    interpret L: numeric_ground_ast_problem P "numeric_lo_of B" "numeric_hi_of B" by (rule leaf)
+    have ginv: "L.nred'.is_gbound_inv'"
+      using gate L.is_gbound_inv_exec_eq by simp
+    show ?thesis
+      by (rule numeric_ground_ast_problem_cert.intro[OF leaf numeric_ground_ast_problem_cert_axioms.intro[OF ginv]])
+  qed
+next
+  case False
+  thus ?thesis using assms unfolding make_certified_numeric_net_def by simp
+qed
+
+text \<open>Bounds-free twin of @{thm [source] make_certified_numeric_net_okay}: an accepted net whose
+  reachability formula is unsatisfiable rules out \<^emph>\<open>every\<close> (genuine, unrestricted) numeric plan.\<close>
+lemma make_certified_numeric_net_okay':
+  assumes A1: "make_certified_numeric_net P B certifier = Result (network, renaming, cert)"
+      and net: "network = (ids_to_names, process_names_to_index, broadcast, automata, bounds,
+                           formula, init_locs, init_vars)"
+      and not_sat: "\<not> (Simple_Network_Impl.sem automata broadcast bounds,
+                        (init_locs, map_of init_vars, (\<lambda>_. 0)) \<Turnstile> formula)"
+    shows "\<nexists>\<pi>. num_ground_plan_valid P \<pi>"
+proof -
+  have no_cert: "\<nexists>\<pi>. numeric_valid_ground_plan_cert P (numeric_lo_of B) (numeric_hi_of B) \<pi>"
+    by (rule make_certified_numeric_net_okay[OF A1 net not_sat])
+  have cert: "numeric_ground_ast_problem_cert P (numeric_lo_of B) (numeric_hi_of B)"
+    by (rule make_certified_numeric_net_cert[OF A1])
+  show ?thesis
+    using no_cert numeric_valid_ground_plan_cert_iff_num_ground_plan_valid[OF cert] by blast
+qed
+
+text \<open>The bounds-free capstone: @{term \<open>Result Sat\<close>} certifies \<^bold>\<open>genuine\<close> unsolvability -- no valid numeric
+  plan for @{term P} exists at all -- with the inferred box @{term B} appearing only as an input to the
+  certifier, absent from the conclusion.\<close>
+lemma check_and_cert_numeric_pddl_problem_okay':
+  assumes mode: "mode \<noteq> Buechi" "mode \<noteq> Debug"
+  shows "
+    <emp>
+      check_and_cert_numeric_pddl_problem P B mode num_split certifier show_cert
+    <\<lambda> Result Sat \<Rightarrow> \<up>(\<nexists>\<pi>. num_ground_plan_valid P \<pi>)
+     | _ \<Rightarrow> true>\<^sub>t"
+proof (cases "make_certified_numeric_net P B certifier")
+  case (Result res)
+  obtain network renaming cert where
+    res: "res = (network, renaming, cert)" by (cases res) auto
+  obtain ids_to_names process_names_to_index
+    broadcast automata bounds formula init_locs init_vars where
+    net: "network = (ids_to_names, process_names_to_index, broadcast, automata, bounds, formula, init_locs, init_vars)"
+    by (cases network) auto
+
+  have intermediate_res: "\<not> Simple_Network_Impl.sem automata broadcast bounds,(init_locs, map_of init_vars, \<lambda>_. 0) \<Turnstile> formula
+    \<Longrightarrow> \<nexists>\<pi>. num_ground_plan_valid P \<pi>"
+    apply (rule make_certified_numeric_net_okay'[OF Result[simplified res net]])
+    by auto
+
+  have conv_commute: "(Simple_Network_Language.conv_A \<circ> automaton_of) x = (automaton_of \<circ> conv_automaton) x" for x
+  proof -
+    have 1: "map conv_ac (default_map_of [] d x) = default_map_of [] (map (\<lambda>(s, cc). (s, map conv_ac cc)) d) x" for d x
+      unfolding default_map_of_def unfolding FinFun.map_default_def unfolding map_of_map
+      by (cases "map_of d x") auto
+    show ?thesis
+      apply (induction x)
+      unfolding Simple_Network_Language.conv_A_def Simple_Network_Language.conv_t_def
+      unfolding conv_automaton_def
+      unfolding automaton_of_def
+      unfolding comp_def
+      unfolding prod.case
+      unfolding set_map
+      unfolding 1 by simp
+  qed
+
+  show ?thesis
+    unfolding check_and_cert_numeric_pddl_problem_def
+    unfolding Result Error_List_Monad.result.case
+    unfolding res prod.case
+    apply (rule bind_rule)
+     apply (rule convert_check_okay[OF mode])
+     apply (rule net)
+    unfolding Let_def
+    apply (rule return_cons_rule)
+    subgoal for x
+      apply (cases x)
+      subgoal for b apply (cases b)
+           apply simp
+          apply simp
+         apply simp
+         apply (intro strip)
+         apply (erule conjE)
+        unfolding Simple_Network_Language.conv_def
+        unfolding prod.case
+        unfolding map_map
+        unfolding conv_commute
+        using intermediate_res
+        unfolding Simple_Network_Impl.sem_def
+        by auto
+      by auto
+    done
+next
+  case (Error x2)
+  show ?thesis unfolding check_and_cert_numeric_pddl_problem_def
+    unfolding Error
+    unfolding Error_List_Monad.result.case Let_def
+    apply (rule return_cons_rule)
+    by auto
+qed
+
 definition check_and_cert_numeric_pddl_problem_no_return where
 "check_and_cert_numeric_pddl_problem_no_return P B mode num_split certifier show_cert =
 do {
