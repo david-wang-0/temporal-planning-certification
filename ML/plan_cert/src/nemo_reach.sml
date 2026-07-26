@@ -192,32 +192,64 @@ struct
                      | NONE => a)) acc neffs
         end
 
-      (* one schema -> applicability rule + effect rules; returns (name, arity, appId, rules) *)
+      (* one schema -> applicability rule(s) + effect rules; returns (name, arity, appId, rules)
+         where appId is the predicate whose derivable tuples ARE the kept instances.
+
+         Durative actions are SNAP-SPLIT into a start predicate a<i>s and an end predicate a<i>e:
+           a<i>s :- types, dom, at-start conditions, duration/at-start def-atoms
+           <at-start adds> :- a<i>s
+           a<i>e :- a<i>s, over-all + at-end conditions (incl. DYNAMIC fluents, as reachability
+                    joins), over-all/at-end def-atoms
+           <at-end adds> :- a<i>e
+         The kept set is a<i>e (an instance whose END snap is reachable can fully fire).  The split
+         is what makes requiring dynamic at-end/over-all fluents SOUND: the start effects seed the
+         fluent set independently of a<i>e, so a self-bootstrapping chain (e.g. painter's container
+         adds s1 at start, which drives s1->s2->s3->s4, satisfying its own at-end s4) is derived
+         rather than killed by a cycle -- while a genuinely-unreachable at-end condition (e.g. s4
+         for a non-consecutive pair, whose chain never starts) correctly prunes the instance.
+         Collapsing start+end onto one predicate (the previous encoding) could not do this: it had
+         to DROP dynamic at-end/over-all conditions to stay sound, keeping provably-dead instances. *)
       fun schema_rules i sch =
         let
-          val appId = "a" ^ Int.toString i
-          val (name, params, bodyC, effL) =
-            (case sch of
-                C.SimpleActionSchemaa (C.ActionHead (n, ps), C.SimpleActionBody (pre, eff)) =>
-                  (n, ps, fn env => cond_body env true pre ([], []), fn env => eff_heads env eff [])
-              | C.DurativeActionSchema (C.ActionHead (n, ps), C.DurativeActionBody (durs, conds, effs)) =>
-                  (n, ps,
-                   fn env =>
-                     let val (ats, flt) =
-                           foldl (fn ((ta, f), st) => cond_body env (ta = C.At_Start) f st)
-                                 ([], []) conds
-                     in (dur_body env durs ats, flt) end,
-                   fn env => foldl (fn ((_, e), a) => eff_heads env e a) [] effs))
+          val (name, params) = (case sch of
+                  C.SimpleActionSchemaa (C.ActionHead (n, ps), _) => (n, ps)
+                | C.DurativeActionSchema (C.ActionHead (n, ps), _) => (n, ps))
           val env = mkVarEnv params
           val vids = List.tabulate (length params, fn k => "?v" ^ Int.toString k)
-          val head = atomStr appId vids
           val tyAtoms = ListPair.map (fn ((_, pty), v) => tyId pty ^ "(" ^ v ^ ")") (params, vids)
           val domAtoms = map (fn v => "dom(" ^ v ^ ")") vids
-          val (atoms, filters) = bodyC env
-          val body = String.concatWith ", " (tyAtoms @ atoms @ domAtoms @ filters)
-          val appRule = head ^ " :- " ^ (if body = "" then "dom(z)" else body) ^ " ."
-          val effRules = map (fn h => h ^ " :- " ^ head ^ " .") (effL env)
-        in (name, length params, appId, appRule :: effRules) end
+          (* head(vids) :- extra, types, atoms, dom, filters .  (dom(z) when the body is empty) *)
+          fun mkRule hid extra (atoms, filters) =
+            let val body = String.concatWith ", " (extra @ tyAtoms @ atoms @ domAtoms @ filters)
+            in atomStr hid vids ^ " :- " ^ (if body = "" then "dom(z)" else body) ^ " ." end
+          fun isStart C.At_Start = true | isStart _ = false
+        in
+          case sch of
+              C.SimpleActionSchemaa (_, C.SimpleActionBody (pre, eff)) =>
+                let
+                  val appId = "a" ^ Int.toString i
+                  val appRule = mkRule appId [] (cond_body env true pre ([], []))
+                  val effRules = map (fn h => h ^ " :- " ^ atomStr appId vids ^ " .")
+                                     (eff_heads env eff [])
+                in (name, length params, appId, appRule :: effRules) end
+            | C.DurativeActionSchema (_, C.DurativeActionBody (durs, conds, effs)) =>
+                let
+                  val sId = "a" ^ Int.toString i ^ "s"
+                  val eId = "a" ^ Int.toString i ^ "e"
+                  val startC = List.filter (fn (ta, _) => isStart ta) conds
+                  val endC   = List.filter (fn (ta, _) => not (isStart ta)) conds
+                  val (sAts, sFlt) = foldl (fn ((_, f), st) => cond_body env true f st) ([], []) startC
+                  val sRule = mkRule sId [] (dur_body env durs sAts, sFlt)
+                  val eRule = mkRule eId [atomStr sId vids]
+                                (foldl (fn ((_, f), st) => cond_body env true f st) ([], []) endC)
+                  val sEff = map (fn h => h ^ " :- " ^ atomStr sId vids ^ " .")
+                                 (foldl (fn ((ta, e), a) => if isStart ta then eff_heads env e a else a)
+                                        [] effs)
+                  val eEff = map (fn h => h ^ " :- " ^ atomStr eId vids ^ " .")
+                                 (foldl (fn ((ta, e), a) => if isStart ta then a else eff_heads env e a)
+                                        [] effs)
+                in (name, length params, eId, sRule :: eRule :: (sEff @ eEff)) end
+        end
 
       val indexed = ListPair.zip (List.tabulate (length schemas, fn i => i), schemas)
       val schemaRules = map (fn (i, s) => schema_rules i s) indexed
