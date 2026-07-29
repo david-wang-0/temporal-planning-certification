@@ -116,7 +116,7 @@ locale numeric_tp_nta_reduction_bounds =
 begin
 
 text \<open>S-property re-exports in the \<open>bounds\<close> locale (the same facts @{locale
-  numeric_tp_nta_reduction_correctness} derives in @{theory TP_NTA_Reduction.TP_NTA_Reduction_Numeric_Edges},
+  numeric_tp_nta_reduction_correctness} derives in @{theory TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Numeric_Edges},
   but proved here where only @{thm [source] num_valid} and the static well-formedness assumptions are in
   scope -- they do NOT depend on the reachability invariant, so they hold from the certificate side too).\<close>
 

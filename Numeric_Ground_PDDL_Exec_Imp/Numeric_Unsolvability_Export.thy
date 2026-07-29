@@ -62,7 +62,7 @@ end
 text \<open>\<^bold>\<open>Unified \<open>Converter\<close> export (propositional + numeric).\<close>  This supersedes the
   propositional-only export in theory \<open>Check_Unsolvability\<close>: it emits the SAME module name
   (\<open>Converter\<close>) and file (\<open>code/Check_Unsolvability.ML\<close>), but from the TOP of the reduction
-  stack (session \<open>bound_parsing\<close>), so the numeric network builder
+  stack (session \<open>Numeric_Ground_PDDL_Exec_Imp\<close>), so the numeric network builder
   @{const check_and_make_numeric_network_opt} -- which needs the bound-inference machinery
   (@{const numeric_ground_ast_problem_defs.is_gbound_inv_exec}) that lives ABOVE
   \<open>Check_Unsolvability\<close> -- lands in the same \<open>Converter\<close> structure and shares the parser's

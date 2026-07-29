@@ -107,7 +107,7 @@ start. The capstone's in-process net hand-off is what makes numeric certificatio
   `isabelle-assistant`, `hugo-0.152.0` — every `isabelle` run warns "Missing Isabelle component".
   Non-blocking; prune the dead lines.
 - **`code/` untracked but build-linked** (`Numeric_Bound_Inference.ML` is linked by
-  `numeric_code.mlb`; plus `Numeric_Projection.ML`, `Makefile`, `widen_nbi_sig.py`) — decide
+  `numeric_code.mlb`; plus `Makefile`, `widen_nbi_sig.py`) — decide
   whether to commit at least the source-like pieces (`widen_nbi_sig.py`, `Makefile`).
 - **`check_numeric_ground_problem_diag`** is still labelled temporary; retire or bless.
 

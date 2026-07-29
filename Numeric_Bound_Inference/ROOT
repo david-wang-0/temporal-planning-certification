@@ -1,0 +1,15 @@
+session Numeric_Bound_Inference = "HOL-IMP" +
+  description \<open>Numeric-fluent bound inference (threshold interval abstract interpretation). Standalone
+    on the HOL-IMP heap -- it CANNOT share the reduction's Temporal_Planning_Base heap (HOL-IMP's
+    Abs_Int0 option-lattice arity clashes with the Munta/FPS tower), so it is a separate session and the
+    inferred box crosses to the reduction as plain data. It COMPUTES a per-fluent box (possibly with
+    infinite endpoints); the executable pipeline rejects any problem whose box has an infinite endpoint
+    ("bound-inference failed") since the reduction's fluent_lo/hi are finite int.\<close>
+  theories
+    Numeric_Bound_Inference
+    Numeric_Bound_Inference_Threshold
+    Numeric_Bound_Inference_Guards
+    Numeric_Bound_Inference_Extract
+    Numeric_Bound_Inference_Code_Export
+  export_files (in "../") [1]
+    "Numeric_Bound_Inference.Numeric_Bound_Inference_Code_Export:code/Numeric_Bound_Inference.ML"

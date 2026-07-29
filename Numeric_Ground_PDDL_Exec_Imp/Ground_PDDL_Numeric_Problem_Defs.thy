@@ -1,7 +1,7 @@
 theory Ground_PDDL_Numeric_Problem_Defs
   imports
-    Ground_PDDL_Problem_Defs
-    TP_NTA_Reduction.TP_NTA_Reduction_Numeric_Defs
+    PDDL_TP_Reduction.Ground_PDDL_Problem_Defs
+    TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Numeric_Defs
 begin
 
 section \<open>Numeric admission locale (NUMERIC_EXEC_PLAN WP-B)\<close>

@@ -1,0 +1,12 @@
+session TP_NTA_Reduction = Temporal_Planning_Semantics +
+  theories
+    NTA_Temp_Planning_Sem
+    TP_NTA_Reduction_Defs
+    TP_NTA_Reduction_Model_Checking
+    TP_NTA_Reduction_Utils
+    TP_NTA_Reduction_Prelims
+    TP_NTA_Reduction_Edges
+    TP_NTA_Reduction_Happenings
+    TP_NTA_Reduction_Properties
+    TP_NTA_Reduction_Steps
+    TP_NTA_Reduction_Correctness

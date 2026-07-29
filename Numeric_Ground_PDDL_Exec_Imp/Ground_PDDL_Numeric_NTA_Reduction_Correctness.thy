@@ -1,8 +1,8 @@
 theory Ground_PDDL_Numeric_NTA_Reduction_Correctness
   imports
-    Ground_PDDL_NTA_Reduction_Correctness
+    PDDL_TP_Reduction.Ground_PDDL_NTA_Reduction_Correctness
     Ground_PDDL_Numeric_Problem_Defs
-    "TP_NTA_Reduction.TP_NTA_Reduction_Correctness_Numeric"
+    "TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Correctness_Numeric"
 begin
 
 text \<open>\<^bold>\<open>NUMERIC_EXEC_PLAN WP-A\<close> -- Rung 4 over the \<^emph>\<open>numeric\<close> net. The numeric twin of

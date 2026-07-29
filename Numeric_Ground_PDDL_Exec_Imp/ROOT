@@ -1,0 +1,17 @@
+session Numeric_Ground_PDDL_Exec_Imp = PDDL_TP_Reduction +
+  description \<open>Numeric ground-PDDL executable/implementation layer: numeric problem defs, the
+    numeric NTA reduction (correctness + executable impl), the bound machinery
+    (Bounds / Cert_Impl), and the numeric code export + verified capstone certifier.\<close>
+  sessions
+    "TP_NTA_Reduction_Numeric"
+  theories
+    Ground_PDDL_Numeric_Problem_Defs
+    Ground_PDDL_Numeric_NTA_Reduction_Correctness
+    Ground_PDDL_Numeric_NTA_Reduction_Impl
+    Ground_PDDL_Numeric_NTA_Reduction_Bounds
+    Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
+    Ground_PDDL_Numeric_Code_Export
+    Numeric_Unsolvability_Export
+    Numeric_Unsolvability_Code_Compile
+  export_files (in "../") [1]
+    "Numeric_Ground_PDDL_Exec_Imp.Numeric_Unsolvability_Code_Compile:ML/Check_Unsolvability.ML"

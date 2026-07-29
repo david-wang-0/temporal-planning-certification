@@ -1,5 +1,5 @@
 theory TP_NTA_Reduction_Numeric_Defs
-  imports TP_NTA_Reduction_Defs
+  imports TP_NTA_Reduction.TP_NTA_Reduction_Defs
 begin
 
 section \<open>Numeric augmentation of the reduction (NUMERIC_PLAN Layer B)\<close>

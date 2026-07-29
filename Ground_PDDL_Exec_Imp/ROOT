@@ -1,0 +1,18 @@
+session PDDL_TP_Reduction = TP_NTA_Reduction +
+  sessions
+    "Grounding_Temporal_Common"
+  theories
+    (* in-repo Analysis-free wf-checker: vendored FPS checker slice, re-pointed off the
+       Analysis-tainted Continuous_Planning onto Analysis_Free_Base (keeps the tower Product_Order-free) *)
+    Error_Monad_Add
+    PDDL_Checker_Common
+    Temporal_Continuous_Reduction_Free
+    Ground_PDDL_Problem_Base
+    Ground_PDDL_Problem_Defs
+    Ground_PDDL_Problem_Reduction
+    Ground_PDDL_Plan_Defs
+    Ground_PDDL_Plan_Reduction
+    Ground_PDDL_Problem_Code
+    Ground_PDDL_NTA_Reduction_Correctness
+    Ground_PDDL_NTA_Reduction_Impl
+    Check_Unsolvability

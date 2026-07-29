@@ -1,7 +1,7 @@
 theory Ground_PDDL_Numeric_NTA_Reduction_Impl
   imports
     Ground_PDDL_Numeric_NTA_Reduction_Correctness
-    Ground_PDDL_NTA_Reduction_Impl
+    PDDL_TP_Reduction.Ground_PDDL_NTA_Reduction_Impl
 begin
 
 text \<open>\<^bold>\<open>NUMERIC_EXEC_PLAN WP-C\<close> -- the \<^emph>\<open>executable\<close> numeric net and its refinement to the abstract

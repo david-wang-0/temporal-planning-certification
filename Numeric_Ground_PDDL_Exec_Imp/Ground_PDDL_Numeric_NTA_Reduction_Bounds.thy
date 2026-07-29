@@ -1,7 +1,7 @@
 theory Ground_PDDL_Numeric_NTA_Reduction_Bounds
   imports
-    "PDDL_TP_Reduction.Ground_PDDL_Numeric_NTA_Reduction_Correctness"
-    "TP_NTA_Reduction.TP_NTA_Reduction_Numeric_Bounds"
+    Ground_PDDL_Numeric_NTA_Reduction_Correctness
+    "TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Numeric_Bounds"
 begin
 
 text \<open>\<^bold>\<open>NUMERIC_EXEC_PLAN WP-D INTEGRATION\<close> -- discharge the soundness-critical @{text num_seq_in_bounds}

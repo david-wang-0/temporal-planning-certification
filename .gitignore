@@ -568,3 +568,5 @@ GEMINI.local.md
 # reviewers. Any other use is forbidden." -> do NOT redistribute/commit. If a
 # permissively-licensed website/IPC copy is confirmed, revisit this line.
 examples/gigante/
+# assistant scratch / working notes (never committed -- published artifact)
+temp/

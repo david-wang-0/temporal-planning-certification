@@ -1,0 +1,13 @@
+session TP_NTA_Reduction_Numeric = TP_NTA_Reduction +
+  description \<open>Numeric extension of the temporal-planning NTA reduction: the numeric net
+    augmentation (numeric defs / model-checking / prelims / edges / projection / steps), its
+    correctness, and the numeric bound machinery -- built on the propositional TP_NTA_Reduction.\<close>
+  theories
+    TP_NTA_Reduction_Numeric_Defs
+    TP_NTA_Reduction_Numeric_Model_Checking
+    TP_NTA_Reduction_Numeric_Prelims
+    TP_NTA_Reduction_Numeric_Edges
+    TP_NTA_Reduction_Numeric_Projection
+    TP_NTA_Reduction_Numeric_Steps
+    TP_NTA_Reduction_Correctness_Numeric
+    TP_NTA_Reduction_Numeric_Bounds

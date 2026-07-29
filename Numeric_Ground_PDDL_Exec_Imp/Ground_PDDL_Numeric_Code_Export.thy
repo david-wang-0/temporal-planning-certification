@@ -1,5 +1,5 @@
 theory Ground_PDDL_Numeric_Code_Export
-  imports "bound_inference.Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl"
+  imports Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
 begin
 
 section \<open>Deliverable (1): executable @{text is_gbound_inv'} code equation\<close>
@@ -36,7 +36,7 @@ text \<open>Global, code-generatable twins of the locale-internal interval evalu
   They take the @{text const_to_int} decode @{term cti} and (for @{term box_exec}) the fluent
   bounds @{term lo}, @{term hi} as explicit arguments, so they live at the theory top level and
   code-generate without a locale interpretation.  Bodies are copied verbatim from
-  @{theory TP_NTA_Reduction.TP_NTA_Reduction_Numeric_Bounds}.\<close>
+  @{theory TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Numeric_Bounds}.\<close>
 
 definition map_ibnd2_exec ::
   "(int \<times> int \<Rightarrow> int \<times> int \<Rightarrow> int \<times> int) \<Rightarrow> (int \<times> int) option \<Rightarrow> (int \<times> int) option \<Rightarrow> (int \<times> int) option"
@@ -282,14 +282,10 @@ lemmas numeric_ground_data_code =
 
 declare numeric_ground_data_code[code]
 
-text \<open>\<^bold>\<open>VERIFIED code-gen of the bound-inference glue surface.\<close> The two functions the (SML)
-  bound-inference glue needs -- the snap projection @{const numeric_ground_ast_problem_defs.numeric_draft_actions}
-  (feeds the compute-side @{text infer_fluent_bounds}) and the boundedness re-check
-  @{const numeric_ground_ast_problem_defs.is_gbound_inv_exec} (the trusted gate on the inferred box) --
-  \<^emph>\<open>code-generate cleanly on their own\<close>.  (The full numeric NETWORK builder @{text num_make_network_impl}
-  does NOT: it re-triggers the @{text Code_Cardinality.finite'} clash and needs the isolated
-  @{text card_UNIV}/@{text proper_interval}/@{text \<open>String.literal\<close>} code-gen block that theory
-  @{text Check_Unsolvability} keeps commented out -- the deferred WP-D code-gen tail.)\<close>
+text \<open>Don't remove this. This just declares the things needed for the bound inference theories.
+  These are exported by the Numeric_Unsolvability_Export.thy file and that is also
+  where the bound inference export gets its datatypes from.
+  This is left as documentation.\<close>
 export_code
   numeric_ground_ast_problem_defs.numeric_draft_actions
   numeric_ground_ast_problem_defs.is_gbound_inv_exec
@@ -297,15 +293,7 @@ export_code
   GCmp_i Ceq Cle Cge Clt Cgt
   EC EV EAdd ESub EMul EDiv
   Inl Inr nat_of_integer integer_of_int int_of_integer
-  in SML module_name NumericProjection file "../code/Numeric_Projection.ML"
+  in SML module_name NumericProjection
 
-text \<open>\<^bold>\<open>Code-gen status (2026-07-13).\<close> All definitions/lemmas above are green and typecheck. Actual ML
-  emission (\<^bold>\<open>export_code \<dots> in SML\<close>) is \<^emph>\<open>deferred\<close> (David's WP-D decision: defer the code-gen
-  typeclass rabbit hole). A probe surfaced a @{text Code_Cardinality.finite'} clash coming from the
-  snaps-disjointness check's @{text \<open>set \<dots> \<inter> set \<dots> = {}\<close>} in
-  @{const numeric_ground_ast_problem_defs.check_numeric_ground_problem} (reformulate to an executable
-  @{const list_all}/@{text \<open>\<notin> set\<close>} form to clear it), and full emission additionally needs the isolated
-  @{text proper_interval}/@{text Abs_literal} @{text \<open>String.literal\<close>} code-gen block that
-  theory @{text Check_Unsolvability} currently keeps commented out.\<close>
 
 end

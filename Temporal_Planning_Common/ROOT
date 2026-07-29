@@ -1,0 +1,5 @@
+session Temporal_Planning_Common = Temporal_Planning_Base +
+  theories
+    TP_Utils
+    ListMisc
+    Sequences

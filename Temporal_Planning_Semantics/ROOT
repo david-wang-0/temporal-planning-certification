@@ -1,0 +1,6 @@
+session Temporal_Planning_Semantics = Temporal_Planning_Common +
+  theories
+    Temporal_Plans
+  document_files (in "../document")
+    "root.tex"
+    "root.bib"

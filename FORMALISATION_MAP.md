@@ -3,8 +3,8 @@
 A short, current pointer into the formalisation and the end-to-end pipeline. Line numbers
 verified against the working tree on 2026-07-18 — the 2026-07-24 work (relational guard
 refinement in `TP_NTA_Reduction_Numeric_Bounds.thy`, the exec-twin equivalence +
-`GCmp_i` projection in `bound_parsing/Ground_PDDL_Numeric_Code_Export.thy`, and the verified
-capstone `check_and_cert_numeric_pddl_problem` in `bound_parsing/Numeric_Unsolvability_Export.thy`)
+`GCmp_i` projection in `Numeric_Ground_PDDL_Exec_Imp/Ground_PDDL_Numeric_Code_Export.thy`, and the verified
+capstone `check_and_cert_numeric_pddl_problem` in `Numeric_Ground_PDDL_Exec_Imp/Numeric_Unsolvability_Export.thy`)
 postdates that verification, so re-anchor those files via isabelle-search. For the narrative see
 `HANDOVER.md`; this file is the navigation entry point.
 
@@ -95,7 +95,7 @@ Connects the inferred box to the Munta bounded-int obligation.
 | Executable trusted gate | `Ground_PDDL_Exec_Imp/Ground_PDDL_Numeric_Code_Export.thy:86` `is_gbound_inv_exec`, `:113` `check_gbounds_opt` |
 | Numeric net builder | `…_Numeric_Code_Export.thy:101` `check_and_make_numeric_network_opt` |
 | **Untrusted** snap projection (re-checked, fail-closed) | `…_Numeric_Code_Export.thy:164` `numeric_draft_actions` |
-| Code export | `…_Numeric_Code_Export.thy:205` `export_code` → module `NumericProjection` → `code/Numeric_Projection.ML` |
+| Code export | `…_Numeric_Code_Export.thy:289` bare `export_code … in SML` (code-gen check, **no** `file`); the projection surface ships in the unified `Converter` export → `code/Check_Unsolvability.ML` (`Numeric_Unsolvability_Export.thy`) |
 | Cert-bridge locales | `…_Numeric_NTA_Reduction_Bounds.thy:31` `numeric_ground_ast_problem_cert`, `:55` `numeric_valid_ground_plan_cert`, `:115` `num_net_form_not_sat_imp_no_valid_ground_plan` |
 | WP-D capstone (refine + plan cert) | `…_Numeric_NTA_Reduction_Cert_Impl.thy:34` `num_model_checking_problem_refine_cert`, `:57` `check_and_make_numeric_network_and_plan_cert` |
 
@@ -115,8 +115,8 @@ box is *rejected*, never unsound.
 | External model-checking orchestration | `ML/plan_cert/src/tchecker_certify.sml` |
 | Bound-inference bridge (entry `infer_box`) | `ML/plan_cert/src/numeric_glue/numeric_bound_glue.sml:71` |
 | Network IR / printing | `ML/plan_cert/src/network_conversion/network_conversion.sml` |
-| Generated code | `code/Numeric_Bound_Inference.ML`, `code/Numeric_Projection.ML`, `code/Ground_PDDL_Net.ML` |
-| MLB wiring | `ML/plan_cert/src/numeric_code.mlb` (isolates the 2 generated modules), `…/plan_cert.mlb`, `ML/Makefile` (`build_certifier`) |
+| Generated code | `code/Numeric_Bound_Inference.ML`, `code/Ground_PDDL_Net.ML` |
+| MLB wiring | `ML/plan_cert/src/numeric_code.mlb` (isolates the compute-side module), `…/plan_cert.mlb`, `ML/Makefile` (`build_certifier`) |
 
 ---
 
@@ -197,7 +197,7 @@ Two Isabelle export regimes are in play (the isabelle-repo gotchas apply — `fi
 | Module → file | Source theory | Regime | Reproduce |
 |---|---|---|---|
 | `NumericBoundInference` → `code/Numeric_Bound_Inference.ML` | `Numeric_Bound_Inference_Code_Export.thy` (`file_prefix`) | **A** store + `export_files` + `-e` | `cd code && make numeric-bound-inference` = `isabelle build -e -d .. Numeric_Bound_Inference` then `python3 widen_nbi_sig.py` (widens the opaque `equal`/`enum`/`finite` dicts). **Reproducible.** |
-| `NumericProjection` → `code/Numeric_Projection.ML` | `Ground_PDDL_Numeric_Code_Export.thy:205` (`file "../code/…"`) | **B** side-effect | Emitted by processing the theory in **jEdit** (its session can't batch-build — blocked by broken `Check_Unsolvability`, can't be split off a shared dir). |
+| `NumericProjection` (code-gen check only) | `Ground_PDDL_Numeric_Code_Export.thy:289` (bare `export_code … in SML`, no `file`) | — | Not emitted to a file; the projection surface ships in the unified `Converter` export (`Numeric_Unsolvability_Export.thy` → `code/Check_Unsolvability.ML`), reached in SML as `Converter.*`. The `Numeric_Ground_PDDL_Exec_Imp` session batch-builds. |
 | `Converter` → `code/Ground_PDDL_Net.ML` | `Ground_PDDL_Net_Export.thy:261` (`file "../code/…"`; **not in ROOT**) | **B** side-effect | Emitted by processing the isolated export theory in **jEdit**. This is the net builder the binary links (`ML/converter.mlb`). |
 
 **The propositional *checker* export** (`ML/Check_Unsolvability.ML`, the certified
