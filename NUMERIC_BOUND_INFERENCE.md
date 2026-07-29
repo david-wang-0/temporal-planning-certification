@@ -150,29 +150,39 @@ soundness is a local interval meet, licensed by `comp_ok ⟹ both operands ∈ n
 (§1a–1c) already gives it a **point box** `[c,c]` (`c` = its init value) with zero extra machinery.
 The only new part is transferring that point box across the `=` guard onto `counter`.
 
-**Worked example — deriving the threshold of `counter = item_id + 1`.** (painter's real guard is the
-offset-free `counter = item_id`; the `+ 1` case shows the general nexp-valued RHS.)
+**Worked example — pinning `counter` from the guard `counter = item_id + 1`.** (painter's real guard is
+the offset-free `counter = item_id`; the `+ 1` case shows the general nexp-valued operand. Reduction-side
+names below; the compute twin `refine_gcomp` — `refine_pair` (HOL-IMP `inv_less_ivl`) + `refine_var` —
+does the same endpoint arithmetic, applying both legs to the pre-refinement box instead of sequentially.
+The threshold list is *separate* machinery: `caps_on`/`landing_cs` `v0`-estimate the guard caps so the
+widening never overshoots the meet below — painter: guard cap `c`, landing `c+1`.)
 
 ```
 # Box entering the guard (from the interval AI over the actions):
 #   item_id : never assigned by any action        -> point interval  B[item_id] = [c, c]   (c = init)
-#   counter : incremented by some action, no const guard hit yet
+#   counter : incremented by some action, no constant cap of its own
 #                                                  -> B[counter] = [0, +inf]   (unbounded on its own)
 
-refine_comp B (Comp EQ (NVar counter) (NAdd (NVar item_id) (NConst 1))):
-    # 1. evaluate the OTHER operand's nexp over the current box (aeval, the §2 interval evaluator)
+refine_comp (Comp EQ (NVar counter) (NAdd (NVar item_id) (NConst 1))) B
+    = refine_right cmp (refine_left cmp B):
+
+  refine_left:   # fires because the LEFT operand is a bare NVar; identity on any other shape
+    # 1. interval-evaluate the WHOLE other operand over the current box (aeval, the §2 evaluator);
+    #    aeval = None (an NDiv) refines nothing (compute twin: NMul/NDiv aeval to top, same effect)
     rhs = aeval B (NAdd (NVar item_id) (NConst 1))     # [c,c] +_ivl [1,1] = [c+1, c+1]
-    # 2. meet the fluent's box with it  (op = EQ -> two-sided meet)
-    B[counter] := B[counter]  meet  rhs                #  [0,+inf] meet [c+1,c+1] = [c+1, c+1]   <-- threshold!
-    # 3. symmetric leg for EQ: also refine any fluent on the RHS by (lhs-box solved back), i.e.
-    #    B[item_id] := B[item_id] meet aeval B (NSub (NVar counter) (NConst 1))   # here a no-op: already [c,c]
+    # 2. tighten the fluent's endpoint(s), op-appropriately: EQ -> both ends (two-sided meet)
+    B[counter] := B[counter]  meet  rhs                #  [0,+inf] meet [c+1,c+1] = [c+1, c+1]  <-- pinned
+  refine_right:  # the mirrored leg runs for EVERY op (not just EQ), on the already-refined box --
+    # but it only fires when the RIGHT operand is a bare NVar; (NAdd _ _) is not, so: no-op here.
+    # There is NO arithmetic back-solving (nothing rewrites counter - 1 onto item_id).
     return B
 
-# op /= EQ uses the half-bounded meets instead of a two-sided one:
-#   LEQ : B[counter] := B[counter] meet ivl_le  (upper rhs)      # cap upper only
-#   LT  : ... meet ivl_le (upper rhs - 1)
-#   GEQ : B[counter] := B[counter] meet ivl_ge  (lower rhs)      # raise lower only
-#   GT  : ... meet ivl_ge (lower rhs + 1)
+# op /= EQ tightens ONE endpoint per leg, strictness via +-1 (refine_right = the mirrored arms);
+# lo e / hi e = the aeval interval of the other operand:
+#   Cle  f <= e :  B[f] := (lo f,                  min (hi f) (hi e))        # cap upper only
+#   Clt  f <  e :  B[f] := (lo f,                  min (hi f) (hi e - 1))
+#   Cge  f >= e :  B[f] := (max (lo f) (lo e),     hi f)                     # raise lower only
+#   Cgt  f >  e :  B[f] := (max (lo f) (lo e + 1), hi f)
 ```
 
 Result: `counter` is pinned to `[c+1, c+1]` (painter's real guard gives `[c,c]`), `extract_box`
@@ -306,13 +316,14 @@ standalone smoke test passing.
   instance, so the compute side is **only** usable via a runtime-list-backed dict — fabricated in SML,
   correct because the fixpoint stability check only inspects fluents in the carrier list. *(Fold this
   widening into a `Code_Compile` sed step when productionizing.)*
-- **Reduction side** — `code/Numeric_Projection.ML` (`structure NumericProjection`), from theory
-  `Ground_PDDL_Exec_Imp/Ground_PDDL_Numeric_Code_Export.thy`. Exports `numeric_draft_actions P` (the
-  INT-ified `(fluents, snaps, init)` projection, fluent names as SML `string`), `check_gbounds_opt P B`
-  (the name-keyed trusted gate = `is_gbound_inv_exec`, **no** net builder so it code-generates), and the
-  `g_int` / `e_int` constructors. Emitted via the `export_code … file "../code/Numeric_Projection.ML"`
-  side-effect during jEdit processing (the network builder still can't code-gen — the deferred
-  `finite'` / `String.literal` block — so a full session build is not yet possible).
+- **Reduction side** — the projection surface (`numeric_draft_actions P`, the INT-ified
+  `(fluents, snaps, init)` projection with fluent names as SML `string`; `check_gbounds_opt P B`, the
+  name-keyed trusted gate = `is_gbound_inv_exec`; and the `g_int` / `e_int` constructors) is defined in
+  `Numeric_Ground_PDDL_Exec_Imp/Ground_PDDL_Numeric_Code_Export.thy`. It is **no longer** emitted as a
+  separate `NumericProjection` module: it ships inside the unified `Converter` export
+  (`code/Check_Unsolvability.ML`, from `Numeric_Unsolvability_Export.thy`) and is reached in SML as
+  `Converter.*`. That theory keeps a bare `export_code … in SML` (no `file`) as a standalone code-gen
+  check of the surface; the whole `Numeric_Ground_PDDL_Exec_Imp` session now batch-builds.
 
 **Glue** — `ML/plan_cert/src/numeric_glue/` : `numeric_bound_glue.sml` (`structure NumericBoundGlue`) maps
 `NumericProjection`'s `g_int`/`e_int` → `NumericBoundInference`'s `gcomp`/`nexp` (strict comparisons

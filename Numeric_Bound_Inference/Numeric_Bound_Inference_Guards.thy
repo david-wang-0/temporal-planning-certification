@@ -187,17 +187,52 @@ lemma refine_guard_sound:
 
 subsection \<open>Guarded abstract transfer and soundness\<close>
 
+text \<open>Checking that the new environment can possibly satisfy the guard.\<close>
+fun aenv_inter_gcomp::"'n aenv \<Rightarrow> 'n gcomp \<Rightarrow> bool" where
+  "aenv_inter_gcomp E (GCmp p a b) =
+     (case refine_pair p (aeval E a) (aeval E b) of
+       (ia, ib) \<Rightarrow> if (ia = \<bottom> \<or> ib = \<bottom>) then False else True)"
+
+definition aenv_inter_guard :: "'n aenv \<Rightarrow> 'n gcomp list \<Rightarrow> bool" where
+  "aenv_inter_guard E G = (\<forall>g \<in> set G. aenv_inter_gcomp E g)"
+
 text \<open>Apply an action's effects to the guard-refined box.\<close>
 
 definition gastep_upds :: "'n gaction \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
-  "gastep_upds ga E = astep_upds (snd ga) (refine_guard (fst ga) E)"
+  "gastep_upds ga E = (
+    if aenv_inter_guard E (fst ga)
+    then astep_upds (snd ga) (refine_guard (fst ga) E)
+    else E)"
+
+lemma aenv_inter_gcomp_sound:
+  assumes env: "v \<in> \<gamma>_env E " and sat: "sat_gcomp v c"
+  shows "aenv_inter_gcomp E c"
+proof -
+  obtain p a b where c: "c = GCmp p a b" by (cases c)
+  obtain ia ib where rp: "refine_pair p (aeval E a) (aeval E b) = (ia, ib)" by fastforce
+  have ma: "eval v a \<in> \<gamma>_ivl (aeval E a)" using env by (blast intro: aeval_sound)
+  have mb: "eval v b \<in> \<gamma>_ivl (aeval E b)" using env by (blast intro: aeval_sound)
+  have satc: "cmp_sem p (eval v a) (eval v b)" using sat unfolding c by simp
+  have mem: "eval v a \<in> \<gamma>_ivl ia \<and> eval v b \<in> \<gamma>_ivl ib"
+    using refine_pair_sound[OF rp ma mb satc] by blast
+  hence "ia \<noteq> \<bottom>" "ib \<noteq> \<bottom>" by auto
+  thus ?thesis using c rp by auto
+qed
+
+lemma aenv_inter_guard_sound:
+  assumes "v \<in> \<gamma>_env E" and "sat_guard v G"
+  shows "aenv_inter_guard E G"
+  using assms aenv_inter_gcomp_sound aenv_inter_guard_def sat_guard_def by blast
 
 lemma gastep_upds_sound:
   assumes "v \<in> \<gamma>_env E" and "sat_guard v (fst ga)"
   shows "apply_upds (snd ga) v \<in> \<gamma>_env (gastep_upds ga E)"
 proof -
   have "v \<in> \<gamma>_env (refine_guard (fst ga) E)" using assms by (simp add: refine_guard_sound)
-  thus ?thesis unfolding gastep_upds_def by (rule astep_upds_sound)
+  moreover
+  have "aenv_inter_guard E (fst ga)" using assms aenv_inter_guard_sound by blast
+  ultimately
+  show ?thesis using astep_upds_sound unfolding gastep_upds_def by auto
 qed
 
 definition gastep :: "'n gaction list \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
@@ -347,7 +382,7 @@ text \<open>The tight threshold set: initial fluent values (the caller supplies 
   @{typ 'n} is not enumerable in general) plus every action's harvest.\<close>
 definition thr_set :: "'n list \<Rightarrow> 'n valuation \<Rightarrow> 'n gaction list \<Rightarrow> int list" where
   "thr_set fs v0 acts = remdups (map v0 fs @ concat (map (gaction_thr v0) acts))"
-
+                                                                 
 
 
 section \<open>Worked example: the counter's upper bound recovered from its guard\<close>
