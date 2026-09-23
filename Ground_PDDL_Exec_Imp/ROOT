@@ -3,7 +3,7 @@ session PDDL_TP_Reduction = TP_NTA_Reduction +
     "Grounding_Temporal_Common"
   theories
     (* in-repo Analysis-free wf-checker: vendored FPS checker slice, re-pointed off the
-       Analysis-tainted Continuous_Planning onto Analysis_Free_Base (keeps the tower Product_Order-free) *)
+       Analysis-tainted Continuous_Planning onto Discrete_Planning_Common (keeps the tower Product_Order-free) *)
     Error_Monad_Add
     PDDL_Checker_Common
     Temporal_Continuous_Reduction_Free

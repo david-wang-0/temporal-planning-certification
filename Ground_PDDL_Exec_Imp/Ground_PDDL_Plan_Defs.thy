@@ -1,7 +1,7 @@
 theory Ground_PDDL_Plan_Defs
   imports
     Ground_PDDL_Problem_Defs
-    "Temporal_Planning_Discrete.Temporal_State_Sequence_Semantics"
+    "Discrete_Temporal_Planning.Temporal_State_Sequence_Semantics"
 begin
 
 text \<open>The new \<open>Temporal_State_Sequence_Semantics\<close> import re-introduces the duplicate
@@ -4133,7 +4133,7 @@ proof -
         res: "resolve_temporal_action_schema n = Some (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
         using durative_plan_action_schema_type1 by blast
       \<comment> \<open>HANDOVER \<section>B: FPS \<open>wf_plan_action (DurativePlanAction n as d)\<close> yields only \<open>d \<ge> 0\<close>
-         (see \<open>Continuous_Planning.Instantiations.wf_plan_action.simps(2)\<close>), NOT \<open>durations_match\<close>.  The
+         (see \<open>Discrete_Planning_Common.Instantiations.wf_plan_action.simps(2)\<close>), NOT \<open>durations_match\<close>.  The
          match is derived from PLAN VALIDITY via @{thm durations_match_of_valid}: the At_Start / At_End
          snaps fold the (temporally filtered) duration atoms \<open>duration_constraint_as_formula\<close> into their
          preconditions, and plan validity makes the valuation model those atoms at value \<open>d\<close>, giving

@@ -1,7 +1,7 @@
-session Temporal_Munta_Base = Temporal_Planning_Discrete +
+session Temporal_Munta_Base = Discrete_Temporal_Planning +
   description \<open>Stable, expensive base layer: the Munta model checker + verified certificate
     checker, List-Index and Containers, re-elaborated ONCE on top of the Analysis-FREE
-    Formal-PDDL-Semantics Temporal_Planning_Discrete heap (the temporal state-sequence semantics and
+    Formal-PDDL-Semantics Discrete_Temporal_Planning heap (the temporal state-sequence semantics and
     well-formedness, with NO HOL-Analysis / ODE / Product_Order tower). Dropping Product_Order leaves
     Munta's Product_Lexorder as the sole prod::ord instance, so the certificate-checker code
     (Simple_Network_Language_Certificate_Code) co-imports with the net builder with no arity clash --

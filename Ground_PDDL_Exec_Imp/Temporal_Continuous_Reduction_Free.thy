@@ -8,8 +8,8 @@
    state-sequence semantics, not the continuous-plan validity reduction.
    TODO: upstream into an Analysis-free FPS session. *)
 theory Temporal_Continuous_Reduction_Free
-  imports Temporal_Planning_Discrete.Temporal_Happening_Semantics
-    Temporal_Planning_Discrete.Temporal_Utils
+  imports Discrete_Temporal_Planning.Temporal_Happening_Semantics
+    Discrete_Temporal_Planning.Temporal_Utils
     PDDL_Checker_Common
 begin
 

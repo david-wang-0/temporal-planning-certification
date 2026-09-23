@@ -1,5 +1,69 @@
 # HANDOVER — verified temporal/numeric unsolvability certification, end to end
 
+## ⭐ SESSION STATUS (2026-09-23) — FPS re-base in progress, read this first
+
+**Goal:** make the whole development build again against the current Formal-PDDL-Semantics (FPS)
+layout. FPS was split along the HOL-Analysis boundary a second time (FPS branch `add-temporal-state-sequence-semantics`
+@ `d7d28c5`, PR #10, stacked on `analysis-free-split` 4349ad8 / PR #9; both open): the sessions this repo used (`Analysis_Free_Base`,
+`Temporal_Planning_Discrete`) were replaced by `Discrete_Planning_Common` and
+`Discrete_Temporal_Planning`; theories `World_Model_Discrete` -> `Worlds`, `Happening_Semantics_Discrete`
+-> `Happening_Semantics`, `Continuous_Effects_Discrete` -> `Invariant_Semantics`; the division-by-zero
+layer (`divide_option`, `numeric_effects_defined`, the divisor enumerations) is NOT on that branch
+(David is redoing it by hand on `division-by-zero-refactor`; `x / 0 = 0` again for now). This repo
+never used those names (audited), so the port is renames + one proof hotspot.
+
+**Plan (phases; status in brackets):**
+0. *Isolated build environment* [DONE]: an FPS git worktree at `d7d28c5` (= `add-temporal-state-sequence-semantics`), and
+   a private Isabelle user home (`USER_HOME=<private dir>`, own `etc/components` pointing the FPS line
+   at the worktree and re-enabling this repo, own heap store seeded by copying the shared one).
+   Reason: the shared FPS checkout is on David's division-by-zero WIP and its heap store serves his
+   jEdit and a peer PIDE session; building the same session names from other sources there would
+   clobber them. Source `temp/tpc-env.sh` before any `isabelle`/`jedit-up` call.
+1. *Grounder port* [handed to the Isabelle-PDDL-Grounding session]: DECISION (David, 2026-09-23) --
+   this repo consumes the STANDALONE `Isabelle-PDDL-Grounding` again (not the FPS `pddl-grounding`
+   branch), and only the cone it needs must build: `Grounding_Base -> Grounding_Utils/Grounding_Common
+   -> Grounding_Temporal_Base -> Temporal_Grounding_Utils -> Grounding_Temporal_Common`. The port =
+   the five renames (sed sweep over every ROOT/.thy so all ROOTs parse) + one lemma edit
+   (`Grounding_Common/Common/PDDL_Sema_Supplement.thy` `formula_atoms_in_dom_valuation_iff` loses its
+   divisor conjunct). Validated green in a scratch FPS worktree (about 1 min); the diff against the
+   standalone repo's `main` is `temp/grounder-port-to-analysis-free-split.diff` (gitignored). The
+   classical grounder sessions still reference removed names and are out of scope. Once the grounder
+   session reports its branch/commit, point the private components file at the standalone repo and
+   drop the scratch `PDDL_Grounding/` copy from the worktree (same session names + identical sources,
+   so no heap rebuild).
+2. *Munta heap* [build running]: `Munta_Certificate_Checker` (pure AFP) into the private store.
+3. *This repo's renames* [DONE]: `Temporal_Munta_Base = Discrete_Temporal_Planning +`, imports in
+   `ListMisc`, `PDDL_Checker_Common`, `Temporal_Continuous_Reduction_Free`, `Ground_PDDL_Problem_Base`,
+   `Ground_PDDL_Plan_Defs`, the `@{const Worlds.valuation}` antiquotations.
+4. *Heaps + verification* [heaps DONE; lower tower GREEN]: private-store heaps built with `-b`:
+   `Temporal_Munta_Base` (35 min), `Temporal_Planning_Base`, and the frozen grounder cone
+   `Grounding_Temporal_Common` from the standalone repo. A single headless sweep (stopped early at
+   David's request; he wants incremental PIDE checks instead of batch builds) showed
+   `Temporal_Planning_Common`, `Temporal_Planning_Semantics`, `TP_NTA_Reduction` and `PDDL_TP_Reduction`
+   all GREEN with NO proof repair (the `Ground_PDDL_Plan_Defs` hotspot included); their heaps are in
+   the private store. Then (jEdit on the `PDDL_TP_Reduction` heap, Opus xhigh prover, 2026-09-23) `TP_NTA_Reduction_Numeric`,
+   `Numeric_Ground_PDDL_Exec_Imp` (bar the export-side-effect `Numeric_Unsolvability_Code_Compile`) and
+   `Index.thy` all GREEN untouched, no command over 10 s except the 31 s `export_code`. `Numeric_Bound_Inference`
+   sits on HOL-IMP and imports nothing from FPS, so it is unaffected. **WHOLE TOWER GREEN: the re-base cost
+   only the renames.** The headless PIDE MCP server is now armed for
+   this repo (`claude mcp add -s local isabelle_pide -e USER_HOME=<private dir> -- isabelle pide_mcp
+   -l PDDL_TP_Reduction -d <repo>`), so the numeric files are checked file by file through
+   `mcp__isabelle_pide__*` (takes effect in a NEW Claude session). Old text of this item follows.
+4'. *Heaps + verification* [original plan]: build `Temporal_Munta_Base` (~35 min Munta re-elaboration) and
+   `Temporal_Planning_Base`; launch jEdit on it; drive the tower green with prover agents. Expected
+   hotspot: `Ground_PDDL_Plan_Defs.thy` (inducts on `valid_temporal_state_seq`, whose
+   `numeric_effects_defined` conjunct is gone -- obligations only get weaker) and any auto/blast
+   slowed by FPS's `valuation_eq_SomeI` now being a default `[intro]` rule. Then the numeric sessions,
+   then `PDDL_TP_Reduction_Index`.
+4b. *Export + run* [DONE 2026-09-23]: `isabelle build -e Numeric_Ground_PDDL_Exec_Imp` on the re-based
+   theories regenerates `ML/Check_Unsolvability.ML` BYTE-IDENTICAL to the pre-rebase export (the FPS
+   change is invisible to the generated code), so the existing `ML/out/plan_cert` is the re-based
+   binary. Verified verdicts, `-certify numeric-tchecker`, smallest instance each: MatchCellar 0.25 s,
+   sync 0.20 s, majsp-2 0.21 s, painter 43 s -- all "Certificate was accepted / unsolvable".
+5. *Docs/commit* [PENDING]: update `ARCHITECTURE_dependencies.md` session names, this section,
+   commit; push the FPS branch `pddl-grounding-split` for David's review (it is the grounder's new home
+   on the split layout).
+
 ## ⭐ SESSION STATUS (2026-07-24) — read this first
 
 **Relational fluent-vs-fluent guards are DONE (variants A + B) and ALL benchmark runs emit nets on

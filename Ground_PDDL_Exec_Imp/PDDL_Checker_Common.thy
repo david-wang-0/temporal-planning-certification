@@ -1,12 +1,12 @@
 (* VENDORED from Formal-PDDL-Semantics/Continuous_Planning/PDDL_Checker_Common.thy.
    Only change vs upstream: the leading import is re-pointed from the Analysis-tainted
    Preservation_Of_Well_Formedness (-> continuous Happening_Semantics -> ODE/Product_Order) to the
-   Analysis-free Analysis_Free_Base.Happening_Semantics_Discrete, so the wf-checker the net builder
+   Analysis-free Discrete_Planning_Common.Happening_Semantics, so the wf-checker the net builder
    uses stays Product_Order-free (this file's body is already Analysis-free -- no euclidean/ODE).
    TODO: trim to the wf-checker slice / upstream into an Analysis-free FPS session. *)
 theory PDDL_Checker_Common
   imports
-    "Analysis_Free_Base.Happening_Semantics_Discrete"
+    "Discrete_Planning_Common.Happening_Semantics"
     Error_Monad_Add
     "HOL-Library.While_Combinator"
     "HOL-Library.Mapping"

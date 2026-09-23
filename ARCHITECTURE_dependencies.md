@@ -1,6 +1,6 @@
 # Dependency diagram — sessions, theories, and the executable/numeric split
 
-Reflects the post-reorganization layout (2026-07-05). The `TA_Network` reduction is now split into a
+Reflects the post-reorganization layout (2026-07-05; FPS session names updated 2026-09-23 to the `analysis-free-split` layout: `Discrete_Planning_Common` / `Discrete_Temporal_Planning`, the grounder living in FPS `PDDL_Grounding/`). The `TA_Network` reduction is now split into a
 **propositional kernel** and a **numeric layer** on top of it, with generic helpers factored into a
 `Utils` theory. All theory files are flat in `TA_Network/` (a single session); the `Numeric_` naming
 prefix distinguishes the layers (see §4).
@@ -26,17 +26,16 @@ graph TD
   TPC["Temporal_Planning_Common"]:::proof
   TPB["Temporal_Planning_Base"]:::ext
   TMB["Temporal_Munta_Base"]:::ext
-  CP["Continuous_Planning (FPS)"]:::ext
-  MCC["Munta_Certificate_Checker"]:::ext
-  TP["Temporal_Planning (FPS)"]:::ext
-  GTC["Grounding_Temporal_Common"]:::ext
+  DTP["Discrete_Temporal_Planning (FPS, Analysis-free)"]:::ext
+  DPC["Discrete_Planning_Common (FPS, Analysis-free)"]:::ext
+  MCC["Munta_Certificate_Checker (AFP)"]:::ext
+  GTC["Grounding_Temporal_Common (FPS PDDL_Grounding)"]:::ext
 
   IDX --> GPE --> NTA --> TPS --> TPC --> TPB --> TMB
-  GPE --> TP
   GPE --> GTC
-  TPB --> TP
   TPB --> GTC
-  TMB --> CP
+  GTC --> DTP
+  TMB --> DTP --> DPC
   TMB --> MCC
 
   classDef exec fill:#c8e6c9,stroke:#2e7d32,color:#000;
