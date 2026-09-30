@@ -44,7 +44,7 @@ text \<open>\<open>\<Pi>SgD:\<close>\<close>
 term ground_ast_problem
 text \<open>Or@{locale ground_ast_problem_defs}\<close>
 text \<open>\<open>\<Pi>S:\<close>\<close>
-term wf_ast_problem
+term wf_ast_temporal_problem
 
 find_theorems name: "Simple_Network_Language_Model"
 

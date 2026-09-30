@@ -13,7 +13,12 @@ val usage = "Usage: $ plan_cert " ^ "\n" ^
             "[-ground-out <path> : dump the grounded PDDL for inspection]" ^ "\n" ^
             "[-certify numeric : build the numeric timed-automata net (keeps numeric fluents)]" ^ "\n" ^
             "[-certify numeric-tchecker : full numeric certification, per-stage profiled: \
-            \tck-reach oracle + VERIFIED in-process capstone check (needs -renaming/-certificate)]" ^ "\n"
+            \tck-reach oracle + VERIFIED in-process capstone check (needs -renaming/-certificate)]" ^ "\n" ^
+            "[-certify alu-tchecker : propositional net -> tck-reach (TCK_ALGO default \
+            \aLU-covreach) -> UNTRUSTED in-process aLU-subsumption check (ALU_BOUNDS=global \
+            \for global-M bounds)]" ^ "\n" ^
+            "[-certify alu-check : UNTRUSTED aLU check of an EXISTING -certificate against an \
+            \existing -model (no oracle run)]" ^ "\n"
 
 (* Optional path to dump the grounded (propositional) PDDL for inspection (-ground-out). *)
 val ground_out_path = ref (NONE : string option)
@@ -290,6 +295,39 @@ fun certify_tchecker domain problem model renaming cert =
         println ("Verdict: " ^ TCheckerCertify.verdict_to_string v)
     end
 
+(* UNTRUSTED aLU certification of the PROPOSITIONAL net (SML only; see
+   alu_certify/alu_certify.sml and FEASIBILITY_alu_subsumption.md).  Same external
+   pipeline as certify_tchecker up to the binary certificate, but tck-reach defaults to
+   aLU-covreach (its aLU-closed passed sets are exactly what the verified checker
+   rejects), and the certificate is then checked IN-PROCESS against MLunta's successor
+   relation with the aLU subsumption test + checker-side recomputed LU ceilings.
+   Acceptance is NOT a verified verdict. *)
+fun certify_alu domain problem model renaming cert =
+    let
+        val () = make_network domain problem model
+        val () = TCheckerCertify.sanitize_file model
+        val () = make_renaming model renaming
+        val pkg_root      = getEnvDefault "TCHECKER_PKG_ROOT" "."
+        val tck_reach_bin = getEnvDefault "TCK_REACH_BIN" "./tck-reach"
+        (* default the oracle's algorithm to aLU-covreach (make_cert reads TCK_ALGO) *)
+        val () = case OS.Process.getEnv "TCK_ALGO" of
+                     SOME _ => ()
+                   | NONE => MLton.ProcEnv.setenv {name = "TCK_ALGO", value = "aLU-covreach"}
+        val () = TCheckerCertify.make_cert
+                   {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin,
+                    muntax = model, renaming = renaming, cert = cert, buechi = false}
+        val _ = AluCertify.check_and_report
+                  {muntax_str = TextIOUtil.read_file model, cert_path = cert}
+    in () end
+
+(* UNTRUSTED aLU check of an already-produced certificate (no oracle run): -model is the
+   EXISTING (sanitized) muntax file, -certificate the EXISTING binary certificate. *)
+fun certify_alu_check model cert =
+    let
+        val _ = AluCertify.check_and_report
+                  {muntax_str = TextIOUtil.read_file model, cert_path = cert}
+    in () end
+
 (* Full NUMERIC certification through the VERIFIED capstone
    (Converter.check_and_cert_numeric_pddl_problem_no_return): the Isabelle side re-checks the
    static bound gate, builds the net, hands it IN-PROCESS to the untrusted oracle_certifier
@@ -393,6 +431,12 @@ fun check args =
         (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, _, _,
          SOME "tchecker", _, _, _) =>
             certify_tchecker domain problem model renaming cert |
+        (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, _, _,
+         SOME "alu-tchecker", _, _, _) =>
+            certify_alu domain problem model renaming cert |
+        (_, _, SOME model, _, SOME cert, _, _,
+         SOME "alu-check", _, _, _) =>
+            certify_alu_check model cert |
         (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, SOME extra, _,
          SOME "inprocess", num_threads, mode, show_cert) =>
             certify_inprocess domain problem model renaming cert extra

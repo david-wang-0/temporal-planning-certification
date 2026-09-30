@@ -13,6 +13,13 @@ certificate_conversion/certificate_conversion.mlb
 mlunta_adapter.sml
 tchecker_certify.sml
 
+(* untrusted in-process aLU certificate checker (SML-only prototype of the
+   FEASIBILITY_alu_subsumption.md checker generalization) *)
+alu_certify/alu_dbm.sml
+alu_certify/alu_urgency.sml
+alu_certify/alu_bounds.sml
+alu_certify/alu_certify.sml
+
 (* numeric bound-inference glue: the two Isabelle code exports (compute + reduction)
    co-linked alongside Converter in the one binary; numeric_code.mlb isolates their
    overlapping top-level helpers *)

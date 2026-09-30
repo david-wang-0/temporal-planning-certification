@@ -166,6 +166,41 @@ the synthetic urgency clock `_urge` (Munta appends it last, `Suc`-shifted) maps 
 union with an identity fallback** (Munta queries foreign location ids that MLunta's per-process dict
 doesn't hold).
 
+## `AluCertify` — the untrusted in-process aLU certificate checker (`alu_certify/`)
+
+The SML-only executable prototype of the `FEASIBILITY_alu_subsumption.md` /
+`temp/ALU_CERTIFICATE_ADMISSION_DRAFT.md` checker generalization: admit `tck-reach
+-a aLU-covreach` certificates, whose passed sets are closed only under aLU subsumption and
+which the verified Munta checker therefore rejects. **Entirely untrusted** — "ACCEPTED" is
+evidence the certificate is aLU-admissible (and that the planned verified generalization
+would accept it), *not* a machine-checked unsolvability proof. Three modules:
+
+- `alu_dbm.sml` — the O(n²) non-convex test `Z1 ⊆ aLU(Z2)` (Herbreteau et al.), transcribed
+  from tchecker's `dbm::is_alu_le` onto MLunta's `IntRep` DBM entries.
+- `alu_bounds.sml` — checker-side L/U bound recomputation from the model (never trusted from
+  the producer): MLunta's per-location LU ceilings (`IntLocalClockCeiling`, default) or the
+  global M ceiling (`ALU_BOUNDS=global`). Also the soundness gates: rejects models with
+  diagonal clock guards or non-simple clock updates (outside the LU simulation).
+- `alu_certify.sml` — the check itself, mirroring the verified checker's obligations with
+  MLunta's product construction as the successor relation E: INIT (initial state aLU-covered),
+  INVARIANT (every stored state's successors aLU-covered), TARGET (no stored state satisfies
+  the formula). The binary cert is deserialized into MLunta's own entry type
+  (`Deserializer64Bit`), closed (convert_certificate leaves unconstrained entries at ∞), and
+  keyed by the same MLunta renaming the cert was produced with.
+- `alu_urgency.sml` — a required semantic repair: MLunta's own urgent-location encoding is
+  **vacuous** (a `"0" <= 0` invariant + `Reset ("0", 0)` on the zero-reference clock are DBM
+  no-ops), so `#trans` lets time pass in urgent locations while tck-reach handles `urgent:`
+  natively. The checker's parse is augmented Munta-style with a real `_urge` clock (appended
+  last; reset on every edge into an urgent location; `_urge <= 0` urgent invariant), and the
+  cert DBMs are padded with an unconstrained `_urge` row/column at load.
+
+CLI: `-certify alu-tchecker` (build prop net → tck-reach, `TCK_ALGO` defaulting to
+`aLU-covreach` → aLU check) and `-certify alu-check` (check an EXISTING `-model`/`-certificate`
+pair, e.g. one produced by `-certify numeric-tchecker TCK_ALGO=aLU-covreach`). Validated
+2026-08-22: MatchCellar 2–4 and sync 1_2–1_4 aLU certs all rejected by the verified checker,
+all accepted here (covreach certs also accepted; solvable-instance and tampered certs
+rejected — fail-closed).
+
 ## Utilities and vendored imports
 
 `util/` (in-repo): `ListUtils`, `ArrayUtils`, the `TO_STRING` functors, `writeln`. From
@@ -193,10 +228,14 @@ Parses flags (`dissect_arguments`), dispatches on the `-certify` mode (`check`),
 | `tchecker` | `certify_tchecker` | propositional net → external tck-reach + muntac verdict |
 | `inprocess` | `certify_inprocess` | propositional net → tck-reach → verified `parse_convert_check` |
 | `numeric-selftest` | `numeric_selftest` | exercises the bound-inference exports on hand-built drafts |
+| `alu-tchecker` | `certify_alu` | prop net → tck-reach (default `aLU-covreach`) → UNTRUSTED in-process aLU check |
+| `alu-check` | `certify_alu_check` | UNTRUSTED aLU check of an existing `-model`/`-certificate` pair |
 | (none) | `make_network` / `make_renaming` | build a net / renaming only |
 
 Env knobs: `QUANT_EXPAND=grounded` (Strategy A), `SHOW_NET=1` (echo the net JSON), `NEMO_PRUNE=0`
-(disable nemo), `TCK_ALGO`, `TCHECKER_PKG_ROOT` / `TCK_REACH_BIN` / `NMO` (tool locations).
+(disable nemo), `TCK_ALGO`, `ALU_BOUNDS=global` (global-M instead of local-LU ceilings in the
+untrusted aLU checker), `ALU_DEBUG=1` (dump failing DBMs), `TCHECKER_PKG_ROOT` /
+`TCK_REACH_BIN` / `NMO` (tool locations).
 
 ## End-to-end: `plan_cert -certify numeric-tchecker -domain D -problem P`
 
