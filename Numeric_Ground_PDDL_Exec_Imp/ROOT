@@ -1,8 +1,10 @@
 session Numeric_Ground_PDDL_Exec_Imp = PDDL_TP_Reduction +
   description \<open>Numeric ground-PDDL executable/implementation layer: numeric problem defs, the
     numeric NTA reduction (correctness + executable impl), the bound machinery
-    (Bounds / Cert_Impl), and the numeric code export + verified capstone certifier.\<close>
+    (Bounds / Cert_Impl: the fluent box is computed by the verified bound inference, no box input),
+    and the numeric code export + verified capstone certifier.\<close>
   sessions
+    "Numeric_Bound_Inference"
     "TP_NTA_Reduction_Numeric"
   theories
     Ground_PDDL_Numeric_Problem_Defs

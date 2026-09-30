@@ -9,10 +9,9 @@ text \<open>\<^bold>\<open>WP-D (no per-plan bounds).\<close> Compose the execut
   \<^emph>\<open>bounds-discharged\<close> capstone (WP-D integration,
   @{thm [source] numeric_ground_ast_problem_cert.num_net_form_not_sat_imp_no_valid_ground_plan}) so the
   \<^emph>\<open>executable\<close> soundness concludes over @{text numeric_valid_ground_plan_cert} -- a genuinely valid
-  numeric plan, with boundedness supplied ONCE, statically, by the @{text \<open>is_gbound_inv'\<close>} certificate
-  (bundled in @{locale numeric_ground_ast_problem_cert}), NOT as a per-plan @{text num_seq_in_bounds}
-  assumption.
-
+  numeric plan, with boundedness supplied ONCE, statically, by the VERIFIED bound inference's own result
+  (@{text \<open>ndefs.reduction_ref_impl.inferred_box = Some (\<lambda>f. (fluent_lo f, fluent_hi f))\<close>}, bundled in
+  @{locale numeric_ground_ast_problem_cert}), NOT as a per-plan @{text num_seq_in_bounds} assumption.
   The two ingredients live in separate theories (the exec net + its refines in
   @{theory Numeric_Ground_PDDL_Exec_Imp.Ground_PDDL_Numeric_NTA_Reduction_Impl}; the cert locale + capstone in
   @{theory Numeric_Ground_PDDL_Exec_Imp.Ground_PDDL_Numeric_NTA_Reduction_Bounds}); this theory imports both.\<close>

@@ -1,43 +1,46 @@
 theory Ground_PDDL_Numeric_NTA_Reduction_Bounds
   imports
     Ground_PDDL_Numeric_NTA_Reduction_Correctness
-    "TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Numeric_Bounds"
+    "TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Numeric_Inference"
 begin
 
 text \<open>\<^bold>\<open>NUMERIC_EXEC_PLAN WP-D INTEGRATION\<close> -- discharge the soundness-critical @{text num_seq_in_bounds}
-  plug at the ground problem from the static, eval-checkable interval certificate
-  @{text \<open>is_gbound_inv'\<close>} (theory @{text TP_NTA_Reduction_Numeric_Bounds}).
+  plug at the ground problem from the VERIFIED interval bound inference
+  (@{text \<open>ndefs.reduction_ref_impl.inferred_box\<close>}, theory @{text TP_NTA_Reduction_Numeric_Inference}): the inference's own
+  result is the certificate.
 
   WP-A (@{text Ground_PDDL_Numeric_NTA_Reduction_Correctness}) carried
   @{text num_seq_in_bounds} as a per-plan locale assumption of @{locale numeric_valid_ground_plan}.
-  Here it is \<^emph>\<open>derived\<close>: the plan-free static certificate @{text \<open>nred'.is_gbound_inv'\<close>} (init in the
-  fluent box; every relaxed snap update lands in bounds under interval evaluation of the guard-refined
-  box) implies the reduction-native @{text \<open>nred'.num_bound_inv\<close>} via
-  @{text is_gbound_inv'_imp_num_bound_inv}, and the abstract discharge
-  locale @{locale numeric_tp_nta_reduction_bounds'} turns that certificate into
+  Here it is \<^emph>\<open>derived\<close>: when the inference run over the plan-free ground data returns the declared
+  fluent box (@{text \<open>ndefs.reduction_ref_impl.inferred_box = Some (\<lambda>f. (fluent_lo f, fluent_hi f))\<close>}), the reduction-native
+  @{text \<open>nred'.num_bound_inv\<close>} follows via @{text inferred_box_imp_num_bound_inv}, and the abstract
+  discharge locale @{locale numeric_tp_nta_reduction_bounds'} turns that certificate into
   @{locale numeric_tp_nta_reduction_correctness} (via @{text num_seq_in_bounds_derived}).
+  (The eval-checkable re-check @{text \<open>is_gbound_inv'\<close>} of theory @{text TP_NTA_Reduction_Numeric_Bounds}
+  stays in the abstract layer; it is no longer used here.)
 
   So the ground plan predicate here (@{text numeric_valid_ground_plan_cert}) no longer bundles the
   soundness-critical reachability invariant: it is a genuinely valid numeric plan, with boundedness
   supplied once, statically, at the problem level.\<close>
 
-subsection \<open>The static bound certificate at the ground problem (plan-free)\<close>
+subsection \<open>The inferred bound certificate at the ground problem (plan-free)\<close>
 
-text \<open>The eval-checkable certificate @{text \<open>nred'.is_gbound_inv'\<close>} is a property of the plan-free
-  ground data (the inferred finite @{text fluent_lo}/@{text fluent_hi} box, @{text num_init}, and every
-  relaxed snap's updates/guards). We assume it here and derive the reduction-native certificate
+text \<open>The certificate @{text \<open>ndefs.reduction_ref_impl.inferred_box = Some (\<lambda>f. (fluent_lo f, fluent_hi f))\<close>} is a property of
+  the plan-free ground data (@{text num_init}, every relaxed snap's updates/guards, the declared fluents):
+  the verified inference computes the box, and the leaf's @{text fluent_lo}/@{text fluent_hi} are exactly
+  its components.  We assume it here and derive the reduction-native certificate
   @{text \<open>nred'.num_bound_inv\<close>}.\<close>
 
 text \<open>Interpret the AXIOM numeric reduction @{locale numeric_tp_nta_reduction} at the injective
   @{const AtStart}/@{const AtEnd} snaps -- the SAME parameters at which the leaf's
   @{text ndefs.reduction_ref_impl} (a @{locale numeric_tp_nta_reduction_defs}) is instantiated -- so the
-  static bound certificate @{text \<open>is_gbound_inv'\<close>} and @{text num_bound_inv} (which live only in the axiom
-  locale @{locale numeric_tp_nta_reduction}) are in scope at the ground level.  The propositional
+  inference @{text inferred_box} and its discharge @{text inferred_box_imp_num_bound_inv} /
+  @{text num_bound_inv} (the latter two live only in the axiom locale @{locale numeric_tp_nta_reduction})
+  are in scope at the ground level.  The propositional
   injective base (incl. \<open>snaps_disj\<close>) is inherited from @{text ndefs.reduction_ref_impl}; the 14
   numeric-wf assumptions are discharged from the leaf assumptions (the raw-snap facts \<open>upds (at_start_spec a)\<close>
   bridge to the injective \<open>app_snap upds (AtStart a)\<close> by \<open>app_snap.simps\<close>), and the
   \<open>unique_names fluent_to_name_spec\<close> obligation from \<open>fluent_to_name_spec_inj\<close>.\<close>
-
 context numeric_ground_ast_problem
 begin
 
@@ -60,23 +63,28 @@ sublocale nred': numeric_tp_nta_reduction
 
 end
 
+text \<open>The inference @{text inferred_box} is a constant of the NO-assumption locale
+  @{locale numeric_tp_nta_reduction_defs}, whose instance at these parameters was registered first as
+  @{text ndefs.reduction_ref_impl}; so its ground name is @{text ndefs.reduction_ref_impl.inferred_box}
+  (the @{text nred'} registration adds names only for the axiom locale's own constants and facts, e.g.
+  @{text \<open>nred'.num_bound_inv\<close>} and @{text \<open>nred'.inferred_box_imp_num_bound_inv\<close>}).\<close>
+
 locale numeric_ground_ast_problem_cert =
     numeric_ground_ast_problem P fluent_lo fluent_hi
   for P :: ast_temporal_problem
     and fluent_lo :: "func \<Rightarrow> int"
     and fluent_hi :: "func \<Rightarrow> int" +
-  assumes gbound_inv: "nred'.is_gbound_inv'"
+  assumes box_inferred: "ndefs.reduction_ref_impl.inferred_box = Some (\<lambda>f. (fluent_lo f, fluent_hi f))"
 begin
 
-text \<open>The static, eval-decidable interval certificate discharges the reduction-native
-  @{term \<open>nred'.num_bound_inv\<close>} (still plan-free).\<close>
+text \<open>The verified inference's own result discharges the reduction-native
+  @{term \<open>nred'.num_bound_inv\<close>} (still plan-free): the declared bounds are exactly the components
+  of the inferred box.\<close>
 lemma num_bound_inv: "nred'.num_bound_inv"
-  using gbound_inv by (rule nred'.is_gbound_inv'_imp_num_bound_inv)
-
+  by (rule nred'.inferred_box_imp_num_bound_inv[OF box_inferred]) simp_all
 end
 
 subsection \<open>The numeric plan-carrying locale, @{text num_seq_in_bounds} DISCHARGED\<close>
-
 text \<open>The twin of @{locale numeric_valid_ground_plan}, but WITHOUT the @{text num_seq_in_bounds}
   assumption: it extends the certificate leaf @{locale numeric_ground_ast_problem_cert} (which supplies
   @{thm [source] numeric_ground_ast_problem_cert.num_bound_inv}) together with the PRIMED numeric
