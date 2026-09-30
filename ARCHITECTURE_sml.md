@@ -13,8 +13,11 @@ Everything the harness does is **untrusted**. It can only ever produce a certifi
 verified checker then *accepts or rejects*; it cannot make an unsound "unsolvable" verdict slip
 through. Exactly two things are trusted, both inside `Converter`:
 
-1. **The static bound gate** `is_gbound_inv_exec` (`check_gbounds_opt`) — re-checks any inferred
-   fluent box before the net is built; fails closed.
+1. **The verified bound inference** `inferred_box_spec` (Isabelle: threshold interval abstract
+   interpretation, `Numeric_Bound_Inference/` + `TP_NTA_Reduction_Numeric_Inference.thy`) — computes
+   the fluent box the numeric net is built over and is *proved* to yield a box that bounds every
+   reachable valuation (`inferred_box_imp_num_bound_inv`); `NONE` (an unbounded fluent) fails closed.
+   There is no untrusted box input and no re-check gate any more (2026-09-30).
 2. **Munta's verified certificate checker** `convert_check` (via `check_and_cert_*` /
    `parse_convert_check`) — validates the returned zone-graph certificate against the built net;
    acceptance is a machine-checked proof of goal-unreachability, hence (by the Isabelle-proved
@@ -45,21 +48,18 @@ not an alias — the alias goes the other way (`parsing/converter_alias.sml` def
 ## `Converter` — the Isabelle export (the trusted core)
 
 Everything verified lives in this one structure: the propositional and numeric net builders, the
-reduction-side snap projection, the bound gate, and Munta's checker. Key entry points the harness
+verified bound inference, and Munta's checker. Key entry points the harness
 calls (SML signatures in `Check_Unsolvability.ML`):
 
 - `check_and_make_network_opt : … ast_problem -> (…net…) option` — propositional net builder.
-- `check_and_make_numeric_network_opt : … ast_problem -> box -> (…net…) option` — numeric net
-  builder; re-checks the box with the trusted `is_gbound_inv_exec` gate before trusting it.
-- `numeric_draft_actions : … ast_problem -> string list * ((g_int list * (string * e_int) list) list * (string * inta) list)`
-  — reduction-side projection of a ground problem into the `(fluents, (snaps, init))` draft the
-  bound glue consumes.
-- `check_gbounds_opt : … ast_problem -> box -> bool` — the trusted static bound re-check
-  (`is_gbound_inv'`), fails closed.
-- `check_and_cert_numeric_pddl_problem_no_return : … ast_problem -> box -> mode -> nat -> (net -> (renaming * inta state_space) option) -> bool -> (unit -> unit)`
-  — **the verified numeric capstone**. Re-checks the gate, builds the net, hands it *in-process* to
-  the untrusted oracle closure (5th arg), then verifies the returned certificate with `convert_check`.
-- `check_numeric_admission_diag_opt : … -> nat` — first-failing admission clause # for diagnostics.
+- `check_and_make_numeric_network_opt : … ast_problem -> (…net…) option` — numeric net
+  builder; runs the verified bound inference itself and builds the net over the inferred box.
+- `inferred_box_list : … ast_problem -> (string * (inta * inta)) list option` — the box the
+  verified inference computes, keyed by fluent name (diagnostics only; the capstone recomputes it).
+- `check_and_cert_numeric_pddl_problem_no_return : … ast_problem -> mode -> nat -> (net -> (renaming * inta state_space) option) -> bool -> (unit -> unit)`
+  — **the verified numeric capstone**. Infers the box, builds the net, hands it *in-process* to
+  the untrusted oracle closure (4th arg), then verifies the returned certificate with `convert_check`.
+- `check_numeric_admission_diag_opt : … -> nat option` — `NONE` = bound inference failed, else the first-failing admission clause # for diagnostics.
 - `parse_convert_check : mode -> nat -> bool -> string -> string -> inta state_space -> bool -> (unit -> unit)`
   — Munta's verified checker (same entry the external `muntac` binary wraps), used by the standalone
   `InProcessCertify.check_and_cert` path.
@@ -107,16 +107,15 @@ specifics: object-equality folding, static-fluent folding (statics inlined in *d
 durations by the lcm of denominators to make them integer; strict no-op when already integer).
 `problem_to_pddl` renders the ground problem back to PDDL for `-ground-out` inspection.
 
-## Numeric bound inference — `NumericBoundGlue` (`numeric_glue/`)
+## Numeric bound inference — inside `Converter` (no SML glue)
 
-Bridges the reduction-side draft to the compute-side interval AI. `numeric_code.mlb` isolates the
-compute-side export `NumericBoundInference` (from `code/Numeric_Bound_Inference.ML`, an interval AI
-over a HOL-IMP heap) so its top-level helpers don't clash with `Converter`. `infer_box : draft -> box option`
-projects each reduction-side `g_int`/`e_int` snap into the compute-side `GCmp`/`nexp`, fabricates a
-fluent-list-backed enum/equal dictionary, computes thresholds, calls `NBI.infer_fluent_bounds`, and
-maps the per-fluent result back to `inta` (`NONE` = a fluent came out unbounded). The two exports
-carry different `int` types, bridged through `IntInf`. **Untrusted**: the reduction re-checks any box
-with `check_gbounds_opt`, so a wrong box is rejected, never unsound.
+Since 2026-09-30 the interval bound inference is part of the verified Isabelle development
+(session `Numeric_Bound_Inference`, imported by the reduction; the old HOL-IMP dependency was
+replaced by the vendored `Interval_Domain.thy`) and ships inside the unified `Converter` export.
+The former `numeric_glue/` (`NumericBoundGlue`, `numeric_code.mlb`), the separate
+`code/Numeric_Bound_Inference.ML` export and its signature-widening script are gone: the capstone
+calls `inferred_box_spec` directly, and its soundness theorem replaces the old `is_gbound_inv_exec`
+re-check.
 
 ## Oracle plumbing — the in-process certifier
 
@@ -224,10 +223,9 @@ Parses flags (`dissect_arguments`), dispatches on the `-certify` mode (`check`),
 | `-certify` | function | flow |
 |---|---|---|
 | `numeric-tchecker` | `certify_numeric_tchecker` | the full verified numeric path (below) |
-| `numeric` | `make_numeric_network` | ground + infer-box + build the numeric net, no oracle |
+| `numeric` | `make_numeric_network` | ground + build the numeric net (box inferred inside `Converter`), no oracle |
 | `tchecker` | `certify_tchecker` | propositional net → external tck-reach + muntac verdict |
 | `inprocess` | `certify_inprocess` | propositional net → tck-reach → verified `parse_convert_check` |
-| `numeric-selftest` | `numeric_selftest` | exercises the bound-inference exports on hand-built drafts |
 | `alu-tchecker` | `certify_alu` | prop net → tck-reach (default `aLU-covreach`) → UNTRUSTED in-process aLU check |
 | `alu-check` | `certify_alu_check` | UNTRUSTED aLU check of an existing `-model`/`-certificate` pair |
 | (none) | `make_network` / `make_renaming` | build a net / renaming only |
@@ -239,16 +237,16 @@ untrusted aLU checker), `ALU_DEBUG=1` (dump failing DBMs), `TCHECKER_PKG_ROOT` /
 
 ## End-to-end: `plan_cert -certify numeric-tchecker -domain D -problem P`
 
-`certify_numeric_tchecker` (via `numeric_ground_and_box`), each arrow naming the owner:
+`certify_numeric_tchecker` (via `numeric_ground`), each arrow naming the owner:
 
 1. **parse** — `PddlParser.get_prob[_q]` → `ast_problem` / `qproblem`.
 2. **nemo filter** — `NemoReach.reach_filter` → the reachable-instance predicate.
 3. **ground(+nemo)** — `Grounder.ground_problem_numeric[_q] filt` → ground, numeric-keeping,
    propositionalised problem (`STAGE ground`).
-4. **infer-box** — `NumericBoundGlue.infer_box (Converter.numeric_draft_actions …)` → box, then the
-   diagnostic `Converter.check_gbounds_opt` re-check (`STAGE infer-box`).
-5. **verified capstone** — `Converter.check_and_cert_numeric_pddl_problem_no_return`: re-checks the
-   gate, **builds the net**, and hands it in-process to the oracle closure.
+4. **infer-box** — `Converter.inferred_box_list` prints the box the verified inference computes
+   (`STAGE infer-box`, diagnostic only; `NONE` = a fluent is unbounded, fail closed).
+5. **verified capstone** — `Converter.check_and_cert_numeric_pddl_problem_no_return`: runs the
+   verified bound inference, **builds the net**, and hands it in-process to the oracle closure.
 6. **in-process oracle** — `InProcessCertify.oracle_certifier`: net → muntax
    (`NetworkConversion`) → renaming (`MLuntaAdapter` + `CertificateConversion`) → external tck-reach
    cert (`TCheckerCertify`, `STAGE renaming`/`convert-tck`/`tck`/`convert-back`) → deserialize →
@@ -257,5 +255,5 @@ untrusted aLU checker), `ALU_DEBUG=1` (dump failing DBMs), `TCHECKER_PKG_ROOT` /
    certificate against the net; acceptance ⇒ goal unreachable ⇒ (proved reduction) no plan ⇒
    "The numeric planning problem is unsolvable." (`STAGE check` = total − oracle time).
 
-The only soundness-bearing steps are #4's `check_gbounds_opt` gate and #7's verified `convert_check`;
-everything else is untrusted plumbing that fails open (nemo) or closed (box projection, oracle).
+The only soundness-bearing steps are #5's verified bound inference + net builder and #7's verified
+`convert_check`; everything else is untrusted plumbing that fails open (nemo) or closed (oracle).

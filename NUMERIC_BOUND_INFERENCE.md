@@ -1,5 +1,15 @@
 # Numeric bound inference — what's done
 
+> **2026-09-30 (branch `verified-bound-inference`): the inference is now VERIFIED END-TO-END and runs
+> inside the Isabelle export.** HOL-IMP is no longer imported (its `option :: order` instance clashes
+> with `HOL-Library.Option_ord` under Munta); the interval core is vendored in
+> `Numeric_Bound_Inference/Interval_Domain.thy`, the session sits on the reduction chain
+> (`Numeric_Bound_Inference = TP_NTA_Reduction +`), and `TP_NTA_Reduction_Numeric_Inference.thy` proves
+> `inferred_box_imp_num_bound_inv`. The capstone computes the box itself (`inferred_box_spec`); the
+> untrusted SML compute side, the `is_gbound_inv_exec`/`snap_ok`/`check_gbounds_opt` re-check, the
+> `e_int`/`g_int` draft projection and `NumericBoundGlue` are deleted. Sections below that describe
+> the compute/re-check split are historical.
+
 The numeric NTA reduction encodes each numeric fluent as a **bounded-`int`** Munta network variable
 (`fluent_lo f .. fluent_hi f`). Soundness of the numeric-net certificate depends on every reachable
 fluent value staying inside its declared box — the locale assumption **`num_seq_in_bounds`**

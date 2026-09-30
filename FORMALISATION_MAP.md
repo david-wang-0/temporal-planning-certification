@@ -132,11 +132,11 @@ arity clashes with the Munta/FPS tower.
 
 ## 6. Current numeric status (important)
 
-- The **verified numeric net track** (§3) is complete and `sorry`-free, but the full
-  **`-numeric` PDDL mode is not yet wired** in the binary: there is no
-  `Converter → NumericProjection` AST coercion / numeric-net codegen. The runnable numeric
-  smoke test today is `plan_cert -certify numeric-selftest` (a synthetic guarded counter that
-  exercises projection + AI + trusted re-check).
+- The **verified numeric net track** (§3) is complete and `sorry`-free and wired end-to-end
+  (`plan_cert -certify numeric-tchecker`). Since 2026-09-30 the fluent box is computed INSIDE the
+  verified export by the interval bound inference (`inferred_box_spec`, soundness
+  `inferred_box_imp_num_bound_inv`); the former untrusted SML inference + `is_gbound_inv_exec`
+  re-check (and the `numeric-selftest` mode) are gone.
 - For the **bounded-numeric benchmarks** (Gigante `-impossible` families), the OPTIC grounder
   compiles the numeric fluents into propositional predicates, so the existing propositional
   pipeline (§2) certifies them without the numeric net. (Note the OPTIC "grounder" build is

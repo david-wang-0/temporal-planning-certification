@@ -20,12 +20,6 @@ alu_certify/alu_urgency.sml
 alu_certify/alu_bounds.sml
 alu_certify/alu_certify.sml
 
-(* numeric bound-inference glue: the two Isabelle code exports (compute + reduction)
-   co-linked alongside Converter in the one binary; numeric_code.mlb isolates their
-   overlapping top-level helpers *)
-numeric_glue/numeric_code.mlb
-numeric_glue/numeric_bound_glue.sml
-
 nemo_reach.sml
 grounder.sml
 inprocess_certify.sml

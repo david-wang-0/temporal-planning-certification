@@ -185,7 +185,6 @@ structure Converter : sig
     And of 'a formula * 'a formula | Or of 'a formula * 'a formula |
     Imp of 'a formula * 'a formula
   type json
-  datatype cmp_op = Ceq | Cle | Cge | Clt | Cgt
   datatype func = Func of string
   datatype 'a primitive_numeric_expression = PNE of func * 'a list
   datatype 'a numeric_expression = ConstantExpr of rat | DurationExpr |
@@ -257,15 +256,11 @@ structure Converter : sig
     Problem of
       'a ast_domain * (object * typea) list * object atom formula list *
         object atom formula
-  type ground_action
   datatype continuous_effect_op = ContinuousIncrease | ContinuousDecrease
   datatype 'a ast_continuous_effect =
     ContinuousEffect of
       continuous_effect_op * 'a primitive_numeric_expression *
         'a numeric_expression
-  datatype e_int = EC of inta | EV of string | EAdd of e_int * e_int |
-    ESub of e_int * e_int | EMul of e_int * e_int | EDiv of e_int * e_int
-  datatype g_int = GCmp_i of cmp_op * e_int * e_int
   type resulta
   datatype ('a, 'b, 'c, 'd) sexp = Truea | Notb of ('a, 'b, 'c, 'd) sexp |
     Andb of ('a, 'b, 'c, 'd) sexp * ('a, 'b, 'c, 'd) sexp |
@@ -312,12 +307,6 @@ structure Converter : sig
                   ((string * (inta * inta)) list *
                     ((nat, nat, string, inta) formulaa *
                       (nat list * (string * inta) list))))))))) option
-  val is_gbound_inv_exec :
-    ast_temporal_action_schema ast_problem ->
-      (func -> inta) -> (func -> inta) -> bool
-  val check_gbounds_opt :
-    ast_temporal_action_schema ast_problem ->
-      (string * (inta * inta)) list -> bool
   val parse_convert_run : bool -> string -> (unit -> string result)
   val check_and_cert_pddl_problem_no_return :
     ast_temporal_action_schema ast_problem ->
@@ -353,62 +342,58 @@ structure Converter : sig
       nat ->
         bool -> string -> string -> inta state_space -> bool -> (unit -> unit)
   val check_numeric_admission_diag_opt :
-    ast_temporal_action_schema ast_problem ->
-      (string * (inta * inta)) list -> nat
+    ast_temporal_action_schema ast_problem -> nat option
   val check_and_make_numeric_network_opt :
     ast_temporal_action_schema ast_problem ->
-      (string * (inta * inta)) list ->
+      (string list *
         (string list *
-          (string list *
-            ((nat -> nat -> string) *
-              ((string -> nat) *
-                (string list *
-                  ((nat list *
-                     (nat list *
-                       ((nat *
-                          ((string, inta) bexp *
-                            ((string, inta) acconstraint list *
-                              (string act *
-                                ((string * (string, inta) exp) list *
-                                  (string list * nat)))))) list *
-                         (nat * (string, inta) acconstraint list) list))) list *
-                    ((string * (inta * inta)) list *
-                      ((nat, nat, string, inta) formulaa *
-                        (nat list * (string * inta) list))))))))) option
+          ((nat -> nat -> string) *
+            ((string -> nat) *
+              (string list *
+                ((nat list *
+                   (nat list *
+                     ((nat *
+                        ((string, inta) bexp *
+                          ((string, inta) acconstraint list *
+                            (string act *
+                              ((string * (string, inta) exp) list *
+                                (string list * nat)))))) list *
+                       (nat * (string, inta) acconstraint list) list))) list *
+                  ((string * (inta * inta)) list *
+                    ((nat, nat, string, inta) formulaa *
+                      (nat list * (string * inta) list))))))))) option
   val check_and_cert_numeric_pddl_problem_no_return :
     ast_temporal_action_schema ast_problem ->
-      (string * (inta * inta)) list ->
-        mode ->
-          nat ->
-            (string list *
-               (string list *
-                 ((nat -> nat -> string) *
-                   ((string -> nat) *
-                     (string list *
-                       ((nat list *
-                          (nat list *
-                            ((nat *
-                               ((string, inta) bexp *
-                                 ((string, inta) acconstraint list *
-                                   (string act *
-                                     ((string * (string, inta) exp) list *
-                                       (string list * nat)))))) list *
-                              (nat *
-                                (string, inta) acconstraint list) list))) list *
-                         ((string * (inta * inta)) list *
-                           ((nat, nat, string, inta) formulaa *
-                             (nat list * (string * inta) list)))))))) ->
-              (((string -> nat) *
+      mode ->
+        nat ->
+          (string list *
+             (string list *
+               ((nat -> nat -> string) *
                  ((string -> nat) *
-                   ((nat -> nat -> nat) *
-                     ((nat -> string) *
-                       ((nat -> string) * (nat -> nat -> nat)))))) *
-                inta state_space) option) ->
-              bool -> (unit -> unit)
-  val numeric_draft_actions :
+                   (string list *
+                     ((nat list *
+                        (nat list *
+                          ((nat *
+                             ((string, inta) bexp *
+                               ((string, inta) acconstraint list *
+                                 (string act *
+                                   ((string * (string, inta) exp) list *
+                                     (string list * nat)))))) list *
+                            (nat *
+                              (string, inta) acconstraint list) list))) list *
+                       ((string * (inta * inta)) list *
+                         ((nat, nat, string, inta) formulaa *
+                           (nat list * (string * inta) list)))))))) ->
+            (((string -> nat) *
+               ((string -> nat) *
+                 ((nat -> nat -> nat) *
+                   ((nat -> string) *
+                     ((nat -> string) * (nat -> nat -> nat)))))) *
+              inta state_space) option) ->
+            bool -> (unit -> unit)
+  val inferred_box_list :
     ast_temporal_action_schema ast_problem ->
-      string list *
-        ((g_int list * (string * e_int) list) list * (string * inta) list)
+      ((string * (inta * inta)) list) option
 end = struct
 
 datatype inta = Int_of_integer of int;
@@ -3494,6 +3479,23 @@ fun order_formula (A1_, A2_) = {preorder_order = preorder_formula (A1_, A2_)} :
 fun linorder_formula (A1_, A2_) = {order_linorder = order_formula (A1_, A2_)} :
   'a formula linorder;
 
+datatype 'a extended = Fin of 'a | Pinf | Minf;
+
+fun less_eq_extended A_ (Fin x) (Fin y) =
+  less_eq ((ord_preorder o preorder_order) A_) x y
+  | less_eq_extended A_ uu Pinf = true
+  | less_eq_extended A_ Minf (Fin v) = true
+  | less_eq_extended A_ Minf Minf = true
+  | less_eq_extended A_ Pinf (Fin v) = false
+  | less_eq_extended A_ Pinf Minf = false
+  | less_eq_extended A_ (Fin v) Minf = false;
+
+fun less_extended A_ x y =
+  less_eq_extended A_ x y andalso not (less_eq_extended A_ y x);
+
+fun ord_extended A_ = {less_eq = less_eq_extended A_, less = less_extended A_} :
+  'a extended ord;
+
 datatype fract = Rata of bool * inta * inta;
 
 fun equal_fract (Rata (x1, x2, x3)) (Rata (y1, y2, y3)) =
@@ -3691,6 +3693,70 @@ fun cproper_interval_prod A_ B_ =
        (ccompare_cproper_interval B_),
     cproper_interval = cproper_interval_proda A_ B_}
   : ('a * 'b) cproper_interval;
+
+fun equal_extended A_ Pinf Minf = false
+  | equal_extended A_ Minf Pinf = false
+  | equal_extended A_ (Fin x1) Minf = false
+  | equal_extended A_ Minf (Fin x1) = false
+  | equal_extended A_ (Fin x1) Pinf = false
+  | equal_extended A_ Pinf (Fin x1) = false
+  | equal_extended A_ (Fin x1) (Fin y1) = eq A_ x1 y1
+  | equal_extended A_ Minf Minf = true
+  | equal_extended A_ Pinf Pinf = true;
+
+fun is_empty_rep p =
+  let
+    val (l, h) = p;
+  in
+    less_extended order_int h l orelse
+      (equal_extended equal_int l Pinf andalso
+         equal_extended equal_int h Pinf orelse
+        equal_extended equal_int l Minf andalso equal_extended equal_int h Minf)
+  end;
+
+fun min A_ a b = (if less_eq A_ a b then a else b);
+
+fun sup_rep p1 p2 =
+  (if is_empty_rep p1 then p2
+    else (if is_empty_rep p2 then p1
+           else let
+                  val (l1, h1) = p1;
+                  val (l2, h2) = p2;
+                in
+                  (min (ord_extended order_int) l1 l2,
+                    max (ord_extended order_int) h1 h2)
+                end));
+
+datatype ivl = Abs_ivl of (inta extended * inta extended);
+
+fun sup_ivla (Abs_ivl xa) (Abs_ivl x) = Abs_ivl (sup_rep xa x);
+
+val sup_ivl = {sup = sup_ivla} : ivl sup;
+
+fun le_rep p1 p2 =
+  let
+    val (l1, h1) = p1;
+    val (l2, h2) = p2;
+  in
+    (if is_empty_rep (l1, h1) then true
+      else (if is_empty_rep (l2, h2) then false
+             else less_eq_extended order_int l2 l1 andalso
+                    less_eq_extended order_int h1 h2))
+  end;
+
+fun less_eq_ivl (Abs_ivl xb) (Abs_ivl x) = le_rep xb x;
+
+fun less_ivl i1 i2 = less_eq_ivl i1 i2 andalso not (less_eq_ivl i2 i1);
+
+val ord_ivl = {less_eq = less_eq_ivl, less = less_ivl} : ivl ord;
+
+val preorder_ivl = {ord_preorder = ord_ivl} : ivl preorder;
+
+val order_ivl = {preorder_order = preorder_ivl} : ivl order;
+
+val semilattice_sup_ivl =
+  {sup_semilattice_sup = sup_ivl, order_semilattice_sup = order_ivl} :
+  ivl semilattice_sup;
 
 datatype cmp_op = Ceq | Cle | Cge | Clt | Cgt;
 
@@ -5266,6 +5332,10 @@ datatype 'a ast_problem =
 datatype ('a, 'b) hashmap =
   HashMap of (('a * 'b) list) FArray.IsabelleMapping.ArrayType * nat;
 
+datatype 'a dexp = DConst of inta | DVar of 'a | DAdd of 'a dexp * 'a dexp |
+  DSub of 'a dexp * 'a dexp | DMul of 'a dexp * 'a dexp |
+  DDiv of 'a dexp * 'a dexp;
+
 datatype ground_action =
   GroundAction of object atom formula * object ast_effect;
 
@@ -5275,15 +5345,14 @@ datatype message = ExploredState;
 
 datatype continuous_effect_op = ContinuousIncrease | ContinuousDecrease;
 
+datatype cmpop = CEq | CLe | CGe | CLt | CGt;
+
+datatype 'a gcomp = GCmp of cmpop * 'a dexp * 'a dexp;
+
 datatype 'a ast_continuous_effect =
   ContinuousEffect of
     continuous_effect_op * 'a primitive_numeric_expression *
       'a numeric_expression;
-
-datatype e_int = EC of inta | EV of string | EAdd of e_int * e_int |
-  ESub of e_int * e_int | EMul of e_int * e_int | EDiv of e_int * e_int;
-
-datatype g_int = GCmp_i of cmp_op * e_int * e_int;
 
 datatype ast_cont_change_action_body =
   ContChangeActionBody of
@@ -6558,6 +6627,10 @@ fun max_sls A_ =
   Abs_semilattice_set
     (max ((ord_preorder o preorder_order o order_linorder) A_));
 
+fun min_sls A_ =
+  Abs_semilattice_set
+    (min ((ord_preorder o preorder_order o order_linorder) A_));
+
 fun sup_cfi A_ =
   Abs_comp_fun_idem (sup ((sup_semilattice_sup o semilattice_sup_lattice) A_));
 
@@ -6840,6 +6913,24 @@ fun subst_term psubst (VAR x) = psubst x
 
 fun tsubst h args = subst_term (psubst (parameters h) args);
 
+val empty_rep : inta extended * inta extended = (Pinf, Minf);
+
+fun above_rep p = (if is_empty_rep p then empty_rep else let
+                   val (l, _) = p;
+                 in
+                   (l, Pinf)
+                 end);
+
+fun above (Abs_ivl x) = Abs_ivl (above_rep x);
+
+fun below_rep p = (if is_empty_rep p then empty_rep else let
+                   val (_, a) = p;
+                 in
+                   (Minf, a)
+                 end);
+
+fun below (Abs_ivl x) = Abs_ivl (below_rep x);
+
 fun map_index n f [] = []
   | map_index n f (x :: xs) = f n x :: map_index (suc n) f xs;
 
@@ -6968,6 +7059,16 @@ fun as_top s = let
                  array_get a (minus_nata n one_nata)
                end;
 
+fun inf_rep p1 p2 =
+  let
+    val (l1, h1) = p1;
+    val (l2, h2) = p2;
+  in
+    (max (ord_extended order_int) l1 l2, min (ord_extended order_int) h1 h2)
+  end;
+
+fun num_ivl x = Abs_ivl (Fin x, Fin x);
+
 fun hm_it_next_key (A1_, A2_) B_ ht =
   (fn f_ => fn () => f_ ((len (heap_list (heap_prod A2_ B_)) (the_array ht)) ())
     ())
@@ -6982,8 +7083,6 @@ fun hm_it_next_key (A1_, A2_) B_ ht =
                    (fn a =>
                      (case a of [] => (raise Fail "Map is empty!")
                        | x :: _ => (fn () => (fst x)))))));
-
-fun min A_ a b = (if less_eq A_ a b then a else b);
 
 fun power A_ a n =
   (if equal_nata n zero_nata then one (one_power A_)
@@ -7302,6 +7401,25 @@ fun as_take m s = let
 fun rev_append [] ac = ac
   | rev_append (x :: xs) ac = rev_append xs (x :: ac);
 
+fun plus_extended A_ (Fin x) (Fin y) = Fin (plus A_ x y)
+  | plus_extended A_ (Fin x) Pinf = Pinf
+  | plus_extended A_ Pinf (Fin x) = Pinf
+  | plus_extended A_ Pinf Pinf = Pinf
+  | plus_extended A_ Minf (Fin y) = Minf
+  | plus_extended A_ (Fin x) Minf = Minf
+  | plus_extended A_ Minf Minf = Minf
+  | plus_extended A_ Minf Pinf = Pinf
+  | plus_extended A_ Pinf Minf = Pinf;
+
+fun plus_rep p1 p2 =
+  (if is_empty_rep p1 orelse is_empty_rep p2 then empty_rep
+    else let
+           val (l1, h1) = p1;
+           val (l2, h2) = p2;
+         in
+           (plus_extended plus_int l1 l2, plus_extended plus_int h1 h2)
+         end);
+
 fun ran_of_map_impl (A1_, A2_, A3_) B_ =
   (fn xi =>
     (fn f_ => fn () => f_
@@ -7342,6 +7460,8 @@ fun idx_iteratei get sz l c f sigma =
   idx_iteratei_aux get (sz l) (sz l) l c f sigma;
 
 fun as_empty B_ uu = (FArray.IsabelleMapping.array_of_list [], zero B_);
+
+val empty_ivl : ivl = Abs_ivl empty_rep;
 
 fun leadsto_impl_0 A_ (B1_, B2_, B3_) copyia succsia leia keyia x =
   let
@@ -7748,6 +7868,17 @@ fun glist_delete_aux eq x [] asa = asa
 
 fun glist_delete eq x l = glist_delete_aux eq x l [];
 
+fun uminus_extended A_ (Fin x) = Fin (uminus A_ x)
+  | uminus_extended A_ Pinf = Minf
+  | uminus_extended A_ Minf = Pinf;
+
+fun uminus_rep p =
+  let
+    val (l, h) = p;
+  in
+    (uminus_extended uminus_int h, uminus_extended uminus_int l)
+  end;
+
 fun lx_uppercase x =
   range (linorder_char, show_char)
     (Chara (true, false, false, false, false, false, true, false))
@@ -8050,6 +8181,26 @@ fun combine_map f xs = combinea (map f xs);
 
 fun as_is_empty s = equal_nata (snd s) zero_nata;
 
+fun uminus_ivl (Abs_ivl x) = Abs_ivl (uminus_rep x);
+
+fun plus_ivl (Abs_ivl xa) (Abs_ivl x) = Abs_ivl (plus_rep xa x);
+
+fun minus_ivl iv1 iv2 = plus_ivl iv1 (uminus_ivl iv2);
+
+fun one_extended A_ = Fin (one A_);
+
+fun inf_ivl (Abs_ivl xa) (Abs_ivl x) = Abs_ivl (inf_rep xa x);
+
+fun inv_less_ivl res iv1 iv2 =
+  (if res
+    then (inf_ivl iv1
+            (minus_ivl (below iv2)
+              (Abs_ivl (one_extended one_int, one_extended one_int))),
+           inf_ivl iv2
+             (plus_ivl (above iv1)
+               (Abs_ivl (one_extended one_int, one_extended one_int))))
+    else (inf_ivl iv1 (above iv2), inf_ivl iv2 (below iv1)));
+
 fun interval (A1_, A2_) a b =
   (if less ((ord_preorder o preorder_order o order_linorder o linorder_interval)
              A2_)
@@ -8249,6 +8400,15 @@ collapse_tr node_eq_impl node_hash_impl xf bb;
     a
   end;
 
+fun sup_fun B_ f g x = sup (sup_semilattice_sup B_) (f x) (g x);
+
+fun deval v (DConst c) = c
+  | deval v (DVar f) = v f
+  | deval v (DAdd (a, b)) = plus_inta (deval v a) (deval v b)
+  | deval v (DSub (a, b)) = minus_inta (deval v a) (deval v b)
+  | deval v (DMul (a, b)) = times_inta (deval v a) (deval v b)
+  | deval v (DDiv (a, b)) = divide_int (deval v a) (deval v b);
+
 fun constraint_clk (LTa (c, uu)) = c
   | constraint_clk (LEa (c, uv)) = c
   | constraint_clk (EQa (c, uw)) = c
@@ -8257,6 +8417,8 @@ fun constraint_clk (LTa (c, uu)) = c
 
 fun start_timer_impl x =
   ((fn a => (fn () => a)) o (fn a => Timing.start_timer a)) x;
+
+fun while_option b c s = (if b s then while_option b c (c s) else SOME s);
 
 fun predicate (PredAtm (x11, x12)) = x11;
 
@@ -8294,6 +8456,15 @@ fun upd_entries_impl x =
         imp_nfoldli xa (fn _ => (fn () => true))
           (fn xb => fn sigma => (fn () => (xb :: sigma))) op_list_empty))
     x;
+
+val top_ivl : ivl = Abs_ivl (Minf, Pinf);
+
+fun daeval e (DConst c) = num_ivl c
+  | daeval e (DVar f) = e f
+  | daeval e (DAdd (a, b)) = plus_ivl (daeval e a) (daeval e b)
+  | daeval e (DSub (a, b)) = minus_ivl (daeval e a) (daeval e b)
+  | daeval e (DMul (a, b)) = top_ivl
+  | daeval e (DDiv (a, b)) = top_ivl;
 
 fun no_stutter A_ [] = true
   | no_stutter A_ [uu] = true
@@ -8533,6 +8704,8 @@ fun filter_time_spec t l =
 
 fun maxa (A1_, A2_, A3_, A4_) a = set_fold1 (A1_, A2_, A3_) (max_sls A4_) a;
 
+fun mina (A1_, A2_, A3_, A4_) a = set_fold1 (A1_, A2_, A3_) (min_sls A4_) a;
+
 fun quicksorta A_ =
   quicksort_by_rel
     (less_eq ((ord_preorder o preorder_order o order_linorder) A_)) [];
@@ -8620,6 +8793,8 @@ fun all_interval (A1_, A2_) p a b =
              b
     else true) andalso
     (if eq A1_ a b then p a else true);
+
+fun init_env v0 = (fn f => num_ivl (v0 f));
 
 fun dfs_reachable (A1_, A2_, A3_) succ d w =
   let
@@ -15931,6 +16106,9 @@ fun domain (Problem (x1, x2, x3, x4)) = x1;
 
 fun func (FuncDecl (x1, x2)) = x1;
 
+fun astep_upds A_ u e =
+  (fn f => (case map_of A_ u f of NONE => e f | SOME a => daeval e a));
+
 fun check_all_list B_ p l msg msgf =
   catch_error
     (forallM
@@ -16077,6 +16255,10 @@ fun to_literals (Atom (PredAtm (x, asa))) = [Atom (PredAtm (x, asa))]
   | to_literals (Or (v, va)) = []
   | to_literals (Imp (v, va)) = [];
 
+val bot_ivl : ivl = empty_ivl;
+
+fun le_on fs e1 e2 = list_all (fn f => less_eq_ivl (e1 f) (e2 f)) fs;
+
 fun floor_rat p = let
                     val (a, b) = quotient_of p;
                   in
@@ -16100,6 +16282,53 @@ fun atom_no_args (PredAtm (p, [])) = true
 fun pred_no_args (PredDecl (p, asa)) = null asa;
 
 fun to_predicate (Atom (PredAtm (x, uu))) = x;
+
+fun refine_pair CEq i1 i2 = (inf_ivl i1 i2, inf_ivl i2 i1)
+  | refine_pair CLe i1 i2 = let
+                              val (j2, j1) = inv_less_ivl false i2 i1;
+                            in
+                              (j1, j2)
+                            end
+  | refine_pair CGe i1 i2 = inv_less_ivl false i1 i2
+  | refine_pair CLt i1 i2 = inv_less_ivl true i1 i2
+  | refine_pair CGt i1 i2 = let
+                              val (j2, j1) = inv_less_ivl true i2 i1;
+                            in
+                              (j1, j2)
+                            end;
+
+fun equal_ivl i1 i2 = less_eq_ivl i1 i2 andalso less_eq_ivl i2 i1;
+
+fun aenv_inter_gcomp e (GCmp (p, a, b)) =
+  let
+    val (ia, ib) = refine_pair p (daeval e a) (daeval e b);
+  in
+    (if equal_ivl ia bot_ivl orelse equal_ivl ib bot_ivl then false else true)
+  end;
+
+fun aenv_inter_guard e g = list_all (aenv_inter_gcomp e) g;
+
+fun refine_var A_ a iv e =
+  (case a of DConst _ => e | DVar f => fun_upd A_ e f (inf_ivl (e f) iv)
+    | DAdd (_, _) => e | DSub (_, _) => e | DMul (_, _) => e
+    | DDiv (_, _) => e);
+
+fun refine_gcomp A_ (GCmp (p, a, b)) e =
+  let
+    val (ia, ib) = refine_pair p (daeval e a) (daeval e b);
+  in
+    refine_var A_ b ib (refine_var A_ a ia e)
+  end;
+
+fun refine_guard A_ g e = fold (refine_gcomp A_) g e;
+
+fun gastep_upds A_ ga e =
+  (if aenv_inter_guard e (fst ga)
+    then astep_upds A_ (snd ga) (refine_guard A_ (fst ga) e) else e);
+
+fun gastep A_ acts e =
+  fold (fn a => fn acc => sup_fun semilattice_sup_ivl acc (gastep_upds A_ a e))
+    acts e;
 
 fun dfs_map_impl_0 A_ (B1_, B2_, B3_) succsi lei keyi copyi x =
   let
@@ -18673,6 +18902,87 @@ fun make_certified_net problem certifier =
               | SOME a => Result a)
         (fn (renaming, cert) => Result (network, (renaming, cert))));
 
+fun equal_dexp A_ (DMul (x51, x52)) (DDiv (x61, x62)) = false
+  | equal_dexp A_ (DDiv (x61, x62)) (DMul (x51, x52)) = false
+  | equal_dexp A_ (DSub (x41, x42)) (DDiv (x61, x62)) = false
+  | equal_dexp A_ (DDiv (x61, x62)) (DSub (x41, x42)) = false
+  | equal_dexp A_ (DSub (x41, x42)) (DMul (x51, x52)) = false
+  | equal_dexp A_ (DMul (x51, x52)) (DSub (x41, x42)) = false
+  | equal_dexp A_ (DAdd (x31, x32)) (DDiv (x61, x62)) = false
+  | equal_dexp A_ (DDiv (x61, x62)) (DAdd (x31, x32)) = false
+  | equal_dexp A_ (DAdd (x31, x32)) (DMul (x51, x52)) = false
+  | equal_dexp A_ (DMul (x51, x52)) (DAdd (x31, x32)) = false
+  | equal_dexp A_ (DAdd (x31, x32)) (DSub (x41, x42)) = false
+  | equal_dexp A_ (DSub (x41, x42)) (DAdd (x31, x32)) = false
+  | equal_dexp A_ (DVar x2) (DDiv (x61, x62)) = false
+  | equal_dexp A_ (DDiv (x61, x62)) (DVar x2) = false
+  | equal_dexp A_ (DVar x2) (DMul (x51, x52)) = false
+  | equal_dexp A_ (DMul (x51, x52)) (DVar x2) = false
+  | equal_dexp A_ (DVar x2) (DSub (x41, x42)) = false
+  | equal_dexp A_ (DSub (x41, x42)) (DVar x2) = false
+  | equal_dexp A_ (DVar x2) (DAdd (x31, x32)) = false
+  | equal_dexp A_ (DAdd (x31, x32)) (DVar x2) = false
+  | equal_dexp A_ (DConst x1) (DDiv (x61, x62)) = false
+  | equal_dexp A_ (DDiv (x61, x62)) (DConst x1) = false
+  | equal_dexp A_ (DConst x1) (DMul (x51, x52)) = false
+  | equal_dexp A_ (DMul (x51, x52)) (DConst x1) = false
+  | equal_dexp A_ (DConst x1) (DSub (x41, x42)) = false
+  | equal_dexp A_ (DSub (x41, x42)) (DConst x1) = false
+  | equal_dexp A_ (DConst x1) (DAdd (x31, x32)) = false
+  | equal_dexp A_ (DAdd (x31, x32)) (DConst x1) = false
+  | equal_dexp A_ (DConst x1) (DVar x2) = false
+  | equal_dexp A_ (DVar x2) (DConst x1) = false
+  | equal_dexp A_ (DDiv (x61, x62)) (DDiv (y61, y62)) =
+    equal_dexp A_ x61 y61 andalso equal_dexp A_ x62 y62
+  | equal_dexp A_ (DMul (x51, x52)) (DMul (y51, y52)) =
+    equal_dexp A_ x51 y51 andalso equal_dexp A_ x52 y52
+  | equal_dexp A_ (DSub (x41, x42)) (DSub (y41, y42)) =
+    equal_dexp A_ x41 y41 andalso equal_dexp A_ x42 y42
+  | equal_dexp A_ (DAdd (x31, x32)) (DAdd (y31, y32)) =
+    equal_dexp A_ x31 y31 andalso equal_dexp A_ x32 y32
+  | equal_dexp A_ (DVar x2) (DVar y2) = eq A_ x2 y2
+  | equal_dexp A_ (DConst x1) (DConst y1) = equal_inta x1 y1;
+
+fun dexp_thr_consts (DConst c) = [c]
+  | dexp_thr_consts (DVar uu) = []
+  | dexp_thr_consts (DAdd (a, b)) = dexp_thr_consts a @ dexp_thr_consts b
+  | dexp_thr_consts (DSub (a, b)) = dexp_thr_consts a @ dexp_thr_consts b
+  | dexp_thr_consts (DMul (uv, uw)) = []
+  | dexp_thr_consts (DDiv (ux, uy)) = [];
+
+fun caps_on A_ v0 f g =
+  maps (fn GCmp (_, a, b) =>
+         (if equal_dexp A_ a (DVar f) then deval v0 b :: dexp_thr_consts b
+           else []) @
+           (if equal_dexp A_ b (DVar f) then deval v0 a :: dexp_thr_consts a
+             else []))
+    g;
+
+fun guard_consts g =
+  maps (fn GCmp (_, a, b) => dexp_thr_consts a @ dexp_thr_consts b) g;
+
+fun upd_offset A_ v0 f (DAdd (a, b)) =
+  (if equal_dexp A_ a (DVar f) then SOME (deval v0 b)
+    else (if equal_dexp A_ b (DVar f) then SOME (deval v0 a) else NONE))
+  | upd_offset A_ v0 f (DSub (a, b)) =
+    (if equal_dexp A_ a (DVar f) then SOME (uminus_inta (deval v0 b)) else NONE)
+  | upd_offset A_ v0 f (DConst v) = NONE
+  | upd_offset A_ v0 f (DVar v) = NONE
+  | upd_offset A_ v0 f (DMul (v, va)) = NONE
+  | upd_offset A_ v0 f (DDiv (v, va)) = NONE;
+
+fun landing_cs A_ v0 g u =
+  (case upd_offset A_ v0 (fst u) (snd u) of NONE => []
+    | SOME d => map (fn k => plus_inta k d) (caps_on A_ v0 (fst u) g));
+
+fun gaction_thr A_ v0 ga =
+  guard_consts (fst ga) @
+    maps (landing_cs A_ v0 (fst ga)) (snd ga) @
+      maps (dexp_thr_consts o snd) (snd ga);
+
+fun thr_set A_ fs v0 acts =
+  remdups equal_int (map v0 fs @ maps (gaction_thr A_ v0) acts);
+
 fun rat_of_digits_pair (ds_1, ds_2) =
   let
     val ds_1a = trim_ld_zs ds_1;
@@ -18848,8 +19158,6 @@ sigmaa (xb, xe))
        linordered_cancel_ab_monoid_add_linordered_ab_group_add)
        A1_)
    xd)))))))))));
-
-fun box_exec lo hi = (fn f => (lo f, hi f));
 
 fun scan_parens lparen rparen inner =
   bindb (gen_token lx_ws (exactly (equal_char, show_char) lparen))
@@ -19086,32 +19394,6 @@ fun parse parser s =
 
 fun precondition (GroundAction (x1, x2)) = x1;
 
-fun map_ibnd2_exec g x y =
-  (case x of NONE => NONE
-    | SOME a => (case y of NONE => NONE | SOME b => SOME (g a b)));
-
-fun aeval_exec cti b (NConst c) = SOME (cti c, cti c)
-  | aeval_exec cti b (NVar f) = SOME (b f)
-  | aeval_exec cti ba (NAdd (a, b)) =
-    map_ibnd2_exec
-      (fn (al, ah) => fn (bl, bh) => (plus_inta al bl, plus_inta ah bh))
-      (aeval_exec cti ba a) (aeval_exec cti ba b)
-  | aeval_exec cti ba (NSub (a, b)) =
-    map_ibnd2_exec
-      (fn (al, ah) => fn (bl, bh) => (minus_inta al bh, minus_inta ah bl))
-      (aeval_exec cti ba a) (aeval_exec cti ba b)
-  | aeval_exec cti ba (NMul (a, b)) =
-    map_ibnd2_exec
-      (fn (al, ah) => fn (bl, bh) =>
-        (min_int (times_inta al bl)
-           (min_int (times_inta al bh)
-             (min_int (times_inta ah bl) (times_inta ah bh))),
-          max ord_int (times_inta al bl)
-            (max ord_int (times_inta al bh)
-              (max ord_int (times_inta ah bl) (times_inta ah bh)))))
-      (aeval_exec cti ba a) (aeval_exec cti ba b)
-  | aeval_exec cti ba (NDiv (a, b)) = NONE;
-
 fun nexp_of_pddl (ConstantExpr r) = NConst r
   | nexp_of_pddl (FunctionExpr (PNE (f, uu))) = NVar f
   | nexp_of_pddl (AddExpr (a, b)) = NAdd (nexp_of_pddl a, nexp_of_pddl b)
@@ -19152,15 +19434,14 @@ fun upd_of_ne (NumericEffect (Assign, PNE (f, uu), e)) = (f, nexp_of_pddl e)
   | upd_of_ne (NumericEffect (ScaleDown, PNE (f, uy), e)) =
     (f, NDiv (NVar f, nexp_of_pddl e));
 
-fun numeric_hi_of b =
-  (fn f =>
-    (case map_of equal_literal b (name f) of NONE => zero_inta
-      | SOME (_, h) => h));
+fun bounds_rep p =
+  (case p of (Fin i, Fin j) => (if less_eq_int i j then SOME (i, j) else NONE)
+    | (Fin _, Pinf) => NONE | (Fin _, Minf) => NONE | (Pinf, _) => NONE
+    | (Minf, _) => NONE);
 
-fun numeric_lo_of b =
-  (fn f =>
-    (case map_of equal_literal b (name f) of NONE => zero_inta
-      | SOME (l, _) => l));
+fun ivl_bounds (Abs_ivl x) = bounds_rep x;
+
+fun finite_ivl iv = not (is_none (ivl_bounds iv));
 
 fun of_nat json =
   (case json of Object _ => Error ["of_nat: expected natural number"]
@@ -19192,6 +19473,28 @@ fun dbm_subset_impl (A1_, A2_, A3_) n =
                         x_f x_g)))))
           true)
       true);
+
+fun extract_box fs e =
+  (if list_all (fn f => finite_ivl (e f)) fs
+    then SOME (fn f => the (ivl_bounds (e f))) else NONE);
+
+fun thr_above t x =
+  let
+    val cs = filter (fn ta => less_eq_extended order_int x (Fin ta)) t;
+  in
+    (if null cs then Pinf
+      else Fin (mina (ceq_int, ccompare_int, lattice_int, linorder_int)
+                 (set (ceq_int, ccompare_int, set_impl_int) cs)))
+  end;
+
+fun thr_below t x =
+  let
+    val cs = filter (fn ta => less_eq_extended order_int (Fin ta) x) t;
+  in
+    (if null cs then Minf
+      else Fin (maxa (ceq_int, ccompare_int, lattice_int, linorder_int)
+                 (set (ceq_int, ccompare_int, set_impl_int) cs)))
+  end;
 
 fun map_sexpa f1 f2 f3 f4 Truea = Truea
   | map_sexpa f1 f2 f3 f4 (Notb x2) = Notb (map_sexpa f1 f2 f3 f4 x2)
@@ -20152,19 +20455,26 @@ binda (rename_locs_formula (fn i => geta show_literal (nth names i)) formulac)
                     end)
               end)));
 
-fun nexp_to_eint nm cti (NConst c) = EC (cti c)
-  | nexp_to_eint nm cti (NVar f) = EV (nm f)
-  | nexp_to_eint nm cti (NAdd (a, b)) =
-    EAdd (nexp_to_eint nm cti a, nexp_to_eint nm cti b)
-  | nexp_to_eint nm cti (NSub (a, b)) =
-    ESub (nexp_to_eint nm cti a, nexp_to_eint nm cti b)
-  | nexp_to_eint nm cti (NMul (a, b)) =
-    EMul (nexp_to_eint nm cti a, nexp_to_eint nm cti b)
-  | nexp_to_eint nm cti (NDiv (a, b)) =
-    EDiv (nexp_to_eint nm cti a, nexp_to_eint nm cti b);
+fun widen_thr_rep t p1 p2 =
+  (if is_empty_rep p1 then p2
+    else (if is_empty_rep p2 then p1
+           else let
+                  val (l1, h1) = p1;
+                  val (l2, h2) = p2;
+                in
+                  ((if less_extended order_int l2 l1 then thr_below t l2
+                     else l1),
+                    (if less_extended order_int h1 h2 then thr_above t h2
+                      else h1))
+                end));
 
-fun comp_to_gint nm cti (Comp (p, a, b)) =
-  SOME (GCmp_i (p, nexp_to_eint nm cti a, nexp_to_eint nm cti b));
+fun widen_thr_ivl xb (Abs_ivl xa) (Abs_ivl x) = Abs_ivl (widen_thr_rep xb xa x);
+
+fun widen_env_thr t e1 e2 = (fn f => widen_thr_ivl t (e1 f) (e2 f));
+
+fun ginfer_thr_on A_ fs t acts v0 =
+  while_option (fn e => not (le_on fs (gastep A_ acts e) e))
+    (fn e => widen_env_thr t e (gastep A_ acts e)) (init_env v0);
 
 fun fw_upd_impl_int n =
   (fn ai => fn bib => fn bia => fn bi =>
@@ -22388,147 +22698,16 @@ fun check_and_cert_pddl_problem problem mode num_split certifier show_cert =
                     (fn () => (Error es))
                   end);
 
-fun refine_right_exec B_ cti (Comp (p, e, NVar g)) b =
-  (case aeval_exec cti b e of NONE => b
-    | SOME (l, h) =>
-      (case p
-        of Ceq =>
-          fun_upd B_ b g (max ord_int (fst (b g)) l, min_int (snd (b g)) h)
-        | Cle => fun_upd B_ b g (max ord_int (fst (b g)) l, snd (b g))
-        | Cge => fun_upd B_ b g (fst (b g), min_int (snd (b g)) h)
-        | Clt =>
-          fun_upd B_ b g
-            (max ord_int (fst (b g)) (plus_inta l one_inta), snd (b g))
-        | Cgt =>
-          fun_upd B_ b g
-            (fst (b g), min_int (snd (b g)) (minus_inta h one_inta))))
-  | refine_right_exec B_ cti (Comp (v, va, NConst vc)) b = b
-  | refine_right_exec B_ cti (Comp (v, va, NAdd (vc, vd))) b = b
-  | refine_right_exec B_ cti (Comp (v, va, NSub (vc, vd))) b = b
-  | refine_right_exec B_ cti (Comp (v, va, NMul (vc, vd))) b = b
-  | refine_right_exec B_ cti (Comp (v, va, NDiv (vc, vd))) b = b;
-
-fun refine_left_exec B_ cti (Comp (p, NVar f, e)) b =
-  (case aeval_exec cti b e of NONE => b
-    | SOME (l, h) =>
-      (case p
-        of Ceq =>
-          fun_upd B_ b f (max ord_int (fst (b f)) l, min_int (snd (b f)) h)
-        | Cle => fun_upd B_ b f (fst (b f), min_int (snd (b f)) h)
-        | Cge => fun_upd B_ b f (max ord_int (fst (b f)) l, snd (b f))
-        | Clt =>
-          fun_upd B_ b f
-            (fst (b f), min_int (snd (b f)) (minus_inta h one_inta))
-        | Cgt =>
-          fun_upd B_ b f
-            (max ord_int (fst (b f)) (plus_inta l one_inta), snd (b f))))
-  | refine_left_exec B_ cti (Comp (v, NConst vc, vb)) b = b
-  | refine_left_exec B_ cti (Comp (v, NAdd (vc, vd), vb)) b = b
-  | refine_left_exec B_ cti (Comp (v, NSub (vc, vd), vb)) b = b
-  | refine_left_exec B_ cti (Comp (v, NMul (vc, vd), vb)) b = b
-  | refine_left_exec B_ cti (Comp (v, NDiv (vc, vd), vb)) b = b;
-
-fun refine_comp_exec B_ cti c b =
-  refine_right_exec B_ cti c (refine_left_exec B_ cti c b);
-
-fun refine_box_exec B_ cti cs b = fold (refine_comp_exec B_ cti) cs b;
-
-fun const_to_int r = floor_rat r;
-
-fun nfluents p = map func (functions (domain p));
-
-fun n_pre g =
-  remdups (equal_comp equal_func equal_rat) (num_comps (precondition g));
-
-fun upds g = map upd_of_ne (numeric_effects (effect g));
-
-fun snap_ok_exec p lo hi s =
-  list_ex
-    (fn g =>
-      less_int
-        (snd (refine_box_exec equal_func const_to_int (n_pre s) (box_exec lo hi)
-               g))
-        (fst (refine_box_exec equal_func const_to_int (n_pre s) (box_exec lo hi)
-               g)))
-    (nfluents p) orelse
-    list_all
-      (fn (f, e) =>
-        (case aeval_exec const_to_int
-                (refine_box_exec equal_func const_to_int (n_pre s)
-                  (box_exec lo hi))
-                e
-          of NONE => false
-          | SOME (al, ah) =>
-            less_eq_int (lo f) al andalso less_eq_int ah (hi f)))
-      (upds s);
-
-fun num_init_assignments p =
-  map_filter
-    (fn a =>
-      (case a of Atom (PredAtm (_, _)) => NONE | Atom (EqAtm (_, _)) => NONE
-        | Atom (NumericEqAtm (ConstantExpr _, _)) => NONE
-        | Atom (NumericEqAtm (DurationExpr, _)) => NONE
-        | Atom (NumericEqAtm (AddExpr (_, _), _)) => NONE
-        | Atom (NumericEqAtm (SubExpr (_, _), _)) => NONE
-        | Atom (NumericEqAtm (MulExpr (_, _), _)) => NONE
-        | Atom (NumericEqAtm (DivExpr (_, _), _)) => NONE
-        | Atom (NumericEqAtm (SinExpr _, _)) => NONE
-        | Atom (NumericEqAtm (CosExpr _, _)) => NONE
-        | Atom (NumericEqAtm (ExpExpr _, _)) => NONE
-        | Atom (NumericEqAtm (PiExpr, _)) => NONE
-        | Atom (NumericEqAtm (FunctionExpr (PNE (g, _)), ConstantExpr r)) =>
-          SOME (g, r)
-        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), DurationExpr)) => NONE
-        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), AddExpr (_, _))) =>
-          NONE
-        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), SubExpr (_, _))) =>
-          NONE
-        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), MulExpr (_, _))) =>
-          NONE
-        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), DivExpr (_, _))) =>
-          NONE
-        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), SinExpr _)) => NONE
-        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), CosExpr _)) => NONE
-        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), ExpExpr _)) => NONE
-        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), PiExpr)) => NONE
-        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), FunctionExpr _)) =>
-          NONE
-        | Atom (NumericLessAtm (_, _)) => NONE
-        | Atom (NumericLEAtm (_, _)) => NONE
-        | Atom (NumericGreaterAtm (_, _)) => NONE
-        | Atom (NumericGEAtm (_, _)) => NONE | Bot => NONE | Not _ => NONE
-        | And (_, _) => NONE | Or (_, _) => NONE | Imp (_, _) => NONE))
-    (inita p);
-
-fun num_init p f =
-  (case map_of equal_func (num_init_assignments p) f of NONE => zero_rat
-    | SOME r => r);
-
-fun is_gbound_inv_exec p lo hi =
-  list_all
-    (fn f =>
-      less_eq_int (lo f) (const_to_int (num_init p f)) andalso
-        less_eq_int (const_to_int (num_init p f)) (hi f))
-    (nfluents p) andalso
-    list_all
-      (fn a =>
-        snap_ok_exec p lo hi (at_start_spec a) andalso
-          snap_ok_exec p lo hi (at_end_spec a))
-      (actions_spec p);
-
-fun check_gbounds_opt p b =
-  let
-    val lo =
-      (fn f =>
-        (case map_of equal_literal b (name f) of NONE => zero_inta
-          | SOME (l, _) => l));
-    val a =
-      (fn f =>
-        (case map_of equal_literal b (name f) of NONE => zero_inta
-          | SOME (_, h) => h));
-  in
-    is_gbound_inv_exec p lo a
-  end;
+fun nexp_to_dexp_exec cti (NConst c) = DConst (cti c)
+  | nexp_to_dexp_exec cti (NVar f) = DVar f
+  | nexp_to_dexp_exec cti (NAdd (a, b)) =
+    DAdd (nexp_to_dexp_exec cti a, nexp_to_dexp_exec cti b)
+  | nexp_to_dexp_exec cti (NSub (a, b)) =
+    DSub (nexp_to_dexp_exec cti a, nexp_to_dexp_exec cti b)
+  | nexp_to_dexp_exec cti (NMul (a, b)) =
+    DMul (nexp_to_dexp_exec cti a, nexp_to_dexp_exec cti b)
+  | nexp_to_dexp_exec cti (NDiv (a, b)) =
+    DDiv (nexp_to_dexp_exec cti a, nexp_to_dexp_exec cti b);
 
 fun is_int_rat r = equal_inta (snd (quotient_of r)) one_inta;
 
@@ -22556,6 +22735,15 @@ fun do_preproc_mc A_ =
             | Error es =>
               err ("Error during preprocessing:\n" ^
                     concat_str (intersperse "\n" es))))));
+
+fun cmp_op_to_cmpop Ceq = CEq
+  | cmp_op_to_cmpop Cle = CLe
+  | cmp_op_to_cmpop Cge = CGe
+  | cmp_op_to_cmpop Clt = CLt
+  | cmp_op_to_cmpop Cgt = CGt;
+
+fun comp_to_gcomp_exec cti (Comp (p, a, b)) =
+  GCmp (cmp_op_to_cmpop p, nexp_to_dexp_exec cti a, nexp_to_dexp_exec cti b);
 
 fun upds_functional_list A_ us = distinct A_ (map fst us);
 
@@ -22616,6 +22804,10 @@ fun upds_no_cross_read_list (A1_, A2_, A3_, A4_, A5_) (B1_, B2_) us =
                      set_impl_prod A5_ set_impl_nexp)
                 us)))))
     us;
+
+fun infer_fluent_bounds_on A_ fs t acts v0 =
+  (case ginfer_thr_on A_ fs t acts v0 of NONE => NONE
+    | SOME a => extract_box fs a);
 
 fun list_of_json_object obj =
   (case obj of Object a => Result a | Arraya _ => Error ["Not an object"]
@@ -22844,6 +23036,74 @@ fun parse_compute model renaming =
 (inv_renum_vars, inv_renum_clocks)))))))))))))))))
                                 end)
                           end))))));
+
+fun const_to_int r = floor_rat r;
+
+fun num_init_assignments p =
+  map_filter
+    (fn a =>
+      (case a of Atom (PredAtm (_, _)) => NONE | Atom (EqAtm (_, _)) => NONE
+        | Atom (NumericEqAtm (ConstantExpr _, _)) => NONE
+        | Atom (NumericEqAtm (DurationExpr, _)) => NONE
+        | Atom (NumericEqAtm (AddExpr (_, _), _)) => NONE
+        | Atom (NumericEqAtm (SubExpr (_, _), _)) => NONE
+        | Atom (NumericEqAtm (MulExpr (_, _), _)) => NONE
+        | Atom (NumericEqAtm (DivExpr (_, _), _)) => NONE
+        | Atom (NumericEqAtm (SinExpr _, _)) => NONE
+        | Atom (NumericEqAtm (CosExpr _, _)) => NONE
+        | Atom (NumericEqAtm (ExpExpr _, _)) => NONE
+        | Atom (NumericEqAtm (PiExpr, _)) => NONE
+        | Atom (NumericEqAtm (FunctionExpr (PNE (g, _)), ConstantExpr r)) =>
+          SOME (g, r)
+        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), DurationExpr)) => NONE
+        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), AddExpr (_, _))) =>
+          NONE
+        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), SubExpr (_, _))) =>
+          NONE
+        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), MulExpr (_, _))) =>
+          NONE
+        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), DivExpr (_, _))) =>
+          NONE
+        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), SinExpr _)) => NONE
+        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), CosExpr _)) => NONE
+        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), ExpExpr _)) => NONE
+        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), PiExpr)) => NONE
+        | Atom (NumericEqAtm (FunctionExpr (PNE (_, _)), FunctionExpr _)) =>
+          NONE
+        | Atom (NumericLessAtm (_, _)) => NONE
+        | Atom (NumericLEAtm (_, _)) => NONE
+        | Atom (NumericGreaterAtm (_, _)) => NONE
+        | Atom (NumericGEAtm (_, _)) => NONE | Bot => NONE | Not _ => NONE
+        | And (_, _) => NONE | Or (_, _) => NONE | Imp (_, _) => NONE))
+    (inita p);
+
+fun num_init p f =
+  (case map_of equal_func (num_init_assignments p) f of NONE => zero_rat
+    | SOME r => r);
+
+fun draft_init_spec p = (fn f => const_to_int (num_init p f));
+
+fun n_pre g =
+  remdups (equal_comp equal_func equal_rat) (num_comps (precondition g));
+
+fun upds g = map upd_of_ne (numeric_effects (effect g));
+
+fun snap_gaction_spec s =
+  (map (comp_to_gcomp_exec const_to_int) (n_pre s),
+    map (fn (f, e) => (f, nexp_to_dexp_exec const_to_int e)) (upds s));
+
+fun draft_acts_spec p =
+  maps (fn a =>
+         [snap_gaction_spec (at_start_spec a),
+           snap_gaction_spec (at_end_spec a)])
+    (actions_spec p);
+
+fun nfluents p = map func (functions (domain p));
+
+fun inferred_box_spec p =
+  infer_fluent_bounds_on equal_func (nfluents p)
+    (thr_set equal_func (nfluents p) (draft_init_spec p) (draft_acts_spec p))
+    (draft_acts_spec p) (draft_init_spec p);
 
 fun num_goal p = remdups (equal_comp equal_func equal_rat) (num_comps (goal p));
 
@@ -24320,36 +24580,39 @@ fun check_and_make_numeric_network p fluent_lo fluent_hi =
   bind (check_numeric_ground_problem ord_int p fluent_lo fluent_hi)
     (fn _ => num_make_network_impl p fluent_lo fluent_hi);
 
-fun make_certified_numeric_net p b certifier =
-  (if not (is_gbound_inv_exec p (numeric_lo_of b) (numeric_hi_of b))
-    then Error ["static bound certificate (is_gbound_inv_exec) rejected the box"]
-    else (case check_and_make_numeric_network p (numeric_lo_of b)
-                 (numeric_hi_of b)
-           of Inl _ => Error ["Could not make numeric network"]
-           | Inr (clocks,
-                   (autos,
-                     (ids_to_names,
-                       (process_names_to_index,
-                         (broadcast,
-                           (automata,
-                             (bounds, (formula, (init_locs, init_vars)))))))))
-             => binda (case certifier
-                              (clocks,
-                                (autos,
-                                  (ids_to_names,
-                                    (process_names_to_index,
-                                      (broadcast,
-(automata, (bounds, (formula, (init_locs, init_vars)))))))))
-                        of NONE => Error ["Certificate could not be generated"]
-                        | SOME a => Result a)
-                  (fn (renaming, cert) =>
-                    Result
-                      ((ids_to_names,
-                         (process_names_to_index,
-                           (broadcast,
-                             (automata,
-                               (bounds, (formula, (init_locs, init_vars))))))),
-                        (renaming, cert)))));
+fun make_certified_numeric_net p certifier =
+  (case inferred_box_spec p
+    of NONE =>
+      Error ["numeric bound inference failed (a fluent is unbounded or out of scope)"]
+    | SOME b =>
+      (case check_and_make_numeric_network p (fst o b) (snd o b)
+        of Inl _ => Error ["Could not make numeric network"]
+        | Inr (clocks,
+                (autos,
+                  (ids_to_names,
+                    (process_names_to_index,
+                      (broadcast,
+                        (automata,
+                          (bounds, (formula, (init_locs, init_vars)))))))))
+          => binda (case certifier
+                           (clocks,
+                             (autos,
+                               (ids_to_names,
+                                 (process_names_to_index,
+                                   (broadcast,
+                                     (automata,
+                                       (bounds,
+ (formula, (init_locs, init_vars)))))))))
+                     of NONE => Error ["Certificate could not be generated"]
+                     | SOME a => Result a)
+               (fn (renaming, cert) =>
+                 Result
+                   ((ids_to_names,
+                      (process_names_to_index,
+                        (broadcast,
+                          (automata,
+                            (bounds, (formula, (init_locs, init_vars))))))),
+                     (renaming, cert)))));
 
 fun check_and_cert_pddl_problem_no_return problem mode num_split certifier
   show_cert =
@@ -24565,22 +24828,12 @@ fun check_numeric_ground_problem_diag p fluent_lo fluent_hi =
                       then nat_of_integer (15 : Int.int)
                       else zero_nata)))))))))))))));
 
-fun check_numeric_admission_diag_opt p b =
-  let
-    val lo =
-      (fn f =>
-        (case map_of equal_literal b (name f) of NONE => zero_inta
-          | SOME (l, _) => l));
-    val a =
-      (fn f =>
-        (case map_of equal_literal b (name f) of NONE => zero_inta
-          | SOME (_, h) => h));
-  in
-    check_numeric_ground_problem_diag p lo a
-  end;
+fun check_numeric_admission_diag_opt p =
+  (case inferred_box_spec p of NONE => NONE
+    | SOME b => SOME (check_numeric_ground_problem_diag p (fst o b) (snd o b)));
 
-fun check_and_cert_numeric_pddl_problem p b mode num_split certifier show_cert =
-  (case make_certified_numeric_net p b certifier
+fun check_and_cert_numeric_pddl_problem p mode num_split certifier show_cert =
+  (case make_certified_numeric_net p certifier
     of Result (network, (renaming, cert)) =>
       (fn f_ => fn () => f_
         ((convert_check mode num_split false network renaming cert show_cert)
@@ -24627,42 +24880,24 @@ fun check_and_cert_numeric_pddl_problem p b mode num_split certifier show_cert =
                     (fn () => (Error es))
                   end);
 
-fun check_and_make_numeric_network_opt p b =
-  let
-    val lo =
-      (fn f =>
-        (case map_of equal_literal b (name f) of NONE => zero_inta
-          | SOME (l, _) => l));
-    val hi =
-      (fn f =>
-        (case map_of equal_literal b (name f) of NONE => zero_inta
-          | SOME (_, h) => h));
-  in
-    (case check_and_make_numeric_network p lo hi of Inl _ => NONE
-      | Inr net => (if is_gbound_inv_exec p lo hi then SOME net else NONE))
-  end;
+fun check_and_make_numeric_network_opt p =
+  (case inferred_box_spec p of NONE => NONE
+    | SOME b =>
+      (case check_and_make_numeric_network p (fst o b) (snd o b)
+        of Inl _ => NONE | Inr a => SOME a));
 
-fun check_and_cert_numeric_pddl_problem_no_return p b mode num_split certifier
+fun check_and_cert_numeric_pddl_problem_no_return p mode num_split certifier
   show_cert =
   (fn f_ => fn () => f_
-    ((check_and_cert_numeric_pddl_problem p b mode num_split certifier
-       show_cert)
+    ((check_and_cert_numeric_pddl_problem p mode num_split certifier show_cert)
     ()) ())
     (fn _ => (fn () => ()));
 
-fun snap_draft_of s =
-  (map_filter (comp_to_gint fluent_to_name_spec const_to_int) (n_pre s),
-    map (fn (f, e) =>
-          (fluent_to_name_spec f,
-            nexp_to_eint fluent_to_name_spec const_to_int e))
-      (upds s));
-
-fun numeric_draft_actions p =
-  (map fluent_to_name_spec (nfluents p),
-    (maps (fn a =>
-            [snap_draft_of (at_start_spec a), snap_draft_of (at_end_spec a)])
-       (actions_spec p),
-      map (fn f => (fluent_to_name_spec f, const_to_int (num_init p f)))
-        (nfluents p)));
+fun inferred_box_list p =
+  map_option
+    (fn b =>
+      map (fn f => (fluent_to_name_spec f, (fst (b f), snd (b f))))
+        (nfluents p))
+    (inferred_box_spec p);
 
 end; (*struct Converter*)

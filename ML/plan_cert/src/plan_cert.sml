@@ -200,12 +200,14 @@ fun make_network domain problem model =
     end
 
 (* Numeric network builder: grounds KEEPING numeric fluents (Grounder.ground_problem_numeric),
-   infers a sound per-fluent int box via the (untrusted) bound-inference glue, then assembles the
-   numeric timed-automata net with the verified Converter.check_and_make_numeric_network_opt --
-   which re-checks the box with the trusted is_gbound_inv_exec gate (fails closed) before trusting
-   it.  Same downstream muntax as the propositional path (identical net type). *)
-(* shared numeric front end: parse + ground (nemo-pruned) + infer & re-check the fluent box *)
-fun numeric_ground_and_box domain problem =
+   then hands the ground problem to the verified Converter.check_and_make_numeric_network_opt,
+   which INFERS the per-fluent int box itself with the verified interval bound inference
+   (Isabelle: numeric_ground_ast_problem_defs.inferred_box_spec) and assembles the numeric
+   timed-automata net.  No untrusted box crosses into the verified code any more, so there is
+   no re-check gate.  Same downstream muntax as the propositional path (identical net type). *)
+(* shared numeric front end: parse + ground (nemo-pruned); reports the box the verified
+   inference will use (a pure diagnostic -- the capstone/builder recompute it internally) *)
+fun numeric_ground domain problem =
     let
         (* nemo datalog reachability (task #22b): built from the quantifier-free C parse
            regardless of the grounding strategy (the lifted reachable set is the same);
@@ -220,41 +222,35 @@ fun numeric_ground_and_box domain problem =
                      SOME f => (PddlParser.writeFile f (Grounder.problem_to_pddl ground_prob);
                                 println ("+ Wrote grounded (numeric-kept) PDDL to " ^ f))
                    | NONE => ()
-        val box = TCheckerCertify.timeStage "infer-box" (fn () =>
-            case NumericBoundGlue.infer_box (Converter.numeric_draft_actions ground_prob) of
-                SOME b => b
+        val () = TCheckerCertify.timeStage "infer-box" (fn () =>
+            case Converter.inferred_box_list ground_prob of
+                SOME box =>
+                  println ("+ Inferred fluent box (verified inference): "
+                     ^ String.concatWith ", "
+                         (List.map (fn (f, (lo, hi)) =>
+                            f ^ " in [" ^ Int.toString (Converter.integer_of_int lo)
+                            ^ "," ^ Int.toString (Converter.integer_of_int hi) ^ "]") box))
               | NONE => exit_fail "numeric bound inference failed (a fluent is unbounded / out of scope)")
-        val () = println ("+ Inferred fluent box: "
-                   ^ String.concatWith ", "
-                       (List.map (fn (f, (lo, hi)) =>
-                          f ^ " in [" ^ Int.toString (Converter.integer_of_int lo)
-                          ^ "," ^ Int.toString (Converter.integer_of_int hi) ^ "]") box))
-        (* diagnostic pre-check (the verified capstone/builder re-run this gate internally) *)
-        val boxOk = Converter.check_gbounds_opt ground_prob box
-        val () = println ("+ Box re-check (is_gbound_inv_exec): "
-                          ^ (if boxOk then "PASS" else "FAIL"))
-    in (ground_prob, box, boxOk) end
+    in ground_prob end
 
 fun make_numeric_network domain problem model =
     let
         val _ = log_conversion_config (domain, problem, model)
-        val (ground_prob, box, boxOk) = numeric_ground_and_box domain problem
+        val ground_prob = numeric_ground domain problem
         val t_net = Timer.startRealTimer ()
         val net =
-            (case Converter.check_and_make_numeric_network_opt ground_prob box of
+            (case Converter.check_and_make_numeric_network_opt ground_prob of
                 SOME n => n
               | NONE =>
-                  let val diag = Converter.integer_of_nat
-                                   (Converter.check_numeric_admission_diag_opt ground_prob box)
-                  in exit_fail (if boxOk
-                             then "structural numeric admission check rejected the problem \
+                  (case Converter.check_numeric_admission_diag_opt ground_prob of
+                     NONE => exit_fail "numeric bound inference failed (a fluent is unbounded / out of scope)"
+                   | SOME d =>
+                       exit_fail ("structural numeric admission check rejected the problem \
                                   \(check_numeric_ground_problem first-failing clause #"
-                                  ^ Int.toString diag ^ "; 1=base-admission 2=snaps-disjoint \
+                                  ^ Int.toString (Converter.integer_of_nat d) ^ "; 1=base-admission 2=snaps-disjoint \
                                   \3/4=upds-functional 5/6=no-cross-read 7=empty-box 8/9=upd-struct-ok \
                                   \10/11=pre-struct-ok 12=inv-struct-ok 13=init-int 14/15=writes-declared \
-                                  \16=goal-struct-ok)"
-                             else "trusted static bound re-check rejected the inferred box (is_gbound_inv_exec)")
-                  end)
+                                  \16=goal-struct-ok)")))
             handle Exn.ERROR msg => exit_fail ("numeric net builder raised ERROR: " ^ msg)
         val _ = NetworkConversion.convert_network (showNet ()) model net
                 handle Exn.ERROR msg => exit_fail ("network conversion raised ERROR: " ^ msg)
@@ -329,8 +325,8 @@ fun certify_alu_check model cert =
     in () end
 
 (* Full NUMERIC certification through the VERIFIED capstone
-   (Converter.check_and_cert_numeric_pddl_problem_no_return): the Isabelle side re-checks the
-   static bound gate, builds the net, hands it IN-PROCESS to the untrusted oracle_certifier
+   (Converter.check_and_cert_numeric_pddl_problem_no_return): the Isabelle side infers the
+   fluent box with the verified bound inference, builds the net, hands it IN-PROCESS to the untrusted oracle_certifier
    closure (external tck-reach; stages renaming / convert-tck / tck / convert-back), and checks
    the returned certificate with Munta's verified convert_check -- the net never round-trips
    through the muntax JSON, so the explicit initial values of point-bounded static fluents
@@ -339,7 +335,7 @@ fun certify_alu_check model cert =
 fun certify_numeric_tchecker domain problem model renaming cert mode_str nthreads show_cert =
     let
         val _ = log_conversion_config (domain, problem, model)
-        val (ground_prob, box, _) = numeric_ground_and_box domain problem
+        val ground_prob = numeric_ground domain problem
         val pkg_root      = getEnvDefault "TCHECKER_PKG_ROOT" "."
         val tck_reach_bin = getEnvDefault "TCK_REACH_BIN" "./tck-reach"
         val oracle_ms = ref (0 : LargeInt.int)
@@ -347,7 +343,7 @@ fun certify_numeric_tchecker domain problem model renaming cert mode_str nthread
                   {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin, show_cert = showNet (),
                    model = model, renaming = renaming, cert = cert, oracle_ms = oracle_ms}
         val t0 = Timer.startRealTimer ()
-        val () = Converter.check_and_cert_numeric_pddl_problem_no_return ground_prob box
+        val () = Converter.check_and_cert_numeric_pddl_problem_no_return ground_prob
                    (InProcessCertify.mode_of_str mode_str)
                    (Converter.nat_of_integer (Option.getOpt (Int.fromString nthreads, 1)))
                    f show_cert ()
@@ -371,57 +367,8 @@ fun certify_inprocess domain problem model renaming cert extra num_threads mode 
                   domain problem model renaming cert mode num_threads show_cert
     in () end
 
-(* Numeric bound-inference self-test: exercises the two extra Isabelle code exports
-   (NumericBoundInference compute side + NumericProjection reduction side) linked into
-   this binary alongside Converter, on hand-built draft data -- the guarded counter
-   `counter := counter+1` guarded by `counter <= 0`, init 0 (box [0,1]).  Proves the
-   three exports co-link and run.  The full -numeric mode is now wired (make_numeric_network):
-   the projection + numeric-net builder live in the unified Converter export. *)
-fun numeric_selftest () =
-    let
-        (* Converter is the int64 build: Int_of_integer / integer_of_int are over native Int.int *)
-        fun npi n = Converter.Int_of_integer n
-        val guarded : NumericBoundGlue.draft =
-          (["counter"],
-           ([([Converter.GCmp_i (Converter.Cle,
-                                 Converter.EV "counter", Converter.EC (npi 0))],
-              [("counter",
-                Converter.EAdd (Converter.EV "counter",
-                                        Converter.EC (npi 1)))])],
-            [("counter", npi 0)]))
-        (* relational (var-vs-var, the painter shape, two items): item0/item1 static at 0/1
-           (point boxes), counter += 1 under guard  item_k = counter  -- fires once per item,
-           so counter in [0,2]; the static point boxes transfer across the = guards *)
-        val relational : NumericBoundGlue.draft =
-          (["item0", "item1", "counter"],
-           ([([Converter.GCmp_i (Converter.Ceq,
-                                 Converter.EV "item0", Converter.EV "counter")],
-              [("counter",
-                Converter.EAdd (Converter.EV "counter",
-                                        Converter.EC (npi 1)))]),
-             ([Converter.GCmp_i (Converter.Ceq,
-                                 Converter.EV "item1", Converter.EV "counter")],
-              [("counter",
-                Converter.EAdd (Converter.EV "counter",
-                                        Converter.EC (npi 1)))])],
-            [("item0", npi 0), ("item1", npi 1), ("counter", npi 0)]))
-        fun showBox NONE = "<NONE: unbounded / out of scope>"
-          | showBox (SOME box) =
-              String.concatWith ", "
-                (List.map (fn (f, (lo, hi)) =>
-                   f ^ " in [" ^ Int.toString (Converter.integer_of_int lo)
-                   ^ "," ^ Int.toString (Converter.integer_of_int hi) ^ "]") box)
-    in
-        println ("numeric bound-inference self-test (guarded counter): "
-                 ^ showBox (NumericBoundGlue.infer_box guarded));
-        println ("numeric bound-inference self-test (relational var-vs-var): "
-                 ^ showBox (NumericBoundGlue.infer_box relational))
-    end
-
 fun check args =
     case args of
-        (_, _, _, _, _, _, _, SOME "numeric-selftest", _, _, _) =>
-            numeric_selftest () |
         (SOME domain, SOME problem, SOME model, _, _, _, _, SOME "numeric", _, _, _) =>
             make_numeric_network domain problem model |
         (SOME domain, SOME problem, SOME model, SOME renaming, SOME cert, _, _,
