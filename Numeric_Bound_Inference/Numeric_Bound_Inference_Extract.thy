@@ -60,7 +60,7 @@ definition extract_box :: "'n list \<Rightarrow> 'n aenv \<Rightarrow> ('n \<Rig
      (if \<forall>f\<in>set fs. finite_ivl (E f) then Some (\<lambda>f. the (ivl_bounds (E f))) else None)"
 
 definition infer_fluent_bounds ::
-    "int list \<Rightarrow> 'n list \<Rightarrow> 'n gaction list \<Rightarrow> 'n valuation \<Rightarrow> ('n \<Rightarrow> int \<times> int) option" where
+    "int list \<Rightarrow> 'n list \<Rightarrow> 'n gaction list \<Rightarrow> 'n dval \<Rightarrow> ('n \<Rightarrow> int \<times> int) option" where
   "infer_fluent_bounds T fs acts v0 =
      (case ginfer_thr T acts v0 of None \<Rightarrow> None | Some E \<Rightarrow> extract_box fs E)"
 
@@ -69,7 +69,7 @@ subsection \<open>Soundness of the extracted finite box\<close>
 
 theorem infer_fluent_bounds_sound:
   assumes b: "infer_fluent_bounds T fs acts v0 = Some b"
-    and v: "v \<in> greach v0 (set acts)"
+    and v: "v \<in> dgreach v0 (set acts)"
     and f: "f \<in> set fs"
   shows "fst (b f) \<le> v f \<and> v f \<le> snd (b f)"
 proof -
@@ -94,9 +94,71 @@ text \<open>A @{const \<gamma>_env}-level restatement: the extracted box contain
 
 corollary infer_fluent_bounds_greach_subset:
   assumes "infer_fluent_bounds T fs acts v0 = Some b"
-  shows "greach v0 (set acts)
+  shows "dgreach v0 (set acts)
            \<subseteq> {v. \<forall>f\<in>set fs. fst (b f) \<le> v f \<and> v f \<le> snd (b f)}"
   using infer_fluent_bounds_sound[OF assms] by blast
+
+
+subsection \<open>Fluent-list-relative extraction (the interface the reduction consumes)\<close>
+
+text \<open>Same pipeline on top of @{const ginfer_thr_on}: the exit test and the extraction both run
+  over the explicit fluent list @{term fs}, so nothing needs @{class enum} on @{typ 'n}. Sound
+  under the @{const targets} side condition of @{thm [source] ginfer_thr_on_sound}.\<close>
+
+definition infer_fluent_bounds_on ::
+    "'n list \<Rightarrow> int list \<Rightarrow> 'n gaction list \<Rightarrow> 'n dval \<Rightarrow> ('n \<Rightarrow> int \<times> int) option" where
+  "infer_fluent_bounds_on fs T acts v0 =
+     (case ginfer_thr_on fs T acts v0 of None \<Rightarrow> None | Some E \<Rightarrow> extract_box fs E)"
+
+lemma infer_fluent_bounds_on_inv:
+  assumes sub: "targets acts \<subseteq> set fs"
+      and b: "infer_fluent_bounds_on fs T acts v0 = Some b"
+  obtains E where "is_gbound_inv v0 acts E"
+              and "init_env v0 \<le> E"
+              and "\<And>f. f \<in> set fs \<Longrightarrow> \<gamma>_ivl (E f) = {fst (b f)..snd (b f)}"
+proof -
+  obtain E where E: "ginfer_thr_on fs T acts v0 = Some E"
+    and box: "extract_box fs E = Some b"
+    using b by (auto simp: infer_fluent_bounds_on_def split: option.splits)
+  have fin: "\<forall>g\<in>set fs. finite_ivl (E g)"
+    and bdef: "b = (\<lambda>g. the (ivl_bounds (E g)))"
+    using box by (auto simp: extract_box_def split: if_splits)
+  have gam: "\<gamma>_ivl (E f) = {fst (b f)..snd (b f)}" if f: "f \<in> set fs" for f
+  proof -
+    have "ivl_bounds (E f) \<noteq> None" using fin f by (simp add: finite_ivl_def)
+    then obtain lo hi where lohi: "ivl_bounds (E f) = Some (lo, hi)" by auto
+    hence "b f = (lo, hi)" using bdef by simp
+    thus ?thesis using ivl_bounds_gamma[OF lohi] by simp
+  qed
+  show thesis
+    by (rule that[OF ginfer_thr_on_inv[OF sub E] ginfer_thr_on_ge_init[OF E] gam])
+qed
+
+theorem infer_fluent_bounds_on_sound:
+  assumes sub: "targets acts \<subseteq> set fs"
+      and b: "infer_fluent_bounds_on fs T acts v0 = Some b"
+      and v: "v \<in> dgreach v0 (set acts)"
+      and f: "f \<in> set fs"
+  shows "fst (b f) \<le> v f"
+    and "v f \<le> snd (b f)"
+proof -
+  have "v f \<in> {fst (b f)..snd (b f)}"
+  proof (rule infer_fluent_bounds_on_inv[OF sub b])
+    fix E
+    assume inv: "is_gbound_inv v0 acts E"
+       and gam: "\<And>g. g \<in> set fs \<Longrightarrow> \<gamma>_ivl (E g) = {fst (b g)..snd (b g)}"
+    have "v \<in> \<gamma>_env E" using gbound_inv_sound[OF inv] v by blast
+    hence "v f \<in> \<gamma>_ivl (E f)" by (simp add: \<gamma>_fun_def)
+    thus "v f \<in> {fst (b f)..snd (b f)}" using gam[OF f] by simp
+  qed
+  thus "fst (b f) \<le> v f" and "v f \<le> snd (b f)" by simp_all
+qed
+corollary infer_fluent_bounds_on_dgreach_subset:
+  assumes "targets acts \<subseteq> set fs"
+      and "infer_fluent_bounds_on fs T acts v0 = Some b"
+  shows "dgreach v0 (set acts)
+           \<subseteq> {v. \<forall>f\<in>set fs. fst (b f) \<le> v f \<and> v f \<le> snd (b f)}"
+  using infer_fluent_bounds_on_sound[OF assms] by blast
 
 
 subsection \<open>Sanity: a point interval is finite, @{term \<top>} is not\<close>
@@ -129,7 +191,7 @@ text \<open>\<^bold>\<open>Rejection.\<close> The \<^emph>\<open>unguarded\<clos
   extraction rejects the problem (``bound-inference failed'', @{term None}).\<close>
 
 definition unguarded_inc :: "unit gaction" where
-  "unguarded_inc = ([], [((), NAdd (NVar ()) (NConst 1))])"
+  "unguarded_inc = ([], [((), DAdd (DVar ()) (DConst 1))])"
 
 value "map_option (\<lambda>E. E ())
          (ginfer_thr (thr_set [()] ctr_init [unguarded_inc]) [unguarded_inc] ctr_init)"

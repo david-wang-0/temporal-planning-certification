@@ -1,15 +1,16 @@
-session Numeric_Bound_Inference = "HOL-IMP" +
-  description \<open>Numeric-fluent bound inference (threshold interval abstract interpretation). Standalone
-    on the HOL-IMP heap -- it CANNOT share the reduction's Temporal_Planning_Base heap (HOL-IMP's
-    Abs_Int0 option-lattice arity clashes with the Munta/FPS tower), so it is a separate session and the
-    inferred box crosses to the reduction as plain data. It COMPUTES a per-fluent box (possibly with
-    infinite endpoints); the executable pipeline rejects any problem whose box has an infinite endpoint
-    ("bound-inference failed") since the reduction's fluent_lo/hi are finite int.\<close>
+session Numeric_Bound_Inference = TP_NTA_Reduction +
+  description \<open>Numeric-fluent bound inference (threshold interval abstract interpretation), sitting in
+    the reduction chain between TP_NTA_Reduction and TP_NTA_Reduction_Numeric. The interval domain is
+    vendored IMP-free in Interval_Domain (HOL-IMP's Abs_Int0 option-order instance clashes with the
+    Munta/FPS tower, so HOL-IMP itself cannot be imported here). It COMPUTES a per-fluent box
+    (possibly with infinite endpoints); the fluent-list-relative loop (ginfer_thr_on /
+    infer_fluent_bounds_on) needs no enum instance on the fluent type and is the interface the
+    numeric reduction consumes. The executable pipeline rejects any problem whose box has an
+    infinite endpoint ("bound-inference failed") since the reduction's fluent_lo/hi are finite int.
+    Code ships inside the unified Converter export (no separate export here).\<close>
   theories
+    Interval_Domain
     Numeric_Bound_Inference
     Numeric_Bound_Inference_Threshold
     Numeric_Bound_Inference_Guards
     Numeric_Bound_Inference_Extract
-    Numeric_Bound_Inference_Code_Export
-  export_files (in "../") [1]
-    "Numeric_Bound_Inference.Numeric_Bound_Inference_Code_Export:code/Numeric_Bound_Inference.ML"

@@ -1,5 +1,5 @@
 theory Numeric_Bound_Inference
-  imports "HOL-IMP.Abs_Int3"
+  imports Interval_Domain
 begin
 
 section \<open>Numeric-fluent bound inference by interval abstract interpretation\<close>
@@ -16,8 +16,9 @@ text \<open>
   \<open>numeric-run-lift-contract\<close>). This theory computes such a range statically, so the
   bound assumptions become a \<^emph>\<open>discharged\<close> fact rather than a raw hypothesis.
 
-  \<^bold>\<open>How (HOL-IMP).\<close> We reuse the interval domain of @{theory \<open>HOL-IMP.Abs_Int2_ivl\<close>}
-  / @{theory \<open>HOL-IMP.Abs_Int3\<close>}: the type @{typ ivl}, its lattice
+  \<^bold>\<open>How (HOL-IMP, vendored).\<close> We reuse the interval domain of HOL-IMP's \<open>Abs_Int2_ivl\<close> /
+  \<open>Abs_Int3\<close>, vendored IMP-free as @{theory \<open>Numeric_Bound_Inference.Interval_Domain\<close>} (HOL-IMP
+  itself cannot be co-imported with the Munta-based reduction tower, see there): the type @{typ ivl}, its lattice
   (@{term "(\<squnion>)"} / @{term "(\<sqinter>)"} / @{term "\<top>"} / @{term "\<bottom>"}), interval
   @{term "(+)"} / @{term "(-)"}, the concretisation @{const \<gamma>_ivl}, the constant
   abstraction @{const num_ivl}, the soundness facts @{thm [source] gamma_num'} /
@@ -27,15 +28,15 @@ text \<open>
   applicable action fires at any step), so the natural abstract object is a fixpoint
   over a map @{typ \<open>'n \<Rightarrow> ivl\<close>} rather than an annotated command.
 
-  \<^bold>\<open>Fragment.\<close> The concrete syntax @{text \<open>'n nexp\<close>} mirrors the project's
+  \<^bold>\<open>Fragment.\<close> The concrete syntax @{text \<open>'n dexp\<close>} mirrors the project's
   @{text nexp} (\<open>Temporal_Planning_Semantics/Temporal_Plans.thy\<close>): constants,
   fluents, \<open>+\<close>, \<open>-\<close>, \<open>*\<close>, \<open>/\<close>. We work over the \<^emph>\<open>discrete integer\<close> fragment (the one
   the Munta reduction targets: \<open>fluent_in_bounds\<close> already carries \<open>r \<in> \<int>\<close>), so a
   valuation is @{typ \<open>'n \<Rightarrow> int\<close>}. Per the benchmark survey
   (\<open>gigante_benchmarks_conditions_effects.md\<close>) the effect right-hand sides that
   actually move fluents are \<open>increase\<close>/\<open>decrease\<close>/\<open>assign\<close> over constants and fluents
-  (i.e. @{text NConst}/@{text NVar}/@{text NAdd}/@{text NSub}); \<open>*\<close> and \<open>/\<close> occur only
-  in \<^emph>\<open>duration\<close> expressions. Accordingly @{text NMul}/@{text NDiv} are abstracted to
+  (i.e. @{text DConst}/@{text DVar}/@{text DAdd}/@{text DSub}); \<open>*\<close> and \<open>/\<close> occur only
+  in \<^emph>\<open>duration\<close> expressions. Accordingly @{text DMul}/@{text DDiv} are abstracted to
   @{term \<top>} here (sound but imprecise); a precise corner-product / interval-division
   refinement is future work.
 
@@ -48,45 +49,45 @@ text \<open>
 
 subsection \<open>Concrete numeric syntax and semantics\<close>
 
-text \<open>@{text \<open>'n nexp\<close>} mirrors the project's @{text nexp} fragment; @{text 'n} is the
+text \<open>@{text \<open>'n dexp\<close>} mirrors the project's @{text nexp} fragment; @{text 'n} is the
   (ground) fluent name.\<close>
 
-datatype 'n nexp =
-    NConst int
-  | NVar 'n
-  | NAdd "'n nexp" "'n nexp"
-  | NSub "'n nexp" "'n nexp"
-  | NMul "'n nexp" "'n nexp"
-  | NDiv "'n nexp" "'n nexp"
+datatype 'n dexp =
+    DConst int
+  | DVar 'n
+  | DAdd "'n dexp" "'n dexp"
+  | DSub "'n dexp" "'n dexp"
+  | DMul "'n dexp" "'n dexp"
+  | DDiv "'n dexp" "'n dexp"
 
-type_synonym 'n valuation = "'n \<Rightarrow> int"
+type_synonym 'n dval = "'n \<Rightarrow> int"
 
-fun eval :: "'n valuation \<Rightarrow> 'n nexp \<Rightarrow> int" where
-  "eval v (NConst c) = c"
-| "eval v (NVar f)   = v f"
-| "eval v (NAdd a b) = eval v a + eval v b"
-| "eval v (NSub a b) = eval v a - eval v b"
-| "eval v (NMul a b) = eval v a * eval v b"
-| "eval v (NDiv a b) = eval v a div eval v b"
+fun deval :: "'n dval \<Rightarrow> 'n dexp \<Rightarrow> int" where
+  "deval v (DConst c) = c"
+| "deval v (DVar f)   = v f"
+| "deval v (DAdd a b) = deval v a + deval v b"
+| "deval v (DSub a b) = deval v a - deval v b"
+| "deval v (DMul a b) = deval v a * deval v b"
+| "deval v (DDiv a b) = deval v a div deval v b"
 
 text \<open>A numeric update assigns an expression to a fluent; an action is a list of
   \<^emph>\<open>parallel\<close> updates whose right-hand sides all read the pre-state, mirroring the
   project's @{text apply_upds} (RHS collapsed to functional form per snap).\<close>
 
-type_synonym 'n upd    = "'n \<times> 'n nexp"
-type_synonym 'n action = "'n upd list"
+type_synonym 'n dupd    = "'n \<times> 'n dexp"
+type_synonym 'n dact = "'n dupd list"
 
-definition apply_upds :: "'n action \<Rightarrow> 'n valuation \<Rightarrow> 'n valuation" where
-  "apply_upds U v = (\<lambda>f. case map_of U f of None \<Rightarrow> v f | Some e \<Rightarrow> eval v e)"
+definition dapply_upds :: "'n dact \<Rightarrow> 'n dval \<Rightarrow> 'n dval" where
+  "dapply_upds U v = (\<lambda>f. case map_of U f of None \<Rightarrow> v f | Some e \<Rightarrow> deval v e)"
 
 text \<open>Concrete collecting semantics: the reachable valuations from an initial state
   @{term v0} under an action set @{term A} \<^emph>\<open>(the flat planning transition system)\<close>.\<close>
 
-inductive_set reach :: "'n valuation \<Rightarrow> 'n action set \<Rightarrow> 'n valuation set"
-  for v0 :: "'n valuation" and A :: "'n action set"
+inductive_set dreach :: "'n dval \<Rightarrow> 'n dact set \<Rightarrow> 'n dval set"
+  for v0 :: "'n dval" and A :: "'n dact set"
 where
-  reach_init: "v0 \<in> reach v0 A"
-| reach_step: "\<lbrakk> v \<in> reach v0 A; a \<in> A \<rbrakk> \<Longrightarrow> apply_upds a v \<in> reach v0 A"
+  dreach_init: "v0 \<in> dreach v0 A"
+| dreach_step: "\<lbrakk> v \<in> dreach v0 A; a \<in> A \<rbrakk> \<Longrightarrow> dapply_upds a v \<in> dreach v0 A"
 
 
 subsection \<open>Abstract domain: environments of intervals\<close>
@@ -96,7 +97,7 @@ text \<open>An abstract state maps each fluent to an interval; its concretisatio
 
 type_synonym 'n aenv = "'n \<Rightarrow> ivl"
 
-abbreviation \<gamma>_env :: "'n aenv \<Rightarrow> 'n valuation set" where
+abbreviation \<gamma>_env :: "'n aenv \<Rightarrow> 'n dval set" where
   "\<gamma>_env \<equiv> \<gamma>_fun \<gamma>_ivl"
 
 lemma mono_gamma_env:
@@ -116,15 +117,15 @@ qed
 
 subsection \<open>Abstract evaluation of numeric expressions\<close>
 
-fun aeval :: "'n aenv \<Rightarrow> 'n nexp \<Rightarrow> ivl" where
-  "aeval E (NConst c) = num_ivl c"
-| "aeval E (NVar f)   = E f"
-| "aeval E (NAdd a b) = aeval E a + aeval E b"
-| "aeval E (NSub a b) = aeval E a - aeval E b"
-| "aeval E (NMul a b) = \<top>"
-| "aeval E (NDiv a b) = \<top>"
+fun daeval :: "'n aenv \<Rightarrow> 'n dexp \<Rightarrow> ivl" where
+  "daeval E (DConst c) = num_ivl c"
+| "daeval E (DVar f)   = E f"
+| "daeval E (DAdd a b) = daeval E a + daeval E b"
+| "daeval E (DSub a b) = daeval E a - daeval E b"
+| "daeval E (DMul a b) = \<top>"
+| "daeval E (DDiv a b) = \<top>"
 
-text \<open>Interval subtraction is sound (HOL-IMP proves @{thm [source] gamma_plus'} and
+text \<open>Interval subtraction is sound (the vendored domain proves @{thm [source] gamma_plus'} and
   @{thm [source] \<gamma>_uminus}; @{text minus_ivl} is @{term "\<lambda>a b. a + - b"}).\<close>
 
 lemma gamma_minus':
@@ -136,56 +137,56 @@ proof -
   thus ?thesis unfolding minus_ivl_def by (simp only: diff_conv_add_uminus)
 qed
 
-text \<open>Soundness of abstract evaluation: @{const aeval} over-approximates @{const eval}.\<close>
+text \<open>Soundness of abstract evaluation: @{const daeval} over-approximates @{const deval}.\<close>
 
-lemma aeval_sound:
+lemma daeval_sound:
   assumes v: "v \<in> \<gamma>_env E"
-  shows "eval v e \<in> \<gamma>_ivl (aeval E e)"
+  shows "deval v e \<in> \<gamma>_ivl (daeval E e)"
 proof (induction e)
-  case (NConst c)
+  case (DConst c)
   show ?case by (simp add: gamma_num')
 next
-  case (NVar f)
+  case (DVar f)
   show ?case using v by (simp add: \<gamma>_fun_def)
 next
-  case (NAdd a b)
-  have "eval v a + eval v b \<in> \<gamma>_ivl (aeval E a + aeval E b)"
-    using NAdd.IH by (rule gamma_plus')
+  case (DAdd a b)
+  have "deval v a + deval v b \<in> \<gamma>_ivl (daeval E a + daeval E b)"
+    using DAdd.IH by (rule gamma_plus')
   thus ?case by simp
 next
-  case (NSub a b)
-  have "eval v a - eval v b \<in> \<gamma>_ivl (aeval E a - aeval E b)"
-    using NSub.IH by (rule gamma_minus')
+  case (DSub a b)
+  have "deval v a - deval v b \<in> \<gamma>_ivl (daeval E a - daeval E b)"
+    using DSub.IH by (rule gamma_minus')
   thus ?case by simp
 next
-  case (NMul a b)
+  case (DMul a b)
   show ?case by (simp add: top_ivl_nice \<gamma>_ivl_nice)
 next
-  case (NDiv a b)
+  case (DDiv a b)
   show ?case by (simp add: top_ivl_nice \<gamma>_ivl_nice)
 qed
 
 
 subsection \<open>Abstract transfer functions\<close>
 
-text \<open>Abstract counterpart of @{const apply_upds}: assign each written fluent the
+text \<open>Abstract counterpart of @{const dapply_upds}: assign each written fluent the
   abstract value of its RHS, keep the rest.\<close>
 
-definition astep_upds :: "'n action \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
-  "astep_upds U E = (\<lambda>f. case map_of U f of None \<Rightarrow> E f | Some e \<Rightarrow> aeval E e)"
+definition astep_upds :: "'n dact \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
+  "astep_upds U E = (\<lambda>f. case map_of U f of None \<Rightarrow> E f | Some e \<Rightarrow> daeval E e)"
 
 lemma astep_upds_sound:
   assumes "v \<in> \<gamma>_env E"
-  shows "apply_upds U v \<in> \<gamma>_env (astep_upds U E)"
+  shows "dapply_upds U v \<in> \<gamma>_env (astep_upds U E)"
 proof -
-  have "apply_upds U v f \<in> \<gamma>_ivl (astep_upds U E f)" for f
+  have "dapply_upds U v f \<in> \<gamma>_ivl (astep_upds U E f)" for f
   proof (cases "map_of U f")
     case None
-    thus ?thesis using assms by (simp add: apply_upds_def astep_upds_def \<gamma>_fun_def)
+    thus ?thesis using assms by (simp add: dapply_upds_def astep_upds_def \<gamma>_fun_def)
   next
     case (Some e)
-    have "eval v e \<in> \<gamma>_ivl (aeval E e)" using assms by (rule aeval_sound)
-    thus ?thesis using Some by (simp add: apply_upds_def astep_upds_def)
+    have "deval v e \<in> \<gamma>_ivl (daeval E e)" using assms by (rule daeval_sound)
+    thus ?thesis using Some by (simp add: dapply_upds_def astep_upds_def)
   qed
   thus ?thesis by (simp add: \<gamma>_fun_def)
 qed
@@ -193,7 +194,7 @@ qed
 text \<open>One collecting step over the whole action list: join the current environment
   with the transfer of \<^emph>\<open>every\<close> action (all evaluated in the same @{term E}).\<close>
 
-definition astep :: "'n action list \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
+definition astep :: "'n dact list \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
   "astep acts E = fold (\<lambda>a acc. acc \<squnion> astep_upds a E) acts E"
 
 lemma fold_sup_init: "(z::'a::semilattice_sup) \<le> fold (\<lambda>a acc. acc \<squnion> g a) xs z"
@@ -238,7 +239,7 @@ lemma astep_ge_action:
 
 subsection \<open>Monotonicity of the abstract step\<close>
 
-text \<open>@{const aeval} is monotone in the environment: interval @{term "(+)"} / @{term "(-)"} are
+text \<open>@{const daeval} is monotone in the environment: interval @{term "(+)"} / @{term "(-)"} are
   monotone in the refinement (subset) order (HOL-IMP @{thm [source] mono_plus_ivl} /
   @{thm [source] mono_minus_ivl}). Note subtraction is monotone here because a \<^emph>\<open>wider\<close> subtrahend
   yields a wider result -- the lattice order is \<open>\<subseteq>\<close>, not the numeric order.\<close>
@@ -251,27 +252,27 @@ proof -
   thus ?thesis by (simp only: minus_ivl_def)
 qed
 
-lemma aeval_mono:
-  assumes "E1 \<le> E2" shows "aeval E1 e \<le> aeval E2 e"
+lemma daeval_mono:
+  assumes "E1 \<le> E2" shows "daeval E1 e \<le> daeval E2 e"
 proof (induction e)
-  case (NConst c)
+  case (DConst c)
   show ?case by simp
 next
-  case (NVar f)
+  case (DVar f)
   show ?case using assms by (simp add: le_fun_def)
 next
-  case (NAdd a b)
-  have "aeval E1 a + aeval E1 b \<le> aeval E2 a + aeval E2 b"
-    using NAdd.IH by (blast intro: mono_plus_ivl)
+  case (DAdd a b)
+  have "daeval E1 a + daeval E1 b \<le> daeval E2 a + daeval E2 b"
+    using DAdd.IH by (blast intro: mono_plus_ivl)
   thus ?case by simp
 next
-  case (NSub a b)
+  case (DSub a b)
   thus ?case by (simp add: mono_minus_ivl2)
 next
-  case (NMul a b)
+  case (DMul a b)
   show ?case by simp
 next
-  case (NDiv a b)
+  case (DDiv a b)
   show ?case by simp
 qed
 
@@ -285,7 +286,7 @@ proof (rule le_funI)
     thus ?thesis using assms by (simp add: astep_upds_def le_fun_def)
   next
     case (Some e)
-    have "aeval E1 e \<le> aeval E2 e" using assms by (rule aeval_mono)
+    have "daeval E1 e \<le> daeval E2 e" using assms by (rule daeval_mono)
     thus ?thesis using Some by (simp add: astep_upds_def)
   qed
 qed
@@ -321,26 +322,26 @@ text \<open>A \<^emph>\<open>bound invariant\<close> is an abstract environment 
   and is closed under one abstract step (a post-fixpoint of @{const astep}). This is the
   soundness certificate: any such @{term E} over-approximates \<^emph>\<open>all\<close> reachable states.\<close>
 
-definition is_bound_inv :: "'n valuation \<Rightarrow> 'n action list \<Rightarrow> 'n aenv \<Rightarrow> bool" where
+definition is_bound_inv :: "'n dval \<Rightarrow> 'n dact list \<Rightarrow> 'n aenv \<Rightarrow> bool" where
   "is_bound_inv v0 acts E \<longleftrightarrow> v0 \<in> \<gamma>_env E \<and> astep acts E \<le> E"
 
 theorem bound_inv_sound:
   assumes inv: "is_bound_inv v0 acts E"
-  shows "reach v0 (set acts) \<subseteq> \<gamma>_env E"
+  shows "dreach v0 (set acts) \<subseteq> \<gamma>_env E"
 proof
-  fix v assume "v \<in> reach v0 (set acts)"
+  fix v assume "v \<in> dreach v0 (set acts)"
   thus "v \<in> \<gamma>_env E"
-  proof (induction rule: reach.induct)
-    case reach_init
+  proof (induction rule: dreach.induct)
+    case dreach_init
     show ?case using inv by (simp add: is_bound_inv_def)
   next
-    case (reach_step v a)
-    have "apply_upds a v \<in> \<gamma>_env (astep_upds a E)"
-      using reach_step.IH by (rule astep_upds_sound)
+    case (dreach_step v a)
+    have "dapply_upds a v \<in> \<gamma>_env (astep_upds a E)"
+      using dreach_step.IH by (rule astep_upds_sound)
     moreover have "astep_upds a E \<le> E"
     proof -
       have "astep_upds a E \<le> astep acts E"
-        using reach_step.hyps(2) by (rule astep_ge_action)
+        using dreach_step.hyps(2) by (rule astep_ge_action)
       also have "\<dots> \<le> E" using inv by (simp add: is_bound_inv_def)
       finally show ?thesis .
     qed
@@ -357,13 +358,13 @@ text \<open>The inference: start from point intervals at the initial values and 
   Soundness is independent of the widening operator (it only uses the exit condition),
   so it needs no termination argument.\<close>
 
-definition init_env :: "'n valuation \<Rightarrow> 'n aenv" where
+definition init_env :: "'n dval \<Rightarrow> 'n aenv" where
   "init_env v0 = (\<lambda>f. num_ivl (v0 f))"
 
 definition widen_env :: "'n aenv \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
   "widen_env E1 E2 = (\<lambda>f. E1 f \<nabla> E2 f)"
 
-definition infer :: "'n action list \<Rightarrow> 'n valuation \<Rightarrow> 'n aenv option" where
+definition infer :: "'n dact list \<Rightarrow> 'n dval \<Rightarrow> 'n aenv option" where
   "infer acts v0 =
      while_option (\<lambda>E. \<not> astep acts E \<le> E) (\<lambda>E. widen_env E (astep acts E)) (init_env v0)"
 
@@ -385,7 +386,7 @@ qed
 
 theorem infer_sound:
   assumes "infer acts v0 = Some E"
-  shows "reach v0 (set acts) \<subseteq> \<gamma>_env E"
+  shows "dreach v0 (set acts) \<subseteq> \<gamma>_env E"
 proof (rule bound_inv_sound)
   have post: "astep acts E \<le> E"
     using while_option_stop[OF assms[unfolded infer_def]] by simp
@@ -399,7 +400,7 @@ subsection \<open>Narrowing: recovering precision after widening\<close>
 
 text \<open>Widening over-shoots (it jumps unstable bounds straight to @{term "\<infinity>"}); a \<^emph>\<open>narrowing\<close>
   pass then tightens them back while staying sound. Soundness is maintained through the loop
-  invariant @{term "reach v0 (set acts) \<subseteq> \<gamma>_env x \<and> astep acts x \<le> x"}: each narrowing step keeps
+  invariant @{term "dreach v0 (set acts) \<subseteq> \<gamma>_env x \<and> astep acts x \<le> x"}: each narrowing step keeps
   both the over-approximation and the post-fixpoint property (the latter needs
   @{thm [source] astep_mono}). Termination of narrowing is not proved here.\<close>
 
@@ -441,10 +442,10 @@ qed
 text \<open>A narrowing step preserves the over-approximation.\<close>
 
 lemma narrow_sound:
-  assumes "reach v0 (set acts) \<subseteq> \<gamma>_env x" and "astep acts x \<le> x"
-  shows "reach v0 (set acts) \<subseteq> \<gamma>_env (narrow_env x (astep acts x))"
+  assumes "dreach v0 (set acts) \<subseteq> \<gamma>_env x" and "astep acts x \<le> x"
+  shows "dreach v0 (set acts) \<subseteq> \<gamma>_env (narrow_env x (astep acts x))"
 proof -
-  have "reach v0 (set acts) \<subseteq> \<gamma>_env (astep acts x)"
+  have "dreach v0 (set acts) \<subseteq> \<gamma>_env (astep acts x)"
     using assms(1) astep_extensive mono_gamma_env by (metis subset_trans)
   moreover have "\<gamma>_env (astep acts x) \<subseteq> \<gamma>_env (narrow_env x (astep acts x))"
     using assms(2) narrow_env1 mono_gamma_env by metis
@@ -454,7 +455,7 @@ qed
 text \<open>Widen to a post-fixpoint, then narrow. The result still over-approximates every reachable
   state (soundness is independent of how far narrowing runs).\<close>
 
-definition infer_narrow :: "'n action list \<Rightarrow> 'n valuation \<Rightarrow> 'n aenv option" where
+definition infer_narrow :: "'n dact list \<Rightarrow> 'n dval \<Rightarrow> 'n aenv option" where
   "infer_narrow acts v0 =
      (case infer acts v0 of None \<Rightarrow> None
       | Some E \<Rightarrow>
@@ -463,29 +464,29 @@ definition infer_narrow :: "'n action list \<Rightarrow> 'n valuation \<Rightarr
 
 theorem infer_narrow_sound:
   assumes "infer_narrow acts v0 = Some E"
-  shows "reach v0 (set acts) \<subseteq> \<gamma>_env E"
+  shows "dreach v0 (set acts) \<subseteq> \<gamma>_env E"
 proof -
   obtain Ew where w: "infer acts v0 = Some Ew"
     and nar: "while_option (\<lambda>x. narrow_env x (astep acts x) < x)
                            (\<lambda>x. narrow_env x (astep acts x)) Ew = Some E"
     using assms unfolding infer_narrow_def by (auto split: option.splits)
-  have "reach v0 (set acts) \<subseteq> \<gamma>_env E \<and> astep acts E \<le> E"
-  proof (rule while_option_rule[where P = "\<lambda>x. reach v0 (set acts) \<subseteq> \<gamma>_env x \<and> astep acts x \<le> x"
+  have "dreach v0 (set acts) \<subseteq> \<gamma>_env E \<and> astep acts E \<le> E"
+  proof (rule while_option_rule[where P = "\<lambda>x. dreach v0 (set acts) \<subseteq> \<gamma>_env x \<and> astep acts x \<le> x"
           and b = "\<lambda>x. narrow_env x (astep acts x) < x"
           and c = "\<lambda>x. narrow_env x (astep acts x)" and s = Ew])
-    fix x assume J: "reach v0 (set acts) \<subseteq> \<gamma>_env x \<and> astep acts x \<le> x"
+    fix x assume J: "dreach v0 (set acts) \<subseteq> \<gamma>_env x \<and> astep acts x \<le> x"
       and "narrow_env x (astep acts x) < x"
-    have "reach v0 (set acts) \<subseteq> \<gamma>_env (narrow_env x (astep acts x))"
+    have "dreach v0 (set acts) \<subseteq> \<gamma>_env (narrow_env x (astep acts x))"
       using J using narrow_sound by auto
     moreover have "astep acts (narrow_env x (astep acts x)) \<le> narrow_env x (astep acts x)"
       using J by (blast intro: narrow_post_fixpoint)
-    ultimately show "reach v0 (set acts) \<subseteq> \<gamma>_env (narrow_env x (astep acts x))
+    ultimately show "dreach v0 (set acts) \<subseteq> \<gamma>_env (narrow_env x (astep acts x))
                    \<and> astep acts (narrow_env x (astep acts x)) \<le> narrow_env x (astep acts x)" ..
   next
     show "while_option (\<lambda>x. narrow_env x (astep acts x) < x)
                        (\<lambda>x. narrow_env x (astep acts x)) Ew = Some E" by (rule nar)
   next
-    show "reach v0 (set acts) \<subseteq> \<gamma>_env Ew \<and> astep acts Ew \<le> Ew"
+    show "dreach v0 (set acts) \<subseteq> \<gamma>_env Ew \<and> astep acts Ew \<le> Ew"
       using infer_sound[OF w] infer_post[OF w] by blast
   qed
   thus ?thesis by blast
@@ -500,10 +501,10 @@ text \<open>A single fluent (type @{typ unit}) starts at \<open>0\<close>; one a
   @{thm [source] le_ivl_iff_subset} and @{thm [source] \<gamma>_ivl_nice}, avoiding the
   fragile empty-interval side conditions of the \<open>_nice\<close> arithmetic lemmas.)\<close>
 
-definition cnt_act :: "unit action" where
-  "cnt_act = [((), NConst 5)]"
+definition cnt_act :: "unit dact" where
+  "cnt_act = [((), DConst 5)]"
 
-definition cnt_init :: "unit valuation" where
+definition cnt_init :: "unit dval" where
   "cnt_init = (\<lambda>_. 0)"
 
 definition cnt_bound :: "unit aenv" where
@@ -538,9 +539,9 @@ next
 qed
 
 theorem cnt_reachable_bounded:
-  "reach cnt_init (set [cnt_act]) \<subseteq> {v. 0 \<le> v () \<and> v () \<le> 5}"
+  "dreach cnt_init (set [cnt_act]) \<subseteq> {v. 0 \<le> v () \<and> v () \<le> 5}"
 proof -
-  have "reach cnt_init (set [cnt_act]) \<subseteq> \<gamma>_env cnt_bound"
+  have "dreach cnt_init (set [cnt_act]) \<subseteq> \<gamma>_env cnt_bound"
     using cnt_is_bound_inv by (rule bound_inv_sound)
   also have "\<gamma>_env cnt_bound \<subseteq> {v. 0 \<le> v () \<and> v () \<le> 5}"
     by (auto simp: \<gamma>_fun_def cnt_bound_def \<gamma>_ivl_nice)
@@ -556,10 +557,10 @@ text \<open>The representative numeric-effect case from the benchmark survey: on
   false here (monotone growth), yet the lower bound is a sound invariant, and widening would
   discover the \<open>\<infinity>\<close> upper bound automatically.\<close>
 
-definition inc_act :: "unit action" where
-  "inc_act = [((), NAdd (NVar ()) (NConst 1))]"
+definition inc_act :: "unit dact" where
+  "inc_act = [((), DAdd (DVar ()) (DConst 1))]"
 
-definition inc_init :: "unit valuation" where
+definition inc_init :: "unit dval" where
   "inc_init = (\<lambda>_. 0)"
 
 definition inc_bound :: "unit aenv" where
@@ -609,9 +610,9 @@ next
 qed
 
 theorem inc_reachable_nonneg:
-  "reach inc_init (set [inc_act]) \<subseteq> {v. 0 \<le> v ()}"
+  "dreach inc_init (set [inc_act]) \<subseteq> {v. 0 \<le> v ()}"
 proof -
-  have "reach inc_init (set [inc_act]) \<subseteq> \<gamma>_env inc_bound"
+  have "dreach inc_init (set [inc_act]) \<subseteq> \<gamma>_env inc_bound"
     using inc_is_bound_inv by (rule bound_inv_sound)
   also have "\<gamma>_env inc_bound \<subseteq> {v. 0 \<le> v ()}"
     by (auto simp: \<gamma>_fun_def inc_bound_def \<gamma>_ivl_nice)

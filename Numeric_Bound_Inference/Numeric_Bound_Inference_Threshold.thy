@@ -133,7 +133,7 @@ definition widen_env_thr :: "int list \<Rightarrow> 'n aenv \<Rightarrow> 'n aen
 lemma widen_env_thr_ge1: "E1 \<le> widen_env_thr T E1 E2"
   by (simp add: widen_env_thr_def le_fun_def widen_thr_ge1)
 
-definition infer_thr :: "int list \<Rightarrow> 'n action list \<Rightarrow> 'n valuation \<Rightarrow> 'n aenv option" where
+definition infer_thr :: "int list \<Rightarrow> 'n dact list \<Rightarrow> 'n dval \<Rightarrow> 'n aenv option" where
   "infer_thr T acts v0 =
      while_option (\<lambda>E. \<not> astep acts E \<le> E) (\<lambda>E. widen_env_thr T E (astep acts E)) (init_env v0)"
 
@@ -149,7 +149,7 @@ qed
 
 theorem infer_thr_sound:
   assumes "infer_thr T acts v0 = Some E"
-  shows "reach v0 (set acts) \<subseteq> \<gamma>_env E"
+  shows "dreach v0 (set acts) \<subseteq> \<gamma>_env E"
 proof (rule bound_inv_sound)
   have post: "astep acts E \<le> E"
     using while_option_stop[OF assms[unfolded infer_thr_def]] by simp
@@ -165,16 +165,16 @@ text \<open>Soundness is independent of the threshold list; precision is not. A 
   gathers every integer constant occurring in the action right-hand sides. The caller can
   prepend the initial fluent values (\<open>\<section>\<close>4 of the pseudocode).\<close>
 
-fun nexp_consts :: "'n nexp \<Rightarrow> int list" where
-  "nexp_consts (NConst c) = [c]"
-| "nexp_consts (NVar f)   = []"
-| "nexp_consts (NAdd a b) = nexp_consts a @ nexp_consts b"
-| "nexp_consts (NSub a b) = nexp_consts a @ nexp_consts b"
-| "nexp_consts (NMul a b) = nexp_consts a @ nexp_consts b"
-| "nexp_consts (NDiv a b) = nexp_consts a @ nexp_consts b"
+fun dexp_consts :: "'n dexp \<Rightarrow> int list" where
+  "dexp_consts (DConst c) = [c]"
+| "dexp_consts (DVar f)   = []"
+| "dexp_consts (DAdd a b) = dexp_consts a @ dexp_consts b"
+| "dexp_consts (DSub a b) = dexp_consts a @ dexp_consts b"
+| "dexp_consts (DMul a b) = dexp_consts a @ dexp_consts b"
+| "dexp_consts (DDiv a b) = dexp_consts a @ dexp_consts b"
 
-definition action_consts :: "'n action list \<Rightarrow> int list" where
-  "action_consts acts = concat (map (\<lambda>a. concat (map (\<lambda>u. nexp_consts (snd u)) a)) acts)"
+definition action_consts :: "'n dact list \<Rightarrow> int list" where
+  "action_consts acts = concat (map (\<lambda>a. concat (map (\<lambda>u. dexp_consts (snd u)) a)) acts)"
 
 
 section \<open>Narrowing with a non-extensive step (recovers precision)\<close>
@@ -216,7 +216,7 @@ qed
 lemma astep_le_iff: "astep acts E \<le> E \<longleftrightarrow> (\<forall>a\<in>set acts. astep_upds a E \<le> E)"
   unfolding astep_def by (subst fold_sup_le_iff) simp
 
-definition pstep :: "'n action list \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
+definition pstep :: "'n dact list \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
   "pstep acts E = fold (\<lambda>a acc. acc \<squnion> astep_upds a E) acts \<bottom>"
 
 lemma pstep_le_iff: "pstep acts E \<le> E \<longleftrightarrow> (\<forall>a\<in>set acts. astep_upds a E \<le> E)"
@@ -227,7 +227,7 @@ lemma pstep_mono:
   unfolding pstep_def
   by (rule fold_sup_mono[OF order_refl]) (rule astep_upds_mono[OF assms])
 
-definition sstep :: "'n action list \<Rightarrow> 'n valuation \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
+definition sstep :: "'n dact list \<Rightarrow> 'n dval \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
   "sstep acts v0 E = init_env v0 \<squnion> pstep acts E"
 
 lemma init_le_sstep: "init_env v0 \<le> sstep acts v0 E"
@@ -272,7 +272,7 @@ proof -
   thus ?thesis by (simp add: sstep_le_iff_bound_inv)
 qed
 
-definition infer_narrow_thr :: "int list \<Rightarrow> 'n action list \<Rightarrow> 'n valuation \<Rightarrow> 'n aenv option" where
+definition infer_narrow_thr :: "int list \<Rightarrow> 'n dact list \<Rightarrow> 'n dval \<Rightarrow> 'n aenv option" where
   "infer_narrow_thr T acts v0 =
      (case infer_thr T acts v0 of None \<Rightarrow> None
       | Some E \<Rightarrow> while_option (\<lambda>x. narrow_env x (sstep acts v0 x) < x)
@@ -280,7 +280,7 @@ definition infer_narrow_thr :: "int list \<Rightarrow> 'n action list \<Rightarr
 
 theorem infer_narrow_thr_sound:
   assumes "infer_narrow_thr T acts v0 = Some E"
-  shows "reach v0 (set acts) \<subseteq> \<gamma>_env E"
+  shows "dreach v0 (set acts) \<subseteq> \<gamma>_env E"
 proof -
   obtain Ew where w: "infer_thr T acts v0 = Some Ew"
     and nar: "while_option (\<lambda>x. narrow_env x (sstep acts v0 x) < x)
@@ -392,7 +392,7 @@ text \<open>
   @{const inc_bound} (\<open>= [0, \<infinity>]\<close>) for the increment and add @{term ctr_reset}.
 \<close>
 
-definition ctr_reset :: "unit action" where "ctr_reset = [((), NConst 0)]"
+definition ctr_reset :: "unit dact" where "ctr_reset = [((), DConst 0)]"
 
 lemma astep_upds_ctr_reset: "astep_upds ctr_reset E = (\<lambda>_. num_ivl 0)"
 proof (rule ext)
@@ -419,9 +419,9 @@ text \<open>So every reachable valuation keeps the counter \<open>\<ge> 0\<close
   upper bound is \<open>\<infinity>\<close>, i.e. genuinely unbounded once the capping guard is dropped).\<close>
 
 theorem ctr_reachable_nonneg:
-  "reach inc_init (set [inc_act, ctr_reset]) \<subseteq> {v. 0 \<le> v ()}"
+  "dreach inc_init (set [inc_act, ctr_reset]) \<subseteq> {v. 0 \<le> v ()}"
 proof -
-  have "reach inc_init (set [inc_act, ctr_reset]) \<subseteq> \<gamma>_env inc_bound"
+  have "dreach inc_init (set [inc_act, ctr_reset]) \<subseteq> \<gamma>_env inc_bound"
     using ctr_is_bound_inv by (rule bound_inv_sound)
   also have "\<gamma>_env inc_bound \<subseteq> {v. 0 \<le> v ()}"
     by (auto simp: \<gamma>_fun_def inc_bound_def \<gamma>_ivl_nice)

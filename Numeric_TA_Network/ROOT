@@ -1,4 +1,4 @@
-session TP_NTA_Reduction_Numeric = TP_NTA_Reduction +
+session TP_NTA_Reduction_Numeric = Numeric_Bound_Inference +
   description \<open>Numeric extension of the temporal-planning NTA reduction: the numeric net
     augmentation (numeric defs / model-checking / prelims / edges / projection / steps), its
     correctness, and the numeric bound machinery -- built on the propositional TP_NTA_Reduction.\<close>

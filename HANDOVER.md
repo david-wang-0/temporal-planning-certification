@@ -64,6 +64,12 @@ never used those names (audited), so the port is renames + one proof hotspot.
    commit; push the FPS branch `pddl-grounding-split` for David's review (it is the grounder's new home
    on the split layout).
 
+## Stage 1 (verified bound inference): vendored Interval_Domain, session retargeted
+
+- 2026-09-30: `Numeric_Bound_Inference/` no longer imports HOL-IMP -- the interval domain is vendored IMP-free in the new `Numeric_Bound_Inference/Interval_Domain.thy` (HOL-IMP `Abs_Int2_ivl` + generic parts of `Abs_Int0`/`Abs_Int3`, BSD, Tobias Nipkow; `unbundle lattice_syntax` + `class semilattice_sup_top` + the interpretation facts `gamma_num'`/`gamma_plus'`/`inv_plus'`/`inv_less'` restated as plain lemmas); session `Numeric_Bound_Inference = TP_NTA_Reduction +` and `TP_NTA_Reduction_Numeric = Numeric_Bound_Inference +` (ROOTs rewired; `Numeric_Bound_Inference_Code_Export.thy` + its `export_files` deleted -- code ships in the unified Converter export, stage 3).
+- Name-clash rename sweep in the five inference theories (`Numeric_Bound_Inference{,_Threshold,_Guards,_Extract}.thy`): `nexp`->`dexp` (`DConst DVar DAdd DSub DMul DDiv`), `eval`->`deval`, `aeval`->`daeval`, `valuation`->`dval`, `upd`->`dupd`, `action`->`dact`, `apply_upds`->`dapply_upds`, `reach`->`dreach`, `greach`->`dgreach`, `nexp_consts`->`dexp_consts`, `nexp_thr_consts`->`dexp_thr_consts`; co-import with `TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Numeric_Bounds` verified clash-free.
+- New fluent-list-relative loop (no `enum` on the fluent type): `le_on`/`targets`/`ginfer_thr_on` + `refine_*_le`, `gastep_upds_untouched`, `gastep_untouched`, `ginfer_thr_on_{ge_init,post,inv,sound}` (Guards.thy) and `infer_fluent_bounds_on` + `infer_fluent_bounds_on_{inv,sound,dgreach_subset}` (Extract.thy) -- the interface stage 2 consumes, under the side condition `targets acts \<subseteq> set fs`.
+
 ## ⭐ SESSION STATUS (2026-07-24) — read this first
 
 **Relational fluent-vs-fluent guards are DONE (variants A + B) and ALL benchmark runs emit nets on
