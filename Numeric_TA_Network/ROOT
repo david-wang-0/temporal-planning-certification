@@ -11,3 +11,4 @@ session TP_NTA_Reduction_Numeric = Numeric_Bound_Inference +
     TP_NTA_Reduction_Numeric_Steps
     TP_NTA_Reduction_Correctness_Numeric
     TP_NTA_Reduction_Numeric_Bounds
+    TP_NTA_Reduction_Numeric_Inference
