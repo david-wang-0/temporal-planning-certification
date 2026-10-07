@@ -276,14 +276,71 @@ proof -
   thus ?thesis by (simp add: \<gamma>_fun_def)
 qed
 
+subsection \<open>Transfer lemmas for the main theorem\<close>
+
+text \<open>The grounder-match contract, lifted from the per-action @{text at_start}/@{text at_end} form of the
+  locale assumptions to a member of @{const all_snaps}.\<close>
+lemma all_snaps_upds_nexp_ok:
+  assumes "s \<in> all_snaps" and "num_val_ok w" and "(f, e) \<in> set (upds s)"
+  shows "nexp_ok w e"
+  using assms snap_upds_nexp_ok_start snap_upds_nexp_ok_end
+  unfolding all_snaps_def by fastforce
+
+lemma all_snaps_pre_comp_ok:
+  assumes "s \<in> all_snaps" and "num_val_ok w" and "c \<in> set (n_pre s)"
+  shows "comp_ok w c"
+  using assms snap_pre_comp_ok_start snap_pre_comp_ok_end
+  unfolding all_snaps_def by fastforce
+
+text \<open>Guard transfer: a snap's numeric guard, satisfied by an integer-ok valuation, is satisfied by
+  its draft translation (@{thm [source] sat_comp_to_gcomp}, comparison by comparison).\<close>
+lemma sat_guard_snap_gaction:
+  assumes "s \<in> all_snaps" and "num_val_ok w" and "sat_comps w (set (n_pre s))"
+  shows "sat_guard (dval_of w) (fst (snap_gaction s))"
+proof -
+  have "sat_gcomp (dval_of w) (comp_to_gcomp c)" if "c \<in> set (n_pre s)" for c
+    using sat_comp_to_gcomp[OF all_snaps_pre_comp_ok[OF assms(1,2) that] sat_compsD[OF assms(3) that]] .
+  thus ?thesis unfolding sat_guard_def snap_gaction_def by simp
+qed
+
+text \<open>Update transfer: the draft action's update of @{term f} is the integer encoding of the concrete
+  update result (@{thm [source] map_of_snap_gaction} + @{thm [source] deval_nexp_to_dexp}).\<close>
+lemma dapply_upds_snap_gaction:
+  assumes "s \<in> all_snaps" and "(f, e) \<in> set (upds s)"
+      and "nexp_ok w e" and "eval_nexp w e = Some r"
+  shows "dapply_upds (snd (snap_gaction s)) (dval_of w) f = const_to_int r"
+  using map_of_snap_gaction[OF assms(1,2)] deval_nexp_to_dexp[OF assms(3,4)]
+  by (simp add: dapply_upds_def)
+
+text \<open>Two generic facts about the inference's environments: a value of the initial valuation lies in
+  every environment above @{const init_env}, and a guarded step from inside a guarded post-fixpoint stays
+  inside it.\<close>
+lemma init_env_le_gammaD:
+  assumes "init_env v0 \<le> E"
+  shows "v0 f \<in> \<gamma>_ivl (E f)"
+proof -
+  have "v0 f \<in> \<gamma>_ivl (init_env v0 f)" by (simp add: init_env_def gamma_num')
+  thus ?thesis using le_funD[OF assms, of f] by (simp add: le_ivl_iff_subset subset_iff)
+qed
+
+lemma gbound_inv_stepD:
+  assumes "is_gbound_inv v0 acts E" and "ga \<in> set acts"
+      and "v \<in> \<gamma>_env E" and "sat_guard v (fst ga)"
+  shows "dapply_upds (snd ga) v \<in> \<gamma>_env E"
+proof -
+  have "gastep_upds ga E \<le> E"
+    using order_trans[OF gastep_ge_action[OF assms(2)]] assms(1) unfolding is_gbound_inv_def by blast
+  thus ?thesis using gastep_upds_sound[OF assms(3,4)] mono_gamma_env by blast
+qed
+
 subsection \<open>Main: an inferred box matching the declared bounds discharges the certificate\<close>
 
 text \<open>Via @{thm [source] num_bound_invI}: the init clause is @{text \<open>init_env draft_init \<le> E\<close>} read at
-  @{term f}; the step clause moves the in-bounds valuation @{term w} into the draft world
-  (@{thm [source] dval_of_in_gamma}), where the snap's guard holds by faithfulness of the translation,
-  so the guarded abstract step (@{thm [source] gastep_upds_sound}) lands the updated valuation inside
-  @{term E} (post-fixpoint), and the update RHS is exactly @{text \<open>const_to_int r\<close>} of the concrete
-  result (@{thm [source] deval_nexp_to_dexp}).\<close>
+  @{term f} (@{thm [source] init_env_le_gammaD}); the step clause moves the in-bounds valuation @{term w}
+  into the draft world (@{thm [source] dval_of_in_gamma}), where the snap's guard holds by faithfulness of
+  the translation (@{thm [source] sat_guard_snap_gaction}), so the guarded abstract step stays inside the
+  post-fixpoint @{term E} (@{thm [source] gbound_inv_stepD}), and the draft update of @{term f} is exactly
+  @{text \<open>const_to_int r\<close>} of the concrete result (@{thm [source] dapply_upds_snap_gaction}).\<close>
 theorem inferred_box_imp_num_bound_inv:
   assumes box: "inferred_box = Some b"
       and lo: "\<And>f. f \<in> set nfluents \<Longrightarrow> fluent_lo f = fst (b f)"
@@ -297,16 +354,12 @@ proof -
     using infer_fluent_bounds_on_inv[OF targets_draft_acts box[unfolded inferred_box_def]] by blast
   have gam: "\<gamma>_ivl (E f) = {fluent_lo f..fluent_hi f}" if "f \<in> set nfluents" for f
     using gam0[OF that] lo[OF that] hi[OF that] by simp
-  have geE: "gastep draft_acts E \<le> E" using inv unfolding is_gbound_inv_def by blast
   show ?thesis
   proof (rule num_bound_invI)
-    \<comment> \<open>INIT: the draft initial valuation sits in the initial environment, hence in @{term E}.\<close>
+    \<comment> \<open>INIT: the draft initial valuation sits in @{term E}, and @{term E} is the declared box.\<close>
     fix f assume f: "f \<in> set nfluents"
-    have "draft_init f \<in> \<gamma>_ivl (init_env draft_init f)" by (simp add: init_env_def gamma_num')
-    hence "draft_init f \<in> \<gamma>_ivl (E f)"
-      using le_funD[OF ge, of f] by (auto simp: le_ivl_iff_subset)
-    thus "fluent_lo f \<le> const_to_int (num_init f) \<and> const_to_int (num_init f) \<le> fluent_hi f"
-      using gam[OF f] by (simp add: draft_init_def)
+    show "fluent_lo f \<le> const_to_int (num_init f) \<and> const_to_int (num_init f) \<le> fluent_hi f"
+      using init_env_le_gammaD[OF ge, of f] gam[OF f] by (simp add: draft_init_def)
   next
     \<comment> \<open>STEP: on any in-bounds valuation satisfying the snap guard, the update RHS lands in bounds.\<close>
     fix s f e w
@@ -315,61 +368,18 @@ proof -
        and wfib: "fluent_in_bounds w"
        and wpre: "sat_comps w (set (n_pre s))"
     have wok: "num_val_ok w" using wfib by (rule fluent_in_bounds_imp_num_val_ok)
-    have fnf: "f \<in> set nfluents" using upds_writes_nfluents[OF sAll fe] .
-    \<comment> \<open>@{text nexp_ok} of the RHS and @{text comp_ok} of the guards, from the grounder-match contract.\<close>
-    have okE: "nexp_ok w e" and preOk: "\<forall>c \<in> set (n_pre s). comp_ok w c"
-    proof -
-      obtain a where
-          a: "a \<in> set actions"
-        and s: "s = at_start a \<or> s = at_end a"
-        using sAll unfolding all_snaps_def by blast
-      show "nexp_ok w e"
-        using s
-      proof
-        assume "s = at_start a"
-        thus ?thesis using snap_upds_nexp_ok_start a wok fe by fastforce
-      next
-        assume "s = at_end a"
-        thus ?thesis using snap_upds_nexp_ok_end a wok fe by fastforce
-      qed
-      show "\<forall>c \<in> set (n_pre s). comp_ok w c"
-        using s
-      proof
-        assume "s = at_start a"
-        thus ?thesis using snap_pre_comp_ok_start a wok by fastforce
-      next
-        assume "s = at_end a"
-        thus ?thesis using snap_pre_comp_ok_end a wok by fastforce
-      qed
-    qed
-    \<comment> \<open>move into the draft world: the valuation inhabits @{term E} and satisfies the draft guard.\<close>
-    let ?v = "dval_of w"
-    let ?ga = "snap_gaction s"
-    have vE: "?v \<in> \<gamma>_env E" using dval_of_in_gamma[OF wfib ge gam] .
-    have guard: "sat_guard ?v (fst ?ga)"
-    proof -
-      have "sat_gcomp ?v (comp_to_gcomp c)" if "c \<in> set (n_pre s)" for c
-        using sat_comp_to_gcomp preOk that sat_compsD[OF wpre that] by blast
-      thus ?thesis unfolding sat_guard_def snap_gaction_def by auto
-    qed
-    \<comment> \<open>the guarded abstract step is sound and stays below the post-fixpoint @{term E}.\<close>
-    have step: "dapply_upds (snd ?ga) ?v \<in> \<gamma>_env (gastep_upds ?ga E)"
-      using gastep_upds_sound[OF vE guard] .
-    have le: "gastep_upds ?ga E \<le> E"
-      by (rule order_trans[OF gastep_ge_action[OF snap_gaction_in_draft_acts[OF sAll]] geE])
-    have "dapply_upds (snd ?ga) ?v \<in> \<gamma>_env E" using step mono_gamma_env[OF le] by blast
-    hence memf: "dapply_upds (snd ?ga) ?v f \<in> \<gamma>_ivl (E f)" by (simp add: \<gamma>_fun_def)
-    \<comment> \<open>the updated draft value of @{term f} is the encoding of the concrete update result.\<close>
+    have okE: "nexp_ok w e" using all_snaps_upds_nexp_ok[OF sAll wok fe] .
     obtain r where
         r: "eval_nexp w e = Some r"
       and rI: "r \<in> \<int>"
       using nexp_ok_eval_bnd[OF okE] by blast
-    have "dapply_upds (snd ?ga) ?v f = deval ?v (nexp_to_dexp e)"
-      using map_of_snap_gaction[OF sAll fe] by (simp add: dapply_upds_def)
-    also have "\<dots> = const_to_int r" by (rule deval_nexp_to_dexp[OF okE r])
-    finally have "const_to_int r \<in> \<gamma>_ivl (E f)" using memf by simp
+    have "dapply_upds (snd (snap_gaction s)) (dval_of w) \<in> \<gamma>_env E"
+      using gbound_inv_stepD[OF inv snap_gaction_in_draft_acts[OF sAll]
+              dval_of_in_gamma[OF wfib ge gam] sat_guard_snap_gaction[OF sAll wok wpre]] .
+    hence "dapply_upds (snd (snap_gaction s)) (dval_of w) f \<in> \<gamma>_ivl (E f)" by (simp add: \<gamma>_fun_def)
+    hence "const_to_int r \<in> \<gamma>_ivl (E f)" using dapply_upds_snap_gaction[OF sAll fe okE r] by simp
     hence "fluent_lo f \<le> const_to_int r" and "const_to_int r \<le> fluent_hi f"
-      using gam[OF fnf] by simp_all
+      using gam[OF upds_writes_nfluents[OF sAll fe]] by simp_all
     thus "\<exists>r. eval_nexp w e = Some r \<and> r \<in> \<int>
              \<and> fluent_lo f \<le> const_to_int r \<and> const_to_int r \<le> fluent_hi f"
       using r rI by blast
