@@ -4,11 +4,11 @@ theory TP_NTA_Reduction_Numeric_Bounds
     TP_NTA_Reduction_Numeric_Model_Checking
 begin
 
-text \<open>WP-E: discharge @{text num_seq_in_bounds} from a static bound certificate over the reduction's
-  numeric semantics. NB @{text \<open>HOL-IMP.Abs_Int3\<close>} CANNOT be imported here: its @{text Abs_Int0}
-  lattice makes @{text \<open>_ option\<close>} a @{text semilattice_sup_top} under a sort premise that CONFLICTS
-  with the Munta/FPS tower's @{text \<open>_ option\<close>} arity (arity clash on @{text option}). So the interval
-  domain is provided self-contained here (no HOL-IMP dependency).\<close>
+text \<open>Discharge @{text num_seq_in_bounds} from a static bound certificate over the reduction's
+  numeric semantics. The interval arithmetic is provided self-contained here rather than imported
+  from HOL-IMP: @{text \<open>HOL-IMP.Abs_Int0\<close>} declares an instance @{text \<open>option :: (order) order\<close>}
+  that duplicates the one in @{text \<open>HOL-Library.Option_ord\<close>}, which reaches this tower through
+  Munta's @{text Automatic_Refinement}, so the two cannot be imported together.\<close>
 
 context numeric_tp_nta_reduction
 begin
@@ -72,7 +72,8 @@ text \<open>The discharge locale: identical to @{locale numeric_tp_nta_reduction
   the \<^emph>\<open>checkable\<close> certificate @{text num_bound_inv} in place of the reachability invariant
   @{text num_seq_in_bounds}. We prove @{text num_seq_in_bounds} here (the bridge), then re-obtain
   @{locale numeric_tp_nta_reduction_correctness} as a sublocale -- so every downstream numeric-net
-  fact holds from the certificate, and WP-A's ground leaf discharges @{text num_bound_inv} instead.\<close>
+  fact holds from the certificate, and the ground leaf (theory
+  \<open>Ground_PDDL_Numeric_NTA_Reduction_Bounds\<close>) discharges @{text num_bound_inv} instead.\<close>
 locale numeric_tp_nta_reduction_bounds =
   tp_nta_reduction_correctness
     init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name +
@@ -492,17 +493,17 @@ sublocale numeric_tp_nta_reduction_correctness
 end
 
 
-section \<open>WP-E: the inline interval-arithmetic certificate check (\<open>is_gbound_inv'\<close>)\<close>
+section \<open>The inline interval-arithmetic certificate check (\<open>is_gbound_inv'\<close>)\<close>
 
 text \<open>The eval-decidable check that discharges @{text num_bound_inv} (and hence, through the bridge
-  above, @{text num_seq_in_bounds}). It is the reduction-native, self-contained twin of the standalone
-  @{text Numeric_Bound_Inference} interval analysis (which cannot be imported: HOL-IMP's @{text Abs_Int0}
-  clashes with the Munta/FPS @{text \<open>_ option\<close>} arity). The standalone analysis \<^emph>\<open>computes\<close> a tight box
-  @{term \<open>\<lambda>f. (fluent_lo f, fluent_hi f)\<close>} (threshold widening + guard refinement); THIS layer \<^emph>\<open>re-checks\<close>
-  it by evaluation over the reduction's own @{typ \<open>('n, 'r) nexp\<close>}, so it also serves as WP-D's executable
-  certificate check.
+  above, @{text num_seq_in_bounds}). It is a reduction-native, self-contained counterpart of the
+  @{text Numeric_Bound_Inference} interval analysis: that analysis \<^emph>\<open>computes\<close> a tight box
+  @{term \<open>\<lambda>f. (fluent_lo f, fluent_hi f)\<close>} (threshold widening + guard refinement), while this layer
+  \<^emph>\<open>checks\<close> a given box by evaluation over the reduction's own @{typ \<open>('n, 'r) nexp\<close>}. The executable
+  pipeline does not use this check: it takes the inference's result directly as the certificate
+  (theory @{text TP_NTA_Reduction_Numeric_Inference}).
 
-  \<^bold>\<open>Status: all soundness lemmas proved (0 sorries). Definitions are concrete/executable.\<close> The interval
+  \<^bold>\<open>Definitions are concrete/executable.\<close> The interval
   eval works in the @{text const_to_int} encoding (code-generatable; reuses only @{text const_to_int_of_int}
   + the @{text nexp_ok} fragment). \<open>None\<close> = "cannot bound" (fail-closed; only via an \<open>NDiv\<close> whose
   divisor interval straddles 0).\<close>
@@ -753,7 +754,7 @@ lemma nexp_ok_fluents_bnd:
   shows "nexp_fluents e \<subseteq> set nfluents"
   using assms by (induction e) auto
 
-text \<open>\<^bold>\<open>SORRY (WP-E).\<close> The interval eval over-approximates the concrete @{const eval_nexp} on the
+text \<open>The interval eval over-approximates the concrete @{const eval_nexp} on the
   @{const nexp_ok} fragment: induction on @{term e}, using @{text const_to_int} commutation on integers
   (derivable from @{text const_to_int_of_int} + integrality) and interval-arithmetic monotonicity. Stated
   over an arbitrary box @{term B} that the read fluents of @{term w} inhabit (so it applies to the
@@ -1180,7 +1181,7 @@ next
   thus ?case by simp
 qed
 
-text \<open>\<^bold>\<open>SORRY (WP-E).\<close> An in-box valuation satisfying the guards inhabits the guard-refined box (each
+text \<open>An in-box valuation satisfying the guards inhabits the guard-refined box (each
   @{const refine_comp} only shrinks a bound to a value the guard already forces).\<close>
 lemma refine_box_sound:
   assumes "fluent_in_bounds w" and "sat_comps w (set cs)"
@@ -1201,7 +1202,7 @@ proof -
     unfolding refine_box_def in_refine_box_def using assms(4) by blast
 qed
 
-text \<open>\<^bold>\<open>SORRY (WP-E).\<close> The eval-decidable certificate implies the semantic certificate -- so a
+text \<open>The eval-decidable certificate implies the semantic certificate -- so a
   threshold-computed box, once @{const is_gbound_inv'} checks by evaluation, discharges @{const num_bound_inv}
   (hence @{text num_seq_in_bounds}). Via @{thm num_bound_invI}: init directly; step: @{thm refine_box_sound}
   puts @{term w} in the refined box, @{text snap_upds_nexp_ok_start}/@{text end} give @{const nexp_ok}
@@ -1299,7 +1300,7 @@ qed
 end
 
 
-text \<open>WP-E discharge locale over the PRIMED injective reduction (the @{const AtStart}/@{const AtEnd}
+text \<open>The discharge locale over the PRIMED injective reduction (the @{const AtStart}/@{const AtEnd}
   relabeled snaps): the exact analog of @{locale numeric_tp_nta_reduction_correctness'} but assuming
   the \<^emph>\<open>checkable\<close> certificate @{text \<open>reduction_ref_impl.num_bound_inv\<close>} in place of the
   reachability invariant @{text num_seq_in_bounds}. Re-obtains @{locale numeric_tp_nta_reduction_bounds}

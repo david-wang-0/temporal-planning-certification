@@ -5,15 +5,14 @@ begin
 section \<open>Numeric-fluent bound inference by interval abstract interpretation\<close>
 
 text \<open>
-  This is a \<^emph>\<open>draft\<close> abstract interpreter that infers sound numeric bounds
+  This is an abstract interpreter that infers sound numeric bounds
   \<open>[lo, hi]\<close> for every numeric fluent of a grounded temporal-planning problem.
 
   \<^bold>\<open>Why.\<close> The NTA reduction encodes numeric fluents as \<^emph>\<open>bounded\<close> \<open>int\<close> network
   variables, so the Munta certificate check only makes sense against a fixed range
   per fluent (\<open>num_net_bounds\<close> / \<open>fluent_in_bounds\<close> / \<open>num_seq_in_bounds\<close> in the
-  reduction locales, currently taken as a reachability \<^emph>\<open>assumption\<close> the checker
-  validates against the plan trace, see \<open>NUMERIC_PLAN.md\<close> \<open>\<section>\<close>3 and the
-  \<open>numeric-run-lift-contract\<close>). This theory computes such a range statically, so the
+  reduction locales, where it enters as a reachability \<^emph>\<open>assumption\<close> on the plan
+  trace). This theory computes such a range statically, so the
   bound assumptions become a \<^emph>\<open>discharged\<close> fact rather than a raw hypothesis.
 
   \<^bold>\<open>How (HOL-IMP, vendored).\<close> We reuse the interval domain of HOL-IMP's \<open>Abs_Int2_ivl\<close> /
@@ -32,18 +31,17 @@ text \<open>
   @{text nexp} (\<open>Temporal_Planning_Semantics/Temporal_Plans.thy\<close>): constants,
   fluents, \<open>+\<close>, \<open>-\<close>, \<open>*\<close>, \<open>/\<close>. We work over the \<^emph>\<open>discrete integer\<close> fragment (the one
   the Munta reduction targets: \<open>fluent_in_bounds\<close> already carries \<open>r \<in> \<int>\<close>), so a
-  valuation is @{typ \<open>'n \<Rightarrow> int\<close>}. Per the benchmark survey
-  (\<open>gigante_benchmarks_conditions_effects.md\<close>) the effect right-hand sides that
+  valuation is @{typ \<open>'n \<Rightarrow> int\<close>}. In the numeric benchmark domains the effect
+  right-hand sides that
   actually move fluents are \<open>increase\<close>/\<open>decrease\<close>/\<open>assign\<close> over constants and fluents
   (i.e. @{text DConst}/@{text DVar}/@{text DAdd}/@{text DSub}); \<open>*\<close> and \<open>/\<close> occur only
   in \<^emph>\<open>duration\<close> expressions. Accordingly @{text DMul}/@{text DDiv} are abstracted to
-  @{term \<top>} here (sound but imprecise); a precise corner-product / interval-division
-  refinement is future work.
+  @{term \<top>} here (sound but imprecise).
 
   \<^bold>\<open>Guards.\<close> Numeric preconditions only ever \<^emph>\<open>prune\<close> transitions, so ignoring them is
-  a sound over-approximation (\<open>NUMERIC_PLAN.md\<close> \<open>\<section>\<close>4). This draft models an action as
-  its numeric update list only; guard-based interval refinement (via @{const inv_less_ivl}
-  / @{const inv_plus_ivl}) is future work.
+  a sound over-approximation. This theory models an action as its numeric update list only;
+  guard-based interval refinement (via @{const inv_less_ivl} / @{const inv_plus_ivl}) is added
+  on top in theory \<open>Numeric_Bound_Inference_Guards\<close>.
 \<close>
 
 

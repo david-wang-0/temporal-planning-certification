@@ -2,9 +2,9 @@ theory TP_NTA_Reduction_Numeric_Defs
   imports TP_NTA_Reduction.TP_NTA_Reduction_Defs
 begin
 
-section \<open>Numeric augmentation of the reduction (NUMERIC_PLAN Layer B)\<close>
+section \<open>Numeric augmentation of the reduction\<close>
 
-text \<open>The numeric reduction is an ADDITIVE layer over the propositional one (NUMERIC_PLAN A.6): a
+text \<open>The numeric reduction is an ADDITIVE layer over the propositional one: a
 locale extending \<open>tp_nta_reduction_defs\<close> with the numeric data (\<open>n_pre\<close>/\<open>n_inv\<close>/\<open>upds\<close>/\<open>num_init\<close>/
 \<open>num_goal\<close>), a fluent-naming map \<open>fluent_to_var\<close>, per-fluent integer bounds, and the value-to-int map
 \<open>const_to_int\<close>. The numeric net reuses the propositional definitions and APPENDS fluent
@@ -44,19 +44,19 @@ begin
 text \<open>The fluent variable name is a DEFINED constant (mirroring the propositional \<open>prop_to_var\<close>),
 prefixing the fluent's abstract name with \<open>''fluent_''\<close>. The \<open>''fluent_''\<close> prefix is disjoint from
 the propositional prefixes (\<open>''var_''\<close>/\<open>''lock_''\<close>) and from \<open>acts_active\<close>/\<open>planning_lock\<close>, which is
-what makes the fluent variables fresh (NUMERIC_PLAN A.6).\<close>
+what makes the fluent variables fresh.\<close>
 definition "fluent_to_var f \<equiv> STR ''fluent_'' + fluent_to_name f"
 
 text \<open>One bounded \<open>int\<close> variable per declared numeric fluent, appended to the propositional
-\<open>all_vars\<close> (NUMERIC_PLAN A.5).\<close>
+\<open>all_vars\<close>.\<close>
 definition num_fluent_vars :: "(String.literal \<times> int \<times> int) list" where
 "num_fluent_vars = map (\<lambda>f. (fluent_to_var f, fluent_lo f, fluent_hi f)) nfluents"
 
 definition num_all_vars :: "(String.literal \<times> int \<times> int) list" where
 "num_all_vars = all_vars @ num_fluent_vars"
 
-text \<open>Numeric guards and updates, derived from the abstract numeric data through the encoders
-(NUMERIC_PLAN A.5): \<open>n_pre\<close>/\<open>n_inv\<close>/\<open>num_goal\<close> become \<open>bexp\<close> guards, \<open>upds\<close> and \<open>num_init\<close> become
+text \<open>Numeric guards and updates, derived from the abstract numeric data through the encoders:
+\<open>n_pre\<close>/\<open>n_inv\<close>/\<open>num_goal\<close> become \<open>bexp\<close> guards, \<open>upds\<close> and \<open>num_init\<close> become
 \<open>(var, exp)\<close> updates.\<close>
 definition num_pre_guard :: "'snap_action \<Rightarrow> (String.literal, int) bexp" where
 "num_pre_guard s = bexp_and_all (map (comp_to_bexp fluent_to_var const_to_int) (n_pre s))"
@@ -73,7 +73,7 @@ definition num_upd :: "'snap_action \<Rightarrow> (String.literal \<times> (Stri
 definition num_init_upd :: "(String.literal \<times> (String.literal, int) exp) list" where
 "num_init_upd = map (\<lambda>f. (fluent_to_var f, exp.const (const_to_int (num_init f)))) nfluents"
 
-text \<open>Faithfulness of the integer encoding on the discrete fragment (NUMERIC_PLAN A.3): a numeric
+text \<open>Faithfulness of the integer encoding on the discrete fragment: a numeric
 expression is @{emph \<open>ok\<close>} at a valuation when every leaf reads a declared, integer-valued fluent or an
 integer constant and every division divides exactly -- the side-condition under which the truncating
 Munta integer arithmetic agrees with the abstract field arithmetic. Hoisted here (into the defs locale,
@@ -159,8 +159,7 @@ end
 section \<open>Well-formedness of the numeric data (the grounder-match contract)\<close>
 
 text \<open>These predicates state the conditions the numeric input must satisfy for the reduction to be
-sound. They are written to match, one-for-one, the guarantees the grounder produces
-(NUMERIC_PLAN A.2/A.3/B).\<close>
+sound. They are written to match, one-for-one, the guarantees the grounder produces.\<close>
 
 definition upds_functional_list :: "('n \<times> ('n, 'r) nexp) list \<Rightarrow> bool" where
 "upds_functional_list us \<longleftrightarrow> distinct (map fst us)"
@@ -183,7 +182,7 @@ text \<open>The numeric reduction propeItr: the spec locale plus well-formedness
 assignment per fluent, from the grounder's combination-normalisation) and cross-read-free; per-fluent
 bounds are valid; the fluent variable names are injective and FRESH (disjoint from the propositional
 variable names, so numeric variables never gate a propositional edge -- the keystone of the
-additive-tracking architecture, NUMERIC_PLAN A.6/5.5).\<close>
+additive-tracking architecture).\<close>
 locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
   n_pre n_inv upds num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int +
@@ -218,8 +217,8 @@ locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
       and upds_no_cross_read_start: "\<forall>a \<in> set actions. upds_no_cross_read_list (upds (at_start a))"
       and upds_no_cross_read_end:   "\<forall>a \<in> set actions. upds_no_cross_read_list (upds (at_end a))"
       and fluent_bounds_valid:      "\<forall>f \<in> set nfluents. fluent_lo f \<le> fluent_hi f"
-      \<comment> \<open>Integer-encoding faithfulness, the grounder-match contract for the discrete fragment
-         (NUMERIC_PLAN A.3): on any integer-valued (@{const num_val_ok}) valuation every snap's update
+      \<comment> \<open>Integer-encoding faithfulness, the grounder-match contract for the discrete fragment:
+         on any integer-valued (@{const num_val_ok}) valuation every snap's update
          RHS and pre/over_all comparison is @{const nexp_ok}/@{const comp_ok} (declared integer reads,
          exact divisions), and the initial valuation is integer-valued. These are static and
          grounder-checkable. Range-boundedness is a @{emph \<open>reachability\<close>} property (a global closure
@@ -248,12 +247,9 @@ locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
             "\<forall>a \<in> set actions. fst ` set (upds (at_start a)) \<subseteq> set nfluents"
       and snap_writes_nfluents_end:
             "\<forall>a \<in> set actions. fst ` set (upds (at_end a)) \<subseteq> set nfluents"
-      \<comment> \<open>Numeric over_all invariants: the OLD static contract -- @{text n_inv_eq} (equalities only) +
-         @{text n_inv_readonly} (over_all fluents never written by any snap) + @{text n_inv_init_sat}
-         (over_all hold at the initial valuation), discharged via a "read-only \<Rightarrow> constant = initial value"
-         shortcut -- has been DROPPED (backlog #8, the lock-based over_all redesign; see
-         \<open>NUMERIC_OVERALL_REDESIGN.md\<close>). The general over_all fragment is now GENERAL (arbitrary
-         while-active comparisons), and the @{text num_edge_2} (start) and @{text num_edge_3} (end)
+      \<comment> \<open>Numeric over_all invariants: there is no static over_all contract (such as equalities
+         only, or over_all fluents never written by any snap). The over_all fragment is GENERAL
+         (arbitrary while-active comparisons), and the @{text num_edge_2} (start) and @{text num_edge_3} (end)
          over_all guards are discharged from plan validity's active clause via
          @{text starting_index_active_Suc} / @{text ending_index_inv_sat} -- a sound over-approximation
          (no lock, no write-guard).\<close>

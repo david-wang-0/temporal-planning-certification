@@ -19,7 +19,8 @@ text \<open>The numeric certifier capstone (theory \<open>Numeric_Unsolvability_
   @{locale numeric_tp_nta_reduction_defs} inherits assumptions from its propositional base, so the
   exported defining equations of its constants (@{text inferred_box}, @{text draft_acts},
   @{text snap_gaction}, the translation functions) carry the locale predicate as a premise and are
-  \<^emph>\<open>not\<close> code equations.  Same idiom as the primed executable net twins of WP-C.\<close>
+  \<^emph>\<open>not\<close> code equations.  Same idiom as the primed executable net twins of
+  \<open>Ground_PDDL_Numeric_NTA_Reduction_Impl\<close>.\<close>
 
 text \<open>Global twins of the locale-internal translation into the inference's draft world
   (@{text nexp_to_dexp} / @{text comp_to_gcomp}, theory \<open>TP_NTA_Reduction_Numeric_Inference\<close>); the

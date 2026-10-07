@@ -6,7 +6,7 @@ begin
 
 section \<open>Discharging the bound certificate from the interval bound inference\<close>
 
-text \<open>Stage 2 of the bound-inference bridge: the reduction's numeric fragment (@{typ \<open>('n, 'r) nexp\<close>}
+text \<open>The reduction side of the bound-inference bridge: the reduction's numeric fragment (@{typ \<open>('n, 'r) nexp\<close>}
   over a partial field valuation) is translated into the inference's integer draft world
   (@{typ \<open>'n dexp\<close>} over a total @{typ int} valuation), the relaxed snaps become guarded draft actions,
   and a box returned by @{const infer_fluent_bounds_on} on that translation discharges

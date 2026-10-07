@@ -255,7 +255,8 @@ struct
   val f_exp_da_base = (f_exp_base 
                       || (char #"?" >> string "duration") wth (fn _ => DurationExpr)) ?? "f_exp_da_base"
   
-  (*TODO: The n is disgusting, there must be a way to remove it.*)
+  (* n bounds the nesting depth of numeric sub-expressions (the parser is built eagerly, so an
+     unbounded recursion would not terminate); f_exp below fixes it at 3. *)
 
   fun f_exp' n base = (base
                  || in_paren (pddl_reserved "sin" >> (if n >= 0 then f_exp' (n - 1) base else base)) wth SinExpr
@@ -354,7 +355,7 @@ struct
   val pref_timed_GD = timed_GD ?? "pref timed GD"
 
   val da_GD = in_paren (opt ((pref_timed_GD wth (fn (tgd) => [tgd])) 
-                          || (pddl_reserved "and" >> (repeat (in_paren pref_timed_GD) (* TODO: fix repeat *))))) ?? "da-GD" (* only allowing one level of (and ...)! *)
+                          || (pddl_reserved "and" >> (repeat (in_paren pref_timed_GD))))) ?? "da-GD" (* only allowing one level of (and ...)! *)
 
   val assign_op_t = (pddl_reserved "increase" wth (fn _ => ContinuousIncrease)
                     || pddl_reserved "decrease" wth (fn _ => ContinuousDecrease)) ?? "assign-op-t"

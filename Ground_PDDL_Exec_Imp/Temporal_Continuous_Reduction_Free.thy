@@ -6,7 +6,7 @@
    plan-embedding functions (temporal_to_continuous_plan / continuous_to_temporal_plan /
    intermediate_states) are intentionally omitted -- the reduction reasons via the discrete
    state-sequence semantics, not the continuous-plan validity reduction.
-   TODO: upstream into an Analysis-free FPS session. *)
+   Candidate for upstreaming into an Analysis-free FPS session. *)
 theory Temporal_Continuous_Reduction_Free
   imports Discrete_Temporal_Planning.Temporal_Happening_Semantics
     Discrete_Temporal_Planning.Temporal_Utils

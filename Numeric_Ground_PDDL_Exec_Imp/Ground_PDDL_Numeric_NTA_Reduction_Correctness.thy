@@ -5,7 +5,7 @@ theory Ground_PDDL_Numeric_NTA_Reduction_Correctness
     "TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Correctness_Numeric"
 begin
 
-text \<open>\<^bold>\<open>NUMERIC_EXEC_PLAN WP-A\<close> -- Rung 4 over the \<^emph>\<open>numeric\<close> net. The numeric twin of
+text \<open>The ground-level soundness lift over the \<^emph>\<open>numeric\<close> net. The numeric twin of
   @{text ground_ast_problem.valid_ground_plan_imp_form_holds}
   (theory @{text Ground_PDDL_NTA_Reduction_Correctness}): interpret
   @{text numeric_tp_nta_reduction_correctness} at the ground numeric problem (via the numeric leaf
@@ -17,7 +17,7 @@ text \<open>\<^bold>\<open>NUMERIC_EXEC_PLAN WP-A\<close> -- Rung 4 over the \<^
   leaf's static assumptions (@{text nred}), and hoist the plan-free numeric net @{text num_net_impl} /
   pre-init config @{term num_a\<^sub>0} into the leaf; (2) a plan-carrying locale
   @{text numeric_valid_ground_plan} (twin of @{text valid_ground_plan}) that interprets
-  @{text numeric_tp_nta_reduction_correctness}; (3) the Rung-4 lemma
+  @{text numeric_tp_nta_reduction_correctness}; (3) the lifting lemma
   @{text num_valid_ground_plan_imp_num_form_holds} and its contrapositive
   @{text num_net_form_not_sat_imp_no_valid_ground_plan}.\<close>
 
@@ -36,7 +36,8 @@ text \<open>The numeric network's Munta semantics and pre-init configuration are
   data only (the augmented automata @{const numeric_tp_nta_reduction_defs.num_timed_automaton_net} and
   variable bounds @{const numeric_tp_nta_reduction_defs.num_all_vars}, both from @{text nred}).  We hoist
   the @{locale Simple_Network_Impl} interpretation and the pre-init config @{term num_a\<^sub>0} into the
-  plan-free leaf context, mirroring @{locale numeric_tp_nta_reduction_correctness} (lines 80/88); the
+  plan-free leaf context, mirroring the @{text num_net_impl} interpretation and the @{text num_a\<^sub>0}
+  definition of @{locale numeric_tp_nta_reduction_correctness}; the
   plan-carrying interpretation's @{text ncorr.num_net_impl}/@{text ncorr.num_a\<^sub>0} coincide with these
   definitionally (same plan-free arguments).\<close>
 
@@ -59,10 +60,11 @@ text \<open>The numeric twin of @{locale valid_ground_plan}: the numeric admissi
   refinement and @{text num_plan.rat_impl.htpl} into the header scope so the @{text num_seq_in_bounds}
   plug can be stated.
 
-  \<^bold>\<open>WP-E plug (@{text num_seq_in_bounds}), supplied by the boundedness analysis; assumption here.\<close> It is
-  the range-boundedness reachability invariant and is soundness-critical -- reserved for the human WP-E
-  boundedness design, NOT discharged from anything.  @{text num_valid} (numeric plan validity) is carried
-  as the assumption @{text num_valid_plan}; at the Rung-4 lift it is supplied by the existential plan
+  \<^bold>\<open>Boundedness assumption (@{text num_seq_in_bounds}).\<close> It is the range-boundedness
+  reachability invariant and is soundness-critical; here it is an assumption (the cert-level locale of
+  theory \<open>Ground_PDDL_Numeric_NTA_Reduction_Bounds\<close> discharges it from the statically inferred
+  bounds).  @{text num_valid} (numeric plan validity) is carried
+  as the assumption @{text num_valid_plan}; at the ground-level lift it is supplied by the existential plan
   hypothesis, exactly as @{text valid_ground_plan} supplies propositional validity.\<close>
 
 locale numeric_valid_ground_plan =
@@ -77,7 +79,7 @@ locale numeric_valid_ground_plan =
     and fluent_hi :: "func \<Rightarrow> int"
     and \<pi> :: "(nat, ast_temporal_action_schema, int) temp_plan" +
   assumes num_valid_plan: "num_plan.num_rat_impl.num_valid_plan"
-      \<comment> \<open>WP-E plug (num_seq_in_bounds), supplied by the boundedness analysis; assumption here.\<close>
+      \<comment> \<open>Range-boundedness of the plan's state sequence (assumption here).\<close>
       and num_seq_in_bounds:
             "\<And>M i. num_plan.num_rat_impl.num_valid_state_sequence M
                \<Longrightarrow> snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)
@@ -91,8 +93,8 @@ text \<open>Interpret the abstract numeric correctness locale @{locale numeric_t
   @{locale numeric_tp_nta_reduction} (via @{text nred}), the UNPRIMED numeric plan locale (via
   @{text num_plan}), and the UNPRIMED @{locale tp_nta_reduction_correctness} (the propositional plan +
   the leaf's @{text unique_names} discharges).  Its three own assumptions are @{text num_valid} (from
-  @{thm num_valid_plan}), @{text num_seq_in_bounds} (the WP-E plug), and @{text num_goal_comp_ok}
-  (a leaf assumption); @{text const_to_int_of_int} (a leaf lemma) is now inherited from the base
+  @{thm num_valid_plan}), @{text num_seq_in_bounds} (the boundedness assumption), and @{text num_goal_comp_ok}
+  (a leaf assumption); @{text const_to_int_of_int} (a leaf lemma) is inherited from the base
   @{locale numeric_tp_nta_reduction} and already discharged there via @{text nred}.\<close>
 
 sublocale ncorr: numeric_tp_nta_reduction_correctness'
@@ -115,7 +117,7 @@ lemmas num_valid_plan_imp_form_holds = ncorr.ref_correctness.num_valid_plan_imp_
 
 end
 
-subsection \<open>Rung 4: the numeric-net lift and its contrapositive\<close>
+subsection \<open>The numeric-net lift and its contrapositive\<close>
 
 context numeric_ground_ast_problem
 begin
@@ -129,7 +131,7 @@ text \<open>The numeric twin of @{thm [source] ground_ast_problem.valid_ground_p
   @{text ncorr} net/config/formula coincide definitionally with the plan-free leaf
   @{term num_net_impl.sem} / @{term num_a\<^sub>0} / @{term ndefs.reach_formula}.
 
-  The @{term num_seq_in_bounds} WP-E plug is threaded through the plan predicate's locale assumption
+  The @{term num_seq_in_bounds} boundedness assumption is threaded through the plan predicate's locale assumption
   (see @{locale numeric_valid_ground_plan}).\<close>
 
 lemma num_valid_ground_plan_imp_num_form_holds:

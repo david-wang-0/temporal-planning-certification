@@ -4,22 +4,20 @@ theory Ground_PDDL_Numeric_NTA_Reduction_Bounds
     "TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Numeric_Inference"
 begin
 
-text \<open>\<^bold>\<open>NUMERIC_EXEC_PLAN WP-D INTEGRATION\<close> -- discharge the soundness-critical @{text num_seq_in_bounds}
-  plug at the ground problem from the VERIFIED interval bound inference
-  (@{text \<open>ndefs.reduction_ref_impl.inferred_box\<close>}, theory @{text TP_NTA_Reduction_Numeric_Inference}): the inference's own
-  result is the certificate.
+text \<open>\<^bold>\<open>Boundedness from the verified bound inference.\<close> The soundness-critical
+  @{text num_seq_in_bounds} obligation is discharged at the ground problem by the verified interval
+  bound inference (@{text \<open>ndefs.reduction_ref_impl.inferred_box\<close>}, theory
+  @{text TP_NTA_Reduction_Numeric_Inference}): the inference's own result is the certificate.
 
-  WP-A (@{text Ground_PDDL_Numeric_NTA_Reduction_Correctness}) carried
-  @{text num_seq_in_bounds} as a per-plan locale assumption of @{locale numeric_valid_ground_plan}.
-  Here it is \<^emph>\<open>derived\<close>: when the inference run over the plan-free ground data returns the declared
-  fluent box (@{text \<open>ndefs.reduction_ref_impl.inferred_box = Some (\<lambda>f. (fluent_lo f, fluent_hi f))\<close>}), the reduction-native
-  @{text \<open>nred'.num_bound_inv\<close>} follows via @{text inferred_box_imp_num_bound_inv}, and the abstract
-  discharge locale @{locale numeric_tp_nta_reduction_bounds'} turns that certificate into
-  @{locale numeric_tp_nta_reduction_correctness} (via @{text num_seq_in_bounds_derived}).
-  (The eval-checkable re-check @{text \<open>is_gbound_inv'\<close>} of theory @{text TP_NTA_Reduction_Numeric_Bounds}
-  stays in the abstract layer; it is no longer used here.)
+  Theory @{text Ground_PDDL_Numeric_NTA_Reduction_Correctness} carries @{text num_seq_in_bounds} as a
+  per-plan locale assumption of @{locale numeric_valid_ground_plan}. Here it is \<^emph>\<open>derived\<close>: when
+  the inference over the plan-free ground data returns the declared fluent box
+  (@{text \<open>ndefs.reduction_ref_impl.inferred_box = Some (\<lambda>f. (fluent_lo f, fluent_hi f))\<close>}), the
+  reduction-native @{text \<open>nred'.num_bound_inv\<close>} follows via @{text inferred_box_imp_num_bound_inv},
+  and the abstract discharge locale @{locale numeric_tp_nta_reduction_bounds'} turns that certificate
+  into @{locale numeric_tp_nta_reduction_correctness} (via @{text num_seq_in_bounds_derived}).
 
-  So the ground plan predicate here (@{text numeric_valid_ground_plan_cert}) no longer bundles the
+  So the ground plan predicate here (@{text numeric_valid_ground_plan_cert}) does not bundle the
   soundness-critical reachability invariant: it is a genuinely valid numeric plan, with boundedness
   supplied once, statically, at the problem level.\<close>
 
@@ -135,7 +133,7 @@ lemmas num_valid_plan_imp_form_holds = nbnd.ref_bounds.num_valid_plan_imp_form_h
 
 end
 
-subsection \<open>Rung 4 (discharged): the numeric-net lift and its contrapositive\<close>
+subsection \<open>The numeric-net lift and its contrapositive\<close>
 
 context numeric_ground_ast_problem_cert
 begin

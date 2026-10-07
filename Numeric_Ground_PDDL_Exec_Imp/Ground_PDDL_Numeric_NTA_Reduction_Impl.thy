@@ -4,14 +4,15 @@ theory Ground_PDDL_Numeric_NTA_Reduction_Impl
     PDDL_TP_Reduction.Ground_PDDL_NTA_Reduction_Impl
 begin
 
-text \<open>\<^bold>\<open>NUMERIC_EXEC_PLAN WP-C\<close> -- the \<^emph>\<open>executable\<close> numeric net and its refinement to the abstract
-  numeric net @{text num_net_impl} (WP-A). The numeric twin of @{text make_network_impl} /
+text \<open>The \<^emph>\<open>executable\<close> numeric net and its refinement to the abstract numeric net
+  @{text num_net_impl} (theory \<open>Ground_PDDL_Numeric_NTA_Reduction_Correctness\<close>).
+  The numeric twin of @{text make_network_impl} /
   @{text model_checking_problem_refine} (theory @{text Ground_PDDL_NTA_Reduction_Impl}), but the numeric
   net is a thin \<^emph>\<open>augmentation\<close> of the propositional net (@{text augment_edge}: conjoin a numeric
   @{typ \<open>(String.literal, int) bexp\<close>} guard + append numeric @{typ \<open>(String.literal, int) exp\<close>} updates
   to each propositional edge; @{text \<open>num_all_vars = all_vars @ num_fluent_vars\<close>}), so the refinement
   lifts the existing propositional @{text \<open>*_refine\<close>} lemmas through the augmentation. Only the
-  boundedness parameters @{text fluent_lo}/@{text fluent_hi} (the WP-E plug) are carried as inputs; the
+  boundedness parameters @{text fluent_lo}/@{text fluent_hi} (the fluent bounds) are carried as inputs; the
   fluent encoding is the DEFINED @{const numeric_ground_ast_problem_defs.fluent_to_var_spec}, proved
   equal to the abstract @{text ndefs.fluent_to_var} by @{text fluent_to_var_spec_eq}.\<close>
 
@@ -830,7 +831,7 @@ text \<open>The numeric twin of @{thm [source] ground_ast_problem.model_checking
   Munta semantics of the \<^emph>\<open>executable\<close> numeric net does not reach the (numeric) goal formula from the
   executable initial configuration, then the ground problem has no valid, bounded numeric plan.  Proved
   by rewriting the executable numeric net / bounds / initial configuration / formula to the abstract
-  @{text ndefs} numeric net via the refines above, and firing the WP-A soundness capstone
+  @{text ndefs} numeric net via the refines above, and firing the abstract soundness capstone
   @{thm [source] num_net_form_not_sat_imp_no_valid_ground_plan}.\<close>
 
 lemma num_model_checking_problem_refine:
@@ -848,13 +849,13 @@ lemma num_model_checking_problem_refine:
 end
 
 
-section \<open>WP-D: the numeric network assembly\<close>
+section \<open>The numeric network assembly\<close>
 
 text \<open>The numeric twin of @{const make_network_impl} / @{const check_and_make_network} (theory
   @{text Ground_PDDL_NTA_Reduction_Impl}): the pure builder assembles the concrete Munta NTA from the
   executable numeric constructors, and @{term check_and_make_numeric_network} runs the numeric admission
   check @{const numeric_ground_ast_problem_defs.check_numeric_ground_problem} first.  Soundness fires the
-  WP-C capstone @{thm [source] numeric_ground_ast_problem.num_model_checking_problem_refine} at the
+  refinement capstone @{thm [source] numeric_ground_ast_problem.num_model_checking_problem_refine} at the
   admitted leaf: if the executable numeric net cannot reach the goal, the ground problem has no valid,
   bounded numeric plan.\<close>
 

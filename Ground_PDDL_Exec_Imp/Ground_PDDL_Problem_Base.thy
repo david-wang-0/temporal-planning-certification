@@ -11,7 +11,7 @@ subsection \<open>To move\<close>
 text \<open>Full case/induction/split rules for \<open>duration_constraint\<close> that also expand the
   \<open>duration_op\<close> into its three constructors EQ/LEQ/GEQ (the generated
   \<open>duration_constraint.cases\<close>/\<open>.induct\<close> only expose the \<open>DurationConstraint\<close> wrapper).
-  TODO: move to a more appropriate location.\<close>
+  They are general and could live alongside the \<open>duration_constraint\<close> datatype.\<close>
 
 lemma duration_constraint_split_full:
   "P (case x of DurationConstraint dop r \<Rightarrow> f dop r)
@@ -174,8 +174,8 @@ text \<open>Positivity (\<open>is_pos_lit\<close> / \<open>is_pos_conj\<close>) 
   (\<open>Grounding_Common.Formula_Utils\<close>, imported via \<open>Grounding_Temporal_Common.Temporal_PDDL_Normalization\<close>):
   there \<open>is_pos_conj\<close> is right-deep and \<open>is_pos_lit\<close> additionally accepts \<open>eqAtm\<close> (and its negation).
   The predAtm-only guarantee the NTA reduction needs is carried separately by the \<open>predAtm_only\<close> side
-  condition below (eqAtm-free preconditions/goal), to be discharged once the grounder's eqAtm-elimination
-  stage lands (grounder HANDOVER, "Temporal equality-atom (eqAtm) elimination stage").\<close>
+  condition below (eqAtm-free preconditions/goal), which an eqAtm-elimination pass in the grounder
+  would discharge.\<close>
 
 fun atom_no_args::"'a atom \<Rightarrow> bool" where
 "atom_no_args (predAtm p []) = True" |
@@ -255,8 +255,8 @@ lemma is_pos_conj_num_no_args:
 
 text \<open>The eqAtm-free side condition on preconditions/timed-conditions (predAtm-only, no eqAtm). Bundled
   with @{const act_pres_pos} it upgrades the grounder's @{const is_pos_conj} to @{const pos_conj_form}
-  of the instantiated ground precondition. To be DISCHARGED once the grounder's eqAtm-elimination stage
-  lands (grounder HANDOVER); until then it is a locale assumption.\<close>
+  of the instantiated ground precondition. It is a locale assumption; an eqAtm-elimination pass in the
+  grounder would discharge it.\<close>
 fun act_conds_no_args::"ast_temporal_action_schema \<Rightarrow> bool" where
 "act_conds_no_args (SimpleActionSchema h (SimpleActionBody pre eff)) = (form_preds_no_args pre)" |
 "act_conds_no_args (DurativeActionSchema h (DurativeActionBody dc cond deff)) = (list_all form_preds_no_args (map snd cond))"
@@ -536,7 +536,7 @@ text \<open>Forward (monotone) half of the models/superset correspondence, with 
   the logical world model.  @{const to_literals} keeps only those (every other shape --- equality,
   numeric, negated, disjunction, implication --- maps to \<^term>\<open>[]\<close>), so the duration-constraint
   numeric atoms FPS folds into snap preconditions are simply dropped here and handled by the numeric
-  layer instead (see the duration-atom-positivity decision in \<open>SEMANTICS_REPOINT_PLAN.md\<close>).  This is
+  layer instead.  This is
   the grounder's actual contract (cf. classical \<open>valuation_pos_conj_mono\<close>).\<close>
 lemma to_literals_subset_if_models:
   assumes "valuation M \<Turnstile>\<^sub>m form"

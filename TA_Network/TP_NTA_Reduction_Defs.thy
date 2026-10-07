@@ -34,8 +34,8 @@ fun bexp_and_all::"('a, 'b) bexp list \<Rightarrow> ('a, 'b) bexp" where
 "bexp_and_all [] = bexp.true" |
 "bexp_and_all (x#xs) = bexp.and x (bexp_and_all xs)"
 
-text \<open>Encoders from the abstract numeric syntax (NUMERIC_PLAN A.1) into the Munta expression and
-boolean-expression languages (NUMERIC_PLAN A.5), parameterised by a fluent-naming map \<open>fv\<close> and a
+text \<open>Encoders from the abstract numeric syntax into the Munta expression and
+boolean-expression languages, parameterised by a fluent-naming map \<open>fv\<close> and a
 value-to-int map \<open>ci\<close> -- the bounded-integer boundary, where rational constants land on \<open>int\<close>
 (exact on the supported fragment). Pure and locale-independent.\<close>
 fun nexp_to_exp :: "('n \<Rightarrow> String.literal) \<Rightarrow> ('r \<Rightarrow> int)

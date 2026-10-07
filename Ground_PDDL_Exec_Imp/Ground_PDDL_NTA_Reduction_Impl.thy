@@ -62,29 +62,11 @@ qed
 
 text \<open>We need to refine some datatypes\<close>
 
-text \<open>WP-D ISOLATION: the code-generation-only typeclass block that used to live here
-  (card_UNIV / proper_interval / cproper_interval / ceq / ccompare / set_impl instances
-  and derive commands for String.literal / predicate / ast_action_schema) was removed to
-  reach green through model_checking_problem_refine.  It is broken by the
-  Formal-PDDL-Semantics re-point on two counts: (a) list_less_one_correct relied on the OLD
-  literal.Abs_literal internal representation, and (b) the derive commands reference the
-  removed 'ast_action_schema' type.  None of it feeds the net-constructor definitions, the
-  *_refine lemmas, or model_checking_problem_refine (verified: nothing after this point uses
-  those names, and there is no export_code in this file).  To be repaired / re-derived under
-  WP-D (code export).  The removed block is preserved in git history (commit 31a9e17).\<close>
-
-text \<open>WP-D ISOLATION: the executable problem-checker scaffolding that used to live here
-  (example_domain / example_problem / a check_wf_problem value, and the check_ground_problem
-  definition + check_ground_problem_return_iff correctness lemma) was removed to reach green
-  through model_checking_problem_refine.  It is broken by the Formal-PDDL-Semantics re-point:
-  the checker used the old ast_domain.STG / ast_domain.mp_constT / ast_problem.mp_objT
-  accessors and the ast_problem locale, and the correctness proof used the removed
-  wf_ast_problem_def / wf_problem'_correct facts -- all of which moved to the ast_cont_*
-  namespace (ast_cont_domain.STG, wf_cont_problem', ...).  None of it feeds
-  model_checking_problem_refine or the reduction *_refine chain (verified: nothing between
-  here and model_checking_problem_refine uses check_ground_problem / check_wf_problem /
-  example_*).  This is the "retire check_ground_problem" WP-D item.  The removed block is
-  preserved in git history (commit 31a9e17).\<close>
+text \<open>The code-generation typeclass instances (\<open>ceq\<close>/\<open>ccompare\<close>/
+  \<open>set_impl\<close>, ...) needed to export the checker are declared in the export theory
+  (\<open>Check_Unsolvability\<close>), not here; none of them feeds the net-constructor
+  definitions or the \<open>*_refine\<close> lemmas below.  The executable admission check is
+  assembled in the final section of this theory.\<close>
 
 
 definition "prop_to_var_impl prop_to_name p \<equiv> STR ''var_'' + prop_to_name p"
@@ -875,7 +857,7 @@ lemma model_checking_problem_refine:
 
 end
 
-section \<open>WP-D: the executable admission check + network assembly (re-derived, ast_cont_* namespace)\<close>
+section \<open>The executable admission check and network assembly\<close>
 
 text \<open>The temporal well-formedness check routes through the \<^emph>\<open>continuous\<close> checker at the translated
   problem (@{const temporal_to_continuous_problem}); its @{text return_iff} composes

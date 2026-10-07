@@ -7,7 +7,7 @@ imports
   "Certification_Monads.Check_Monad"
   "Show.Show_Instances"
 begin
-  (* TODO: Move *)
+  (* General-purpose; could live in a library theory. *)
   abbreviation "assert_opt \<Phi> \<equiv> if \<Phi> then Some () else None"
 
   definition "lift_opt m e \<equiv> case m of Some x \<Rightarrow> Error_Monad.return x | None \<Rightarrow> Error_Monad.error e"
@@ -17,7 +17,7 @@ begin
     "lift_opt (Some v) e = return v"
     by (auto simp: lift_opt_def)
 
-  (* TODO: Move *)
+  (* General-purpose; could live in a library theory. *)
   lemma reflcl_image_iff[simp]: "R\<^sup>=``S = S\<union>R``S" by blast
 
   named_theorems return_iff

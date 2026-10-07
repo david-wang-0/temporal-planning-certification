@@ -156,7 +156,7 @@ qed
 subsection \<open>The bounds-free numeric plan predicate\<close>
 
 text \<open>@{locale numeric_valid_ground_plan_cert} is the \<^bold>\<open>genuine, unrestricted\<close> numeric plan predicate --
-  its per-plan @{text num_seq_in_bounds} reachability assumption was \<^emph>\<open>dropped\<close> in WP-D (see the header of
+  it carries \<^emph>\<open>no\<close> per-plan @{text num_seq_in_bounds} reachability assumption (see the header of
   theory \<open>Ground_PDDL_Numeric_NTA_Reduction_Bounds\<close>), with boundedness supplied once, statically, at the
   problem level via the certificate leaf @{locale numeric_ground_ast_problem_cert}.  But it still carries
   the fluent box as parameters.  Concretely @{thm [source] numeric_valid_ground_plan_cert_def} factors as

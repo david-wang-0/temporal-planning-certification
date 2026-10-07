@@ -439,8 +439,8 @@ qed
 subsection \<open>Stronger numeric invariants (the propositional ones plus correct numeric tracking)\<close>
 
 text \<open>The per-step invariants of the propositional bisimulation, strengthened with the requirement that
-the integer variable store @{emph \<open>also\<close>} tracks the abstract numeric valuation at the matching index
-(NUMERIC_PLAN A.6 / 5.5). @{term M} is the abstract numeric state sequence supplied by
+the integer variable store @{emph \<open>also\<close>} tracks the abstract numeric valuation at the matching index.
+@{term M} is the abstract numeric state sequence supplied by
 @{text num_valid_plan}: @{term \<open>snd (M i)\<close>} is the valuation @{emph \<open>before\<close>} happening @{term i} and
 @{term \<open>snd (M (Suc i))\<close>} the valuation after it. Each twin implies its propositional original, so the
 projection direction reuses the existing proof verbatim; the extra @{const num_tracks} conjunct is the

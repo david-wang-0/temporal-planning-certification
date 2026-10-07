@@ -501,11 +501,9 @@ proof (rule sat_comps_cong)
     by (rule happening_num_update_unwritten) (rule unwr)
 qed
 
-\<comment> \<open>@{text happening_num_update_inv_unchanged} and @{text num_seq_inv_const} (the old "over_all fluents
-  are read-only \<Rightarrow> constant = initial value" shortcut, which consumed the dropped @{text n_inv_readonly})
-  were DELETED with the static over_all contract (backlog #8, the lock-based over_all redesign). The
-  surviving @{text active_action_inv_sat} (below) + @{text num_inv_guard_sat_at} are the
-  keepers for the Stage-2 lock-based @{text num_edge_2} discharge.\<close>
+\<comment> \<open>The over_all guards need no static (read-only, constant-valued) contract:
+  @{text active_action_inv_sat} (below) + @{text num_inv_guard_sat_at} discharge the
+  @{text num_edge_2} over_all guard from plan validity.\<close>
 lemma active_action_inv_sat:
   assumes vss: "num_plan.num_rat_impl.num_valid_state_sequence M"
       and i: "i < length planning_sem.htpl"

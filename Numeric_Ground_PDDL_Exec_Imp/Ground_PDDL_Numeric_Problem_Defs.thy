@@ -4,14 +4,14 @@ theory Ground_PDDL_Numeric_Problem_Defs
     TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Numeric_Defs
 begin
 
-section \<open>Numeric admission locale (NUMERIC_EXEC_PLAN WP-B)\<close>
+section \<open>Numeric admission locale\<close>
 
 text \<open>The \<^emph>\<open>numeric leaf\<close> of the grounder-idiomatic ladder (see @{text ground_ast_problem_core} in
   @{theory PDDL_TP_Reduction.Ground_PDDL_Problem_Defs}): the static admission bundle for the
   \<^emph>\<open>numeric\<close> NTA reduction over a concrete ground PDDL problem \<open>P\<close>. It is the sibling of the classical
   leaf @{text ground_ast_problem} off the shared, numeric-inclusive @{text ground_ast_problem_core}:
   it keeps the core's nine propositional admission assumptions and \<^bold>\<open>drops @{text no_functions}\<close>
-  (numeric fluents are now permitted), adding the numeric-fragment well-formedness that
+  (numeric fluents are permitted), adding the numeric-fragment well-formedness that
   @{text numeric_tp_nta_reduction} requires.
 
   \<^bold>\<open>Numeric data is DEFINED from \<open>P\<close>, not fixed as parameters.\<close> Mirroring how
@@ -25,14 +25,15 @@ text \<open>The \<^emph>\<open>numeric leaf\<close> of the grounder-idiomatic la
   numeric effects/atoms that @{text pre_spec}/@{text adds_spec} project out.
 
   \<^bold>\<open>What is NOT here.\<close> Two assumptions of the correctness locale are plan-scoped and belong to a
-  plan-carrying sub-locale (WP-A), NOT to this plan-free admission bundle:
+  plan-carrying sub-locale (theory \<open>Ground_PDDL_Numeric_NTA_Reduction_Correctness\<close>), NOT to this
+  plan-free admission bundle:
     \<^item> @{text num_valid} -- plan validity; supplied under the \<open>\<exists>\<pi>. numeric_plan_for_problem \<pi>\<close>
-      hypothesis at the Rung-4 lift.
-    \<^item> @{text num_seq_in_bounds} -- the range-boundedness reachability invariant (the \<^bold>\<open>boundedness plug
-      (WP-E)\<close>, reserved for human design).
+      hypothesis at the ground-level lift.
+    \<^item> @{text num_seq_in_bounds} -- the range-boundedness reachability invariant (the
+      \<^bold>\<open>boundedness assumption\<close>, discharged from the statically inferred bounds).
 
-  \<^bold>\<open>Remaining parameters.\<close> Only @{text fluent_lo}/@{text fluent_hi} (the WP-E bounds plug) stay
-  parameters. The fluent Munta-name map is now DEFINED (mirroring @{text prop_to_var}): the abstract
+  \<^bold>\<open>Remaining parameters.\<close> Only @{text fluent_lo}/@{text fluent_hi} (the fluent bounds) stay
+  parameters. The fluent Munta-name map is DEFINED (mirroring @{text prop_to_var}): the abstract
   @{text ndefs.fluent_to_var} is built off the fixed @{text fluent_to_name}, concretised here as
   @{text \<open>fluent_to_name_spec \<equiv> func.name\<close>}, so @{text fluent_to_var_inj}/@{text fluent_vars_fresh}
   become abstract lemmas (the injectivity obligation is discharged from
@@ -101,7 +102,7 @@ definition nfluents :: "func list" where
 text \<open>The fluent's abstract name is its bare @{typ name} (mirror of @{text \<open>prop_to_name_spec \<equiv> predicate.name\<close>}
   in @{locale ground_ast_problem_defs}); the concrete fluent Munta-variable name prefixes it with
   @{text \<open>''fluent_''\<close>} -- a computable ground-level twin of the abstract @{text ndefs.fluent_to_var},
-  proved equal to it in WP-C.\<close>
+  proved equal to it in theory \<open>Ground_PDDL_Numeric_NTA_Reduction_Impl\<close>.\<close>
 
 definition "fluent_to_name_spec \<equiv> func.name"
 
@@ -173,15 +174,13 @@ locale numeric_ground_ast_problem =
       and num_init_val_ok:          "\<forall>f \<in> set nfluents. num_init f \<in> \<int>"
       and snap_writes_nfluents_start:"\<forall>a \<in> set actions_spec. fst ` set (upds (at_start_spec a)) \<subseteq> set nfluents"
       and snap_writes_nfluents_end:  "\<forall>a \<in> set actions_spec. fst ` set (upds (at_end_spec a)) \<subseteq> set nfluents"
-  \<comment> \<open>(4) The OLD static over_all contract (@{text n_inv_eq} / @{text n_inv_readonly} /
-      @{text n_inv_init_sat}) has been \<^bold>\<open>removed\<close>: the abstract @{text numeric_tp_nta_reduction} dropped
-      it (backlog #8, \<^emph>\<open>design B\<close> in NUMERIC_OVERALL_REDESIGN.md). The over_all fragment is now general
-      (arbitrary while-active comparisons); the guard is discharged from plan validity's active clause at
-      @{text num_edge_2} (start) and @{text num_edge_3} (end) -- a sound over-approximation, no lock and
-      no write-guard -- so the numeric leaf no longer restricts over_all to equalities/read-only.\<close>
-  \<comment> \<open>(5) Numeric-goal faithfulness (plan-free half). @{text const_to_int_of_int} is now a lemma of
-      the defs locale, no longer assumed; the plan-scoped @{text num_valid}/@{text num_seq_in_bounds}
-      are added by the plan-carrying sub-locale (WP-A), NOT here.\<close>
+  \<comment> \<open>(4) No static over_all contract: the over_all fragment is general (arbitrary while-active
+      comparisons); the guard is discharged from plan validity's active clause at @{text num_edge_2}
+      (start) and @{text num_edge_3} (end) -- a sound over-approximation, no lock and no write-guard --
+      so the numeric leaf does not restrict over_all to equalities/read-only.\<close>
+  \<comment> \<open>(5) Numeric-goal faithfulness (plan-free half). @{text const_to_int_of_int} is a lemma of the
+      defs locale, not an assumption; the plan-scoped @{text num_valid}/@{text num_seq_in_bounds}
+      are added by the plan-carrying sub-locale, NOT here.\<close>
       and num_goal_comp_ok:    "\<And>w. ndefs.num_val_ok w \<Longrightarrow> (\<forall>c \<in> set num_goal. ndefs.comp_ok w c)"
 begin
 
@@ -204,10 +203,11 @@ proof -
     unfolding distinct_map by blast
 qed
 
-text \<open>\<^bold>\<open>Next (NUMERIC_EXEC_PLAN WP-A/WP-C).\<close> The plan-carrying locale attaches a numeric plan \<open>\<pi>\<close> and
-  the boundedness plug @{text num_seq_in_bounds}, then interprets @{text numeric_tp_nta_reduction_correctness}
-  (imported in the WP-A file) to obtain the numeric-net certificate @{text num_valid_plan_imp_form_holds}
-  over @{text num_net_impl}.\<close>
+text \<open>\<^bold>\<open>Next.\<close> The plan-carrying locale attaches a numeric plan \<open>\<pi>\<close> and the
+  boundedness assumption @{text num_seq_in_bounds}, then interprets
+  @{text numeric_tp_nta_reduction_correctness} (theory
+  \<open>Ground_PDDL_Numeric_NTA_Reduction_Correctness\<close>) to obtain the numeric-net certificate
+  @{text num_valid_plan_imp_form_holds} over @{text num_net_impl}.\<close>
 
 end
 

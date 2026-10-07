@@ -638,9 +638,9 @@ proof -
   have ppd: "happening_pre_pre_delay i (L, v |` dom (map_of net_bounds), c)"
     using pres[unfolded cfg] by (rule num_happening_pre_pre_delay_propD)
   have tr: "num_tracks v (snd (M i))" using pres[unfolded cfg] by (rule num_happening_pre_pre_delay_trackD)
-  \<comment> \<open>The boundedness now rides in the separately-carried @{const num_LvP}, from which we re-derive the
-     full-store bound (still needed by the run-lift core) and -- via the bridge -- the propositional
-     @{const LvP} on the projection store that @{thm [source] happening_steps_possible} now requires.\<close>
+  \<comment> \<open>The boundedness rides in the separately-carried @{const num_LvP}, from which we re-derive the
+     full-store bound (needed by the run-lift core) and -- via the bridge -- the propositional
+     @{const LvP} on the projection store that @{thm [source] happening_steps_possible} requires.\<close>
   have bnd: "Simple_Network_Language.bounded (map_of num_net_bounds) v"
     using lvp[unfolded cfg] by (simp add: num_Lv_conds_dests(3))
   have lvpr: "LvP (L, v |` dom (map_of net_bounds), c)"
@@ -651,7 +651,7 @@ proof -
   have prun: "graph_impl.steps ((L, v |` dom (map_of net_bounds), c) # delay_and_apply i (L, v |` dom (map_of net_bounds), c))"
     and ppost: "happening_post i (last (delay_and_apply i (L, v |` dom (map_of net_bounds), c)))"
     using happening_steps_possible[OF i ppd lvpr] by blast+
-  \<comment> \<open>TODO (the run-lift core): lift prun to a numeric run over the FULL store v, threading num_tracks
+  \<comment> \<open>The run-lift core (carried out below): lift prun to a numeric run over the FULL store v, threading num_tracks
      (the running happening_num_update_set partial fold) and the num_net_bounds bound via num_int_step_lift
      + num_data_no_write_edge / num_data_upd_edge per internal step (L ! p pins the fired edge) and
      num_steps_delay_replace for the leading delay; num_happening_post then follows from ppost since the
@@ -684,7 +684,7 @@ proof -
     unfolding planning_sem.time_index_def by auto
 
   \<comment> \<open>The full prop run in @{text ?seq} form, obtained from @{text prun} by the same algebra the
-     propositional assembly uses (lines 110-123 of @{thm [source] happening_steps_possible}).\<close>
+     propositional assembly uses (in the proof of @{thm [source] happening_steps_possible}).\<close>
   \<comment> \<open>The list-shape facts: @{term \<open>delay_and_apply i ?proj\<close>} is the @{const tl} of the @{text ?seq}
      chain, whose head is @{term \<open>delay ?d ?proj\<close>}.\<close>
   have seq_ne: "?seq \<noteq> []" by simp

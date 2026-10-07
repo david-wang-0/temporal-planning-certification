@@ -99,7 +99,7 @@ fun comp_fluents :: "('n, 'r) comp \<Rightarrow> 'n set" where
 
 subsection \<open>Numeric effects\<close>
 text \<open>A numeric effect set @{term U} maps each affected fluent to the expression assigned to it. Two
-well-formedness conditions (fail-closed, checked per snap, see \<section>A.2): the left-hand side is
+well-formedness conditions (fail-closed, checked per snap): the left-hand side is
 @{emph \<open>functional\<close>} (no fluent assigned twice), and no effect reads a fluent that the same snap also
 writes (@{emph \<open>no intra-snap read-after-write\<close>}) -- PDDL snap effects are simultaneous, but Munta
 edge updates are sequential, so we reject the case where the two differ.\<close>
@@ -172,9 +172,8 @@ sufficient level of abstraction.\<close>
 type_synonym 'p state = "'p set"
 
 text \<open>A numeric state pairs the propositional set with a partial fluent valuation (partiality =
-definedness). The propositional component @{typ \<open>'p set\<close>} is exactly the old @{typ \<open>'p state\<close>}, so it
-remains a projection (@{term fst}) and the existing purely-propositional lemmas carry over unchanged
-(\<section>3 Layer A: keep a propositional projection so existing lemmas degrade gracefully).\<close>
+definedness). The propositional component @{typ \<open>'p set\<close>} is exactly @{typ \<open>'p state\<close>}, so it
+remains a projection (@{term fst}) and the purely propositional lemmas carry over unchanged.\<close>
 type_synonym ('p, 'n, 'r) num_state = "'p set \<times> ('n \<rightharpoonup> 'r)"
 
 type_synonym 'p state_sequence = "nat \<Rightarrow> ('p state)"
@@ -307,7 +306,7 @@ lemma upds_imp_simps[simp]:
   "upds_imp (AtEnd a)   = upds (at_end a)"
   unfolding upds_imp_def by simp_all
 
-text \<open>Well-formedness of a snap's numeric effects (\<section>A.2): functional lhs + no intra-snap
+text \<open>Well-formedness of a snap's numeric effects: functional lhs + no intra-snap
 read-after-write.\<close>
 definition snap_upds_wf :: "'snap_action \<Rightarrow> bool" where
   "snap_upds_wf a \<longleftrightarrow> upds_wf (upds a)"
@@ -373,7 +372,7 @@ lemma num_mutex_snap_action_empty:
   using assms unfolding num_mutex_snap_action_def snap_writes_def by simp
 
 text \<open>The numeric effect of a single snap on the valuation: apply its (pre-combined, functional)
-effect set @{term \<open>upds a\<close>}, reading every rhs from the snap's pre-state @{term v}. The \<section>A.3 boundary
+effect set @{term \<open>upds a\<close>}, reading every rhs from the snap's pre-state @{term v}. The translation from PDDL
 combines same-fluent effects into one assignment per fluent (PDDL @{text combine_additive_numeric_effects}
 / @{text action_numeric_update_function_simplified}), so @{term \<open>upds a\<close>} is functional by construction.\<close>
 definition snap_num_update :: "'snap_action \<Rightarrow> ('n \<rightharpoonup> 'r) \<Rightarrow> ('n \<rightharpoonup> 'r)" where
@@ -432,7 +431,7 @@ qed
 
 text \<open>Two non-interfering snaps' numeric updates commute -- the load-bearing fact behind
 order-independence of @{const happening_num_update}. The functional hypotheses hold by construction
-(\<section>A.3 combination); non-interference (@{term \<open>\<not> num_mutex_snap_action a b\<close>}) gives disjoint writes and
+(same-fluent effects are combined when translating from PDDL); non-interference (@{term \<open>\<not> num_mutex_snap_action a b\<close>}) gives disjoint writes and
 no cross read/write, so each snap's rhs reads the same value whichever snap runs first.\<close>
 lemma snap_num_update_commute:
   assumes fa: "upds_functional (upds a)" and fb: "upds_functional (upds b)"
@@ -508,7 +507,7 @@ text \<open>On a functional, pairwise-non-interfering set of snaps the per-snap 
 @{const Finite_Set.fold} of @{const snap_num_update} is **order-independent** -- this is the set-level
 numeric happening update, the abstract analog of PDDL's
 @{text same_actions_then_happening_numeric_update_function_equal}. The two hypotheses hold for a real
-happening: @{term \<open>upds a\<close>} is functional by construction (\<section>A.3 combination), and pairwise
+happening: @{term \<open>upds a\<close>} is functional by construction (same-fluent effects are combined into one), and pairwise
 non-interference is exactly what the clock/\<epsilon>-separation enforces among co-occurring snaps.\<close>
 lemma comp_fun_commute_on_snap_num_update:
   assumes "\<And>a. a \<in> S \<Longrightarrow> upds_functional (upds a)"
@@ -1495,13 +1494,11 @@ proof -
   qed
 qed
 
-text \<open>**Migration lemma** (the collapse go/no-go). With empty numeric data the numeric state-sequence
+text \<open>**Conservativity lemma.** With empty numeric data the numeric state-sequence
 validity is @{emph \<open>definitionally\<close>} the propositional one on the @{term fst} projection, plus a
 constant valuation. So the numeric semantics conservatively generalises the propositional one: every
 propositional plan lifts (pick any constant valuation), and certifying the empty-numeric task is the
-old certification. This is the clean signal that the parallel hierarchy can be collapsed by promotion
-+ retirement (NUMERIC_PLAN \<section> "How would you collapse"). Needs finite happenings (true for a finite
-plan).\<close>
+propositional certification. Needs finite happenings (true for a finite plan).\<close>
 lemma num_valid_state_sequence_empty:
   assumes upd: "upds = (\<lambda>_. {})" and npre: "n_pre = (\<lambda>_. {})" and ninv: "n_inv = (\<lambda>_. {})"
       and fin: "\<And>i. i < length htpl \<Longrightarrow> finite (happ_at plan_happ_seq (time_index i))"
@@ -1611,7 +1608,7 @@ next
   qed
 qed
 
-text \<open>General projection (NUMERIC_PLAN A.6 step 1), the non-empty generalisation of
+text \<open>General projection, the non-empty generalisation of
 \<open>num_valid_plan_empty\<close>: numeric conditions only add constraints, so the propositional projection
 \<open>\<lambda>i. fst (M i)\<close> of a numerically valid plan is propositionally valid -- unconditionally (no
 empty-numeric hypotheses). It feeds the numeric capstone: project to \<open>valid_plan\<close>, reuse the

@@ -4,10 +4,10 @@ theory Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
     Ground_PDDL_Numeric_NTA_Reduction_Bounds
 begin
 
-text \<open>\<^bold>\<open>WP-D (no per-plan bounds).\<close> Compose the executable numeric net refinement (WP-C,
-  @{thm [source] numeric_ground_ast_problem.num_model_checking_problem_refine}) with the
-  \<^emph>\<open>bounds-discharged\<close> capstone (WP-D integration,
-  @{thm [source] numeric_ground_ast_problem_cert.num_net_form_not_sat_imp_no_valid_ground_plan}) so the
+text \<open>\<^bold>\<open>No per-plan bounds.\<close> Compose the executable numeric net refinement
+  (@{thm [source] numeric_ground_ast_problem.num_model_checking_problem_refine}) with the
+  \<^emph>\<open>bounds-discharged\<close> capstone
+  (@{thm [source] numeric_ground_ast_problem_cert.num_net_form_not_sat_imp_no_valid_ground_plan}) so the
   \<^emph>\<open>executable\<close> soundness concludes over @{text numeric_valid_ground_plan_cert} -- a genuinely valid
   numeric plan, with boundedness supplied ONCE, statically, by the VERIFIED bound inference's own result
   (@{text \<open>ndefs.reduction_ref_impl.inferred_box = Some (\<lambda>f. (fluent_lo f, fluent_hi f))\<close>}, bundled in
@@ -24,7 +24,7 @@ begin
 text \<open>The numeric twin of @{thm [source] numeric_ground_ast_problem.num_model_checking_problem_refine},
   but firing the bounds-discharged @{text \<open>_cert\<close>} capstone: if the Munta semantics of the executable
   numeric net does not reach the goal formula, then the ground problem has no valid numeric plan
-  \<^emph>\<open>at all\<close> (no residual @{text num_seq_in_bounds} obligation).  Proved exactly like the WP-C refinement
+  \<^emph>\<open>at all\<close> (no residual @{text num_seq_in_bounds} obligation).  Proved exactly like that refinement
   (rewrite the executable net / bounds / initial configuration / formula to the abstract @{text ndefs}
   net via the inherited refines), but the capstone in scope is
   @{locale numeric_ground_ast_problem_cert}'s own @{text num_net_form_not_sat_imp_no_valid_ground_plan}

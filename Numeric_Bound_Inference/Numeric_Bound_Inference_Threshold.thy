@@ -11,7 +11,7 @@ text \<open>
   \<open>cnt\<close> example (\<open>f := 5\<close>) widens to @{term "[Fin 0, \<infinity>]::ivl"} instead of
   @{term "[Fin 0, Fin 5]::ivl"}.
 
-  This theory adds \<^bold>\<open>threshold widening\<close> (BOUND_INFERENCE_pseudocode.md \<open>\<section>\<close>4): a growing bound
+  This theory adds \<^bold>\<open>threshold widening\<close>: a growing bound
   advances only to the next \<^emph>\<open>threshold\<close> (an integer constant drawn from the problem) rather
   than to @{term "\<infinity>"}; only when it must pass every threshold does it reach @{term "\<infinity>"}. With
   the constant \<open>5\<close> in the threshold set, \<open>cnt\<close> now converges at @{term "[Fin 0, Fin 5]::ivl"}.
@@ -163,7 +163,7 @@ subsection \<open>Threshold-set extraction (a convenient default)\<close>
 
 text \<open>Soundness is independent of the threshold list; precision is not. A reasonable default
   gathers every integer constant occurring in the action right-hand sides. The caller can
-  prepend the initial fluent values (\<open>\<section>\<close>4 of the pseudocode).\<close>
+  prepend the initial fluent values.\<close>
 
 fun dexp_consts :: "'n dexp \<Rightarrow> int list" where
   "dexp_consts (DConst c) = [c]"
@@ -372,8 +372,7 @@ qed
 section \<open>Worked example: the counter domain (smallest instance)\<close>
 
 text \<open>
-  The design spec (BOUND_INFERENCE_pseudocode.md \<open>\<section>\<close>5) infers \<open>[0, n]\<close> for a counter capped by a
-  guard \<open>counter = item_id\<close>. Its \<^bold>\<open>smallest instance\<close> (\<open>n = 1\<close>, one item with id \<open>0\<close>) is
+  A counter capped by a guard \<open>counter = item_id\<close> has the reachable range \<open>[0, n]\<close>. Its \<^bold>\<open>smallest instance\<close> (\<open>n = 1\<close>, one item with id \<open>0\<close>) is
   \<^item> \<open>inc\<close>:   guard \<open>counter = 0\<close>,   effect \<open>counter += 1\<close>
   \<^item> \<open>reset\<close>: effect \<open>counter := 0\<close>
   with \<open>counter = 0\<close> initially. \<^emph>\<open>With\<close> the guard the reachable set is \<open>{0, 1}\<close>: from \<open>0\<close>, \<open>inc\<close>
@@ -382,13 +381,13 @@ text \<open>
 
   \<^bold>\<open>Why this fragment gets \<open>[0, \<infinity>]\<close> instead.\<close> An action here is its update list \<^emph>\<open>only\<close> --
   numeric guards are dropped (a sound over-approximation: dropping a guard only \<^emph>\<open>adds\<close>
-  transitions, \<open>\<section>\<close>4). So \<open>inc\<close> becomes an \<^bold>\<open>unconditional\<close> \<open>counter += 1\<close>, whose reachable set
+  transitions). So \<open>inc\<close> becomes an \<^bold>\<open>unconditional\<close> \<open>counter += 1\<close>, whose reachable set
   from \<open>0\<close> is all of \<open>\<nat>\<close>. The inferred bound is therefore \<open>[0, \<infinity>]\<close> -- sound, and in fact
   \<^emph>\<open>tight for the guard-free system\<close>, but not the \<open>[0, 1]\<close> the guard would give. Threshold
   widening cannot rescue it: no finite threshold caps a genuinely unbounded fluent, so the upper
   bound correctly reaches \<open>\<infinity>\<close> (the "cannot finitize" verdict). Recovering \<open>[0, 1]\<close> needs the
   guard-refinement pass (intersect with \<open>counter = 0\<close> via @{const inv_less_ivl} / equality),
-  which is future work. We reuse the base theory's @{const inc_act} / @{const inc_init} /
+  which theory \<open>Numeric_Bound_Inference_Guards\<close> adds. We reuse the base theory's @{const inc_act} / @{const inc_init} /
   @{const inc_bound} (\<open>= [0, \<infinity>]\<close>) for the increment and add @{term ctr_reset}.
 \<close>
 

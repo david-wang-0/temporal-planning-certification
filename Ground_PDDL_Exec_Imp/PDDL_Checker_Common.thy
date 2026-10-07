@@ -3,7 +3,7 @@
    Preservation_Of_Well_Formedness (-> continuous Happening_Semantics -> ODE/Product_Order) to the
    Analysis-free Discrete_Planning_Common.Happening_Semantics, so the wf-checker the net builder
    uses stays Product_Order-free (this file's body is already Analysis-free -- no euclidean/ODE).
-   TODO: trim to the wf-checker slice / upstream into an Analysis-free FPS session. *)
+   Candidate for trimming to the wf-checker slice and upstreaming into an Analysis-free FPS session. *)
 theory PDDL_Checker_Common
   imports
     "Discrete_Planning_Common.Happening_Semantics"
@@ -145,7 +145,7 @@ lemma show_law_ast_cont_domain[show_law_intros]:
   apply(cases x)
   by (auto simp add: show_law_def showsp_ast_cont_domain_def show_law_simps)
 
-(*TODO:
+(* Show instances for ast_cont_domain / ast_problem, disabled (the net builder does not need them):
 local_setup \<open>
   Show_Generator.register_foreign_showsp @{typ ast_cont_domain} @{term "showsp_ast_cont_domain"} @{thm show_law_ast_cont_domain}
 \<close>
@@ -741,7 +741,6 @@ text \<open>[vendored slice] The \<open>check_code_common\<close> [code] bundle 
   are kept, which is all the net builder's check_and_make_network needs.\<close>
 
 subsubsection \<open>More Efficient Distinctness Check for Linorders\<close>
-(* TODO: Can probably be optimized even more. *)
 fun no_stutter :: "'a list \<Rightarrow> bool" where
   "no_stutter [] = True"
 | "no_stutter [_] = True"
