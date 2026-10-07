@@ -34,48 +34,11 @@ The code is not critical for our correctness proofs.
 
 # How to use
 
-## Obtain the dependencies
-
-```shell
-git submodule update --init
-```
-
-Skip to [Building the executable encoder](#building-the-executable-encoder)
-to build the encoder without generating code with Isabelle.
+In the artifact, the instructions in the top-level README supersede this section: the PDDL
+semantics and the grounder sessions it needs are in sibling folders and are passed to Isabelle
+with `-d`, not registered as components.
 
 ## Checking Isabelle Proofs and Exporting Code
-
-### Install Isabelle 2025
-
-More instructions here: https://isabelle.in.tum.de/website-Isabelle2025/index.html
-
-### Add the Isabelle AFP for Isabelle 2025
-
-Download instructions can be found here: https://www.isa-afp.org/download/
-
-Make sure to use AFP-2025: https://foss.heptapod.net/isa-afp/afp-2025
-
-Once a local copy is obtained, add the theories as Isabelle component
-```shell
-isabelle components -u <path-to>/afp-2025/thys
-```
-
-### Add the PDDL semantics (Formal-PDDL-Semantics) as Isabelle component
-
-The temporal PDDL semantics come from the standalone **Formal-PDDL-Semantics** repository
-(sessions `Temporal_Planning` / `Continuous_Planning`). Clone it alongside this project and register
-it as an Isabelle component:
-
-```shell
-isabelle components -u <path-to>/Formal-PDDL-Semantics
-```
-
-### Make Isabelle recognise the project's dependencies
-
-Add the root directory of this project as Isabelle Component
-```shell
-isabelle components -u .
-```
 
 ### Using Isabelle to check the formal proof and export code
 
