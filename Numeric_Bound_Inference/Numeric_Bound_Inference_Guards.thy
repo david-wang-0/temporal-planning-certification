@@ -578,10 +578,10 @@ value "thr_set [()] cnt_init [([], cnt_act)]"
   \<comment> \<open>\<open>[0, 5]\<close>: init \<open>0\<close>, assign-constant \<open>5\<close> (no guard \<Rightarrow> no landing)\<close>
 
 text \<open>A var-vs-var demo: two fluents (@{typ bool} names), \<open>item\<close> (@{term True}) static at \<open>1\<close>,
-  \<open>counter\<close> (@{term False}) incremented under the guard \<open>item = counter\<close> -- the painter shape.
-  The static fluent keeps its point interval \<open>[1,1]\<close>, the relational refinement transfers it onto
-  the counter before the \<open>+1\<close>, and the harvested thresholds (init values \<open>0\<close>, \<open>1\<close>; landing
-  \<open>1 + 1\<close>) let the widening settle at the tight \<open>[0, 2]\<close>.\<close>
+  \<open>counter\<close> (@{term False}) starting at \<open>0\<close> and incremented under the guard
+  \<open>item = counter\<close> -- the painter shape. The harvest still yields the landing \<open>1 + 1 = 2\<close>, but the
+  relational refinement of the guard meets \<open>counter\<close>'s \<open>[0,0]\<close> with \<open>item\<close>'s \<open>[1,1]\<close>, which is
+  empty: the increment can never fire, so both fluents keep their initial point intervals.\<close>
 
 definition vv_acts :: "bool gaction list" where
   "vv_acts = [([GCmp CEq (DVar True) (DVar False)],
@@ -591,9 +591,9 @@ definition vv_init :: "bool dval" where
   "vv_init = (\<lambda>f. if f then 1 else 0)"
 
 value "thr_set [True, False] vv_init vv_acts"
-  \<comment> \<open>\<open>[1, 0, 2]\<close>: inits \<open>1\<close>/\<open>0\<close>, landing \<open>1 + 1 = 2\<close> (cap = the static side's init)\<close>
+  \<comment> \<open>\<open>[0, 2, 1]\<close>: inits \<open>0\<close>/\<open>1\<close>, landing \<open>1 + 1 = 2\<close> (cap = the static side's init)\<close>
 
 value "map_option (\<lambda>E. (E True, E False))
          (ginfer_thr (thr_set [True, False] vv_init vv_acts) vv_acts vv_init)"
-  \<comment> \<open>\<open>Some ([Fin 1, Fin 1], [Fin 0, Fin 2])\<close> -- the static point survives, the counter is capped\<close>
+  \<comment> \<open>\<open>Some ([Fin 1, Fin 1], [Fin 0, Fin 0])\<close> -- the guard is unsatisfiable, so the counter never moves\<close>
 end
