@@ -250,10 +250,12 @@ untrusted aLU checker), `ALU_DEBUG=1` (dump failing DBMs), `TCHECKER_PKG_ROOT` /
    theory's `stage_timed` hook (an identity in HOL): the export itself prints `STAGE infer-box`
    as soon as the inference returns, before the net is built, and records the time in its
    `StageTiming` structure, which `plan_cert` reads to keep `check` disjoint.
-5. **in-process oracle** — `InProcessCertify.oracle_certifier`: net → muntax
-   (`NetworkConversion`) → renaming (`MLuntaAdapter` + `CertificateConversion`) → external tck-reach
-   cert (`TCheckerCertify`, `STAGE renaming`/`convert-tck`/`tck`/`convert-back`) → deserialize →
-   `SOME (renaming, state_space)`.
+5. **in-process oracle** — `InProcessCertify.oracle_certifier`, every step a stage, together the
+   closure's whole wall time: net → muntax (`NetworkConversion` + sanitize, `STAGE write-muntax`)
+   → renaming functions (`MLuntaAdapter` + `CertificateConversion`, `STAGE renaming`) → renaming
+   file (`MLuntaAdapter.parse_rename`, `STAGE write-renaming`) → external tck-reach cert
+   (`TCheckerCertify`, `STAGE convert-tck`/`tck`/`convert-back`) → deserialize (`STAGE read-cert`)
+   → `SOME (renaming, state_space)`.
 6. **verified check → verdict** — back in the capstone, Munta's `convert_check` validates the
    certificate against the net; acceptance ⇒ goal unreachable ⇒ (proved reduction) no plan ⇒
    "The numeric planning problem is unsolvable." (`STAGE check` = total − oracle time −

@@ -330,9 +330,10 @@ fun certify_alu_check model cert =
    the returned certificate with Munta's verified convert_check -- the net never round-trips
    through the muntax JSON, so the explicit initial values of point-bounded static fluents
    survive.  Stage lines: ground, infer-box (the capstone's own inference run, printed by the
-   export's stage_timed hook as soon as it returns, i.e. before the net is built), renaming,
-   convert-tck, tck, convert-back, check (= verified capstone time minus the oracle closure's
-   own wall time and minus infer-box). *)
+   export's stage_timed hook as soon as it returns, i.e. before the net is built), then the
+   oracle closure's write-muntax, renaming, write-renaming, convert-tck, tck, convert-back,
+   read-cert (together its whole wall time), then check (= verified capstone time minus the
+   oracle closure's wall time and minus infer-box). *)
 fun certify_numeric_tchecker domain problem model renaming cert mode_str nthreads show_cert =
     let
         val _ = log_conversion_config (domain, problem, model)

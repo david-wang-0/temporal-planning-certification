@@ -69,9 +69,12 @@ struct
     let
       val t0 = Timer.startRealTimer ()
       (* write muntax, sanitise identifiers (tck-reach forbids '-') *)
-      val _ = NetworkConversion.convert_network show_cert model net
-      val _ = TCheckerCertify.sanitize_file model
-      val muntax = TextIOUtil.read_file model
+      val muntax =
+        TCheckerCertify.timeStage "write-muntax" (fn () =>
+          let
+            val _ = NetworkConversion.convert_network show_cert model net
+            val _ = TCheckerCertify.sanitize_file model
+          in TextIOUtil.read_file model end)
       (* renaming functions from MLunta's construct (construct only, NOT its retired checker);
          parse_rename writes the renaming file convert_certificate.py consumes -- both come
          from the same MLunta parse, so they are name-consistent with the tck certificate *)
@@ -80,12 +83,14 @@ struct
           (case MLuntaAdapter.parse_construct true muntax of
               Either.Right (_, system) => SOME (CertConv.convert_renaming system)
             | Either.Left _ => NONE))
-      val _ = MLuntaAdapter.parse_rename renaming muntax
+      val _ = TCheckerCertify.timeStage "write-renaming" (fn () =>
+                MLuntaAdapter.parse_rename renaming muntax)
       (* external tck-reach -> binary munta certificate (stages convert-tck / tck / convert-back) *)
       val _ = TCheckerCertify.make_cert
                 {pkg_root = pkg_root, tck_reach_bin = tck_reach_bin,
                  muntax = model, renaming = renaming, cert = cert, buechi = false}
-      val ss_opt = read_certificate_from_file false cert
+      val ss_opt = TCheckerCertify.timeStage "read-cert" (fn () =>
+                     read_certificate_from_file false cert)
       val () = oracle_ms := Time.toMilliseconds (Timer.checkRealTimer t0)
     in
       case (ren_opt, ss_opt) of
