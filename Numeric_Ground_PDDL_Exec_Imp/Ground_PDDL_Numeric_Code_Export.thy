@@ -133,11 +133,47 @@ text \<open>Code equations for the inference at the ground problem: the executab
   unconditional; the global translation twins and @{const cmp_op_to_cmpop} are \<open>primrec\<close>/\<open>fun\<close>
   equations, \<open>[code]\<close> by construction).\<close>
 
+text \<open>Evaluation sharing for the generated code; none of these equations changes what is computed.
+  \<^item> @{text draft_init_spec}: the numeric init assignments are extracted from @{text \<open>init P\<close>} once,
+    not again on every fluent lookup.
+  \<^item> @{text inferred_box_spec}: the fluents, draft actions and initial valuation are built once and
+    shared by the threshold set and the inference.
+  \<^item> @{const ginfer_thr_on}: the fixpoint environment is a function, and every iteration otherwise
+    wraps the previous one in fresh closures, so a lookup at iteration \<open>k\<close> re-runs all earlier
+    iterations. @{text tab_on} evaluates the environment once per tracked fluent into an association
+    list and looks it up there; it is the identity (@{text tab_on_eq}).\<close>
+
+lemma (in numeric_ground_ast_problem_defs) draft_init_spec_code:
+  "draft_init_spec =
+     (let asg = num_init_assignments
+      in (\<lambda>f. const_to_int (case map_of asg f of Some r \<Rightarrow> r | None \<Rightarrow> 0)))"
+  by (simp add: draft_init_spec_def num_init_def)
+
+lemma (in numeric_ground_ast_problem_defs) inferred_box_spec_let:
+  "inferred_box_spec =
+     (let fs = nfluents; acts = draft_acts_spec; v0 = draft_init_spec
+      in infer_fluent_bounds_on fs (thr_set fs v0 acts) acts v0)"
+  by (simp add: inferred_box_spec_def Let_def)
+
+definition tab_on :: "'n list \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
+  "tab_on fs E =
+     (let t = map (\<lambda>f. (f, E f)) fs
+      in (\<lambda>f. case map_of t f of Some i \<Rightarrow> i | None \<Rightarrow> E f))"
+
+lemma tab_on_eq: "tab_on fs E = E"
+  by (rule ext) (auto simp: tab_on_def map_of_map_restrict restrict_map_def)
+
+lemma ginfer_thr_on_tab_code [code]:
+  "ginfer_thr_on fs T acts v0 =
+     while_option (\<lambda>E. \<not> le_on fs (gastep acts E) E)
+       (\<lambda>E. tab_on fs (widen_env_thr T E (gastep acts E))) (tab_on fs (init_env v0))"
+  by (simp add: ginfer_thr_on_def tab_on_eq)
+
 lemmas inferred_box_spec_code =
   numeric_ground_ast_problem_defs.snap_gaction_spec_def
   numeric_ground_ast_problem_defs.draft_acts_spec_def
-  numeric_ground_ast_problem_defs.draft_init_spec_def
-  numeric_ground_ast_problem_defs.inferred_box_spec_def
+  numeric_ground_ast_problem_defs.draft_init_spec_code
+  numeric_ground_ast_problem_defs.inferred_box_spec_let
   numeric_ground_ast_problem_defs.inferred_box_list_def
 
 declare inferred_box_spec_code[code]
