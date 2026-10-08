@@ -136,6 +136,23 @@ fun imp_fora_inner i u f s =
 
 
 
+structure StageTiming : sig
+  val timed : string -> (unit -> 'a) -> 'a
+  val get_ms : string -> LargeInt.int
+end = struct
+  val stages = Unsynchronized.ref ([] : (string * LargeInt.int) list);
+  fun timed s f =
+    let
+      val t = Timer.startRealTimer ();
+      val r = f ();
+      val ms = Time.toMilliseconds (Timer.checkRealTimer t);
+      val _ = stages := (s, ms) :: !stages;
+      val _ = TextIO.print ("+ STAGE " ^ s ^ ": " ^ LargeInt.toString ms ^ " ms\n");
+    in r end;
+  fun get_ms s =
+    List.foldl (fn ((s', m), acc) => if s' = s then acc + m else acc) 0 (!stages);
+end
+
 structure Str_Literal : sig
   type int = Int.int
   val literal_of_asciis : int list -> string
@@ -18902,6 +18919,13 @@ fun make_certified_net problem certifier =
               | SOME a => Result a)
         (fn (renaming, cert) => Result (network, (renaming, cert))));
 
+fun tab_on A_ fs e =
+  let
+    val t = map (fn f => (f, e f)) fs;
+  in
+    (fn f => (case map_of A_ t f of NONE => e f | SOME i => i))
+  end;
+
 fun equal_dexp A_ (DMul (x51, x52)) (DDiv (x61, x62)) = false
   | equal_dexp A_ (DDiv (x61, x62)) (DMul (x51, x52)) = false
   | equal_dexp A_ (DSub (x41, x42)) (DDiv (x61, x62)) = false
@@ -19317,27 +19341,24 @@ and scan_0 l =
                             (alt (bindb
                                    (scan_infix_pair aexp aexp
                                      [Chara
-(true, false, true, true, true, true, false, false)])
+(false, true, true, true, true, true, false, false)])
                                    (fn x =>
                                      return
-                                       (uncurry (fn a => fn b => Eqa (a, b))
+                                       (uncurry (fn a => fn b => Gta (a, b))
  x)))
                               (bindb
                                 (alt (bindb
                                        (scan_infix_pair aexp aexp
- [Chara (false, true, true, true, true, true, false, false)])
+ [Chara (false, true, true, true, true, true, false, false),
+   Chara (true, false, true, true, true, true, false, false)])
                                        (fn x =>
- return (uncurry (fn a => fn b => Gta (a, b)) x)))
-                                  (bindb
-                                    (alt (bindb
-   (scan_infix_pair aexp aexp
-     [Chara (false, true, true, true, true, true, false, false),
-       Chara (true, false, true, true, true, true, false, false)])
-   (fn x => return (uncurry (fn a => fn b => Ge (a, b)) x)))
-                                      (scan_parens
-[Chara (false, false, false, true, false, true, false, false)]
-[Chara (true, false, false, true, false, true, false, false)] scan_7))
-                                    (fn x => return (sum_join x))))
+ return (uncurry (fn a => fn b => Ge (a, b)) x)))
+                                  (scan_parens
+                                    [Chara (false, false, false, true, false,
+     true, false, false)]
+                                    [Chara (true, false, false, true, false,
+     true, false, false)]
+                                    scan_7))
                                 (fn x => return (sum_join x))))
                             (fn x => return (sum_join x))))
                         (fn x => return (sum_join x))))
@@ -19552,179 +19573,256 @@ fun rename_locs_formula f (EX phi) =
         binda (rename_locs_sexp f psi)
           (fn psia => Result (Leadsto (phia, psia))));
 
-fun chop_bexp A_ clocks (Anda (a, b)) (cs, es) =
-  chop_bexp A_ clocks b (chop_bexp A_ clocks a (cs, es))
-  | chop_bexp A_ clocks (Ltb (Var a, Const b)) (cs, es) =
-    (if membera A_ clocks a then (LTa (a, b) :: cs, es)
-      else (cs, Ltb (Var a, Const b) :: es))
-  | chop_bexp A_ clocks (Lea (Var a, Const b)) (cs, es) =
-    (if membera A_ clocks a then (LEa (a, b) :: cs, es)
-      else (cs, Lea (Var a, Const b) :: es))
-  | chop_bexp A_ clocks (Eqa (Var a, Const b)) (cs, es) =
-    (if membera A_ clocks a then (EQa (a, b) :: cs, es)
-      else (cs, Eqa (Var a, Const b) :: es))
-  | chop_bexp A_ clocks (Ge (Var a, Const b)) (cs, es) =
-    (if membera A_ clocks a then (GEa (a, b) :: cs, es)
-      else (cs, Ge (Var a, Const b) :: es))
-  | chop_bexp A_ clocks (Gta (Var a, Const b)) (cs, es) =
-    (if membera A_ clocks a then (GTa (a, b) :: cs, es)
-      else (cs, Gta (Var a, Const b) :: es))
-  | chop_bexp A_ clocks True (cs, es) = (cs, True :: es)
-  | chop_bexp A_ clocks (Nota v) (cs, es) = (cs, Nota v :: es)
-  | chop_bexp A_ clocks (Ora (v, va)) (cs, es) = (cs, Ora (v, va) :: es)
-  | chop_bexp A_ clocks (Imply (v, va)) (cs, es) = (cs, Imply (v, va) :: es)
-  | chop_bexp A_ clocks (Eqa (Const vb, va)) (cs, es) =
-    (cs, Eqa (Const vb, va) :: es)
-  | chop_bexp A_ clocks (Eqa (If_then_else (vb, vc, vd), va)) (cs, es) =
-    (cs, Eqa (If_then_else (vb, vc, vd), va) :: es)
-  | chop_bexp A_ clocks (Eqa (Binop (vb, vc, vd), va)) (cs, es) =
-    (cs, Eqa (Binop (vb, vc, vd), va) :: es)
-  | chop_bexp A_ clocks (Eqa (Unop (vb, vc), va)) (cs, es) =
-    (cs, Eqa (Unop (vb, vc), va) :: es)
-  | chop_bexp A_ clocks (Eqa (v, Var vb)) (cs, es) = (cs, Eqa (v, Var vb) :: es)
-  | chop_bexp A_ clocks (Eqa (v, If_then_else (vb, vc, vd))) (cs, es) =
-    (cs, Eqa (v, If_then_else (vb, vc, vd)) :: es)
-  | chop_bexp A_ clocks (Eqa (v, Binop (vb, vc, vd))) (cs, es) =
-    (cs, Eqa (v, Binop (vb, vc, vd)) :: es)
-  | chop_bexp A_ clocks (Eqa (v, Unop (vb, vc))) (cs, es) =
-    (cs, Eqa (v, Unop (vb, vc)) :: es)
-  | chop_bexp A_ clocks (Lea (Const vb, va)) (cs, es) =
-    (cs, Lea (Const vb, va) :: es)
-  | chop_bexp A_ clocks (Lea (If_then_else (vb, vc, vd), va)) (cs, es) =
-    (cs, Lea (If_then_else (vb, vc, vd), va) :: es)
-  | chop_bexp A_ clocks (Lea (Binop (vb, vc, vd), va)) (cs, es) =
-    (cs, Lea (Binop (vb, vc, vd), va) :: es)
-  | chop_bexp A_ clocks (Lea (Unop (vb, vc), va)) (cs, es) =
-    (cs, Lea (Unop (vb, vc), va) :: es)
-  | chop_bexp A_ clocks (Lea (v, Var vb)) (cs, es) = (cs, Lea (v, Var vb) :: es)
-  | chop_bexp A_ clocks (Lea (v, If_then_else (vb, vc, vd))) (cs, es) =
-    (cs, Lea (v, If_then_else (vb, vc, vd)) :: es)
-  | chop_bexp A_ clocks (Lea (v, Binop (vb, vc, vd))) (cs, es) =
-    (cs, Lea (v, Binop (vb, vc, vd)) :: es)
-  | chop_bexp A_ clocks (Lea (v, Unop (vb, vc))) (cs, es) =
-    (cs, Lea (v, Unop (vb, vc)) :: es)
-  | chop_bexp A_ clocks (Ltb (Const vb, va)) (cs, es) =
-    (cs, Ltb (Const vb, va) :: es)
-  | chop_bexp A_ clocks (Ltb (If_then_else (vb, vc, vd), va)) (cs, es) =
-    (cs, Ltb (If_then_else (vb, vc, vd), va) :: es)
-  | chop_bexp A_ clocks (Ltb (Binop (vb, vc, vd), va)) (cs, es) =
-    (cs, Ltb (Binop (vb, vc, vd), va) :: es)
-  | chop_bexp A_ clocks (Ltb (Unop (vb, vc), va)) (cs, es) =
-    (cs, Ltb (Unop (vb, vc), va) :: es)
-  | chop_bexp A_ clocks (Ltb (v, Var vb)) (cs, es) = (cs, Ltb (v, Var vb) :: es)
-  | chop_bexp A_ clocks (Ltb (v, If_then_else (vb, vc, vd))) (cs, es) =
-    (cs, Ltb (v, If_then_else (vb, vc, vd)) :: es)
-  | chop_bexp A_ clocks (Ltb (v, Binop (vb, vc, vd))) (cs, es) =
-    (cs, Ltb (v, Binop (vb, vc, vd)) :: es)
-  | chop_bexp A_ clocks (Ltb (v, Unop (vb, vc))) (cs, es) =
-    (cs, Ltb (v, Unop (vb, vc)) :: es)
-  | chop_bexp A_ clocks (Ge (Const vb, va)) (cs, es) =
-    (cs, Ge (Const vb, va) :: es)
-  | chop_bexp A_ clocks (Ge (If_then_else (vb, vc, vd), va)) (cs, es) =
-    (cs, Ge (If_then_else (vb, vc, vd), va) :: es)
-  | chop_bexp A_ clocks (Ge (Binop (vb, vc, vd), va)) (cs, es) =
-    (cs, Ge (Binop (vb, vc, vd), va) :: es)
-  | chop_bexp A_ clocks (Ge (Unop (vb, vc), va)) (cs, es) =
-    (cs, Ge (Unop (vb, vc), va) :: es)
-  | chop_bexp A_ clocks (Ge (v, Var vb)) (cs, es) = (cs, Ge (v, Var vb) :: es)
-  | chop_bexp A_ clocks (Ge (v, If_then_else (vb, vc, vd))) (cs, es) =
-    (cs, Ge (v, If_then_else (vb, vc, vd)) :: es)
-  | chop_bexp A_ clocks (Ge (v, Binop (vb, vc, vd))) (cs, es) =
-    (cs, Ge (v, Binop (vb, vc, vd)) :: es)
-  | chop_bexp A_ clocks (Ge (v, Unop (vb, vc))) (cs, es) =
-    (cs, Ge (v, Unop (vb, vc)) :: es)
-  | chop_bexp A_ clocks (Gta (Const vb, va)) (cs, es) =
-    (cs, Gta (Const vb, va) :: es)
-  | chop_bexp A_ clocks (Gta (If_then_else (vb, vc, vd), va)) (cs, es) =
-    (cs, Gta (If_then_else (vb, vc, vd), va) :: es)
-  | chop_bexp A_ clocks (Gta (Binop (vb, vc, vd), va)) (cs, es) =
-    (cs, Gta (Binop (vb, vc, vd), va) :: es)
-  | chop_bexp A_ clocks (Gta (Unop (vb, vc), va)) (cs, es) =
-    (cs, Gta (Unop (vb, vc), va) :: es)
-  | chop_bexp A_ clocks (Gta (v, Var vb)) (cs, es) = (cs, Gta (v, Var vb) :: es)
-  | chop_bexp A_ clocks (Gta (v, If_then_else (vb, vc, vd))) (cs, es) =
-    (cs, Gta (v, If_then_else (vb, vc, vd)) :: es)
-  | chop_bexp A_ clocks (Gta (v, Binop (vb, vc, vd))) (cs, es) =
-    (cs, Gta (v, Binop (vb, vc, vd)) :: es)
-  | chop_bexp A_ clocks (Gta (v, Unop (vb, vc))) (cs, es) =
-    (cs, Gta (v, Unop (vb, vc)) :: es);
+fun sexp_to_acconstraint (Ltc (a, b)) = LTa (a, b)
+  | sexp_to_acconstraint (Leb (a, b)) = LEa (a, b)
+  | sexp_to_acconstraint (Eqb (a, b)) = EQa (a, b)
+  | sexp_to_acconstraint (Gea (a, b)) = GEa (a, b)
+  | sexp_to_acconstraint (Gtb (a, b)) = GTa (a, b);
 
-fun compile_invariant (A1_, A2_, A3_, A4_, A5_, A6_) B_ clocks vars inv =
+fun sexp_to_bexp (Ltc (a, b)) = Result (Ltb (Var a, Const b))
+  | sexp_to_bexp (Leb (a, b)) = Result (Lea (Var a, Const b))
+  | sexp_to_bexp (Eqb (a, b)) = Result (Eqa (Var a, Const b))
+  | sexp_to_bexp (Gea (a, b)) = Result (Ge (Var a, Const b))
+  | sexp_to_bexp (Gtb (a, b)) = Result (Gta (Var a, Const b))
+  | sexp_to_bexp (Andb (a, b)) =
+    binda (sexp_to_bexp a)
+      (fn aa => binda (sexp_to_bexp b) (fn ba => Result (Anda (aa, ba))))
+  | sexp_to_bexp (Orb (a, b)) =
+    binda (sexp_to_bexp a)
+      (fn aa => binda (sexp_to_bexp b) (fn ba => Result (Ora (aa, ba))))
+  | sexp_to_bexp (Implya (a, b)) =
+    binda (sexp_to_bexp a)
+      (fn aa => binda (sexp_to_bexp b) (fn ba => Result (Imply (aa, ba))))
+  | sexp_to_bexp Truea = Error ["Illegal construct in binary operation"]
+  | sexp_to_bexp (Notb v) = Error ["Illegal construct in binary operation"]
+  | sexp_to_bexp (Loc (v, va)) =
+    Error ["Illegal construct in binary operation"];
+
+fun chop_sexp A_ clocks (Andb (a, b)) (cs, es) =
+  chop_sexp A_ clocks b (chop_sexp A_ clocks a (cs, es))
+  | chop_sexp A_ clocks (Eqb (a, b)) (cs, es) =
+    (if membera A_ clocks a then (Eqb (a, b) :: cs, es)
+      else (cs, Eqb (a, b) :: es))
+  | chop_sexp A_ clocks (Leb (a, b)) (cs, es) =
+    (if membera A_ clocks a then (Leb (a, b) :: cs, es)
+      else (cs, Leb (a, b) :: es))
+  | chop_sexp A_ clocks (Ltc (a, b)) (cs, es) =
+    (if membera A_ clocks a then (Ltc (a, b) :: cs, es)
+      else (cs, Ltc (a, b) :: es))
+  | chop_sexp A_ clocks (Gea (a, b)) (cs, es) =
+    (if membera A_ clocks a then (Gea (a, b) :: cs, es)
+      else (cs, Gea (a, b) :: es))
+  | chop_sexp A_ clocks (Gtb (a, b)) (cs, es) =
+    (if membera A_ clocks a then (Gtb (a, b) :: cs, es)
+      else (cs, Gtb (a, b) :: es))
+  | chop_sexp A_ clocks Truea (cs, es) = (cs, Truea :: es)
+  | chop_sexp A_ clocks (Notb v) (cs, es) = (cs, Notb v :: es)
+  | chop_sexp A_ clocks (Orb (v, va)) (cs, es) = (cs, Orb (v, va) :: es)
+  | chop_sexp A_ clocks (Implya (v, va)) (cs, es) = (cs, Implya (v, va) :: es)
+  | chop_sexp A_ clocks (Loc (v, va)) (cs, es) = (cs, Loc (v, va) :: es);
+
+fun compile_invariant clocks vars inv =
   let
-    val (cs, es) = chop_bexp A4_ clocks inv ([], []);
+    val (cs, es) = chop_sexp equal_literal clocks inv ([], []);
+    val g = map sexp_to_acconstraint cs;
   in
-    (if null es then Result (cs, True)
+    (if null es then Result (g, True)
       else let
-             val b = fold (fn a => fn b => Anda (a, b)) (tla es) (hda es);
+             val e = fold (fn a => fn b => Andb (a, b)) (tla es) (hda es);
            in
-             binda (assert
-                     (less_eq_set (A1_, A2_, A3_) (set_bexp (A2_, A3_, A5_) b)
-                       (set (A2_, A3_, A5_) vars))
-                     (implode
-                       ([Chara (true, false, true, false, true, false, true,
-                                 false),
-                          Chara (false, true, true, true, false, true, true,
-                                  false),
-                          Chara (true, true, false, true, false, true, true,
-                                  false),
-                          Chara (false, true, true, true, false, true, true,
-                                  false),
-                          Chara (true, true, true, true, false, true, true,
-                                  false),
-                          Chara (true, true, true, false, true, true, true,
-                                  false),
-                          Chara (false, true, true, true, false, true, true,
-                                  false),
-                          Chara (false, false, false, false, false, true, false,
-                                  false),
-                          Chara (false, true, true, false, true, true, true,
-                                  false),
-                          Chara (true, false, false, false, false, true, true,
-                                  false),
-                          Chara (false, true, false, false, true, true, true,
-                                  false),
-                          Chara (true, false, false, true, false, true, true,
-                                  false),
-                          Chara (true, false, false, false, false, true, true,
-                                  false),
-                          Chara (false, true, false, false, false, true, true,
-                                  false),
-                          Chara (false, false, true, true, false, true, true,
-                                  false),
-                          Chara (true, false, true, false, false, true, true,
-                                  false),
-                          Chara (false, false, false, false, false, true, false,
-                                  false),
-                          Chara (true, false, false, true, false, true, true,
-                                  false),
-                          Chara (false, true, true, true, false, true, true,
-                                  false),
-                          Chara (false, false, false, false, false, true, false,
-                                  false),
-                          Chara (false, true, false, false, false, true, true,
-                                  false),
-                          Chara (true, false, true, false, false, true, true,
-                                  false),
-                          Chara (false, false, false, true, true, true, true,
-                                  false),
-                          Chara (false, false, false, false, true, true, true,
-                                  false),
-                          Chara (false, true, false, true, true, true, false,
-                                  false),
-                          Chara (false, false, false, false, false, true, false,
-                                  false)] @
-                         shows_prec_bexp A6_ B_ zero_nata b [])))
-               (fn _ => Result (cs, b))
+             binda (sexp_to_bexp e)
+               (fn b =>
+                 binda (assert
+                         (less_eq_set
+                           (cenum_literal, ceq_literal, ccompare_literal)
+                           (set_bexp
+                             (ceq_literal, ccompare_literal, set_impl_literal)
+                             b)
+                           (set (ceq_literal, ccompare_literal,
+                                  set_impl_literal)
+                             vars))
+                         (implode
+                           ([Chara (true, false, true, false, true, false, true,
+                                     false),
+                              Chara (false, true, true, true, false, true, true,
+                                      false),
+                              Chara (true, true, false, true, false, true, true,
+                                      false),
+                              Chara (false, true, true, true, false, true, true,
+                                      false),
+                              Chara (true, true, true, true, false, true, true,
+                                      false),
+                              Chara (true, true, true, false, true, true, true,
+                                      false),
+                              Chara (false, true, true, true, false, true, true,
+                                      false),
+                              Chara (false, false, false, false, false, true,
+                                      false, false),
+                              Chara (false, true, true, false, true, true, true,
+                                      false),
+                              Chara (true, false, false, false, false, true,
+                                      true, false),
+                              Chara (false, true, false, false, true, true,
+                                      true, false),
+                              Chara (true, false, false, true, false, true,
+                                      true, false),
+                              Chara (true, false, false, false, false, true,
+                                      true, false),
+                              Chara (false, true, false, false, false, true,
+                                      true, false),
+                              Chara (false, false, true, true, false, true,
+                                      true, false),
+                              Chara (true, false, true, false, false, true,
+                                      true, false),
+                              Chara (false, false, false, false, false, true,
+                                      false, false),
+                              Chara (true, false, false, true, false, true,
+                                      true, false),
+                              Chara (false, true, true, true, false, true, true,
+                                      false),
+                              Chara (false, false, false, false, false, true,
+                                      false, false),
+                              Chara (false, true, false, false, false, true,
+                                      true, false),
+                              Chara (true, false, true, false, false, true,
+                                      true, false),
+                              Chara (false, false, false, true, true, true,
+                                      true, false),
+                              Chara (false, false, false, false, true, true,
+                                      true, false),
+                              Chara (false, true, false, true, true, true,
+                                      false, false),
+                              Chara (false, false, false, false, false, true,
+                                      false, false)] @
+                             shows_prec_bexp show_literal show_int zero_nata b
+                               [])))
+                   (fn _ => Result (g, b)))
            end)
   end;
 
+fun scan_acconstraint x =
+  let
+    val scan =
+      (fn s => fn c =>
+        bindb (gen_token lx_ws scan_var)
+          (fn xa =>
+            bindb (gen_token lx_ws (exactly (equal_char, show_char) s))
+              (fn _ =>
+                bindb (gen_token lx_ws lx_int)
+                  (fn xaa => return (c (implode xa) xaa)))));
+  in
+    bindb (alt (scan [Chara (false, false, true, true, true, true, false,
+                              false)]
+                 (fn a => fn b => Ltc (a, b)))
+            (bindb
+              (alt (scan [Chara (false, false, true, true, true, true, false,
+                                  false),
+                           Chara (true, false, true, true, true, true, false,
+                                   false)]
+                     (fn a => fn b => Leb (a, b)))
+                (bindb
+                  (alt (scan [Chara (true, false, true, true, true, true, false,
+                                      false),
+                               Chara (true, false, true, true, true, true,
+                                       false, false)]
+                         (fn a => fn b => Eqb (a, b)))
+                    (bindb
+                      (alt (scan [Chara (true, false, true, true, true, true,
+  false, false)]
+                             (fn a => fn b => Eqb (a, b)))
+                        (bindb
+                          (alt (scan [Chara
+(false, true, true, true, true, true, false, false),
+                                       Chara
+ (true, false, true, true, true, true, false, false)]
+                                 (fn a => fn b => Gea (a, b)))
+                            (scan [Chara (false, true, true, true, true, true,
+   false, false)]
+                              (fn a => fn b => Gtb (a, b))))
+                          (fn xa => return (sum_join xa))))
+                      (fn xa => return (sum_join xa))))
+                  (fn xa => return (sum_join xa))))
+              (fn xa => return (sum_join xa))))
+      (fn xa => return (sum_join xa))
+  end
+    x;
+
+fun scan_loc x =
+  bindb (gen_token lx_ws scan_var)
+    (fn xa =>
+      bindb (exactly (equal_char, show_char)
+              [Chara (false, true, true, true, false, true, false, false)])
+        (fn _ =>
+          bindb scan_var (fn xaa => return (Loc (implode xa, implode xaa)))))
+    x;
+
+fun scan_bexp_elem x =
+  bindb (alt scan_acconstraint scan_loc) (fn xa => return (sum_join xa)) x;
+
+fun scan_7a elem imply or anda nota l =
+  bindb (alt (bindb
+               (scan_infix_pair (scan_6a elem imply or anda nota)
+                 (scan_7a elem imply or anda nota)
+                 [Chara (true, false, true, true, false, true, false, false),
+                   Chara (false, true, true, true, true, true, false, false)])
+               (fn x => return (uncurry imply x)))
+          (bindb
+            (alt (bindb
+                   (scan_infix_pair (scan_6a elem imply or anda nota)
+                     (scan_7a elem imply or anda nota)
+                     [Chara (false, false, true, true, true, true, true, false),
+                       Chara (false, false, true, true, true, true, true,
+                               false)])
+                   (fn x => return (uncurry or x)))
+              (scan_6a elem imply or anda nota))
+            (fn x => return (sum_join x))))
+    (fn x => return (sum_join x)) l
+and scan_0a elem imply or anda nota l =
+  bindb (alt (bindb
+               (gen_token lx_ws
+                 (bindb
+                   (alt (exactly (equal_char, show_char)
+                          [Chara (false, true, true, true, true, true, true,
+                                   false)])
+                     (exactly (equal_char, show_char)
+                       [Chara (true, false, false, false, false, true, false,
+                                false)]))
+                   (fn x => return (sum_join x))))
+               (fn _ =>
+                 bindb (scan_parens
+                         [Chara (false, false, false, true, false, true, false,
+                                  false)]
+                         [Chara (true, false, false, true, false, true, false,
+                                  false)]
+                         (scan_7a elem imply or anda nota))
+                   (fn x => return (nota x))))
+          (bindb
+            (alt elem
+              (scan_parens
+                [Chara (false, false, false, true, false, true, false, false)]
+                [Chara (true, false, false, true, false, true, false, false)]
+                (scan_7a elem imply or anda nota)))
+            (fn x => return (sum_join x))))
+    (fn x => return (sum_join x)) l
+and scan_6a elem imply or anda nota l =
+  bindb (alt (bindb
+               (scan_infix_pair (scan_0a elem imply or anda nota)
+                 (scan_6a elem imply or anda nota)
+                 [Chara (false, true, true, false, false, true, false, false),
+                   Chara (false, true, true, false, false, true, false, false)])
+               (fn x => return (uncurry anda x)))
+          (scan_0a elem imply or anda nota))
+    (fn x => return (sum_join x)) l;
+
 fun compile_invarianta clocks vars inv =
   (if ((inv : string) = "") then Result ([], True)
-    else binda (err_msg ("Failed to parse guard in " ^ inv) (parse scan_7 inv))
-           (compile_invariant
-             (cenum_literal, ceq_literal, ccompare_literal, equal_literal,
-               set_impl_literal, show_literal)
-             show_int clocks vars));
+    else binda (err_msg ("Failed to parse guard in " ^ inv)
+                 (parse
+                   (scan_7a scan_bexp_elem (fn a => fn b => Implya (a, b))
+                     (fn a => fn b => Orb (a, b)) (fn a => fn b => Andb (a, b))
+                     Notb)
+                   inv))
+           (compile_invariant clocks vars));
 
 fun of_string json =
   (case json of Object _ => Error ["of_array: expected sequence"]
@@ -20046,122 +20144,8 @@ Result
                         end))
               end)));
 
-fun scan_acconstraint x =
-  let
-    val scan =
-      (fn s => fn c =>
-        bindb (gen_token lx_ws scan_var)
-          (fn xa =>
-            bindb (gen_token lx_ws (exactly (equal_char, show_char) s))
-              (fn _ =>
-                bindb (gen_token lx_ws lx_int)
-                  (fn xaa => return (c (implode xa) xaa)))));
-  in
-    bindb (alt (scan [Chara (false, false, true, true, true, true, false,
-                              false)]
-                 (fn a => fn b => Ltc (a, b)))
-            (bindb
-              (alt (scan [Chara (false, false, true, true, true, true, false,
-                                  false),
-                           Chara (true, false, true, true, true, true, false,
-                                   false)]
-                     (fn a => fn b => Leb (a, b)))
-                (bindb
-                  (alt (scan [Chara (true, false, true, true, true, true, false,
-                                      false),
-                               Chara (true, false, true, true, true, true,
-                                       false, false)]
-                         (fn a => fn b => Eqb (a, b)))
-                    (bindb
-                      (alt (scan [Chara (true, false, true, true, true, true,
-  false, false)]
-                             (fn a => fn b => Eqb (a, b)))
-                        (bindb
-                          (alt (scan [Chara
-(false, true, true, true, true, true, false, false),
-                                       Chara
- (true, false, true, true, true, true, false, false)]
-                                 (fn a => fn b => Gea (a, b)))
-                            (scan [Chara (false, true, true, true, true, true,
-   false, false)]
-                              (fn a => fn b => Gtb (a, b))))
-                          (fn xa => return (sum_join xa))))
-                      (fn xa => return (sum_join xa))))
-                  (fn xa => return (sum_join xa))))
-              (fn xa => return (sum_join xa))))
-      (fn xa => return (sum_join xa))
-  end
-    x;
-
-fun scan_loc x =
-  bindb (gen_token lx_ws scan_var)
-    (fn xa =>
-      bindb (exactly (equal_char, show_char)
-              [Chara (false, true, true, true, false, true, false, false)])
-        (fn _ =>
-          bindb scan_var (fn xaa => return (Loc (implode xa, implode xaa)))))
-    x;
-
-fun scan_bexp_elem x =
-  bindb (alt scan_acconstraint scan_loc) (fn xa => return (sum_join xa)) x;
-
 fun scan_prefix p head =
   bindb (gen_token lx_ws (exactly (equal_char, show_char) head)) (fn _ => p);
-
-fun scan_7a elem imply or anda nota l =
-  bindb (alt (bindb
-               (scan_infix_pair (scan_6a elem imply or anda nota)
-                 (scan_7a elem imply or anda nota)
-                 [Chara (true, false, true, true, false, true, false, false),
-                   Chara (false, true, true, true, true, true, false, false)])
-               (fn x => return (uncurry imply x)))
-          (bindb
-            (alt (bindb
-                   (scan_infix_pair (scan_6a elem imply or anda nota)
-                     (scan_7a elem imply or anda nota)
-                     [Chara (false, false, true, true, true, true, true, false),
-                       Chara (false, false, true, true, true, true, true,
-                               false)])
-                   (fn x => return (uncurry or x)))
-              (scan_6a elem imply or anda nota))
-            (fn x => return (sum_join x))))
-    (fn x => return (sum_join x)) l
-and scan_0a elem imply or anda nota l =
-  bindb (alt (bindb
-               (gen_token lx_ws
-                 (bindb
-                   (alt (exactly (equal_char, show_char)
-                          [Chara (false, true, true, true, true, true, true,
-                                   false)])
-                     (exactly (equal_char, show_char)
-                       [Chara (true, false, false, false, false, true, false,
-                                false)]))
-                   (fn x => return (sum_join x))))
-               (fn _ =>
-                 bindb (scan_parens
-                         [Chara (false, false, false, true, false, true, false,
-                                  false)]
-                         [Chara (true, false, false, true, false, true, false,
-                                  false)]
-                         (scan_7a elem imply or anda nota))
-                   (fn x => return (nota x))))
-          (bindb
-            (alt elem
-              (scan_parens
-                [Chara (false, false, false, true, false, true, false, false)]
-                [Chara (true, false, false, true, false, true, false, false)]
-                (scan_7a elem imply or anda nota)))
-            (fn x => return (sum_join x))))
-    (fn x => return (sum_join x)) l
-and scan_6a elem imply or anda nota l =
-  bindb (alt (bindb
-               (scan_infix_pair (scan_0a elem imply or anda nota)
-                 (scan_6a elem imply or anda nota)
-                 [Chara (false, true, true, false, false, true, false, false),
-                   Chara (false, true, true, false, false, true, false, false)])
-               (fn x => return (uncurry anda x)))
-          (scan_0a elem imply or anda nota))
-    (fn x => return (sum_join x)) l;
 
 fun scan_formula x =
   bindb (alt (bindb
@@ -20474,7 +20458,8 @@ fun widen_env_thr t e1 e2 = (fn f => widen_thr_ivl t (e1 f) (e2 f));
 
 fun ginfer_thr_on A_ fs t acts v0 =
   while_option (fn e => not (le_on fs (gastep A_ acts e) e))
-    (fn e => widen_env_thr t e (gastep A_ acts e)) (init_env v0);
+    (fn e => tab_on A_ fs (widen_env_thr t e (gastep A_ acts e)))
+    (tab_on A_ fs (init_env v0));
 
 fun fw_upd_impl_int n =
   (fn ai => fn bib => fn bia => fn bi =>
@@ -23037,8 +23022,6 @@ fun parse_compute model renaming =
                                 end)
                           end))))));
 
-fun const_to_int r = floor_rat r;
-
 fun num_init_assignments p =
   map_filter
     (fn a =>
@@ -23077,11 +23060,16 @@ fun num_init_assignments p =
         | And (_, _) => NONE | Or (_, _) => NONE | Imp (_, _) => NONE))
     (inita p);
 
-fun num_init p f =
-  (case map_of equal_func (num_init_assignments p) f of NONE => zero_rat
-    | SOME r => r);
+fun const_to_int r = floor_rat r;
 
-fun draft_init_spec p = (fn f => const_to_int (num_init p f));
+fun draft_init_spec p =
+  let
+    val asg = num_init_assignments p;
+  in
+    (fn f =>
+      const_to_int
+        (case map_of equal_func asg f of NONE => zero_rat | SOME r => r))
+  end;
 
 fun n_pre g =
   remdups (equal_comp equal_func equal_rat) (num_comps (precondition g));
@@ -23101,9 +23089,20 @@ fun draft_acts_spec p =
 fun nfluents p = map func (functions (domain p));
 
 fun inferred_box_spec p =
-  infer_fluent_bounds_on equal_func (nfluents p)
-    (thr_set equal_func (nfluents p) (draft_init_spec p) (draft_acts_spec p))
-    (draft_acts_spec p) (draft_init_spec p);
+  StageTiming.timed "infer-box"
+    (fn _ =>
+      let
+        val fs = nfluents p;
+        val acts = draft_acts_spec p;
+        val v0 = draft_init_spec p;
+      in
+        infer_fluent_bounds_on equal_func fs (thr_set equal_func fs v0 acts)
+          acts v0
+      end);
+
+fun num_init p f =
+  (case map_of equal_func (num_init_assignments p) f of NONE => zero_rat
+    | SOME r => r);
 
 fun num_goal p = remdups (equal_comp equal_func equal_rat) (num_comps (goal p));
 
