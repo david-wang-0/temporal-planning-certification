@@ -55,7 +55,8 @@ calls (SML signatures in `Check_Unsolvability.ML`):
 - `check_and_make_numeric_network_opt : … ast_problem -> (…net…) option` — numeric net
   builder; runs the verified bound inference itself and builds the net over the inferred box.
 - `inferred_box_list : … ast_problem -> (string * (inta * inta)) list option` — the box the
-  verified inference computes, keyed by fluent name (diagnostics only; the capstone recomputes it).
+  verified inference computes, keyed by fluent name (diagnostics; `plan_cert` no longer calls it, so
+  the inference runs once per certification, inside the verified call).
 - `check_and_cert_numeric_pddl_problem_no_return : … ast_problem -> mode -> nat -> (net -> (renaming * inta state_space) option) -> bool -> (unit -> unit)`
   — **the verified numeric capstone**. Infers the box, builds the net, hands it *in-process* to
   the untrusted oracle closure (4th arg), then verifies the returned certificate with `convert_check`.
@@ -243,17 +244,19 @@ untrusted aLU checker), `ALU_DEBUG=1` (dump failing DBMs), `TCHECKER_PKG_ROOT` /
 2. **nemo filter** — `NemoReach.reach_filter` → the reachable-instance predicate.
 3. **ground(+nemo)** — `Grounder.ground_problem_numeric[_q] filt` → ground, numeric-keeping,
    propositionalised problem (`STAGE ground`).
-4. **infer-box** — `Converter.inferred_box_list` prints the box the verified inference computes
-   (`STAGE infer-box`, diagnostic only; `NONE` = a fluent is unbounded, fail closed).
-5. **verified capstone** — `Converter.check_and_cert_numeric_pddl_problem_no_return`: runs the
-   verified bound inference, **builds the net**, and hands it in-process to the oracle closure.
-6. **in-process oracle** — `InProcessCertify.oracle_certifier`: net → muntax
+4. **verified capstone** — `Converter.check_and_cert_numeric_pddl_problem_no_return`: runs the
+   verified bound inference (`NONE` = a fluent is unbounded, fail closed), **builds the net**, and
+   hands it in-process to the oracle closure. The inference's code equation wraps it in Munta's
+   `time_it` hook (an identity in HOL) under the label `infer-box`; `plan_cert` reads that entry
+   from the exported `Timing` structure and prints it as `STAGE infer-box`.
+5. **in-process oracle** — `InProcessCertify.oracle_certifier`: net → muntax
    (`NetworkConversion`) → renaming (`MLuntaAdapter` + `CertificateConversion`) → external tck-reach
    cert (`TCheckerCertify`, `STAGE renaming`/`convert-tck`/`tck`/`convert-back`) → deserialize →
    `SOME (renaming, state_space)`.
-7. **verified check → verdict** — back in the capstone, Munta's `convert_check` validates the
+6. **verified check → verdict** — back in the capstone, Munta's `convert_check` validates the
    certificate against the net; acceptance ⇒ goal unreachable ⇒ (proved reduction) no plan ⇒
-   "The numeric planning problem is unsolvable." (`STAGE check` = total − oracle time).
+   "The numeric planning problem is unsolvable." (`STAGE check` = total − oracle time −
+   infer-box).
 
-The only soundness-bearing steps are #5's verified bound inference + net builder and #7's verified
+The only soundness-bearing steps are #4's verified bound inference + net builder and #6's verified
 `convert_check`; everything else is untrusted plumbing that fails open (nemo) or closed (oracle).

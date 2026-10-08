@@ -27,28 +27,11 @@ structure Timing : sig
   val start_timer: unit -> unit
   val save_time: string -> unit
   val get_timings: unit -> (string * Time.time) list
-  val set_cpu: bool -> unit
 end = struct
-
-  open Timer;
-
-  val is_cpu = Unsynchronized.ref false;
-  fun set_cpu b = is_cpu := b;
-
-  val cpu_timer: cpu_timer option Unsynchronized.ref = Unsynchronized.ref NONE;
-  val real_timer: real_timer option Unsynchronized.ref = Unsynchronized.ref NONE;
-
+  val t = Unsynchronized.ref Time.zeroTime;
   val timings = Unsynchronized.ref [];
-  fun start_timer () = (
-    if !is_cpu then
-      cpu_timer := SOME (startCPUTimer ())
-    else
-      real_timer := SOME (startRealTimer ()));
-  fun get_elapsed () = (
-    if !is_cpu then
-      #usr (!cpu_timer |> the |> checkCPUTimer)
-    else
-      (!real_timer |> the |> checkRealTimer));
+  fun start_timer () = (t := Time.now ());
+  fun get_elapsed () = Time.- (Time.now (), !t);
   fun save_time s = (timings := ((s, get_elapsed ()) :: !timings));
   fun get_timings () = !timings;
 end
@@ -18902,6 +18885,13 @@ fun make_certified_net problem certifier =
               | SOME a => Result a)
         (fn (renaming, cert) => Result (network, (renaming, cert))));
 
+fun tab_on A_ fs e =
+  let
+    val t = map (fn f => (f, e f)) fs;
+  in
+    (fn f => (case map_of A_ t f of NONE => e f | SOME i => i))
+  end;
+
 fun equal_dexp A_ (DMul (x51, x52)) (DDiv (x61, x62)) = false
   | equal_dexp A_ (DDiv (x61, x62)) (DMul (x51, x52)) = false
   | equal_dexp A_ (DSub (x41, x42)) (DDiv (x61, x62)) = false
@@ -20474,7 +20464,8 @@ fun widen_env_thr t e1 e2 = (fn f => widen_thr_ivl t (e1 f) (e2 f));
 
 fun ginfer_thr_on A_ fs t acts v0 =
   while_option (fn e => not (le_on fs (gastep A_ acts e) e))
-    (fn e => widen_env_thr t e (gastep A_ acts e)) (init_env v0);
+    (fn e => tab_on A_ fs (widen_env_thr t e (gastep A_ acts e)))
+    (tab_on A_ fs (init_env v0));
 
 fun fw_upd_impl_int n =
   (fn ai => fn bib => fn bia => fn bi =>
@@ -23037,8 +23028,6 @@ fun parse_compute model renaming =
                                 end)
                           end))))));
 
-fun const_to_int r = floor_rat r;
-
 fun num_init_assignments p =
   map_filter
     (fn a =>
@@ -23077,11 +23066,16 @@ fun num_init_assignments p =
         | And (_, _) => NONE | Or (_, _) => NONE | Imp (_, _) => NONE))
     (inita p);
 
-fun num_init p f =
-  (case map_of equal_func (num_init_assignments p) f of NONE => zero_rat
-    | SOME r => r);
+fun const_to_int r = floor_rat r;
 
-fun draft_init_spec p = (fn f => const_to_int (num_init p f));
+fun draft_init_spec p =
+  let
+    val asg = num_init_assignments p;
+  in
+    (fn f =>
+      const_to_int
+        (case map_of equal_func asg f of NONE => zero_rat | SOME r => r))
+  end;
 
 fun n_pre g =
   remdups (equal_comp equal_func equal_rat) (num_comps (precondition g));
@@ -23101,9 +23095,20 @@ fun draft_acts_spec p =
 fun nfluents p = map func (functions (domain p));
 
 fun inferred_box_spec p =
-  infer_fluent_bounds_on equal_func (nfluents p)
-    (thr_set equal_func (nfluents p) (draft_init_spec p) (draft_acts_spec p))
-    (draft_acts_spec p) (draft_init_spec p);
+  time_it "infer-box"
+    (fn _ =>
+      let
+        val fs = nfluents p;
+        val acts = draft_acts_spec p;
+        val v0 = draft_init_spec p;
+      in
+        infer_fluent_bounds_on equal_func fs (thr_set equal_func fs v0 acts)
+          acts v0
+      end);
+
+fun num_init p f =
+  (case map_of equal_func (num_init_assignments p) f of NONE => zero_rat
+    | SOME r => r);
 
 fun num_goal p = remdups (equal_comp equal_func equal_rat) (num_comps (goal p));
 

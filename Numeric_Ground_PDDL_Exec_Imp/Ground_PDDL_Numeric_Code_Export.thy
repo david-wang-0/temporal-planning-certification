@@ -1,5 +1,6 @@
 theory Ground_PDDL_Numeric_Code_Export
   imports Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
+    "Munta_Base.Trace_Timing"
 begin
 
 section \<open>The verified bound inference at the ground problem: executable twin + code equations\<close>
@@ -155,6 +156,17 @@ lemma (in numeric_ground_ast_problem_defs) inferred_box_spec_let:
       in infer_fluent_bounds_on fs (thr_set fs v0 acts) acts v0)"
   by (simp add: inferred_box_spec_def Let_def)
 
+text \<open>The code equation also wraps the inference in Munta's timing hook @{const time_it} (an
+  identity, @{thm [source] time_it}), so the SML tool can report the stage time of the run the
+  verified certifier itself performs.\<close>
+
+lemma (in numeric_ground_ast_problem_defs) inferred_box_spec_timed:
+  "inferred_box_spec =
+     time_it (STR ''infer-box'')
+       (\<lambda>_. let fs = nfluents; acts = draft_acts_spec; v0 = draft_init_spec
+            in infer_fluent_bounds_on fs (thr_set fs v0 acts) acts v0)"
+  by (rule trans[OF inferred_box_spec_let time_it])
+
 definition tab_on :: "'n list \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
   "tab_on fs E =
      (let t = map (\<lambda>f. (f, E f)) fs
@@ -173,7 +185,7 @@ lemmas inferred_box_spec_code =
   numeric_ground_ast_problem_defs.snap_gaction_spec_def
   numeric_ground_ast_problem_defs.draft_acts_spec_def
   numeric_ground_ast_problem_defs.draft_init_spec_code
-  numeric_ground_ast_problem_defs.inferred_box_spec_let
+  numeric_ground_ast_problem_defs.inferred_box_spec_timed
   numeric_ground_ast_problem_defs.inferred_box_list_def
 
 declare inferred_box_spec_code[code]
