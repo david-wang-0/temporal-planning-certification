@@ -246,9 +246,10 @@ untrusted aLU checker), `ALU_DEBUG=1` (dump failing DBMs), `TCHECKER_PKG_ROOT` /
    propositionalised problem (`STAGE ground`).
 4. **verified capstone** — `Converter.check_and_cert_numeric_pddl_problem_no_return`: runs the
    verified bound inference (`NONE` = a fluent is unbounded, fail closed), **builds the net**, and
-   hands it in-process to the oracle closure. The inference's code equation wraps it in Munta's
-   `time_it` hook (an identity in HOL) under the label `infer-box`; `plan_cert` reads that entry
-   from the exported `Timing` structure and prints it as `STAGE infer-box`.
+   hands it in-process to the oracle closure. The inference's code equation wraps it in the
+   theory's `stage_timed` hook (an identity in HOL): the export itself prints `STAGE infer-box`
+   as soon as the inference returns, before the net is built, and records the time in its
+   `StageTiming` structure, which `plan_cert` reads to keep `check` disjoint.
 5. **in-process oracle** — `InProcessCertify.oracle_certifier`: net → muntax
    (`NetworkConversion`) → renaming (`MLuntaAdapter` + `CertificateConversion`) → external tck-reach
    cert (`TCheckerCertify`, `STAGE renaming`/`convert-tck`/`tck`/`convert-back`) → deserialize →

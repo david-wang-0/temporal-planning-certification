@@ -27,11 +27,28 @@ structure Timing : sig
   val start_timer: unit -> unit
   val save_time: string -> unit
   val get_timings: unit -> (string * Time.time) list
+  val set_cpu: bool -> unit
 end = struct
-  val t = Unsynchronized.ref Time.zeroTime;
+
+  open Timer;
+
+  val is_cpu = Unsynchronized.ref false;
+  fun set_cpu b = is_cpu := b;
+
+  val cpu_timer: cpu_timer option Unsynchronized.ref = Unsynchronized.ref NONE;
+  val real_timer: real_timer option Unsynchronized.ref = Unsynchronized.ref NONE;
+
   val timings = Unsynchronized.ref [];
-  fun start_timer () = (t := Time.now ());
-  fun get_elapsed () = Time.- (Time.now (), !t);
+  fun start_timer () = (
+    if !is_cpu then
+      cpu_timer := SOME (startCPUTimer ())
+    else
+      real_timer := SOME (startRealTimer ()));
+  fun get_elapsed () = (
+    if !is_cpu then
+      #usr (!cpu_timer |> the |> checkCPUTimer)
+    else
+      (!real_timer |> the |> checkRealTimer));
   fun save_time s = (timings := ((s, get_elapsed ()) :: !timings));
   fun get_timings () = !timings;
 end
@@ -118,6 +135,23 @@ fun imp_fora_inner i u f s =
 
 
 
+
+structure StageTiming : sig
+  val timed : string -> (unit -> 'a) -> 'a
+  val get_ms : string -> LargeInt.int
+end = struct
+  val stages = Unsynchronized.ref ([] : (string * LargeInt.int) list);
+  fun timed s f =
+    let
+      val t = Timer.startRealTimer ();
+      val r = f ();
+      val ms = Time.toMilliseconds (Timer.checkRealTimer t);
+      val _ = stages := (s, ms) :: !stages;
+      val _ = TextIO.print ("+ STAGE " ^ s ^ ": " ^ LargeInt.toString ms ^ " ms\n");
+    in r end;
+  fun get_ms s =
+    List.foldl (fn ((s', m), acc) => if s' = s then acc + m else acc) 0 (!stages);
+end
 
 structure Str_Literal : sig
   type int = Int.int
@@ -23095,7 +23129,7 @@ fun draft_acts_spec p =
 fun nfluents p = map func (functions (domain p));
 
 fun inferred_box_spec p =
-  time_it "infer-box"
+  StageTiming.timed "infer-box"
     (fn _ =>
       let
         val fs = nfluents p;

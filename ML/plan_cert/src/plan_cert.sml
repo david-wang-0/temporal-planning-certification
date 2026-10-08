@@ -205,15 +205,11 @@ fun make_network domain problem model =
    (Isabelle: numeric_ground_ast_problem_defs.inferred_box_spec) and assembles the numeric
    timed-automata net.  No untrusted box crosses into the verified code any more, so there is
    no re-check gate.  Same downstream muntax as the propositional path (identical net type). *)
-(* Wall time (ms) the verified code spent in the bound inference: its code equation wraps the
-   inference in Munta's time_it hook under the label "infer-box", which records into the
-   exported Timing structure.  Summed, in case a failure path ran it more than once. *)
-fun infer_box_ms () =
-    List.foldl (fn ((s, t), acc) => if s = "infer-box" then acc + Time.toMilliseconds t else acc)
-               (0 : LargeInt.int) (Timing.get_timings ())
-
-fun print_infer_box_stage ms =
-    print ("+ STAGE infer-box: " ^ LargeInt.toString ms ^ " ms\n")
+(* Wall time (ms) the verified code spent in the bound inference.  The export prints the
+   "infer-box" stage line itself (Isabelle: stage_timed around inferred_box_spec, printed as
+   soon as the inference returns) and records it in StageTiming; read here only to keep the
+   other stages disjoint from it. *)
+fun infer_box_ms () = StageTiming.get_ms "infer-box"
 
 (* shared numeric front end: parse + ground (nemo-pruned) *)
 fun numeric_ground domain problem =
@@ -252,10 +248,9 @@ fun make_numeric_network domain problem model =
                                   \10/11=pre-struct-ok 12=inv-struct-ok 13=init-int 14/15=writes-declared \
                                   \16=goal-struct-ok)")))
             handle Exn.ERROR msg => exit_fail ("numeric net builder raised ERROR: " ^ msg)
+        val infer_ms = infer_box_ms ()
         val _ = NetworkConversion.convert_network (showNet ()) model net
                 handle Exn.ERROR msg => exit_fail ("network conversion raised ERROR: " ^ msg)
-        val infer_ms = infer_box_ms ()
-        val () = print_infer_box_stage infer_ms
         (* convert-net excludes the inference, reported as its own stage *)
         val () = print ("+ STAGE convert-net: "
                         ^ LargeInt.toString (Time.toMilliseconds (Timer.checkRealTimer t_net)
@@ -334,9 +329,10 @@ fun certify_alu_check model cert =
    closure (external tck-reach; stages renaming / convert-tck / tck / convert-back), and checks
    the returned certificate with Munta's verified convert_check -- the net never round-trips
    through the muntax JSON, so the explicit initial values of point-bounded static fluents
-   survive.  Stage lines: ground, renaming, convert-tck, tck, convert-back, infer-box (the
-   capstone's own inference run, timed by its time_it hook), check (= verified capstone time
-   minus the oracle closure's own wall time and minus infer-box). *)
+   survive.  Stage lines: ground, infer-box (the capstone's own inference run, printed by the
+   export's stage_timed hook as soon as it returns, i.e. before the net is built), renaming,
+   convert-tck, tck, convert-back, check (= verified capstone time minus the oracle closure's
+   own wall time and minus infer-box). *)
 fun certify_numeric_tchecker domain problem model renaming cert mode_str nthreads show_cert =
     let
         val _ = log_conversion_config (domain, problem, model)
@@ -354,11 +350,8 @@ fun certify_numeric_tchecker domain problem model renaming cert mode_str nthread
                    f show_cert ()
         val total = Time.toMilliseconds (Timer.checkRealTimer t0)
     in
-        let val infer_ms = infer_box_ms ()
-        in
-          print_infer_box_stage infer_ms;
-          print ("+ STAGE check: " ^ LargeInt.toString (total - !oracle_ms - infer_ms) ^ " ms\n")
-        end
+        print ("+ STAGE check: " ^ LargeInt.toString (total - !oracle_ms - infer_box_ms ())
+               ^ " ms\n")
     end
 
 (* Part B': the SAME external tck-reach oracle, but the certificate is CHECKED IN-PROCESS by

@@ -1,6 +1,5 @@
 theory Ground_PDDL_Numeric_Code_Export
   imports Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
-    "Munta_Base.Trace_Timing"
 begin
 
 section \<open>The verified bound inference at the ground problem: executable twin + code equations\<close>
@@ -156,16 +155,45 @@ lemma (in numeric_ground_ast_problem_defs) inferred_box_spec_let:
       in infer_fluent_bounds_on fs (thr_set fs v0 acts) acts v0)"
   by (simp add: inferred_box_spec_def Let_def)
 
-text \<open>The code equation also wraps the inference in Munta's timing hook @{const time_it} (an
-  identity, @{thm [source] time_it}), so the SML tool can report the stage time of the run the
-  verified certifier itself performs.\<close>
+text \<open>Stage timing for the SML tool.  @{text stage_timed} is the identity
+  (@{text stage_timed}); in SML it runs its argument, prints \<open>+ STAGE <name>: <ms> ms\<close> as soon as
+  it returns, and records the time (\<open>StageTiming.get_ms\<close>) so the tool can keep its other stages
+  disjoint.  The code equation of @{text inferred_box_spec} wraps the inference in it, so the
+  stage line of the run the verified certifier itself performs comes out before the net is built
+  or converted.\<close>
+
+definition stage_timed :: "String.literal \<Rightarrow> (unit \<Rightarrow> 'a) \<Rightarrow> 'a" where
+  "stage_timed s f = f ()"
+
+lemma stage_timed: "e = stage_timed s (\<lambda>_. e)"
+  by (simp add: stage_timed_def)
+
+code_printing code_module "StageTiming" \<rightharpoonup> (SML)
+\<open>structure StageTiming : sig
+  val timed : string -> (unit -> 'a) -> 'a
+  val get_ms : string -> LargeInt.int
+end = struct
+  val stages = Unsynchronized.ref ([] : (string * LargeInt.int) list);
+  fun timed s f =
+    let
+      val t = Timer.startRealTimer ();
+      val r = f ();
+      val ms = Time.toMilliseconds (Timer.checkRealTimer t);
+      val _ = stages := (s, ms) :: !stages;
+      val _ = TextIO.print ("+ STAGE " ^ s ^ ": " ^ LargeInt.toString ms ^ " ms\n");
+    in r end;
+  fun get_ms s =
+    List.foldl (fn ((s', m), acc) => if s' = s then acc + m else acc) 0 (!stages);
+end\<close>
+
+code_printing constant stage_timed \<rightharpoonup> (SML) "StageTiming.timed"
 
 lemma (in numeric_ground_ast_problem_defs) inferred_box_spec_timed:
   "inferred_box_spec =
-     time_it (STR ''infer-box'')
+     stage_timed (STR ''infer-box'')
        (\<lambda>_. let fs = nfluents; acts = draft_acts_spec; v0 = draft_init_spec
             in infer_fluent_bounds_on fs (thr_set fs v0 acts) acts v0)"
-  by (rule trans[OF inferred_box_spec_let time_it])
+  by (rule trans[OF inferred_box_spec_let stage_timed])
 
 definition tab_on :: "'n list \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
   "tab_on fs E =
