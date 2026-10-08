@@ -19,8 +19,8 @@ interval bound inference with relational (fluent-vs-fluent) guard refinement, ne
 datalog-reachability pruning in the grounder, and a verified certifier capstone
 (`check_and_cert_numeric_pddl_problem`) that hands the built network in-process to an external
 tck-reach oracle and checks the returned certificate with Munta's verified checker
-(`plan_cert -certify numeric-tchecker`, per-stage profiled). The benchmark harness is
-distributed separately.
+(`plan_cert -certify numeric-tchecker`, per-stage profiled). In the artifact, the benchmark
+harness is in the sibling folder `benchmarks/`.
 
 # Note
 

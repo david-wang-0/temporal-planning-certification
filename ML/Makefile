@@ -1,7 +1,9 @@
-# Sources MLton compiles into the certifier. Listed so `make` rebuilds out/plan_cert
-# whenever any .sml/.mlb under plan_cert/src changes (MLton tracks its own internal
-# dependency graph, but make needs the prerequisites to know when to re-invoke it).
-CERT_SRCS := $(shell find plan_cert/src -name '*.sml' -o -name '*.mlb' 2>/dev/null)
+# Sources MLton compiles into the certifier: plan_cert's own sources, the code exported from
+# Isabelle (Check_Unsolvability.ML, pulled in via converter.mlb) and the vendored libraries.
+# Listed so `make` rebuilds out/plan_cert whenever any of them changes (MLton tracks its own
+# internal dependency graph, but make needs the prerequisites to know when to re-invoke it).
+CERT_SRCS := $(shell find plan_cert/src plan_cert/imports lib \( -name '*.sml' -o -name '*.sig' -o -name '*.fun' -o -name '*.mlb' -o -name '*.ML' \) 2>/dev/null) \
+             Check_Unsolvability.ML converter.mlb term_stub.sml
 MLTON_FLAGS := -inline 700 -default-type int64 -default-ann 'allowExtendedTextConsts true'
 
 .PHONY: create_dirs clean build_certifier build_certifier_profile \
