@@ -1225,13 +1225,13 @@ derive (no) cenum formula primitive_numeric_expression atom object numeric_expre
 
 text \<open>Containers instances for the temporal-AST datatype tree (the network builder puts action
   schemas etc. into sets), bottom-up.\<close>
-derive (eq) ceq "type" duration_op temporal_annotation numeric_effect_op continuous_effect_op
-derive linorder "type" duration_op temporal_annotation numeric_effect_op continuous_effect_op
-derive ccompare "type" duration_op temporal_annotation numeric_effect_op continuous_effect_op
-derive (eq) ceq numeric_effect ast_effect ast_continuous_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
-derive linorder numeric_effect ast_effect ast_continuous_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
-derive ccompare numeric_effect ast_effect ast_continuous_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
-derive (dlist) set_impl "type" duration_op temporal_annotation numeric_effect_op continuous_effect_op numeric_effect ast_effect ast_continuous_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
+derive (eq) ceq "type" duration_op temporal_annotation numeric_effect_op
+derive linorder "type" duration_op temporal_annotation numeric_effect_op
+derive ccompare "type" duration_op temporal_annotation numeric_effect_op
+derive (eq) ceq numeric_effect ast_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
+derive linorder numeric_effect ast_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
+derive ccompare numeric_effect ast_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
+derive (dlist) set_impl "type" duration_op temporal_annotation numeric_effect_op numeric_effect ast_effect duration_constraint ast_action_head ast_simple_action_body ast_temporal_durative_action_body ast_temporal_action_schema
 
 text \<open>card_UNIV / cproper_interval for the AST types used in NESTED sets (the reduction's
   mutex_snap_action' builds \<open>predicate set set\<close>): required inherently by nested Containers sets

@@ -89,20 +89,6 @@ lemma wf_ast_cont_problem_equiv: "ast_cont_problem.wf_cont_problem \<longleftrig
   using wf_ast_cont_domain_equiv temporal_to_continuous_problem_sel temporal_to_continuous_domain_sel
   by presburger
 
-lemma I_equiv: "I = ast_cont_problem.I"
-  unfolding I_def ast_cont_problem.I_def
-  unfolding temporal_to_continuous_problem_sel by simp
-
-end
-
-context wf_ast_temporal_problem
-begin
-
-sublocale wf_ast_cont_problem: wf_ast_cont_problem "temporal_to_continuous_problem P"
-  using wf_ast_cont_problem_equiv
-  unfolding wf_ast_cont_problem_def
-  using wf_temporal_problem
-  by simp
 end
 
 end

@@ -97,7 +97,7 @@ local_setup \<open>
     [true] @{thm show_law_atom}
 \<close>
 
-derive "show" atom   numeric_effect ast_effect "term" temporal_annotation  duration_op duration_constraint continuous_effect_op ast_continuous_effect 
+derive "show" atom   numeric_effect ast_effect "term" temporal_annotation  duration_op duration_constraint 
 
 definition showsp_ground_action :: 
   "ground_action showsp"
@@ -113,60 +113,6 @@ local_setup \<open>
 \<close>
 
 derive "show" ground_action
-
-definition showsp_ast_cont_action_schema :: 
-  "ast_cont_action_schema showsp"
-where
-  "showsp_ast_cont_action_schema p x = (case x of 
-    (SimpleActionSchema (ActionHead a b) (SimpleActionBody c d)) \<Rightarrow> shows ''(SimpleActionSchema '' o shows a o shows_space o shows b o shows_space o shows c o shows_space o shows d o shows '')'' |
-    (ContChangeActionSchema (ActionHead a b) (ContChangeActionBody c d e f)) \<Rightarrow> shows ''(ContChangeActionSchema '' o shows a o shows_space o shows b o shows_space o shows c o shows_space o shows d o shows_space o shows e o shows_space o shows f o shows '')'')"
-
-lemma show_law_ast_cont_action_schema[show_law_intros]:
-  "show_law showsp_ast_cont_action_schema x"
-  apply(cases x)
-  by (auto simp add: show_law_def showsp_ast_cont_action_schema_def  show_law_simps
-            split: ast_action_head.splits ast_simple_action_body.splits
-                   ast_cont_change_action_body.splits)
-
-local_setup \<open>
-  Show_Generator.register_foreign_showsp @{typ ast_cont_action_schema} @{term "showsp_ast_cont_action_schema"} @{thm show_law_ast_cont_action_schema}
-\<close>
-
-derive "show" ast_cont_action_schema
-
-definition showsp_ast_cont_domain :: 
-  "ast_cont_domain showsp"
-where
-  "showsp_ast_cont_domain p x = (case x of 
-    (Domain a b c d e) \<Rightarrow> shows ''(Domain '' o shows a o shows_space o shows b o shows_space o shows c o shows_space o shows d o shows_space o shows e o shows '')'')"
-
-lemma show_law_ast_cont_domain[show_law_intros]:
-  "show_law showsp_ast_cont_domain x"
-  apply(cases x)
-  by (auto simp add: show_law_def showsp_ast_cont_domain_def show_law_simps)
-
-(* Show instances for ast_cont_domain / ast_problem, disabled (the net builder does not need them):
-local_setup \<open>
-  Show_Generator.register_foreign_showsp @{typ ast_cont_domain} @{term "showsp_ast_cont_domain"} @{thm show_law_ast_cont_domain}
-\<close>
-
-derive "show" "ast_cont_action_schema ast_domain"
-
-definition showsp_ast_problem :: 
-  "ast_problem showsp"
-where
-  "showsp_ast_problem p x = (case x of 
-    (Problem a b c d) \<Rightarrow> shows ''(DurativeActionSchema '' o shows a o shows_space o shows b o shows_space o shows c o shows_space o shows d o shows '')'')"
-
-lemma show_law_ast_problem[show_law_intros]:
-  "show_law showsp_ast_problem x"
-  apply(cases x)
-  by (auto simp add: show_law_def showsp_ast_problem_def  show_law_simps)
-
-local_setup \<open>
-  Show_Generator.register_foreign_showsp @{typ ast_problem} @{term "showsp_ast_problem"} @{thm show_law_ast_problem}
-\<close>
-derive "show"   ast_problem *)
 
 subsection \<open>Generic DFS Reachability Checker\<close>
 text \<open>Used for subtype checks\<close>
@@ -597,31 +543,6 @@ lemma wf_func_asign'_correct[simp]: "wf_func_assign' mp_objT STG f = wf_func_ass
     unfolding wf_cont_problem_def wf_cont_problem'_def wf_problem_signature_def
     by (auto simp: wf_domain'_correct wf_fmla'_correct wf_cont_domain_def)
 
-  text \<open>Instantiating actions will yield well-founded effects.
-    Corollary of @{thm wf_inst_simple_action_schema} 
-             and @{thm wf_inst_cont_change_action_schema}.\<close>
-
-  lemma wf_effect_inst_weak:
-    fixes h b
-    defines "a\<^sub>s\<^sub>c\<^sub>h\<^sub>e\<^sub>m\<^sub>a \<equiv> SimpleActionSchema h b"  
-    assumes "a = instantiate_action_schema a\<^sub>s\<^sub>c\<^sub>h\<^sub>e\<^sub>m\<^sub>a args" 
-        and "action_params_match h args" 
-        and "wf_cont_action_schema a\<^sub>s\<^sub>c\<^sub>h\<^sub>e\<^sub>m\<^sub>a"
-    shows "wf_effect_inst (effect a)"
-    using assms wf_inst_simple_action_schema[of h args b]
-    by (cases h; cases b)
-       (auto simp: wf_effect_inst_alt Let_def)
-
-  lemma wf_effect_durative_inst_weak:
-    fixes h b
-    defines "a\<^sub>s\<^sub>c\<^sub>h\<^sub>e\<^sub>m\<^sub>a \<equiv> ContChangeActionSchema h b"  
-    assumes "a = inst_snap_action a\<^sub>s\<^sub>c\<^sub>h\<^sub>e\<^sub>m\<^sub>a dur args ta" 
-        and "action_params_match h args" 
-        and "wf_cont_action_schema a\<^sub>s\<^sub>c\<^sub>h\<^sub>e\<^sub>m\<^sub>a"
-    shows "wf_effect_inst (effect a)"
-    using assms wf_inst_cont_change_action_schema[of h args b]
-    by  (cases h; cases b) (auto simp: wf_effect_inst_alt Let_def)
-
 end \<comment> \<open>Context of \<open>ast_problem\<close>\<close>
 
 text \<open>[vendored slice] The happening-execution / induced-sequence PLAN-VALIDATION lemmas and the
@@ -718,7 +639,6 @@ lemmas wf_domain_code =
   inst_duration_in_atom.simps
   inst_duration_in_numeric_expression.simps
   inst_duration_in_numeric_effect.simps
-  inst_duration_in_continuous_effect.simps
   acts_non_intrf_def
   (*ast_domain.apply_happ.simps*)
 
