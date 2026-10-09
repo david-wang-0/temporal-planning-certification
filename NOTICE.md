@@ -107,6 +107,5 @@ addition to ours.
 
 | files | origin | licence |
 |---|---|---|
-| `examples/ground/MatchCellar-impossible/`, `examples/ground/sync-impossible/` | groundings of instances of the MatchCellar-impossible and sync-impossible families from the additional material of Panjkovic, Micheli, Cimatti, "Deciding Unsolvability in Temporal Planning under Action Non-Self-Overlapping", AAAI 2022 (<https://doi.org/10.1609/aaai.v36i9.21225>); MatchCellar is originally an IPC 2011 domain | that material's licence permits inspection by AAAI reviewers only |
-| `examples/ground/MatchCellar-possible/` | a small solvable grounded MatchCellar instance; where the instance comes from is not recorded | not known |
+| `examples/ground/MatchCellar-possible/` | a small solvable grounded MatchCellar instance, the example of our paper; MatchCellar is originally an IPC 2011 domain | ours: BSD-3-Clause |
 | `ML/plan_cert/test/resources/ground-blocks*.pddl` | grounded Blocksworld instances (IPC domain) | no licence stated |
