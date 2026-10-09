@@ -22,15 +22,21 @@ tck-reach oracle and checks the returned certificate with Munta's verified check
 (`plan_cert -certify numeric-tchecker`, per-stage profiled). In the artifact, the benchmark
 harness is in the sibling folder `benchmarks/`.
 
-# Note
+# Third-party components and licences
 
-The Python files are originally from: https://doi.org/10.6084/m9.figshare.12620582
-They have been updated for compatibility with new TChecker versions.
+Our sources are under the BSD-3-Clause licence (`LICENSE`). Third-party material is listed in
+[NOTICE.md](NOTICE.md), with licence texts in `LICENSES/`. In short:
 
-We have also taken some code from `mlunta`,
-which can otherwise be found in the Isabelle AFP
-as part of Munta.
-The code is not critical for our correctness proofs.
+- A built `plan_cert` binary is distributed under **GPL-3.0-or-later**: its PDDL parser uses the
+  GPL-licensed parcom library (`ML/lib/parcom`). The corresponding source is this repository.
+- The Python files (`run.py`, `convert_models/`) are from the artifact of Wimmer, Herbreteau and
+  van de Pol, FORMATS 2020 (https://doi.org/10.6084/m9.figshare.12620582, CC BY 4.0). Some of
+  them have been updated for compatibility with newer TChecker versions.
+- The SML libraries in `ML/lib/` are mlunta (Joshua von Mutius, BSD-3-Clause), CMlib (MIT),
+  parcom (GPL-3.0-or-later) and SML driver files of Munta from the AFP (`ML/lib/munta_util/`,
+  Simon Wimmer, BSD). This code is not critical for our correctness proofs.
+- `ML/Check_Unsolvability.ML` is generated from our theories together with Isabelle/HOL and
+  AFP entries, which are under BSD licences except for Show and parts of Deriving (LGPL 2.1).
 
 # How to use
 
