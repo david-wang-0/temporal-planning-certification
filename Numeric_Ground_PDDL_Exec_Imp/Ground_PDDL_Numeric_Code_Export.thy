@@ -134,10 +134,10 @@ text \<open>Code equations for the inference at the ground problem: the executab
   equations, \<open>[code]\<close> by construction).\<close>
 
 text \<open>Evaluation sharing for the generated code; none of these equations changes what is computed.
-  \<^item> @{text draft_init_spec}: the numeric init assignments are extracted from @{text \<open>init P\<close>} and
-    their lookup map is built once, not again on every fluent lookup.
-  \<^item> @{text inferred_box_spec}: the fluents, draft actions, initial valuation and threshold set are
-    each built once and shared by the inference.
+  \<^item> @{text draft_init_spec}: the numeric init assignments are extracted from @{text \<open>init P\<close>} once,
+    not again on every fluent lookup.
+  \<^item> @{text inferred_box_spec}: the fluents, draft actions and initial valuation are built once and
+    shared by the threshold set and the inference.
   \<^item> @{const ginfer_thr_on}: the fixpoint environment is a function, and every iteration otherwise
     wraps the previous one in fresh closures, so a lookup at iteration \<open>k\<close> re-runs all earlier
     iterations. @{text tab_on} evaluates the environment once per tracked fluent into an association
@@ -145,15 +145,14 @@ text \<open>Evaluation sharing for the generated code; none of these equations c
 
 lemma (in numeric_ground_ast_problem_defs) draft_init_spec_code:
   "draft_init_spec =
-     (let m = map_of num_init_assignments
-      in (\<lambda>f. const_to_int (case m f of Some r \<Rightarrow> r | None \<Rightarrow> 0)))"
+     (let asg = num_init_assignments
+      in (\<lambda>f. const_to_int (case map_of asg f of Some r \<Rightarrow> r | None \<Rightarrow> 0)))"
   by (simp add: draft_init_spec_def num_init_def)
 
 lemma (in numeric_ground_ast_problem_defs) inferred_box_spec_let:
   "inferred_box_spec =
-     (let fs = nfluents; acts = draft_acts_spec; v0 = draft_init_spec;
-          thr = thr_set fs v0 acts
-      in infer_fluent_bounds_on fs thr acts v0)"
+     (let fs = nfluents; acts = draft_acts_spec; v0 = draft_init_spec
+      in infer_fluent_bounds_on fs (thr_set fs v0 acts) acts v0)"
   by (simp add: inferred_box_spec_def Let_def)
 
 text \<open>Stage timing for the SML tool.  @{text stage_timed} is the identity
@@ -192,9 +191,8 @@ code_printing constant stage_timed \<rightharpoonup> (SML) "StageTiming.timed"
 lemma (in numeric_ground_ast_problem_defs) inferred_box_spec_timed:
   "inferred_box_spec =
      stage_timed (STR ''infer-box'')
-       (\<lambda>_. let fs = nfluents; acts = draft_acts_spec; v0 = draft_init_spec;
-                  thr = thr_set fs v0 acts
-            in infer_fluent_bounds_on fs thr acts v0)"
+       (\<lambda>_. let fs = nfluents; acts = draft_acts_spec; v0 = draft_init_spec
+            in infer_fluent_bounds_on fs (thr_set fs v0 acts) acts v0)"
   by (rule trans[OF inferred_box_spec_let stage_timed])
 
 definition tab_on :: "'n list \<Rightarrow> 'n aenv \<Rightarrow> 'n aenv" where
