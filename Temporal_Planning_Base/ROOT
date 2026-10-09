@@ -1,15 +1,25 @@
 session Temporal_Planning_Base = Temporal_Munta_Base +
-  description \<open>Thin layer loading the grounder's temporal normalization locales (session
-    Grounding_Temporal_Common: grounded_temporal_problem / positive_temporal_problem) on top of the
-    stable Analysis-free Munta heap. The FPS temporal discrete semantics / well-formedness now live in
-    Discrete_Temporal_Planning BELOW the Munta heap, so they are already in the base image and are not
-    reloaded here; the Analysis-tainted FPS checkers (Temporal_PDDL_Checker_*, the continuous
-    reduction) are dropped entirely -- the net builder uses an in-repo Analysis-free wf-checker. The
-    whole development is built on top of this heap in jEdit. Contains no project-local theories (FPS +
-    grounder externals only).\<close>
+  description \<open>Thin layer loading the Analysis-free Formal-PDDL-Semantics discrete semantics
+    (Discrete_Planning_Common / Discrete_Temporal_Planning: the temporal happening and
+    state-sequence semantics and well-formedness) and the grounder's temporal normalization locales
+    (session Grounding_Temporal_Common: grounded_temporal_problem / positive_temporal_problem) on top
+    of the stable Munta heap. The FPS sessions are checked HERE, ABOVE the Munta heap, so editing
+    them rebuilds only this layer and the ones above; every FPS theory the sessions above import is
+    loaded into this heap so they never re-check it. The Analysis-tainted FPS checkers
+    (Temporal_PDDL_Checker_*, the continuous reduction) are dropped entirely -- the net builder uses
+    an in-repo Analysis-free wf-checker. The whole development is built on top of this heap in
+    jEdit. Contains no project-local theories (FPS + grounder externals only).\<close>
   options [timeout = 7200]
   sessions
     "Utils"
+    "Discrete_Planning_Common"
+    "Discrete_Temporal_Planning"
     "Grounding_Temporal_Common"
   theories [document = false]
+    "Discrete_Planning_Common.Utils"
+    "Discrete_Planning_Common.Happening_Semantics"
+    "Discrete_Temporal_Planning.Temporal_Instantiations"
+    "Discrete_Temporal_Planning.Temporal_Utils"
+    "Discrete_Temporal_Planning.Temporal_Happening_Semantics"
+    "Discrete_Temporal_Planning.Temporal_State_Sequence_Semantics"
     "Grounding_Temporal_Common.Temporal_PDDL_Normalization"

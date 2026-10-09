@@ -1,13 +1,13 @@
-session Temporal_Munta_Base = Discrete_Temporal_Planning +
+session Temporal_Munta_Base = HOL +
   description \<open>Stable, expensive base layer: the Munta model checker + verified certificate
-    checker, List-Index and Containers, re-elaborated ONCE on top of the Analysis-FREE
-    Formal-PDDL-Semantics Discrete_Temporal_Planning heap (the temporal state-sequence semantics and
-    well-formedness, with NO HOL-Analysis / ODE / Product_Order tower). Dropping Product_Order leaves
-    Munta's Product_Lexorder as the sole prod::ord instance, so the certificate-checker code
+    checker, List-Index and Containers, elaborated ONCE directly on plain HOL. It sits deliberately
+    BELOW the Formal-PDDL-Semantics sessions (Discrete_Planning_Common / Discrete_Temporal_Planning),
+    which are loaded in Temporal_Planning_Base above it, so an edit to the PDDL semantics only
+    rebuilds the thin layers above and never re-checks Munta. The FPS sessions loaded above are
+    Analysis-FREE (NO HOL-Analysis / ODE / Product_Order tower), so Munta's Product_Lexorder stays
+    the sole prod::ord instance and the certificate-checker code
     (Simple_Network_Language_Certificate_Code) co-imports with the net builder with no arity clash --
-    this is what makes the unified export (a) possible. The temporal discrete semantics sit BELOW
-    this heap as a frozen external FPS image, so editing project theories above does not rebuild
-    Munta. Contains no project-local theories.\<close>
+    this is what makes the unified export (a) possible. Contains no project-local theories.\<close>
   options [timeout = 7200]
   sessions
     "List-Index"
