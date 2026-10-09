@@ -23104,11 +23104,9 @@ fun const_to_int r = floor_rat r;
 
 fun draft_init_spec p =
   let
-    val asg = num_init_assignments p;
+    val m = map_of equal_func (num_init_assignments p);
   in
-    (fn f =>
-      const_to_int
-        (case map_of equal_func asg f of NONE => zero_rat | SOME r => r))
+    (fn f => const_to_int (case m f of NONE => zero_rat | SOME r => r))
   end;
 
 fun n_pre g =
@@ -23130,15 +23128,14 @@ fun nfluents p = map func (functions (domain p));
 
 fun inferred_box_spec p =
   StageTiming.timed "infer-box"
-    (fn _ =>
-      let
-        val fs = nfluents p;
-        val acts = draft_acts_spec p;
-        val v0 = draft_init_spec p;
-      in
-        infer_fluent_bounds_on equal_func fs (thr_set equal_func fs v0 acts)
-          acts v0
-      end);
+    (fn _ => let
+               val fs = nfluents p;
+               val acts = draft_acts_spec p;
+               val v0 = draft_init_spec p;
+               val thr = thr_set equal_func fs v0 acts;
+             in
+               infer_fluent_bounds_on equal_func fs thr acts v0
+             end);
 
 fun num_init p f =
   (case map_of equal_func (num_init_assignments p) f of NONE => zero_rat
