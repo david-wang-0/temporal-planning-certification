@@ -552,7 +552,7 @@ proof -
   show ?thesis using assms abstr_plan_binary_prop' 1 by blast
 qed
 
-(* --- *)
+
 lemma duration_matches_imp_sat_lb: 
   assumes "duration_matches d dc ps as"
       and "\<not>is_Func_Const dc"
