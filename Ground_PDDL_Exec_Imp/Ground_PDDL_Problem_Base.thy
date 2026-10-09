@@ -46,12 +46,13 @@ text \<open>Munta's @{const Assertions.models} (separation logic) also binds the
   uses.\<close>
 no_notation Assertions.models (infix "\<Turnstile>" 50)
 
-subsection \<open>Open-world world model (FPS @{const Worlds.valuation} / \<open>\<Turnstile>\<^sub>m\<close>)\<close>
+subsection \<open>World model (FPS @{const Worlds.valuation} / \<open>\<Turnstile>\<^sub>m\<close>)\<close>
 
-text \<open>The re-point uses Formal-PDDL-Semantics' open-world, partial @{const Worlds.valuation}
+text \<open>The re-point uses Formal-PDDL-Semantics' closed-world @{const Worlds.valuation}
   (@{typ \<open>world_model \<Rightarrow> object atom \<rightharpoonup> bool\<close>}) and @{const map_formula_semantics} (\<open>\<Turnstile>\<^sub>m\<close>).
   For a positive predicate conjunction this coincides with subset membership of its literals in the
-  logical world model (\<open>pos_conj_models_iff_superset\<close> below); no closed-world layer is introduced.
+  logical world model (\<open>pos_conj_models_iff_superset\<close> below). The valuation is partial only on
+  numeric comparisons with an undefined fluent.
   Bridge lemmas adapted from the classical grounder \<open>Isabelle-PDDL-Grounding\<close>
   (\<open>val_predAtm_dom\<close> / \<open>valuation_pos_conj_mono\<close>).\<close>
 
@@ -79,7 +80,7 @@ lemma pos_conj_form_BigAnd:
 fun to_predicate::"object atom Formulas.formula \<Rightarrow> predicate" where
 "to_predicate (Atom (predAtm x _)) = x"
 
-text \<open>Open-world bridge (adapted from the classical grounder \<open>Isabelle-PDDL-Grounding\<close>): a
+text \<open>Bridge (adapted from the classical grounder \<open>Isabelle-PDDL-Grounding\<close>): a
   positive predicate conjunction is satisfied under the FPS partial valuation iff its literals are
   all present in the logical world model. Predicate atoms are always defined, so the definedness
   guard of \<open>\<Turnstile>\<^sub>m\<close> is trivial.\<close>
