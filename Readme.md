@@ -147,7 +147,7 @@ chmod +x run.sh
 
 Example:
 ```shell
-./run.sh examples/ground/MatchCellar-possible/instance_solvable_domain.pddl examples/ground/MatchCellar-possible/instance_solvable_problem.pddl
+./run.sh examples/ground/MatchCellar-impossible/instance_03_domain.pddl examples/ground/MatchCellar-impossible/instance_03_problem.pddl
 ```
 
 ## Running individual components
