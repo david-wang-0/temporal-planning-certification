@@ -362,9 +362,10 @@ struct
      Some domains give NON-integer durations (painter's domain_container: (= ?duration 15.004)
      alongside integer 4/5/6).  The integer-duration network builder rejects non-integer
      durations, so as a post-pass over the assembled ground actions we scale EVERY duration
-     constant uniformly by  K = lcm of all duration denominators  (15.004 = 15004/1000, the
-     others /1  =>  K = 1000  =>  x1000  ->  15004 / 4000 / 5000 / 6000).  Uniform scaling of
-     ALL durations preserves the temporal structure.
+     constant uniformly by  K = lcm of all duration denominators, each rational in lowest terms
+     (15.004 = 3751/250, the others /1  =>  K = 250  =>  x250  ->  3751 / 1000 / 1250 / 1500).
+     Uniform scaling of ALL durations preserves the temporal structure, provided no numeric
+     condition or effect mentions ?duration (those are not scaled).
 
      GATED: when every duration is already integer, K = 1 and the pass is a strict no-op
      (the actions list is returned untouched -- durations are never rebuilt when K = 1), so
@@ -399,7 +400,10 @@ struct
       | C.ExpExpr a       => nexp_dur_lcm k a
       | _                 => k)   (* DurationExpr, PiExpr, FunctionExpr: no constant leaf *)
 
-  (* multiply every ConstantExpr leaf by kK; NVar/FunctionExpr (fluent refs) left alone *)
+  (* multiply every ConstantExpr leaf by kK; NVar/FunctionExpr (fluent refs) left alone.
+     LIMITATION: this scales the expression's value by kK only for a single constant or a sum
+     of constants; a product of constants is scaled by kK^2, a quotient not at all.  Every
+     benchmark duration is a single constant after static folding. *)
   fun scale_nexp kK e =
     (case e of
         C.ConstantExpr r  =>

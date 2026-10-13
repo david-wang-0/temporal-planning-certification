@@ -46,11 +46,17 @@ lifted PDDL problem has none rests on the grounder being correct.
 grounding, `scale_durations` in `grounder.sml` multiplies every duration constant by K, the lcm of
 their denominators (each rational in lowest terms). If all durations are integers, K = 1 and the
 pass changes nothing. For `painter-impossible`, 15.004 = 3751/250, so K = 250 and the durations
-4, 5, 6, 15.004 become 1000, 1250, 1500, 3751 (the comment in `grounder.sml` says K = 1000; that is
-wrong). The verified verdict is then about the scaled ground problem. That the original problem is
-unsolvable when the scaled one is (scaling every time constant uniformly maps plans to plans and is
-an isomorphism of zone graphs; the separation constant of the PDDL reduction is 0) is an informal
-argument: there is no formal scaling lemma.
+4, 5, 6, 15.004 become 1000, 1250, 1500, 3751. The verified verdict is then about the scaled ground
+problem. That the original problem is unsolvable when the scaled one is (scaling every time constant
+uniformly maps plans to plans and is an isomorphism of zone graphs; the separation constant of the
+PDDL reduction is 0) is an informal argument: there is no formal scaling lemma. The argument needs
+the durations to be the only time constants: no numeric condition or effect may mention `?duration`,
+since those are not scaled. This holds for `painter`, the only benchmark family with K ≠ 1.
+
+The pass multiplies each constant *leaf* of a duration expression by K, which scales the duration by K
+only when the expression is a single constant or a sum of constants: a product of two constants
+would be scaled by K², a quotient not at all. Every duration in the benchmarks is a single constant
+(after static fluents are folded), so this does not arise there.
 
 # Third-party components and licences
 
