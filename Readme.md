@@ -22,6 +22,36 @@ tck-reach oracle and checks the returned certificate with Munta's verified check
 (`plan_cert -certify numeric-tchecker`, per-stage profiled). In the artifact, the benchmark
 harness is in the sibling folder `benchmarks/`.
 
+## What is verified and what is trusted
+
+`plan_cert -certify numeric-tchecker` ends in the capstone `check_and_cert_numeric_pddl_problem_okay`
+(`Numeric_Ground_PDDL_Exec_Imp/Numeric_Unsolvability_Export.thy`): when it reports
+"The numeric planning problem is unsolvable.", there is no `π` with `num_ground_plan_valid P π`,
+where `P` is the **ground** problem handed to it.
+
+- Untrusted, before the capstone: the PDDL parser and our own grounder (`ML/plan_cert/src/grounder.sml`,
+  written for `plan_cert`, not taken from another planner), including the nemo datalog-reachability
+  pruning (`ML/plan_cert/src/nemo_reach.sml`), static-fluent folding and the duration scaling below.
+- Verified, inside the capstone: the executable admission check (it checks that `P` is a well-formed
+  ground problem of the supported fragment, not that it is a faithful grounding of the lifted
+  problem), the bound inference, the TA encoding, and Munta's certificate checker.
+- Untrusted but harmless: the tck-reach oracle and the certificate conversions; a wrong
+  certificate is rejected by the checker.
+
+So the verified verdict is "the ground problem emitted by our grounder has no valid plan"; that the
+lifted PDDL problem has none rests on the grounder being correct.
+
+**Duration scaling.** The integer-clock network builder and Munta's checker need integer constants
+(`is_int_rat` in `Numeric_Ground_PDDL_Exec_Imp/Ground_PDDL_Numeric_NTA_Reduction_Impl.thy`). After
+grounding, `scale_durations` in `grounder.sml` multiplies every duration constant by K, the lcm of
+their denominators (each rational in lowest terms). If all durations are integers, K = 1 and the
+pass changes nothing. For `painter-impossible`, 15.004 = 3751/250, so K = 250 and the durations
+4, 5, 6, 15.004 become 1000, 1250, 1500, 3751 (the comment in `grounder.sml` says K = 1000; that is
+wrong). The verified verdict is then about the scaled ground problem. That the original problem is
+unsolvable when the scaled one is (scaling every time constant uniformly maps plans to plans and is
+an isomorphism of zone graphs; the separation constant of the PDDL reduction is 0) is an informal
+argument: there is no formal scaling lemma.
+
 # Third-party components and licences
 
 Our sources are under the BSD-3-Clause licence (`LICENSE`). Third-party material is listed in
