@@ -154,7 +154,7 @@ text \<open>Definition 3 (Variable updates):
       separating reads from writes)
 
     Updates are applied sequentially (@{const is_upds}), so later updates read earlier writes.
-    We add @{term upds_no_cress_reads} to ensure that updates do not read from the cross product of previous writes.
+    We add @{const upds_no_cross_read_list} to prevent this.
 \<close>
 text \<open>Definition 4 (Clocks):
   Timed Automata (Munta):
