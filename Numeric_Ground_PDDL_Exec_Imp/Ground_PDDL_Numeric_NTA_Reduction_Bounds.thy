@@ -2,7 +2,9 @@ theory Ground_PDDL_Numeric_NTA_Reduction_Bounds
   imports
     Ground_PDDL_Numeric_NTA_Reduction_Correctness
     "TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Numeric_Inference"
+    "Provenance.Provenance"
 begin
+provenance ai
 
 text \<open>\<^bold>\<open>Boundedness from the verified bound inference.\<close> The soundness-critical
   @{text num_seq_in_bounds} obligation is discharged at the ground problem by the verified interval

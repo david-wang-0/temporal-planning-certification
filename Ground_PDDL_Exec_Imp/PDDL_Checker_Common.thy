@@ -11,7 +11,9 @@ theory PDDL_Checker_Common
     "HOL-Library.While_Combinator"
     "HOL-Library.Mapping"
     "HOL-Library.Tree"
+    "Provenance.Provenance"
 begin
+provenance human
 
 lemma show_law_literal: "show_law shows_prec (x :: String.literal)"
   unfolding show_law_def Show.shows_prec_literal_def

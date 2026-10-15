@@ -1,6 +1,7 @@
 theory ListMisc
-  imports "Automatic_Refinement.Misc" "List-Index.List_Index" "Discrete_Planning_Common.Utils"
+  imports "Automatic_Refinement.Misc" "List-Index.List_Index" "Discrete_Planning_Common.Utils" "Provenance.Provenance"
 begin
+provenance human
 
 locale filter_sorted_distinct_list =
   fixes xs::"nat list"
@@ -385,7 +386,7 @@ lemma filter_eq_conv:
   shows "filter P xs = filter Q xs"
   using assms apply (induction xs) by auto
 
-lemma count_list_gt1_two_indices:
+lemma \<^marker>\<open>provenance ai\<close> count_list_gt1_two_indices:
   "1 < count_list xs a \<Longrightarrow> \<exists>i j. i < length xs \<and> j < length xs \<and> i \<noteq> j \<and> xs ! i = a \<and> xs ! j = a"
 proof (induction xs)
   case (Cons x xs)
@@ -409,7 +410,7 @@ proof (induction xs)
   qed
 qed simp
 
-lemma two_indices_count_list_gt1:
+lemma \<^marker>\<open>provenance ai\<close> two_indices_count_list_gt1:
   assumes "i < length xs" "j < length xs" "i \<noteq> j" "xs ! i = a" "xs ! j = a"
   shows "1 < count_list xs a"
   using assms
@@ -443,7 +444,7 @@ qed simp
 lemma list_pairwise_nth_refl:
   assumes refl: "\<forall>x y. P x y \<longleftrightarrow> P y x"
   shows "list_pairwise P xs \<longleftrightarrow> (\<forall>i j. i < length xs \<longrightarrow> j < length xs \<longrightarrow> i \<noteq> j \<longrightarrow> P (xs ! i) (xs ! j))"
-proof
+proof \<^marker>\<open>provenance ai\<close>
   assume "list_pairwise P xs"
   thus "\<forall>i j. i < length xs \<longrightarrow> j < length xs \<longrightarrow> i \<noteq> j \<longrightarrow> P (xs ! i) (xs ! j)"
     using list_pairwise_then_at_list_indices by blast
@@ -473,7 +474,7 @@ qed
 lemma list_pairwise_map:
   assumes "list_pairwise (\<lambda>x y. P (f x) (f y)) xs"
   shows "list_pairwise P (map f xs)"
-proof -
+proof \<^marker>\<open>provenance ai\<close> -
   have hyp: "\<forall>a\<in>set xs. \<forall>b\<in>set xs. (a \<noteq> b \<or> 1 < count_list xs a) \<longrightarrow> P (f a) (f b)"
     using assms unfolding list_pairwise_as_nonrec by blast
   show ?thesis

@@ -2,11 +2,13 @@ theory TP_NTA_Reduction_Defs
   imports Temporal_Planning_Semantics.Temporal_Plans_Lemmas
       Temporal_Planning_Semantics.Temporal_Plans_Code
       Munta_Model_Checker.Simple_Network_Language_Model_Checking
-      Munta_Base.Error_List_Monad
+      Munta_Base.Error_List_Monad "Provenance.Provenance"
 
 begin
+provenance human
 section \<open>Abstract definition of reduction\<close>
 
+provenance ai_human
 text \<open>Abstract definition of the reduction from a temporal planning problem to a Munta timed-automata
 network. Time is hardcoded as \<open>int\<close> (following Wimmer, who interprets the network over the reals, which
 satisfy the time-class assumptions); the locale structure mirrors the temporal-planning locales, with
@@ -30,10 +32,12 @@ of the instants (which can yield fewer transitions while model-checking). When a
 incremented, the invariant propositions must be checked true -- otherwise one could be false, never
 explicitly set false during execution, and still fail to hold.\<close>
 
+provenance human
 fun bexp_and_all::"('a, 'b) bexp list \<Rightarrow> ('a, 'b) bexp" where
 "bexp_and_all [] = bexp.true" |
 "bexp_and_all (x#xs) = bexp.and x (bexp_and_all xs)"
 
+provenance ai
 text \<open>Encoders from the abstract numeric syntax into the Munta expression and
 boolean-expression languages, parameterised by a fluent-naming map \<open>fv\<close> and a
 value-to-int map \<open>ci\<close> -- the bounded-integer boundary, where rational constants land on \<open>int\<close>
@@ -55,6 +59,7 @@ fun comp_to_bexp :: "('n \<Rightarrow> String.literal) \<Rightarrow> ('r \<Right
 | "comp_to_bexp fv ci (Comp Clt a b) = bexp.lt (nexp_to_exp fv ci a) (nexp_to_exp fv ci b)"
 | "comp_to_bexp fv ci (Comp Cgt a b) = bexp.gt (nexp_to_exp fv ci a) (nexp_to_exp fv ci b)"
 
+provenance human
 locale type_naming =
   fixes mem_to_name:: "'ty \<Rightarrow> String.literal"
 
@@ -166,8 +171,10 @@ in
   start_clocks @ end_clocks
 "
 
+provenance ai_human
 text \<open>The transition from the \<open>off\<close> location (action inactive) to the location for the instant the
 action starts.\<close>
+provenance human
 definition start_edge::"'action \<Rightarrow> nat \<times> (String.literal, int) Simple_Expressions.bexp \<times> (String.literal, int) acconstraint list \<times> String.literal act \<times> (String.literal \<times> (String.literal, int) exp) list \<times> String.literal list \<times> nat" where
 "start_edge a \<equiv> 
 let 
@@ -225,9 +232,11 @@ in
   (running_loc, pl_is_1, guard, Sil (STR ''''), upds , resets, ending_loc)
 "
 
+provenance ai_human
 text \<open>Checking that no interfering snap-action is starting is done with the clock constraints. It is
 enough to check that the end does not interfere with the start: interference is reflexive and the start
 clock has already been reset.\<close>
+provenance human
 definition instant_trans_edge::"'action 
   \<Rightarrow> nat 
     \<times> (String.literal, int) Simple_Expressions.bexp 
@@ -250,8 +259,10 @@ in
   (starting_loc, pl_is_1, guard, Sil (STR ''''), [], resets, ending_loc)
 "
 
+provenance ai_human
 text \<open>The not-locked check applies only to deletions that are not immediately overwritten by
 additions.\<close>
+provenance human
 definition end_edge::"'action \<Rightarrow> nat \<times> (String.literal, int) Simple_Expressions.bexp \<times> (String.literal, int) acconstraint list \<times> String.literal act \<times> (String.literal \<times> (String.literal, int) exp) list \<times> String.literal list \<times> nat" where
 "end_edge a \<equiv> 
 let 
@@ -407,7 +418,7 @@ definition timed_automaton_net::"
 definition "net_broadcast::String.literal list \<equiv> []"
 abbreviation "net_bounds::(String.literal \<times> int \<times> int) list \<equiv> all_vars"
 abbreviation "net_automata \<equiv> timed_automaton_net"
-abbreviation "urge \<equiv> urge_clock"
+abbreviation \<^marker>\<open>provenance ai\<close> "urge \<equiv> urge_clock"
 definition "reach_formula::(nat, nat, String.literal, int) Simple_Network_Language_Model_Checking.formula \<equiv> formula.EX (sexp.loc 0 goal_loc)"
 definition "init_vars::(String.literal \<times> int) list \<equiv> map (map_prod id fst) all_vars"
 definition "init_locs::nat list \<equiv> init_loc # map (\<lambda>x. off_loc) actions"
@@ -419,8 +430,10 @@ lemma length_net_automata: "length net_automata = Suc (length actions)"
 end
 
 
+provenance ai
 text \<open>The primed reduction layer (on \<open>temp_planning_problem_list_impl_int'\<close>): its
 \<open>reduction_ref_impl\<close> sublocale instantiates the unprimed reduction on the restricted problem.\<close>
+provenance human
 locale tp_nta_reduction_defs' = temp_planning_problem_list_impl_int'
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
   for init :: "'proposition list"

@@ -1,6 +1,7 @@
 theory Numeric_Bound_Inference
-  imports Interval_Domain
+  imports Interval_Domain "Provenance.Provenance"
 begin
+provenance ai
 
 section \<open>Numeric-fluent bound inference by interval abstract interpretation\<close>
 

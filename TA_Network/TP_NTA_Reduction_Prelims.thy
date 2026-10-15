@@ -2,8 +2,9 @@ theory TP_NTA_Reduction_Prelims
   imports TP_NTA_Reduction_Utils
           "Temporal_Planning_Common.Sequences"
           "Temporal_Planning_Common.ListMisc"
-          NTA_Temp_Planning_Sem
+          NTA_Temp_Planning_Sem "Provenance.Provenance"
 begin
+provenance human
 
 context tp_nta_reduction_correctness
 begin

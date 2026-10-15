@@ -1,6 +1,7 @@
 theory Ground_PDDL_Problem_Code
-  imports Ground_PDDL_Problem_Defs
+  imports Ground_PDDL_Problem_Defs "Provenance.Provenance"
 begin
+provenance human
 
 (* fun at_start_spec::"ast_action_schema \<Rightarrow> ground_action" where
 "at_start_spec (Simple_Action_Schema n ps pre eff) = instantiate_action_schema (Simple_Action_Schema n ps pre eff) [] At_Start" |

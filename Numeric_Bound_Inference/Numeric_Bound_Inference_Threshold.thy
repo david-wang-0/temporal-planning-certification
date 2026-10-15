@@ -1,6 +1,7 @@
 theory Numeric_Bound_Inference_Threshold
-  imports Numeric_Bound_Inference
+  imports Numeric_Bound_Inference "Provenance.Provenance"
 begin
+provenance ai
 
 section \<open>Threshold widening for numeric bound inference\<close>
 

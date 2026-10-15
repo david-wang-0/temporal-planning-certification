@@ -1,6 +1,7 @@
 theory TP_NTA_Reduction_Numeric_Defs
-  imports TP_NTA_Reduction.TP_NTA_Reduction_Defs
+  imports TP_NTA_Reduction.TP_NTA_Reduction_Defs "Provenance.Provenance"
 begin
+provenance ai
 
 section \<open>Numeric augmentation of the reduction\<close>
 

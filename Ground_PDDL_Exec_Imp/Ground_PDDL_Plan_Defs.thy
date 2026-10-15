@@ -2,18 +2,22 @@ theory Ground_PDDL_Plan_Defs
   imports
     Ground_PDDL_Problem_Defs
     "Discrete_Temporal_Planning.Temporal_State_Sequence_Semantics"
+    "Provenance.Provenance"
 begin
+provenance ai
 
 text \<open>The new \<open>Temporal_State_Sequence_Semantics\<close> import re-introduces the duplicate
   \<open>Syntax_Utils.app\<close> \<open>|>\<close> notation (identical to Munta's \<open>Error_List_Monad.app\<close> already used
   here, and suppressed in \<open>Ground_PDDL_Problem_Defs\<close>).  Re-suppress it so \<open>|>\<close> resolves uniquely.\<close>
 no_notation Syntax_Utils.app (infixl "|>" 59)
 
+provenance human
 instantiation real::infinity
 begin
 instance ..
 end
 
+provenance ai
 text \<open>Re-point: the project-local \<open>list_pairwise\<close> (formerly in \<open>ListMisc\<close>) was removed in favour of
   Formal-PDDL-Semantics' \<open>Utils.list_pairwise\<close> (the one \<open>valid_temporal_state_seq\<close> uses).  The
   two \<open>list_pairwise\<close>-specific lemmas the development relies on (\<open>list_pairwise_nth_refl\<close>,
@@ -46,13 +50,13 @@ definition durations_match :: "rat \<Rightarrow> term duration_constraint list \
 context ground_ast_problem_defs
 begin
 
-lemma in_acts_of_temporal_plan_atE:
+lemma \<^marker>\<open>provenance ai_human\<close> in_acts_of_temporal_plan_atE:
   assumes "a \<in> set (acts_of_temporal_plan_at t p)"
       and "\<And>\<pi>. (t, \<pi>) \<in> simple_acts p \<Longrightarrow> a = the (res_inst \<pi>) \<Longrightarrow> Q a t p"
           "\<And>\<pi>. (t, \<pi>) \<in> durative_acts p \<Longrightarrow> a = the (res_inst_snap_action \<pi> At_Start) \<Longrightarrow> Q a t p"
           "\<And>t' \<pi>. (t', \<pi>) \<in> durative_acts p \<Longrightarrow> t = t' + duration \<pi> \<Longrightarrow> a = the (res_inst_snap_action \<pi> At_End) \<Longrightarrow> Q a t p"
   shows "Q a t p"
-proof -
+proof \<^marker>\<open>provenance ai\<close> -
   from assms(1) obtain t\<^sub>\<pi> \<pi> where
     mem: "(t\<^sub>\<pi>, \<pi>) \<in> set p"
     and a_in: "a \<in> set (simplified_res_inst_temporal_plan_action_at t (t\<^sub>\<pi>, \<pi>))"
@@ -93,13 +97,13 @@ lemma fst_apply_eff_mem_or_del:
          \<or> p \<in> \<Union> (set (map (set o dels o effect) A))"
   using assms unfolding apply_eff_unfold by auto
 
-lemma valid_temporal_state_seq_prop_pred_final:
+lemma \<^marker>\<open>provenance human\<close> valid_temporal_state_seq_prop_pred_final:
   assumes "valid_temporal_state_seq M ts \<pi> M'"
       and "\<forall>p \<in> fst M'. Q p"
       and "\<forall>t \<in> set ts. \<forall>a \<in> set (acts_of_temporal_plan_at t \<pi>). 
             \<forall>p \<in> set (adds (ground_action.effect a)) \<union> set (dels (ground_action.effect a)). Q p"
   shows "\<forall>p \<in> fst M. Q p"
-  using assms
+  using \<^marker>\<open>provenance ai\<close> assms
 proof (induction M ts \<pi> M' arbitrary: M rule: valid_temporal_state_seq.induct)
   case (1 M \<pi>s M')
   then show ?case by simp
@@ -146,13 +150,13 @@ lemma fst_apply_eff_Q_forward:
   shows "\<forall>p \<in> fst (apply_eff A M). Q p"
   using assms unfolding apply_eff_unfold by auto
 
-lemma valid_temporal_state_seq_prop_pred_initial:
+lemma \<^marker>\<open>provenance human\<close> valid_temporal_state_seq_prop_pred_initial:
   assumes "valid_temporal_state_seq M ts \<pi> M'"
       and "\<forall>p \<in> fst M. Q p"
       and "\<forall>t \<in> set ts. \<forall>a \<in> set (acts_of_temporal_plan_at t \<pi>). 
         \<forall>p \<in> set (adds (ground_action.effect a)) \<union> set (dels (ground_action.effect a)). Q p"
   shows "\<forall>p \<in> fst M'. Q p"
-  using assms
+  using \<^marker>\<open>provenance ai\<close> assms
 proof (induction M ts \<pi> M' rule: valid_temporal_state_seq.induct)
   case (1 M \<pi>s M')
   then show ?case by simp
@@ -185,11 +189,11 @@ qed
 
 
 
-lemma wf_apply_eff:
+lemma \<^marker>\<open>provenance human\<close> wf_apply_eff:
   assumes "wf_world_model M"
       and "\<forall>h \<in> set A. wf_ground_action h"
     shows "wf_world_model (apply_eff A M)"
-proof -
+proof \<^marker>\<open>provenance ai\<close> -
   have "\<forall>f \<in> fst (apply_eff A M). wf_fmla_atom objT f"
   proof
     fix f
@@ -331,13 +335,14 @@ next
     using 3 \<pi> res by simp
 qed
 
+provenance human
 lemma valid_temporal_state_seq_wf_world_model:
   assumes "wf_world_model M"
       and "valid_temporal_state_seq M ts \<pi> M'"
       and "wf_plan \<pi>"
       and "\<forall>t \<in>set ts. is_htp \<pi> t"
     shows "wf_world_model M'"
-  using assms 
+  using \<^marker>\<open>provenance ai_human\<close> assms 
 proof (induction M ts \<pi> M' rule: valid_temporal_state_seq.induct)
   case (1 M \<pi>s M')
   then show ?case by auto
@@ -352,6 +357,7 @@ next
 
   show ?case using 2 wf_M1 by (simp add: Let_def)
 next
+  provenance_in_proof ai
   case (3 M t\<^sub>i t\<^sub>j ts \<pi>s M')
 
   have wf: "\<forall>a \<in> set (acts_of_temporal_plan_at t\<^sub>i \<pi>s). wf_ground_action a"
@@ -430,7 +436,7 @@ lemma in_set_ref_planI:
 lemma ref_plan_pairwise_if:
   assumes "list_pairwise (\<lambda>a b. Q (timed_plan_action_to_ref_plan_action a) (timed_plan_action_to_ref_plan_action b)) tp"
   shows "list_pairwise Q ref_plan"
-  using assms unfolding ref_plan_def by (rule list_pairwise_map)
+  using \<^marker>\<open>provenance ai_human\<close> assms unfolding ref_plan_def by (rule list_pairwise_map)
 
 text \<open>Properties specific to later proofs\<close>
 fun plan_act_no_args where
@@ -557,7 +563,7 @@ lemma duration_matches_imp_sat_lb:
   assumes "duration_matches d dc ps as"
       and "\<not>is_Func_Const dc"
   shows "imp_defs.rat_impl.satisfies_lower_bound (dc_to_lb dc) d"
-proof -
+proof \<^marker>\<open>provenance ai\<close> -
   have nf: "dc_no_func dc" using assms(2) unfolding is_Func_Const_def by simp
   obtain dop e where de: "dc = DurationConstraint dop e" by (cases dc) auto
   have "dc_no_func (DurationConstraint dop e)" using nf de by simp
@@ -569,7 +575,7 @@ lemma durations_match_imp_sat_lb:
   assumes "durations_match d dcs ps as"
       and "list_all (\<lambda>x. \<not>is_Func_Const x) dcs"
     shows "imp_defs.rat_impl.satisfies_lower_bound (dc_list_lower dcs) d"
-proof (rule dc_list_lower_propI)
+proof \<^marker>\<open>provenance ai_human\<close> (rule dc_list_lower_propI)
   show "list_all (\<lambda>lb. imp_defs.rat_impl.satisfies_lower_bound lb d) (map dc_to_lb dcs)"
     unfolding list_all_iff
   proof (intro ballI)
@@ -587,7 +593,7 @@ lemma duration_matches_imp_sat_ub:
   assumes "duration_matches d dc ps as"
       and "\<not>is_Func_Const dc"
   shows "imp_defs.rat_impl.satisfies_upper_bound (dc_to_ub dc) d"
-proof -
+proof \<^marker>\<open>provenance ai\<close> -
   have nf: "dc_no_func dc" using assms(2) unfolding is_Func_Const_def by simp
   obtain dop e where de: "dc = DurationConstraint dop e" by (cases dc) auto
   have "dc_no_func (DurationConstraint dop e)" using nf de by simp
@@ -599,7 +605,7 @@ lemma durations_match_imp_sat_ub:
   assumes "durations_match d dcs ps as"
       and "list_all (\<lambda>x. \<not>is_Func_Const x) dcs"
     shows "imp_defs.rat_impl.satisfies_upper_bound (dc_list_upper dcs) d"
-proof (rule dc_list_upper_propI)
+proof \<^marker>\<open>provenance ai_human\<close> (rule dc_list_upper_propI)
   show "list_all (\<lambda>ub. imp_defs.rat_impl.satisfies_upper_bound ub d) (map dc_to_ub dcs)"
     unfolding list_all_iff
   proof (intro ballI)
@@ -845,16 +851,16 @@ text \<open>Mutex re-bridge.  The new state-sequence validity carries, at every 
   content of @{thm list_pairwise_as_nonrec} (no separation / no-self-overlap collapses the
   list-position mutex to plan-entry-pair non-interference).\<close>
 
-lemma htps_acts_list_pairwise:
+lemma \<^marker>\<open>provenance ai\<close> htps_acts_list_pairwise:
   assumes "t\<^sub>i \<in> set htps"
   shows "list_pairwise acts_non_intrf (acts_of_temporal_plan_at t\<^sub>i tp)"
   using valid_temporal_state_seq_list_pairwise_acts[OF valid_temporal_state_seq_final_state assms] .
 
-lemma all_htps_acts_non_intrf:
+lemma \<^marker>\<open>provenance ai_human\<close> all_htps_acts_non_intrf:
   assumes "t\<^sub>i \<in> set htps"
   shows "(\<forall>a \<in> set (acts_of_temporal_plan_at t\<^sub>i tp).
             \<forall>b \<in> set (acts_of_temporal_plan_at t\<^sub>i tp). a \<noteq> b \<longrightarrow> acts_non_intrf a b)"
-  using list_pairwise_acts_distinctD[OF htps_acts_list_pairwise[OF assms]] by blast
+  using \<^marker>\<open>provenance ai\<close> list_pairwise_acts_distinctD[OF htps_acts_list_pairwise[OF assms]] by blast
 
 lemma all_htps_acts_non_intrf':
   assumes "t\<^sub>i \<in> set htps"
@@ -862,7 +868,7 @@ lemma all_htps_acts_non_intrf':
       and "b \<in> set (acts_of_temporal_plan_at t\<^sub>i tp)"
       and "a \<noteq> b"
   shows "acts_non_intrf a b"
-  using list_pairwise_acts_distinctD[OF htps_acts_list_pairwise[OF assms(1)] assms(2,3,4)] .
+  using \<^marker>\<open>provenance ai\<close> list_pairwise_acts_distinctD[OF htps_acts_list_pairwise[OF assms(1)] assms(2,3,4)] .
 
 (* Needs an assumption that durations are integers. *)
 
@@ -881,6 +887,7 @@ lemma durative_acts_in_plan:
   assumes "(t, a) \<in> durative_acts tp"
   shows "(t, a) \<in> set tp" using assms unfolding durative_acts_def by simp
 
+provenance ai
 lemma resolve_schema_name:
   assumes "resolve_temporal_action_schema n = Some a"
   shows "ast_temporal_action_schema_name a = n"
@@ -923,10 +930,11 @@ proof -
   show ?thesis using res unfolding a h b by blast
 qed
 
+provenance human
 lemma durative_plan_action_durs:
   assumes "wf_plan_action (DurativePlanAction n as d)"
   shows "0 \<le> d"
-  using assms by (auto split: option.splits)
+  using \<^marker>\<open>provenance ai_human\<close> assms by (auto split: option.splits)
 
 lemma simple_act_ex_simple_plan_act:
   assumes "(t, a) \<in> simple_acts tp"
@@ -936,7 +944,7 @@ lemma simple_act_ex_simple_plan_act:
 lemma res_simple_act_name:
   assumes "(t, a) \<in> simple_acts tp"
   shows "\<exists>ps pre eff. resolve_temporal_action_schema (plan_action.name a) = Some (SimpleActionSchema (ActionHead (plan_action.name a) ps) (SimpleActionBody pre eff))"
-proof -
+proof \<^marker>\<open>provenance ai_human\<close> -
   obtain n as where a: "a = SimplePlanAction n as"
     using assms[THEN simple_act_ex_simple_plan_act] by blast
   have "wf_plan_action a" using wf_plan_actions assms[THEN simple_acts_in_plan] by blast
@@ -955,7 +963,7 @@ lemma durative_act_ex_durative_plan_act:
 lemma res_durative_act_name:
   assumes "(t, a) \<in> durative_acts tp"
   shows "\<exists>ps dcs pre eff. resolve_temporal_action_schema (plan_action.name a) = Some (DurativeActionSchema (ActionHead (plan_action.name a) ps) (DurativeActionBody dcs pre eff))"
-proof -
+proof \<^marker>\<open>provenance ai_human\<close> -
   obtain n as d where a: "a = DurativePlanAction n as d"
     using assms[THEN durative_act_ex_durative_plan_act] by blast
   have "wf_plan_action a" using wf_plan_actions assms[THEN durative_acts_in_plan] by blast
@@ -977,7 +985,7 @@ lemma in_simple_actsE':
   assumes "(t, a) \<in> simple_acts tp"
       and "\<And>n as. (t, SimplePlanAction n as) \<in> set tp \<Longrightarrow> thesis"
     shows "thesis"
-proof -
+proof \<^marker>\<open>provenance ai_human\<close> -
   have mem: "(t, a) \<in> set tp" and "is_act_simple a"
     using assms(1) unfolding simple_acts_def by auto
   then obtain n as where "a = SimplePlanAction n as"
@@ -989,7 +997,7 @@ lemma in_durative_actsE:
   assumes "(t, a) \<in> durative_acts tp"
       and "\<And>n as d. (t, DurativePlanAction n as d) \<in> set tp \<Longrightarrow> Q (DurativePlanAction n as d) t tp"
     shows "Q a t tp"
-proof -
+proof \<^marker>\<open>provenance ai_human\<close> -
   have mem: "(t, a) \<in> set tp" and "\<not> is_act_simple a"
     using assms(1) unfolding durative_acts_def by auto
   then obtain n as d where "a = DurativePlanAction n as d"
@@ -1001,7 +1009,7 @@ lemma in_durative_actsE':
   assumes "(t, a) \<in> durative_acts tp"
       and "\<And>n as d. (t, DurativePlanAction n as d) \<in> set tp \<Longrightarrow> thesis"
     shows "thesis"
-proof -
+proof \<^marker>\<open>provenance ai_human\<close> -
   have mem: "(t, a) \<in> set tp" and "\<not> is_act_simple a"
     using assms(1) unfolding durative_acts_def by auto
   then obtain n as d where "a = DurativePlanAction n as d"
@@ -1016,7 +1024,7 @@ text \<open>The acts of a plan at a time point are wf\<close>
 lemma acts_of_temporal_plan_at_wf:
   assumes "a \<in> set (acts_of_temporal_plan_at t tp)"
   shows "wf_ground_action a"
-  using wf_acts_of_temporal_plan_at[OF wf_plan assms] .
+  using \<^marker>\<open>provenance ai\<close> wf_acts_of_temporal_plan_at[OF wf_plan assms] .
 
 text \<open>Plan actions provide no arguments\<close>
 
@@ -1051,6 +1059,7 @@ proof -
   thus ?thesis unfolding list_all_iff by fastforce
 qed
 
+provenance ai
 text \<open>Duration-fold bridge: the FPS @{const acts_of_temporal_plan_at} resolves the plan actions
   through @{const res_inst}/@{const res_inst_snap_action}, whose durative snaps
   @{term "the (res_inst_snap_action \<pi> At_Start)"} fold the duration constraints into the
@@ -1191,10 +1200,10 @@ lemma res_inst_snap_end_dels:
 
 text \<open>The ground actions of the plan at a timepoint have no arguments\<close>
 
-lemma acts_of_temporal_plan_at_no_args:
+lemma \<^marker>\<open>provenance ai_human\<close> acts_of_temporal_plan_at_no_args:
   assumes "a \<in> set (acts_of_plan_at_simplified t tp)"
   shows "ground_act_no_args a"
-proof (rule in_acts_of_plan_at_simplifiedE[OF assms], goal_cases)
+proof \<^marker>\<open>provenance ai\<close> (rule in_acts_of_plan_at_simplifiedE[OF assms], goal_cases)
   case (1 n as)
   have mem: "(t, SimplePlanAction n as) \<in> set tp" using 1 by simp
   hence wfpa: "wf_plan_action (SimplePlanAction n as)" using wf_plan_actions by blast
@@ -1291,6 +1300,7 @@ next
   show ?case using 3 end_snaps_wf[OF sch] res b by simp
 qed
 
+provenance human
 text \<open>Plan actions have no arguments\<close>
 
 lemma simple_action_in_ref_plan:
@@ -1369,7 +1379,7 @@ lemma resolve_temporal_action_schema_inj_on_dom:
       and "resolve_temporal_action_schema x = Some a"
       and "resolve_temporal_action_schema y = Some b"
   shows "x = y"
-proof -
+proof \<^marker>\<open>provenance ai\<close> -
   have "ast_temporal_action_schema_name a = x"
     using assms(2) index_by_eq_SomeD unfolding resolve_temporal_action_schema_def by fastforce
   moreover
@@ -1400,7 +1410,7 @@ lemma ref_plan_acts_in_actions:
 lemma ref_plan_acts_wf:
   assumes "(a, t, d) \<in> set ref_plan"
   shows "wf_temporal_action_schema a"
-  using acts_wf[OF ref_plan_acts_in_actions[OF assms]] .
+  using \<^marker>\<open>provenance ai\<close> acts_wf[OF ref_plan_acts_in_actions[OF assms]] .
 
 lemma ref_plan_durs:
   assumes "(a, t, d) \<in> set ref_plan"
@@ -1412,7 +1422,7 @@ lemma ref_plan_durs:
 lemma ref_plan_start_is_htp:
   assumes "(a, t, d) \<in> set ref_plan"
   shows "is_htp tp (rat_of_int t)"
-  using assms
+  using \<^marker>\<open>provenance ai_human\<close> assms
 proof (cases a rule: ast_temporal_action_schema_cases_unfold)
   case (SimpleActionSchema n params pre eff)
   thus ?thesis
@@ -1462,10 +1472,10 @@ if dels b = {x}, pre b = {x}, adds b = {}, dels a = {x}, pre a = {x}, adds a = {
 
 (* To do: remove the name *)
 
-lemma at_start_snap_at_t:
+lemma \<^marker>\<open>provenance ai_human\<close> at_start_snap_at_t:
   assumes "(a, t, d) \<in> set ref_plan"
   shows "at_start_spec a \<in> set (acts_of_plan_at_simplified (rat_of_int t) tp)"
-  using assms
+  using \<^marker>\<open>provenance human\<close> assms
 proof (induction a rule: ast_temporal_action_schema_induct_unfold)
   case (SimpleActionSchema n ps pre eff)
   then obtain as where
@@ -1474,6 +1484,7 @@ proof (induction a rule: ast_temporal_action_schema_induct_unfold)
     using simple_action_in_ref_plan by blast
   hence z: "SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff) = the (resolve_temporal_action_schema n)" by simp
   have as_Nil: "as = []" using x plan_acts_no_args unfolding list_all_iff by (cases as) auto
+  provenance_in_proof ai
   have "the (res_inst (SimplePlanAction n as)) \<in> set (acts_of_plan_at_simplified (rat_of_int t) tp)"
     using acts_of_plan_at_simplified_res_instI[OF x] .
   moreover
@@ -1487,12 +1498,13 @@ next
     and y: "resolve_temporal_action_schema n = Some (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
     using durative_action_in_ref_plan by blast
   hence z: "DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff) = the (resolve_temporal_action_schema n)" by simp
+  provenance_in_proof ai
   have "at_start_spec (the (resolve_temporal_action_schema n)) \<in> set (acts_of_plan_at_simplified (rat_of_int t) tp)"
     using acts_of_plan_at_simplified_startI[OF x] .
   thus ?case unfolding z[symmetric] by simp
 qed
 
-lemma at_end_snap_at_t_if_durative:
+lemma \<^marker>\<open>provenance ai_human\<close> at_end_snap_at_t_if_durative:
   assumes "((DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff)), t, d) \<in> set ref_plan"
   shows "at_end_spec (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff)) \<in> set (acts_of_plan_at_simplified (rat_of_int (t + d)) tp)"
 proof -
@@ -1678,7 +1690,7 @@ proof -
     case (Cons pa pas)
     have 1: "list_pairwise ref_no_self_overlap (map timed_plan_action_to_ref_plan_action pas)" using Cons by simp
 
-    have nso: "list_all (PDDL_no_self_overlap pa) pas" using Cons.prems unfolding list_all_iff by auto
+    have nso: "list_all (PDDL_no_self_overlap pa) pas" using \<^marker>\<open>provenance ai_human\<close> Cons.prems unfolding list_all_iff by auto
     have wf: "list_all (\<lambda>x. wf_plan_action (snd x)) (pa # pas)" using Cons by blast
     have no_args: "list_all (\<lambda>x. plan_act_no_args (snd x)) (pa # pas)" using Cons by blast
     have are_integer: "list_all timed_plan_action_durs_integer (pa # pas)" using Cons by blast
@@ -1686,11 +1698,11 @@ proof -
     have 2: "list_all (ref_no_self_overlap (timed_plan_action_to_ref_plan_action pa)) (map timed_plan_action_to_ref_plan_action pas)"
       using nso wf no_args are_integer PDDL_no_self_overlap_imp_ref_no_self_overlap unfolding list_all_iff by simp
 
-    have "ref_no_self_overlap (timed_plan_action_to_ref_plan_action pa) y'
+    have \<^marker>\<open>provenance ai\<close> "ref_no_self_overlap (timed_plan_action_to_ref_plan_action pa) y'
           \<and> ref_no_self_overlap y' (timed_plan_action_to_ref_plan_action pa)"
       if "y' \<in> set (map timed_plan_action_to_ref_plan_action pas)" for y'
       using that 2 ref_no_self_overlap_refl unfolding list_all_iff by blast
-    thus ?case using 1 by simp
+    thus \<^marker>\<open>provenance ai\<close> ?case using 1 by simp
   qed
 qed
 
@@ -1859,7 +1871,7 @@ text \<open>Forward decomposition of a valid state sequence at an arbitrary spli
   pair, so the converse glue is unavailable at a non-shared boundary.  Only the forward direction
   (which \<^emph>\<open>drops\<close> the straddling interval invariant) holds, and that is all our @{const state_at}
   proofs consume.\<close>
-lemma valid_temporal_state_seq_app_decompose:
+lemma \<^marker>\<open>provenance ai\<close> valid_temporal_state_seq_app_decompose:
   assumes "valid_temporal_state_seq M (xs @ ys) \<pi> M'"
   shows "\<exists>Mm. valid_temporal_state_seq M xs \<pi> Mm \<and> valid_temporal_state_seq Mm ys \<pi> M'"
   using assms
@@ -1908,7 +1920,7 @@ lemma state_at_is_state_at:
   assumes "valid_temporal_state_seq M ts \<pi> M'"
       and "strict_sorted ts"
   shows "is_state_at \<pi> ts M M' t (state_at \<pi> ts M M' t)"
-proof -
+proof \<^marker>\<open>provenance ai\<close> -
   have "valid_temporal_state_seq M (takeWhile (\<lambda>x. x < t) ts @ dropWhile (\<lambda>x. x < t) ts) \<pi> M'"
     using assms(1) by simp
   hence "\<exists>M\<^sub>m. is_state_at \<pi> ts M M' t M\<^sub>m"
@@ -2038,7 +2050,7 @@ text \<open>The temporal wf-problem locale does not assume @{term \<open>wf_worl
   we recover it from the per-fact clause
   \<open>\<forall>f\<in>set (init P). wf_fmla_atom objT f \<or> wf_func_assign f\<close>, since for a predAtom
   @{term \<open>wf_func_assign f\<close>} is always false.\<close>
-lemma wf_I: "wf_world_model I"
+lemma \<^marker>\<open>provenance ai\<close> wf_I: "wf_world_model I"
 proof -
   have "wf_fmla_atom objT f" if "f \<in> set (init P)" and "is_predAtom f" for f
     using that wf_temporal_problem
@@ -2096,7 +2108,7 @@ proof -
       by auto
   qed 
   hence "\<exists>Mj. valid_temporal_state_seq I (take n htps) tp Mj \<and> valid_temporal_state_seq Mj [htps ! n] tp (abstr_state_list ! Suc n)" 
-    unfolding take_Sn using valid_temporal_state_seq_app_decompose by blast
+    unfolding \<^marker>\<open>provenance ai_human\<close> take_Sn using valid_temporal_state_seq_app_decompose by blast
   then obtain Mj where
     Ij: "valid_temporal_state_seq I (take n htps) tp Mj" 
     and jSn: "valid_temporal_state_seq Mj [htps ! n] tp (abstr_state_list ! Suc n)" by auto
@@ -2108,7 +2120,7 @@ proof -
     using valid_temporal_state_seq_abstr_state_list_i assms by simp
   have eq: "Mj = (abstr_state_list ! n)" using Ij In valid_temporal_state_seq_state_unique by blast
 
-  show ?thesis using Mj_eff_Sn eq by simp
+  show ?thesis using \<^marker>\<open>provenance ai_human\<close> Mj_eff_Sn eq by simp
 qed
 
 lemma ref_htpl_eq_htps: "imp_defs.rat_impl.htpl = htps"
@@ -2274,11 +2286,13 @@ qed
 
 definition "missing_ends t \<pi> \<equiv> {s. \<exists>a. (t,a) \<in> simple_acts \<pi> \<and> Some s = map_option at_end_spec (resolve_temporal_action_schema (name a))}"  
 
+provenance ai_human
 lemma plan_happ_seq_alt': "\<forall>s. s \<in> (imp_defs.rat_impl.happ_at imp_defs.rat_impl.plan_happ_seq t)  \<longleftrightarrow> 
   ((s \<in> set (acts_of_plan_at_simplified t tp)) 
     \<or> s \<in> missing_ends t tp)"
   unfolding missing_ends_def
 proof (intro strip iffI CollectI; (elim disjE CollectE exE conjE)?)
+  provenance_in_proof human
   fix s
   assume a: "(t, s) \<in> imp_defs.rat_impl.plan_happ_seq" 
   show "s \<in> set (acts_of_plan_at_simplified t tp) \<or> s \<in> {s. \<exists>a. (t, a) \<in> simple_acts tp \<and> Some s = map_option at_end_spec (resolve_temporal_action_schema (plan_action.name a))}"
@@ -2294,7 +2308,7 @@ proof (intro strip iffI CollectI; (elim disjE CollectE exE conjE)?)
     thus "at_end_spec a \<in> set (acts_of_plan_at_simplified (rat_of_int t + rat_of_int d) tp) 
             \<or> at_end_spec a \<in> {s. \<exists>a. (rat_of_int t + rat_of_int d, a) \<in> simple_acts tp 
               \<and> Some s = map_option at_end_spec (resolve_temporal_action_schema (plan_action.name a))}"
-    proof (induction a rule: ast_temporal_action_schema_induct_unfold)
+    proof \<^marker>\<open>provenance ai_human\<close> (induction a rule: ast_temporal_action_schema_induct_unfold)
       case (SimpleActionSchema n ps pre eff)
       hence b: "(SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff), t, d) \<in> set ref_plan" by simp
       have d: "d = 0" using b simple_act_in_ref_plan_durs by auto
@@ -2403,6 +2417,7 @@ next
       unfolding s td a(2) using a(2) plan_action.sel td by auto
   qed
 next
+  provenance_in_proof human
   fix s a
   assume x: "(t, a) \<in> simple_acts tp" 
     and s: "Some s = map_option at_end_spec (resolve_temporal_action_schema (plan_action.name a))"
@@ -2411,6 +2426,7 @@ next
     a: "a = SimplePlanAction n as" using x(1) unfolding simple_acts_def is_act_simple 
     by (cases a) auto
 
+  provenance_in_proof ai_human
   have wfa: "wf_plan_action (SimplePlanAction n as)"
     using a x simple_acts_in_plan wf_plan_actions by fastforce
   obtain ps pre eff where 
@@ -2422,6 +2438,7 @@ next
   have s: "s = at_end_spec (SimpleActionSchema (ActionHead n ps) (SimpleActionBody pre eff))"
     using s resS a by simp
 
+  provenance_in_proof human
   have ref: "(the (resolve_temporal_action_schema n), \<lfloor>t\<rfloor>, 0) \<in> set ref_plan"
     apply (rule in_set_ref_planI)
     using x a simple_acts_in_plan by auto
@@ -2441,12 +2458,12 @@ qed
 
 lemma plan_happ_seq_alt: "imp_defs.rat_impl.happ_at imp_defs.rat_impl.plan_happ_seq t =
   set (acts_of_plan_at_simplified t tp) \<union> missing_ends t tp"
-  using plan_happ_seq_alt' by blast
+  using \<^marker>\<open>provenance human\<close> plan_happ_seq_alt' by blast
 
 
 lemma missing_ends_ground_non_actions:
   "missing_ends t tp \<subseteq> {ground_non_action}"
-proof (rule subsetI)
+proof \<^marker>\<open>provenance human\<close> (rule subsetI)
   fix x
   assume "x \<in> missing_ends t tp"
   then obtain a where
@@ -2461,13 +2478,13 @@ proof (rule subsetI)
 qed
 
 
-lemma Union_diff_eq_diff:
+lemma \<^marker>\<open>provenance human\<close> Union_diff_eq_diff:
   assumes "\<forall>x \<in> S. f x = {x}"
      and "\<forall>x \<in> T. f x = {x}"
    shows "\<Union>(f ` S - f ` T) = S - T"
   using assms by auto
 
-lemma apply_effects_if:
+lemma \<^marker>\<open>provenance human\<close> apply_effects_if:
   assumes "S - (\<Union>x\<in>h. set (dels (ground_action.effect x))) \<union> (\<Union>x\<in>h. set (adds (ground_action.effect x))) = T"
      and S_props: "S \<subseteq> {x. form_preds_no_args x \<and> is_predAtom x}"
      and h_props: "h \<subseteq> {x. ground_act_no_args x \<and> wf_ground_action x}" 
@@ -2554,6 +2571,7 @@ proof -
 qed
   
 
+provenance ai
 text \<open>Apply-effects bridge.  The FPS actions-at-\<open>t\<close> (@{const acts_of_temporal_plan_at}) and the
   project actions-at-\<open>t\<close> (@{const acts_of_plan_at_simplified}) decompose over the same plan
   entries; their durative snaps differ only in the folded duration constraints and duration
@@ -2703,7 +2721,7 @@ proof -
     using A D by simp
 qed
 
-lemma apply_effects_subseq:
+lemma \<^marker>\<open>provenance human\<close> apply_effects_subseq:
   assumes "i < length imp_defs.rat_impl.htpl" 
   shows "imp_defs.rat_impl.apply_effects 
       (imp_defs.rat_impl.happ_at imp_defs.rat_impl.plan_happ_seq (imp_defs.rat_impl.time_index i)) 
@@ -2716,7 +2734,7 @@ proof -
   hence ia: "i < length abstr_state_list" 
     and ip: "i < length plan_state_list" by simp+
 
-  have x: "apply_eff (acts_of_temporal_plan_at (htps ! i) tp) (abstr_state_list ! i) = abstr_state_list ! Suc i"
+  have \<^marker>\<open>provenance ai_human\<close> x: "apply_eff (acts_of_temporal_plan_at (htps ! i) tp) (abstr_state_list ! i) = abstr_state_list ! Suc i"
     by (rule abstr_state_list_nth_Suc[OF i', symmetric])
 
   have 2: "set (acts_of_plan_at_simplified (htps ! i) tp) \<subseteq> {x. ground_act_no_args x \<and> wf_ground_action x}"
@@ -2744,6 +2762,7 @@ proof -
         assume t: "t \<in> set htps" 
           and a: "a \<in> set (acts_of_temporal_plan_at t tp)" 
           and p: "p \<in> set (adds (ground_action.effect a)) \<union> set (dels (ground_action.effect a))"
+        provenance_in_proof ai
         obtain a' where
           a': "a' \<in> set (acts_of_plan_at_simplified t tp)"
           and adds_eq: "set (adds (ground_action.effect a')) = set (adds (ground_action.effect a))"
@@ -2771,7 +2790,7 @@ proof -
     thus ?thesis by blast
   qed
 
-  have x': "fst (abstr_state_list ! i)
+  have \<^marker>\<open>provenance ai\<close> x': "fst (abstr_state_list ! i)
       - (\<Union>a\<in>set (acts_of_plan_at_simplified (htps ! i) tp). set (dels (ground_action.effect a)))
       \<union> (\<Union>a\<in>set (acts_of_plan_at_simplified (htps ! i) tp). set (adds (ground_action.effect a)))
       = fst (abstr_state_list ! Suc i)"
@@ -2781,7 +2800,7 @@ proof -
     by (simp add: o_def)
 
   have "imp_defs.rat_impl.apply_effects (set (acts_of_plan_at_simplified (htps ! i) tp)) (plan_state_list ! i) = plan_state_list ! Suc i"
-    unfolding plan_state_list_nth_conv_abstr_state_list_nth[OF ip]
+    unfolding \<^marker>\<open>provenance ai_human\<close> plan_state_list_nth_conv_abstr_state_list_nth[OF ip]
     unfolding plan_state_list_nth_conv_abstr_state_list_nth[OF Sip]
     unfolding x'[symmetric]
     using apply_effects_if[OF x' 3 2]
@@ -3003,7 +3022,7 @@ next
   qed
 qed
 
-lemma plan_inv_seq_alt:
+lemma \<^marker>\<open>provenance human\<close> plan_inv_seq_alt:
   "imp_defs.rat_impl.invs_at imp_defs.rat_impl.plan_inv_seq t = \<Union> (set ` (map to_predicate) ` to_literals ` invs_of_plan_at t tp)"
 proof -
   presume "{p. \<exists>a d t'. p \<in> (set \<circ> over_all_spec) a \<and> (a, t', d) \<in> ran abstr_plan \<and> t' < t \<and> t \<le> t' + d} 
@@ -3068,6 +3087,7 @@ next
       obtain ps dcs pre eff where
         res: "resolve_temporal_action_schema n = Some (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
         using dur_act[THEN res_durative_act_name] by auto 
+      provenance_in_proof ai_human
       have inv: "res_inst_temporal_inv (DurativePlanAction n [] da) = Some (the (res_inst_temporal_inv (DurativePlanAction n [] da)))"
         by simp
       have "x \<in> set (over_all_spec (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff)))"
@@ -3095,10 +3115,12 @@ next
     obtain ps dcs pre eff where
       res: "resolve_temporal_action_schema n = Some (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
       using res_durative_act_name[OF act] by auto
+    provenance_in_proof ai_human
     have invE: "res_inst_temporal_inv (DurativePlanAction n [] da) = Some inv" using invF a as by simp
     have x: "x \<in> (set \<circ> over_all_spec) (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))" 
       using over_all_spec_eq_res_inst_temporal_inv[OF res, of da] invE x by simp
 
+    provenance_in_proof human
     have "(DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff), rat_of_int \<lfloor>t'\<rfloor>, rat_of_int \<lfloor>da\<rfloor>) \<in> ran abstr_plan"
       using ran_abstr_planI in_set_ref_planI act res unfolding durative_acts_def by fastforce
     moreover
@@ -3206,11 +3228,12 @@ proof -
   thus ?thesis using hi by simp
 qed
 
-lemma invs_sat:
+lemma \<^marker>\<open>provenance human\<close> invs_sat:
   assumes "i < length imp_defs.rat_impl.htpl" 
   shows "imp_defs.rat_impl.invs_at imp_defs.rat_impl.plan_inv_seq (imp_defs.rat_impl.time_index i) \<subseteq> plan_state_list ! i"
 proof -
   have i': "i < length htps" using assms ref_htpl_eq_htps by argo
+  provenance_in_proof ai
   have ia: "i < length abstr_state_list" using i' length_abstr_state_list by simp
   have lwm: "lwm_basic (fst (abstr_state_list ! i))"
     using abstr_state_list_nth_wf_world_model[OF less_imp_le_nat[OF i']]
@@ -3218,8 +3241,9 @@ proof -
        (auto simp: lwm_basic_def wf_fmla_atom_imp_is_predAtom wf_world_model.simps)
   have psl: "plan_state_list ! i = (\<Union>f \<in> fst (abstr_state_list ! i). set (map to_predicate (to_literals f)))"
     unfolding plan_state_list_def using ia by simp
+  provenance_in_proof human
   have "\<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at (htps ! i) tp) \<subseteq> plan_state_list ! i"
-  proof
+  proof \<^marker>\<open>provenance ai\<close>
     fix x assume "x \<in> \<Union> (set ` map to_predicate ` to_literals ` invs_of_plan_at (htps ! i) tp)"
     then obtain inv where iv: "inv \<in> invs_of_plan_at (htps ! i) tp"
       and xinv: "x \<in> set (map to_predicate (to_literals inv))" by auto
@@ -3238,7 +3262,7 @@ qed
 
 
 
-lemma pres_sat:
+lemma \<^marker>\<open>provenance human\<close> pres_sat:
   assumes i: "i < length imp_defs.rat_impl.htpl"
   shows "\<Union> ((set \<circ> pre_spec) ` imp_defs.rat_impl.happ_at imp_defs.rat_impl.plan_happ_seq (imp_defs.rat_impl.time_index i)) \<subseteq> plan_state_list ! i"
 proof -
@@ -3250,7 +3274,7 @@ proof -
   show ?thesis
     unfolding plan_happ_seq_alt
     unfolding imp_defs.rat_impl.time_index_def ref_htpl_eq_htps
-    using pre_spec_acts_union_eq[of "htps ! i"]
+    using \<^marker>\<open>provenance ai_human\<close> pre_spec_acts_union_eq[of "htps ! i"]
     by (simp add: comp_def)
 next
   have i': "i < length htps" using assms ref_htpl_eq_htps by argo
@@ -3269,6 +3293,7 @@ next
     "drop i htps = t#ts" by (cases "drop i htps") auto
   hence di: "drop i htps = (htps ! i)#ts" using i' using hd_drop_conv_nth by fastforce
 
+  provenance_in_proof ai
   have entails: "valuation (abstr_state_list ! i) \<Turnstile>\<^sub>m ground_action.precondition a"
     if "a \<in> set (acts_of_temporal_plan_at (htps ! i) tp)" for a
     using valid_temporal_state_seq_head_precond[OF v[unfolded di] that] .
@@ -3291,8 +3316,9 @@ next
       using to_literals_subset_if_models[OF entails[OF that]] .
   qed
 
+  provenance_in_proof human
   show "\<Union> ((set \<circ> pre_spec) ` set (acts_of_temporal_plan_at (htps ! i) tp)) \<subseteq> plan_state_list ! i "
-    unfolding plan_state_list_def
+    unfolding \<^marker>\<open>provenance ai_human\<close> plan_state_list_def
     apply (subst nth_map)
     using Sia apply simp
     unfolding comp_def pre_spec_alt set_remdups set_map image_image
@@ -4040,7 +4066,7 @@ proof (intro ballI)
   qed
 qed
 
-lemma temp_plan_valid:
+lemma \<^marker>\<open>provenance human\<close> temp_plan_valid:
   "imp_defs.rat_impl.valid_plan"
 proof -
   have vss: "\<exists>M. imp_defs.rat_impl.valid_state_sequence M \<and> M 0 = set init_spec \<and> set goal_spec \<subseteq> M (length imp_defs.rat_impl.htpl)" 
@@ -4066,7 +4092,7 @@ proof -
       using is_predAtom_literals
       by auto
     show "set goal_spec \<subseteq> plan_state_list ! length imp_defs.rat_impl.htpl"
-    proof -
+    proof \<^marker>\<open>provenance ai\<close> -
       have basic: "lwm_basic (fst final_state)"
       proof -
         have "wf_world_model final_state"
@@ -4104,6 +4130,7 @@ proof -
       fix t n as d
       assume "(t, DurativePlanAction n as d) \<in> set tp"
       hence "wf_plan_action (DurativePlanAction n as d)" using wf_plan_actions by fast
+      provenance_in_proof ai_human
       hence "0 \<le> d" by (rule durative_plan_action_durs)
       thus "0 \<le> rat_of_int \<lfloor>d\<rfloor>" by simp
     qed
@@ -4132,6 +4159,7 @@ proof -
       then obtain ps pre eff dcs where
         res: "resolve_temporal_action_schema n = Some (DurativeActionSchema (ActionHead n ps) (DurativeActionBody dcs pre eff))"
         using durative_plan_action_schema_type1 by blast
+      provenance_in_proof ai_human
       \<comment> \<open>FPS \<open>wf_plan_action (DurativePlanAction n as d)\<close> yields only \<open>d \<ge> 0\<close>
          (see \<open>Discrete_Planning_Common.Instantiations.wf_plan_action.simps(2)\<close>), NOT \<open>durations_match\<close>.  The
          match is derived from PLAN VALIDITY via @{thm durations_match_of_valid}: the At_Start / At_End
@@ -4176,6 +4204,7 @@ proof -
         show "pred_option (pred_upper_bound is_integer) None" by simp
       qed
 
+      provenance_in_proof human
       show "imp_defs.rat_impl.satisfies_duration_bounds (the (resolve_temporal_action_schema n)) (rat_of_int \<lfloor>d\<rfloor>)" 
         unfolding imp_defs.rat_impl.satisfies_duration_bounds_def Let_def res option.sel 
         unfolding comp_def lower_spec.simps upper_spec.simps
@@ -4206,9 +4235,11 @@ proof -
             and btd:  "ref_plan ! j = (b, tb, db)"
 
 
+          provenance_in_proof ai
           have len_eq: "length ref_plan = length tp" unfolding ref_plan_def by simp
           have itp: "i < length tp" and jtp: "j < length tp" using i j len_eq by simp_all
 
+          provenance_in_proof human
           have in_ref_plan: "(a, ta, da) \<in> set ref_plan" 
             "(b, tb, db) \<in> set ref_plan"
             using nth_mem[OF i] nth_mem[OF j] unfolding atd btd by simp+
@@ -4224,6 +4255,7 @@ proof -
             using i j ij atd[symmetric] btd[symmetric]
             by auto
 
+          provenance_in_proof ai
           \<comment> \<open>Position-keyed block memberships: the snaps of the two distinct reference-plan entries \<open>i\<close>, \<open>j\<close>
              occur in the corresponding (distinct) concat blocks of @{const acts_of_plan_at_simplified}.\<close>
           have a_start_blk: "at_start_spec a \<in> set (snap_of_plan_action_at_simplified (rat_of_int ta) (tp ! i))"
@@ -4263,6 +4295,7 @@ proof -
           consider "at_end_spec b \<noteq> ground_non_action" | "at_end_spec b = ground_non_action" by blast
           note b_end = this
 
+          provenance_in_proof human
           have a_in_acts: "a \<in> set actions_spec" 
            and b_in_acts: "b \<in> set actions_spec" 
             using in_ref_plan
@@ -4293,6 +4326,7 @@ proof -
             "rat_of_int tb \<in> set htps" 
             using ref_plan_start_in_htps in_ref_plan by force+
 
+          provenance_in_proof ai_human
           have "rat_of_int (ta + da) \<in> set htps \<or> at_end_spec a = ground_non_action" 
             apply (cases a rule: ast_temporal_action_schema_cases_unfold)
             using ref_plan_end_in_htps_if_durative in_ref_plan
@@ -4303,18 +4337,19 @@ proof -
             by blast+
           note a_end_time = this
 
+          provenance_in_proof human
           show "imp_defs.rat_impl.mutex_sched a (rat_of_int ta) (rat_of_int da) b (rat_of_int tb) (rat_of_int db)" 
           proof (intro imp_defs.rat_impl.mutex_sched_zero_sepI acts_non_intrf_imp_mutex_snap_action acts_pres_pos acts_no_args acts_wf)
             show "rat_of_int 0 = 0" by simp
           next 
             assume t: "rat_of_int ta = rat_of_int tb"
             show "acts_non_intrf (at_start_spec a) (at_start_spec b)" 
-              using acts_non_intrf_simplified_distinct_entries[OF start_times_in_htps(1) itp jtp ij
+              using \<^marker>\<open>provenance ai\<close> acts_non_intrf_simplified_distinct_entries[OF start_times_in_htps(1) itp jtp ij
                   a_start_blk b_start_blk[unfolded t[symmetric]]] .
           next
             assume t: "rat_of_int ta = rat_of_int tb + rat_of_int db" 
             show "acts_non_intrf (at_start_spec a) (at_end_spec b)"
-            proof (cases rule: b_end)
+            proof \<^marker>\<open>provenance ai\<close> (cases rule: b_end)
               case 1
               have tb_eq: "rat_of_int ta = rat_of_int (tb + db)" using t by simp
               show ?thesis
@@ -4327,7 +4362,7 @@ proof -
           next 
             assume t: "rat_of_int ta + rat_of_int da = rat_of_int tb" 
             show "acts_non_intrf (at_end_spec a) (at_start_spec b)"
-            proof (cases rule: a_end)
+            proof \<^marker>\<open>provenance ai\<close> (cases rule: a_end)
               case 1
               have ta_eq: "rat_of_int (ta + da) = rat_of_int tb" using t by simp
               show ?thesis
@@ -4340,7 +4375,7 @@ proof -
           next 
             assume t: "rat_of_int ta + rat_of_int da = rat_of_int tb + rat_of_int db" 
             show "acts_non_intrf (at_end_spec a) (at_end_spec b)"
-            proof (cases rule: a_end)
+            proof \<^marker>\<open>provenance ai\<close> (cases rule: a_end)
               case a1: 1
               show ?thesis
               proof (cases rule: b_end)
@@ -4389,7 +4424,7 @@ proof -
             have a_in_acts: "a \<in> set actions_spec" using a ref_plan_acts_in_actions by simp
             
             show "\<not> imp_defs.rat_impl.set_impl.mutex_snap_action (at_start_spec a) (at_end_spec a)"
-            proof (cases a rule: ast_temporal_action_schema_cases_unfold)
+            proof \<^marker>\<open>provenance ai\<close> (cases a rule: ast_temporal_action_schema_cases_unfold)
               case (SimpleActionSchema n ps pre eff)
               hence "at_end_spec a = ground_non_action" by simp
               thus ?thesis using ground_non_action_not_mutex(2) by simp

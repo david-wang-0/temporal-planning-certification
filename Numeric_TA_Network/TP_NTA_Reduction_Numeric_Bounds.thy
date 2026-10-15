@@ -2,7 +2,9 @@ theory TP_NTA_Reduction_Numeric_Bounds
   imports
     TP_NTA_Reduction_Correctness_Numeric
     TP_NTA_Reduction_Numeric_Model_Checking
+    "Provenance.Provenance"
 begin
+provenance ai
 
 text \<open>Discharge @{text num_seq_in_bounds} from a static bound certificate over the reduction's
   numeric semantics. The interval arithmetic is provided self-contained here rather than imported

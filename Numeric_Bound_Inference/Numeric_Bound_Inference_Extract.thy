@@ -1,6 +1,7 @@
 theory Numeric_Bound_Inference_Extract
-  imports Numeric_Bound_Inference_Guards
+  imports Numeric_Bound_Inference_Guards "Provenance.Provenance"
 begin
+provenance ai
 
 section \<open>Finite-box extraction: the \<open>\<infinity> \<Rightarrow> reject\<close> bridge to the executable pipeline\<close>
 

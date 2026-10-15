@@ -11,7 +11,9 @@ theory Temporal_Continuous_Reduction_Free
   imports Discrete_Temporal_Planning.Temporal_Happening_Semantics
     Discrete_Temporal_Planning.Temporal_Utils
     PDDL_Checker_Common
+    "Provenance.Provenance"
 begin
+provenance human
 
 
 fun temporal_to_continuous_action_body :: "ast_temporal_durative_action_body \<Rightarrow> ast_cont_change_action_body" where

@@ -1,6 +1,7 @@
 theory TP_NTA_Reduction_Numeric_Prelims
-  imports TP_NTA_Reduction_Numeric_Model_Checking
+  imports TP_NTA_Reduction_Numeric_Model_Checking "Provenance.Provenance"
 begin
+provenance ai
 
 context numeric_tp_nta_reduction_correctness
 begin

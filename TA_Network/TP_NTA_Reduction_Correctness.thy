@@ -1,6 +1,7 @@
 theory TP_NTA_Reduction_Correctness
-  imports TP_NTA_Reduction_Steps
+  imports TP_NTA_Reduction_Steps "Provenance.Provenance"
 begin
+provenance ai_human
 context tp_nta_reduction_correctness
 begin
 lemma happening_steps_possible:
@@ -8,13 +9,13 @@ lemma happening_steps_possible:
       and pres: "happening_pre_pre_delay i s"
       and lvp: "LvP s"
   shows "graph_impl.steps (s#delay_and_apply i s) \<and> happening_post i (last (delay_and_apply i s)) \<and> LvP (last (delay_and_apply i s))" 
-proof -
+proof \<^marker>\<open>provenance human\<close> -
   let ?seq = "((ext_seq \<circ> seq_apply) (map edge_2_effect (filter (is_starting_index (planning_sem.time_index i)) [0..<length actions]))
              ((ext_seq \<circ> seq_apply) (map end_edge_effect (filter (is_ending_index (planning_sem.time_index i)) [0..<length actions]))
                ((ext_seq \<circ> seq_apply) (map start_edge_effect (filter (is_starting_index (planning_sem.time_index i)) [0..<length actions]))
                  (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) (filter (is_instant_index (planning_sem.time_index i)) [0..<length actions])) 
                   ((ext_seq \<circ> seq_apply) (map edge_3_effect (filter (is_ending_index (planning_sem.time_index i)) [0..<length actions])) [delay (get_delay i) s])))))"
-  presume p: "graph_impl.steps ?seq \<and> happening_post i (last ?seq) \<and> LvP (last ?seq)"
+  presume \<^marker>\<open>provenance ai_human\<close> p: "graph_impl.steps ?seq \<and> happening_post i (last ?seq) \<and> LvP (last ?seq)"
 
   have delay_non_negative: "0 \<le> get_delay i" 
     unfolding get_delay_def
@@ -33,7 +34,7 @@ proof -
     and Lvc': "(L, v, c') = delay (get_delay i) (L, v, c)"
     unfolding delay_def by simp
 
-  have Lv_con: "Lv_conds L v" using lvp unfolding s by simp
+  have Lv_con: "Lv_conds L v" using \<^marker>\<open>provenance ai_human\<close> lvp unfolding s by simp
   
   have no_urgent: "\<forall>p<length (fst (snd net_impl.sem)). fst (L, v, c) ! p \<notin> urgent (fst (snd net_impl.sem) ! p)"
   proof (intro allI impI)
@@ -105,8 +106,9 @@ proof -
       using 1 by linarith
   qed
 
-  show "graph_impl.steps (s#delay_and_apply i s) \<and> happening_post i (last (delay_and_apply i s)) \<and> LvP (last (delay_and_apply i s))" 
+  show \<^marker>\<open>provenance ai_human\<close> "graph_impl.steps (s#delay_and_apply i s) \<and> happening_post i (last (delay_and_apply i s)) \<and> LvP (last (delay_and_apply i s))" 
     apply (intro conjI)
+    provenance_in_proof human
     subgoal
       unfolding delay_and_apply_def Let_def
       unfolding s
@@ -128,6 +130,7 @@ proof -
       unfolding comp_apply[of ext_seq seq_apply, symmetric]
       apply (subst last_tl_eq_last)
       using p by blast
+    provenance_in_proof ai_human
     subgoal
       unfolding delay_and_apply_def Let_def
       apply (subst apply_nth_happening_def)
@@ -144,7 +147,7 @@ let ?seq = "((ext_seq \<circ> seq_apply) (map edge_2_effect (filter (is_starting
                  (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) (filter (is_instant_index (planning_sem.time_index i)) [0..<length actions])) 
                   ((ext_seq \<circ> seq_apply) (map edge_3_effect (filter (is_ending_index (planning_sem.time_index i)) [0..<length actions])) [delay (get_delay i) s])))))"
 
-  have seed: "LvP (delay (get_delay i) s)"
+  have \<^marker>\<open>provenance ai\<close> seed: "LvP (delay (get_delay i) s)"
     using lvp by (cases s) (simp add: delay_def)
 
   have pres': "happening_pre_end_starts i (delay (get_delay i) s)"
@@ -189,17 +192,17 @@ let ?seq = "((ext_seq \<circ> seq_apply) (map edge_2_effect (filter (is_starting
       subgoal by (auto dest!: happening_pre_post_delay_dests(7))
       done
   qed
-  show "graph_impl.steps ?seq \<and> happening_post i (last ?seq) \<and> LvP (last ?seq)"
-      apply (rule start_ends_possible)
+  show \<^marker>\<open>provenance ai_human\<close> "graph_impl.steps ?seq \<and> happening_post i (last ?seq) \<and> LvP (last ?seq)"
+      apply \<^marker>\<open>provenance human\<close> (rule start_ends_possible)
         apply (rule end_ends_possible)
           apply (rule start_starts_possible)
             apply (rule instant_actions_possible)
               apply (rule end_starts_possible)
-    by (auto intro!: i graph_impl.steps.intros pres' seed)
+    by \<^marker>\<open>provenance ai_human\<close> (auto intro!: i graph_impl.steps.intros pres' seed)
 qed
 
 
-lemma set_foldl_append: "set (foldl (@) ys xs) = \<Union> (set ` (set xs)) \<union> (set ys)"
+lemma \<^marker>\<open>provenance human\<close> set_foldl_append: "set (foldl (@) ys xs) = \<Union> (set ` (set xs)) \<union> (set ys)"
   apply (induction xs arbitrary: ys)
   by auto
 
@@ -216,6 +219,7 @@ proof (rule steps_seq.ext_seq'_induct_list_prop_and_post[
         simplified length_map set_map length_upt minus_nat.diff_0 set_upt], 
         goal_cases)
   case (1 f x)
+  provenance_in_proof human
   have x: "delay_and_apply i x' \<noteq> []" if "i < length planning_sem.htpl" for i x'
   proof -
     have 1: "\<exists>x. x \<in> set xs \<Longrightarrow> xs \<noteq> []" for xs by auto
@@ -417,10 +421,10 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R =
         using pl by (auto simp: variables_unique)
     qed
   qed
-  show "graph_impl.steps [x, main_auto_goal_edge_effect x]"
+  show \<^marker>\<open>provenance human\<close> "graph_impl.steps [x, main_auto_goal_edge_effect x]"
   proof -
-    obtain L v c where s: "x = (L, v, c)" by (rule prod_cases3)
-    have lv: "Lv_conds L v" using lvp unfolding s by simp
+    obtain \<^marker>\<open>provenance ai\<close> L v c where s: "x = (L, v, c)" by (rule prod_cases3)
+    have \<^marker>\<open>provenance ai\<close> lv: "Lv_conds L v" using lvp unfolding s by simp
     show "graph_impl.steps [x, main_auto_goal_edge_effect x]"
       apply (rule single_step_intro)
       apply (rule ssubst[OF s])
@@ -469,7 +473,9 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R =
               prefer 2
               apply (subst is_val_simps)
               apply (erule goal_trans_preE)
+              provenance_in_proof ai_human
               apply (simp add: Lv_conds_dests(4)[OF lv])
+             provenance_in_proof human
              apply simp
             apply rule
            apply simp
@@ -480,12 +486,14 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R =
         by (rule check_bexp_is_val.intros)
               apply simp
       using no_invs apply simp
+      provenance_in_proof ai_human
       \<comment> \<open>The remaining \<open>step_int\<close> premises: the target-location facts (\<open>L ! 0 = planning_loc\<close>,
           \<open>0 < length L\<close>) come from \<open>lv\<close> (no longer from \<open>goal_trans_pre\<close>); the \<open>is_upds\<close> of the single
           \<open>planning_lock \<mapsto> 2\<close> update is structural; the two \<open>bounded\<close> goals reduce to \<open>bounded v\<close> from
           \<open>lv\<close> via \<open>single_upd_bounded\<close> (bound \<open>(0, 2)\<close>).\<close>
             apply (rule Lv_conds_dests(2)[OF lv])
            apply (insert Lv_conds_dests(1)[OF lv]; simp)
+          provenance_in_proof human
           apply simp
          apply simp
         apply (rule is_upds.intros)
@@ -495,12 +503,13 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post[where R =
           apply (rule check_bexp_is_val.intros)
          apply simp
         apply (rule is_upds.intros)
-       apply (rule single_upd_bounded[OF Lv_conds_dests(3)[OF lv] map_of_net_bounds_planning_lock]; simp)
+       apply \<^marker>\<open>provenance ai_human\<close> (rule single_upd_bounded[OF Lv_conds_dests(3)[OF lv] map_of_net_bounds_planning_lock]; simp)
       by (rule Lv_conds_dests(3)[OF lv])
   qed
 qed
 
 
+provenance human
 lemma all_steps_possible: "graph_impl.steps plan_steps \<and> goal_state_conds (last plan_steps)" 
     unfolding plan_steps_def 
     unfolding comp_apply[of ext_seq seq_apply, symmetric]         
@@ -651,6 +660,7 @@ proof -
   show ?thesis using x.valid_plan_imp_form_holds by auto
 qed
 
+provenance ai
 text \<open>
 A numeric problem without fluents is a propositional problem.
 

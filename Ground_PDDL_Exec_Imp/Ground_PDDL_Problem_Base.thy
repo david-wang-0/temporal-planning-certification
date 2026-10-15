@@ -3,7 +3,9 @@ theory Ground_PDDL_Problem_Base
       "Discrete_Temporal_Planning.Temporal_Instantiations"
       "Discrete_Temporal_Planning.Temporal_Happening_Semantics"
       "Grounding_Temporal_Common.Temporal_PDDL_Normalization"
+      "Provenance.Provenance"
 begin
+provenance ai
 
 subsection \<open>To move\<close>
 
@@ -56,7 +58,7 @@ text \<open>The re-point uses Formal-PDDL-Semantics' closed-world @{const Worlds
   Bridge lemmas adapted from the classical grounder \<open>Isabelle-PDDL-Grounding\<close>
   (\<open>val_predAtm_dom\<close> / \<open>valuation_pos_conj_mono\<close>).\<close>
 
-fun to_literals::"object atom Formulas.formula \<Rightarrow> object atom Formulas.formula list" where
+fun \<^marker>\<open>provenance human\<close> to_literals::"object atom Formulas.formula \<Rightarrow> object atom Formulas.formula list" where
 "to_literals (Atom (predAtm x as)) = [Atom (predAtm x as)]" |
 "to_literals (x \<^bold>\<and> y) = to_literals x @ to_literals y" |
 "to_literals _ = []"
@@ -77,7 +79,7 @@ lemma pos_conj_form_BigAnd:
 
 (* PLACEHOLDER: inst_formula preservation lemmas moved below is_pos_conj_to_literals_conv_atoms *)
 
-fun to_predicate::"object atom Formulas.formula \<Rightarrow> predicate" where
+fun \<^marker>\<open>provenance human\<close> to_predicate::"object atom Formulas.formula \<Rightarrow> predicate" where
 "to_predicate (Atom (predAtm x _)) = x"
 
 text \<open>Bridge (adapted from the classical grounder \<open>Isabelle-PDDL-Grounding\<close>): a
@@ -87,6 +89,7 @@ text \<open>Bridge (adapted from the classical grounder \<open>Isabelle-PDDL-Gro
 lemma val_predAtm_dom: "predAtm p xs \<in> dom (valuation M)"
   unfolding valuation_def by (simp add: domIff)
 
+provenance human
 instantiation lower_bound::(linorder) linorder
 begin
 fun less_eq_lower_bound::"('a::linorder) lower_bound \<Rightarrow> ('a::linorder) lower_bound \<Rightarrow> bool" where
@@ -206,6 +209,7 @@ fun act_pres_pos::"ast_temporal_action_schema \<Rightarrow> bool" where
 "act_pres_pos (SimpleActionSchema h (SimpleActionBody pre eff)) = (is_pos_conj pre)" |
 "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff)) = (list_all is_pos_conj (map snd cond))"
 
+provenance ai
 text \<open>Numeric-TOLERANT positivity: like the reused \<open>is_pos_lit\<close>/\<open>is_pos_conj\<close> but the five positive
   numeric-comparison atoms are ACCEPTED (they are projected to \<open>n_pre\<close>, not \<open>pre_spec\<close>); only NEGATED
   \<open>predAtm\<close> literals are rejected.  The BASE locale assumes this weaker positivity, so numeric
@@ -266,6 +270,7 @@ fun dc_no_func::"term duration_constraint \<Rightarrow> bool" where
 "dc_no_func (DurationConstraint dop (ConstantExpr x)) = True" |
 "dc_no_func _ = False"
 
+provenance human
 fun act_no_func_dcs::"ast_temporal_action_schema \<Rightarrow> bool" where
 "act_no_func_dcs (SimpleActionSchema h b) = True" |
 "act_no_func_dcs (DurativeActionSchema h (DurativeActionBody dc cond deff)) = (list_all dc_no_func (map snd dc))"
@@ -278,7 +283,7 @@ fun act_dcs_integers::"ast_temporal_action_schema \<Rightarrow> bool" where
 "act_dcs_integers (SimpleActionSchema h b) = True" |
 "act_dcs_integers (DurativeActionSchema h (DurativeActionBody dc cond deff)) = (list_all duration_constraint_integer (map snd dc))"
 
-fun ground_act_pres_pos::"ground_action \<Rightarrow> bool" where
+fun \<^marker>\<open>provenance ai_human\<close> ground_act_pres_pos::"ground_action \<Rightarrow> bool" where
 "ground_act_pres_pos (GroundAction pre eff) = (pos_conj_form pre)"
 
 fun ground_act_no_args::"ground_action \<Rightarrow> bool" where
@@ -430,10 +435,10 @@ lemma is_pos_conj_map_formula:
   subgoal for f g by (cases f) auto
   by auto
 
-lemma is_pos_conj_to_literals_conv_atoms:
+lemma \<^marker>\<open>provenance ai_human\<close> is_pos_conj_to_literals_conv_atoms:
   assumes "is_pos_conj form" and "form_preds_no_args form"
   shows "Atom ` atoms form = set (to_literals form)"
-  using assms unfolding form_preds_no_args_def
+  using \<^marker>\<open>provenance ai\<close> assms unfolding form_preds_no_args_def
 proof (induction form)
   case (Atom x) thus ?case by (cases x) auto
 next
@@ -448,6 +453,7 @@ next
   case (Not x) thus ?case by (cases x) (auto elim!: atom_no_args.elims)
 qed auto
 
+provenance ai
 text \<open>Instantiation preservation (BOUNDARY BRIDGE): inst_formula's atom-map keeps predAtm/eqAtm and
   is identity on predAtm, so is_pos_conj, form_preds_no_args and hence pos_conj_form carry through --
   the grounder's is_pos_conj + eqAtm-free side condition on the (term) snap conditions gives
@@ -497,20 +503,20 @@ lemma pos_conj_form_inst_formula:
   using is_pos_conj_to_literals_conv_atoms[OF is_pos_conj_inst_formula[OF assms(1)]
                                               form_preds_no_args_inst_formula[OF assms(2)]] .
 
-lemma is_pos_conj_atoms_preds:
+lemma \<^marker>\<open>provenance ai_human\<close> is_pos_conj_atoms_preds:
   assumes "form_preds_no_args form"
   shows "\<forall>a \<in> Atom ` atoms form. is_predAtom a"
-proof
+proof \<^marker>\<open>provenance ai\<close>
   fix a assume "a \<in> Atom ` atoms form"
   then obtain x where x: "a = Atom x" and "x \<in> atoms form" by auto
   hence "atom_no_args x" using assms unfolding form_preds_no_args_def by blast
   thus "is_predAtom a" unfolding x by (cases x) auto
 qed
 
-lemma is_pos_conj_predicates: 
+lemma \<^marker>\<open>provenance ai_human\<close> is_pos_conj_predicates: 
   assumes "is_pos_conj form" and "form_preds_no_args form"
   shows "to_predicate ` Atom ` atoms form = set (map to_predicate (to_literals form))"
-  using assms unfolding set_remdups set_map 
+  using \<^marker>\<open>provenance human\<close> assms unfolding set_remdups set_map 
   using is_pos_conj_to_literals_conv_atoms[OF assms]
   by simp 
 
@@ -520,13 +526,13 @@ lemma pos_conj_form_predicates:
   using assms unfolding pos_conj_form_def by (metis set_map) 
 
 
-lemma is_predAtom_imp_is_pos_conj:
+lemma \<^marker>\<open>provenance human\<close> is_predAtom_imp_is_pos_conj:
   assumes "is_predAtom f"
   shows "is_pos_conj f"
   using assms 
   by (induction f rule: is_predAtom.induct) simp+
   
-lemma is_predAtom_literals:
+lemma \<^marker>\<open>provenance human\<close> is_predAtom_literals:
   assumes "is_predAtom f"
   shows "to_literals f = [f]"
   using assms
@@ -551,6 +557,7 @@ next
   thus ?case by (auto simp: map_formula_semantics_simps)
 qed auto
 
+provenance human
 lemma form_preds_no_args_imp_atoms_no_args:
   assumes "form_preds_no_args form"
   shows "\<forall>a \<in> Atom ` atoms form. form_preds_no_args a"
@@ -580,7 +587,7 @@ lemma eff_dels_no_args_conjunct_effect:
   unfolding comp_def set_concat
   by auto
 
-lemma form_preds_no_args_map_atom:
+lemma \<^marker>\<open>provenance ai\<close> form_preds_no_args_map_atom:
   assumes "form_preds_no_args c"
   shows "form_preds_no_args (Formulas.map_formula (map_atom f) c)"
 proof -
@@ -590,14 +597,14 @@ proof -
     by (auto simp: formula.set_map h)
 qed
 
-lemma pos_conj_form_map_atom:
+lemma \<^marker>\<open>provenance ai\<close> pos_conj_form_map_atom:
   assumes "is_pos_conj c" and "form_preds_no_args c"
   shows "pos_conj_form (Formulas.map_formula (map_atom f) c)"
   unfolding pos_conj_form_def
   using is_pos_conj_to_literals_conv_atoms[OF is_pos_conj_map_formula[OF assms(1)]
                                               form_preds_no_args_map_atom[OF assms(2)]] .
 
-lemma instantiate_action_schema_pres_pos:
+lemma \<^marker>\<open>provenance ai_human\<close> instantiate_action_schema_pres_pos:
   assumes "act_pres_pos (SimpleActionSchema h (SimpleActionBody pre eff))"
       and "form_preds_no_args pre"
     shows "ground_act_pres_pos (instantiate_temporal_action_schema (SimpleActionSchema h (SimpleActionBody pre eff)) as)"
@@ -610,7 +617,7 @@ proof -
 qed
 
 
-lemma inst_formula_BigAnd:
+lemma \<^marker>\<open>provenance ai\<close> inst_formula_BigAnd:
   "inst_formula f dur (BigAnd Fs) = BigAnd (map (inst_formula f dur) Fs)"
   by (induction Fs) (auto simp: inst_formula.simps)
 
@@ -618,16 +625,17 @@ text \<open>The snap precondition specs are built with no duration constraints (
   \<^const>\<open>at_start_spec\<close>/\<^const>\<open>at_end_spec\<close>/\<^const>\<open>over_all_snap\<close>), so the precondition is a positive
   conjunction of the (predicate) timed conditions only -- the numeric duration atoms enter the
   network locale separately via \<^const>\<open>lower_spec\<close>/\<^const>\<open>upper_spec\<close>, not here.\<close>
-lemma inst_snap_act_pres_pos:
+lemma \<^marker>\<open>provenance ai_human\<close> inst_snap_act_pres_pos:
   assumes "act_pres_pos (DurativeActionSchema h (DurativeActionBody dc cond deff))"
       and "list_all form_preds_no_args (map snd cond)"
     shows "ground_act_pres_pos (inst_snap_action_body_elements [] cond deff (tsubst h args) dur anno)"
 proof -
-  have pos: "list_all is_pos_conj (filter_time_spec anno cond)"
+  have \<^marker>\<open>provenance human\<close> pos: "list_all is_pos_conj (filter_time_spec anno cond)"
     using assms(1)
     unfolding filter_time_spec_def comp_def
     apply (subst (asm) act_pres_pos.simps)
     unfolding list_all_iff by auto
+  provenance_in_proof ai
   have noargs: "list_all form_preds_no_args (filter_time_spec anno cond)"
     using assms(2) unfolding filter_time_spec_def list_all_iff by auto
   have "\<forall>c \<in> set (filter_time_spec anno cond). pos_conj_form (inst_formula (tsubst h args) dur c)"
@@ -668,7 +676,7 @@ lemma dc_list_upper_propI:
   apply (rule min_ub_opt_propI)
   using assms by simp+
 
-lemma dc_integer_imp_lb_integer:
+lemma \<^marker>\<open>provenance ai_human\<close> dc_integer_imp_lb_integer:
   assumes "duration_constraint_integer dc"
   shows "pred_option (pred_lower_bound is_integer) (dc_to_lb dc)"
   using assms
@@ -678,7 +686,7 @@ lemma dc_integer_imp_lb_integer:
     by (cases dop; cases c) auto
   done
 
-lemma dc_integer_imp_ub_integer:
+lemma \<^marker>\<open>provenance ai_human\<close> dc_integer_imp_ub_integer:
   assumes "duration_constraint_integer dc"
   shows "pred_option (pred_upper_bound is_integer) (dc_to_ub dc)"
   using assms
@@ -695,18 +703,20 @@ sublocale imp_defs: temp_planning_problem_list_defs_int
   by unfold_locales simp
 
 
+provenance ai_human
 lemma ground_non_action_pre:
   "pre_spec ground_non_action = []"
-  unfolding ground_non_action_def by auto
+  unfolding \<^marker>\<open>provenance human\<close> ground_non_action_def by auto
 
 lemma ground_non_action_adds:
   "adds_spec ground_non_action = []"
-  unfolding ground_non_action_def by auto
+  unfolding \<^marker>\<open>provenance human\<close> ground_non_action_def by auto
 
 lemma ground_non_action_dels:
   "dels_spec ground_non_action = []"
-  unfolding ground_non_action_def by auto
+  unfolding \<^marker>\<open>provenance human\<close> ground_non_action_def by auto
 
+provenance human
 lemma inj_on_to_predicate:
   "inj_on to_predicate {x. form_preds_no_args x \<and> is_predAtom x}"
 proof (rule inj_onI)
@@ -820,6 +830,7 @@ lemma dels_spec_alt:
 
 end
 
+provenance ai_human
 locale ground_ast_problem_base =
     ground_ast_problem_defs P +
     wf_ast_temporal_problem P
@@ -835,6 +846,7 @@ locale ground_ast_problem_base =
 
 begin
 
+provenance human
 lemma acts_wf:
   assumes "a \<in> set actions_spec"
   shows " wf_temporal_action_schema a"
@@ -850,7 +862,7 @@ lemma resolve_action_in_actions:
   using assms unfolding resolve_temporal_action_schema_def actions_spec_def
   by (blast dest: index_by_eq_SomeD)
 
-lemma act_params_match_empty:
+lemma \<^marker>\<open>provenance ai_human\<close> act_params_match_empty:
   assumes "parameters h = []"
   shows "action_params_match h []"
   using assms
@@ -904,7 +916,7 @@ functions in the PDDL formalisation\<close>
 
 text \<open>A durative schema in the domain, with empty parameters, yields a well-formed snap action
   via @{const inst_snap_action_body_elements} with no duration constraints in the precondition.\<close>
-lemma durative_snap_body_wf:
+lemma \<^marker>\<open>provenance ai\<close> durative_snap_body_wf:
   assumes "DurativeActionSchema h (DurativeActionBody dc cond deff) \<in> set actions_spec"
   shows "wf_ground_action (inst_snap_action_body_elements [] cond deff (tsubst h []) dur ta)"
 proof (rule wf_inst_snap_action_body_elements)
@@ -926,7 +938,7 @@ qed
 lemma start_snaps_wf:
   assumes "a \<in> set actions_spec"
   shows "wf_ground_action (at_start_spec a)"
-  using assms
+  using \<^marker>\<open>provenance ai_human\<close> assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
   show ?case
@@ -951,7 +963,7 @@ qed
 lemma end_snaps_wf:
   assumes "a \<in> set actions_spec"
   shows "wf_ground_action (at_end_spec a)"
-  using assms
+  using \<^marker>\<open>provenance ai_human\<close> assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
   show ?case
@@ -970,7 +982,7 @@ text \<open>The over-all condition is obtained by first instantiating the action
 lemma over_all_snap_wf:
   assumes "a \<in> set actions_spec"
   shows "wf_ground_action (over_all_snap a)"
-  using assms
+  using \<^marker>\<open>provenance ai_human\<close> assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
   show ?case
@@ -992,7 +1004,7 @@ lemma act_no_params:
   using assms unfolding actions_spec_def using acts_no_params unfolding list_all_iff 
   by simp
 
-lemma act_pres_pos_num_spec:
+lemma \<^marker>\<open>provenance ai\<close> act_pres_pos_num_spec:
   assumes "a \<in> set actions_spec"
   shows "act_pres_pos_num a"
   using assms unfolding actions_spec_def using positive_act_pres unfolding list_all_iff
@@ -1004,10 +1016,10 @@ lemma constT_None:
 
 text \<open>An atom that is well-formed over the empty type environment (no constants, no variables)
   cannot have any arguments: a predicate atom's arguments would have to be typed, but no entity is.\<close>
-lemma wf_atom_no_args:
+lemma \<^marker>\<open>provenance ai\<close> wf_atom_no_args:
   assumes "wf_atom (ty_term (map_of []) constT) (predAtm n obs)"
   shows "atom_no_args (predAtm n obs)"
-  using assms
+  using \<^marker>\<open>provenance human\<close> assms
   apply (cases obs)
    apply simp
   subgoal for ob' obs'
@@ -1026,7 +1038,7 @@ lemma wf_atom_no_args:
 text \<open>In the numeric-free setting a well-formed positive conjunction over the empty type
   environment has only argument-free predicate atoms (no numeric/equality atoms, by positivity;
   no arguments, by the empty type environment).\<close>
-lemma wf_fmla_imp_wf_atom:
+lemma \<^marker>\<open>provenance ai\<close> wf_fmla_imp_wf_atom:
   assumes "wf_fmla tyt form"
       and "a \<in> formula.atoms form"
   shows "wf_atom tyt a"
@@ -1038,7 +1050,7 @@ lemma wf_fmla_atom_no_args:
   assumes "wf_fmla_atom (ty_term (map_of []) constT) form" 
   shows "form_preds_no_args form" 
   unfolding form_preds_no_args_def
-proof
+proof \<^marker>\<open>provenance ai\<close>
   fix a assume a: "a \<in> formula.atoms form"
   have "is_predAtom form" using assms wf_fmla_atom_imp_is_predAtom by blast
   then obtain n obs where feq: "form = Atom (predAtm n obs)"
@@ -1049,7 +1061,7 @@ proof
   thus "atom_no_args a" unfolding a_eq using wf_atom_no_args by blast
 qed
 
-lemma map_formula_no_args_gen:
+lemma \<^marker>\<open>provenance ai_human\<close> map_formula_no_args_gen:
   assumes "form_preds_no_args form"
       and "\<And>p. atom_no_args (g (predAtm p []))"
   shows "form_preds_no_args (Formulas.map_formula g form)"
@@ -1067,7 +1079,7 @@ lemma map_formula_no_args_gen:
 lemma map_formula_no_args:
   assumes "form_preds_no_args form"
   shows "form_preds_no_args ((Formulas.map_formula o map_atom) f form)"
-  unfolding comp_def
+  unfolding \<^marker>\<open>provenance ai\<close> comp_def
   apply (rule map_formula_no_args_gen[OF assms])
   by simp
 
@@ -1089,12 +1101,12 @@ lemma map_effect_dels_no_args:
 
 text \<open>\<^const>\<open>to_literals\<close> only extracts \<open>predAtm\<close> literals, which are well-formed atoms whenever the
   formula is well-formed -- no positivity needed for the props inclusion.\<close>
-lemma wf_fmla_imp_wf_to_literals:
+lemma \<^marker>\<open>provenance ai\<close> wf_fmla_imp_wf_to_literals:
   "wf_fmla M form \<Longrightarrow> list_all (wf_fmla_atom M) (to_literals form)"
   by (induction form rule: to_literals.induct) auto
 
 text \<open>Conditions and effects of well formed ground actions are in props. Snap actions are ground actions\<close>
-lemma wf_ground_action_pres_in_props:
+lemma \<^marker>\<open>provenance ai_human\<close> wf_ground_action_pres_in_props:
   assumes "wf_ground_action h"
   shows "(set \<circ> pre_spec) h \<subseteq> set props_spec"
   using assms
@@ -1145,7 +1157,7 @@ text \<open>Actions' over_all conditions are in props.\<close>
 lemma over_all_in_props:
   assumes "a \<in> set actions_spec"
   shows "set (over_all_spec a) \<subseteq> set props_spec"
-  using assms
+  using \<^marker>\<open>provenance ai_human\<close> assms
   unfolding over_all_spec.simps
   using wf_ground_action_pres_in_props[simplified comp_def]
   using over_all_snap_wf by blast

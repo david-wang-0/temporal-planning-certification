@@ -1,6 +1,7 @@
 theory Temporal_Plans_Instances
-  imports Temporal_Plans
+  imports Temporal_Plans "Provenance.Provenance"
 begin
+provenance human
 
 
 
@@ -355,6 +356,7 @@ sublocale temp_plan_for_action_defs at_start at_end "set o over_all" lower upper
   by unfold_locales
 end
 
+provenance ai
 text \<open>**Numeric collapse twin of @{locale temp_plan_for_problem_list_defs}**. The list-refined plan-for-problem locale, additively carrying the
 numeric data of @{locale numeric_temp_plan_defs} on the @{emph \<open>same\<close>} @{locale temp_plan_defs}
 base (the same @{term \<open>set o pre\<close>} / @{term \<open>set o over_all\<close>} projection as the
@@ -403,6 +405,7 @@ lemma collapse_num_valid_plan:
 
 end
 
+provenance human
 locale temp_plan_for_problem_list_impl = 
   temp_plan_for_problem_list_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi> +
   temp_planning_problem_list_impl at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions 
@@ -715,6 +718,7 @@ sublocale abstr_impl: temp_plan_for_problem_list_impl at_start at_end over_all
 
 end
 
+provenance ai
 text \<open>**Numeric collapse twin of @{locale temp_plan_for_problem_list_impl_int}** -- the int/list
 executable layer the reduction's capstone (\<^theory_text>\<open>tp_nta_reduction_correctness\<close> in
 \<^theory_text>\<open>TP_NTA_Reduction_Model_Checking\<close>) is stated on. It additively carries the numeric
@@ -759,6 +763,7 @@ sublocale num_rat_impl: numeric_temp_plan_for_problem_list_defs at_start at_end 
 
 end
 
+provenance human
 (* An instance of this should be created. *)
 locale temp_plan_for_problem_list_impl_int' =
   temp_plan_for_problem_list_defs_int at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi> +
@@ -799,6 +804,7 @@ sublocale conc_ref_impl: temp_plan_for_problem_list_impl_int AtStart AtEnd rat_i
   by auto
 end
 
+provenance ai
 text \<open>**Numeric collapse twin of @{locale temp_plan_for_problem_list_impl_int'}** (the primed
 existence-form capstone @{text valid_temp_plan_imp_form_holds} in
 \<^theory_text>\<open>TP_NTA_Reduction_Correctness\<close> is stated on this). Same shape as the unprimed
@@ -849,6 +855,7 @@ lemma numeric_temp_plan_for_problem_list_impl_int'_imp_prop:
      at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>"
   using assms unfolding numeric_temp_plan_for_problem_list_impl_int'_def by simp
 
+provenance human
 (* 
 locale temp_planning_problem_list_impl_int_ex = temp_planning_problem_list_impl_int'
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions

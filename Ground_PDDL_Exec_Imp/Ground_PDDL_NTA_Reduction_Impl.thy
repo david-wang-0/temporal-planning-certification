@@ -1,7 +1,9 @@
 theory Ground_PDDL_NTA_Reduction_Impl
   imports Ground_PDDL_NTA_Reduction_Correctness
     Temporal_Continuous_Reduction_Free
+    "Provenance.Provenance"
 begin
+provenance human
 
 
 lemmas return_iff = return_iff check_all_list_return_iff check_wf_problem_return_iff
@@ -500,7 +502,7 @@ lemma inc_prop_lock_ab_refine:
 
 lemma lower_spec_refine:
   "lower_spec = lower_spec_impl"
-  apply (intro ext)
+  apply \<^marker>\<open>provenance ai_human\<close> (intro ext)
   subgoal for x
     apply (cases x rule: ast_temporal_action_schema_cases_unfold)
     by simp+
@@ -508,7 +510,7 @@ lemma lower_spec_refine:
 
 lemma upper_spec_refine:
   "upper_spec = upper_spec_impl"
-  apply (intro ext)
+  apply \<^marker>\<open>provenance ai_human\<close> (intro ext)
   subgoal for x
     apply (cases x rule: ast_temporal_action_schema_cases_unfold)
     by simp+
@@ -771,7 +773,7 @@ text \<open>Then, we refine the variable bounds\<close>
 
 lemma inv_vars_refine:
   "abstr_model_checking.reduction_ref_impl.inv_vars invs = inv_vars' invs"
-  unfolding abstr_model_checking.reduction_ref_impl.inv_vars_def
+  unfolding \<^marker>\<open>provenance ai_human\<close> abstr_model_checking.reduction_ref_impl.inv_vars_def
   unfolding prop_to_lock_refine prop_to_var_refine
   unfolding inv_vars'_def by (simp add: Let_def image_Un)
 
@@ -857,6 +859,7 @@ lemma model_checking_problem_refine:
 
 end
 
+provenance ai
 section \<open>The executable admission check and network assembly\<close>
 
 text \<open>The temporal well-formedness check routes through the \<^emph>\<open>continuous\<close> checker at the translated
@@ -892,7 +895,7 @@ text \<open>The numeric-tolerant BASE admission check: like \<open>check_ground_
   nullary; numeric init assignments are exempt).  It characterizes @{locale ground_ast_problem_base},
   which both the classical leaf (\<open>check_ground_problem_core\<close> = base + the two predAtm-only
   checks) and the numeric leaf build on.\<close>
-definition "check_ground_problem_base P \<equiv> do {
+definition \<^marker>\<open>provenance ai_human\<close> "check_ground_problem_base P \<equiv> do {
   let D = ast_problem.domain P;
   check_wf_temporal_problem P;
   check (is_pos_conj_num (goal P)) (ERRS ''Goal not a conjunction of positive literals'');
@@ -907,7 +910,7 @@ definition "check_ground_problem_base P \<equiv> do {
     (\<lambda>(x::object atom Formulas.formula) (y::string). show y)
 }"
 
-lemma check_ground_problem_base_return_iff[return_iff]:
+lemma \<^marker>\<open>provenance ai_human\<close> check_ground_problem_base_return_iff[return_iff]:
   "check_ground_problem_base P = Inr () \<longleftrightarrow> ground_ast_problem_base P"
 proof -
   interpret ast_temporal_problem P .
@@ -951,6 +954,7 @@ proof -
   thus ?thesis by (simp add: check_ground_problem_core_return_iff)
 qed
 
+provenance human
 text \<open>The classical (numeric-free) leaf @{locale ground_ast_problem} is the core plus @{text \<open>functions D = []\<close>}.\<close>
 
 definition "check_ground_problem P \<equiv> do {
@@ -960,7 +964,7 @@ definition "check_ground_problem P \<equiv> do {
 
 lemma check_ground_problem_return_iff[return_iff]:
   "check_ground_problem P = Inr () \<longleftrightarrow> ground_ast_problem P"
-  unfolding check_ground_problem_def ground_ast_problem_def ground_ast_problem_axioms_def
+  unfolding \<^marker>\<open>provenance ai\<close> check_ground_problem_def ground_ast_problem_def ground_ast_problem_axioms_def
   by (auto simp: return_iff)
 
 text \<open>The pure network builder: assemble the concrete Munta NTA from the refined constructors.\<close>

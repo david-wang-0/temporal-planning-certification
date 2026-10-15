@@ -1,6 +1,7 @@
 theory Ground_PDDL_Problem_Defs
-  imports Ground_PDDL_Problem_Base
+  imports Ground_PDDL_Problem_Base "Provenance.Provenance"
 begin
+provenance human
 text \<open>Numeric-free / integer-duration assumptions for the (numeric-free) NTA reduction phase that
   the grounder's grounded/positive locales do not cover: no numeric functions, duration constraints
   are function-free and integer-valued. Bundled with the grounder's grounded_temporal_problem
@@ -11,6 +12,7 @@ locale integer_duration_problem = wf_ast_temporal_problem P
       and acts_no_func_dcs: "list_all act_no_func_dcs (actions D)"
       and acts_dcs_integers: "list_all act_dcs_integers (actions D)"
 
+provenance ai_human
 locale ground_ast_problem_core =
     ground_ast_problem_base P
   for P :: ast_temporal_problem +
@@ -19,7 +21,7 @@ locale ground_ast_problem_core =
 
 begin
 
-lemma act_conds_no_args_spec:
+lemma \<^marker>\<open>provenance ai\<close> act_conds_no_args_spec:
   assumes "a \<in> set actions_spec"
   shows "act_conds_no_args a"
   using assms unfolding actions_spec_def using conds_no_args unfolding list_all_iff
@@ -29,7 +31,7 @@ text \<open>In the classical (predAtm-only) core the numeric-tolerant base posit
   @{const act_pres_pos_num} upgrades to strict @{const act_pres_pos} -- there are no numeric
   condition atoms to differ on -- so the classical no-args/pos-conj lemmas below (which take
   @{const act_pres_pos}) are fed unchanged.\<close>
-lemma act_pres_pos_spec:
+lemma \<^marker>\<open>provenance ai\<close> act_pres_pos_spec:
   assumes "a \<in> set actions_spec"
   shows "act_pres_pos a"
   using act_pres_pos_num_spec[OF assms] act_conds_no_args_spec[OF assms]
@@ -130,10 +132,11 @@ proof -
     using eff_dels_no_args by auto
 qed
 
+provenance human
 lemma start_snap_no_args:
   assumes "a \<in> set actions_spec"
   shows "ground_act_no_args (at_start_spec a)"
-  using assms
+  using \<^marker>\<open>provenance ai_human\<close> assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
   obtain pre eff where
@@ -155,7 +158,7 @@ qed
 lemma end_snap_no_args:
   assumes "a \<in> set actions_spec"
   shows "ground_act_no_args (at_end_spec a)"
-  using assms
+  using \<^marker>\<open>provenance ai_human\<close> assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
   show ?case 
@@ -176,7 +179,7 @@ text \<open>The over-all condition is obtained by first instantiating the action
 lemma over_all_snap_no_args:
   assumes "a \<in> set actions_spec"
   shows "ground_act_no_args (over_all_snap a)"
-  using assms
+  using \<^marker>\<open>provenance ai_human\<close> assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
   show ?case 
@@ -196,7 +199,7 @@ text \<open>Conditions\<close>
 lemma start_snap_pre_pos_conj:
   assumes "a \<in> set actions_spec"
   shows "ground_act_pres_pos (at_start_spec a)"
-  using assms
+  using \<^marker>\<open>provenance ai_human\<close> assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
   obtain pre eff where b: "b = SimpleActionBody pre eff" by (cases b)
@@ -219,7 +222,7 @@ qed
 lemma end_snap_pre_pos_conj:
   assumes "a \<in> set actions_spec"
   shows "ground_act_pres_pos (at_end_spec a)"
-  using assms
+  using \<^marker>\<open>provenance ai_human\<close> assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
   show ?case unfolding at_end_spec.simps ground_non_action_def by (simp add: pos_conj_form_def)
@@ -236,7 +239,7 @@ qed
 lemma over_all_snap_pre_pos_conj:
   assumes "a \<in> set actions_spec"
   shows "ground_act_pres_pos (over_all_snap a)"
-  using assms
+  using \<^marker>\<open>provenance ai_human\<close> assms
 proof (induction a rule: ast_temporal_action_schema.induct)
   case (SimpleActionSchema h b)
   show ?case unfolding over_all_snap.simps ground_non_action_def by (simp add: pos_conj_form_def)
@@ -270,7 +273,7 @@ text \<open>In the numeric-free setting the domain declares no functions, so the
   empty and no initialisation fact can be a (well-formed) function assignment. Hence the
   well-formedness alternative \<open>wf_fmla_atom objT f \<or> wf_func_assign f\<close> of @{const wf_temporal_problem}
   collapses to the predicate-atom case.\<close>
-lemma no_functions_no_wf_func_assign:
+lemma \<^marker>\<open>provenance ai\<close> no_functions_no_wf_func_assign:
   "\<not> wf_func_assign f"
 proof (rule notI)
   assume "wf_func_assign f"
@@ -288,7 +291,7 @@ qed
 
 lemma init_wf_fmla_atoms:
   "\<forall>f\<in>set (init P). wf_fmla_atom objT f"
-proof -
+proof \<^marker>\<open>provenance ai_human\<close> -
   have 1: "\<forall>f\<in>set (init P). wf_fmla_atom objT f \<or> wf_func_assign f"
     using wf_temporal_problem unfolding wf_temporal_problem_def by auto
   show "\<forall>f\<in>set (init P). wf_fmla_atom objT f" 

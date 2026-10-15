@@ -1,6 +1,7 @@
 theory TP_NTA_Reduction_Numeric_Edges
-  imports TP_NTA_Reduction_Numeric_Prelims
+  imports TP_NTA_Reduction_Numeric_Prelims "Provenance.Provenance"
 begin
+provenance ai
 
 context numeric_tp_nta_reduction_correctness
 begin

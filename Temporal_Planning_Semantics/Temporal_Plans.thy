@@ -1,6 +1,7 @@
 theory Temporal_Plans
-  imports Temporal_Planning_Common.TP_Utils "Difference_Bound_Matrices.DBM"
+  imports Temporal_Planning_Common.TP_Utils "Difference_Bound_Matrices.DBM" "Provenance.Provenance"
 begin
+provenance human
 
 datatype ('t) lower_bound =
   GT 't |
@@ -10,6 +11,7 @@ datatype ('t) upper_bound =
   LT 't |
   LE 't
 
+provenance ai
 section \<open>Abstract numeric syntax\<close>
 text \<open>Numeric expressions and comparisons over opaque ground fluents @{typ 'n} and a rational-like
 value sort @{typ 'r} (intended instance @{typ rat}). These stay PDDL-agnostic: PDDL's
@@ -165,17 +167,20 @@ proof -
   thus ?thesis unfolding apply_upds_def using uniq by simp
 qed
 
+provenance human
 section \<open>Plan validity\<close>
 text \<open>This and similar notions need to be used in multiple places. I formulate this to a 
 sufficient level of abstraction.\<close>
 
 type_synonym 'p state = "'p set"
 
+provenance ai
 text \<open>A numeric state pairs the propositional set with a partial fluent valuation (partiality =
 definedness). The propositional component @{typ \<open>'p set\<close>} is exactly @{typ \<open>'p state\<close>}, so it
 remains a projection (@{term fst}) and the purely propositional lemmas carry over unchanged.\<close>
 type_synonym ('p, 'n, 'r) num_state = "'p set \<times> ('n \<rightharpoonup> 'r)"
 
+provenance human
 type_synonym 'p state_sequence = "nat \<Rightarrow> ('p state)"
 
 text \<open>Invariants\<close>
@@ -269,6 +274,7 @@ lemma mutex_snap_action_refl:
 
 end
 
+provenance ai
 text \<open>Numeric extension of @{locale action_defs}. Additive: it imports every @{locale action_defs}
 parameter and adds the numeric data, so @{locale action_defs} and its existing sublocales are
 untouched. Numeric preconditions/effects attach to snap actions; the @{term over_all} numeric
@@ -550,6 +556,7 @@ qed
 
 end
 
+provenance human
 text \<open>Unique snap actions\<close>
 locale action_defs_unique_snaps = action_defs +
   assumes snaps_disj_on_UNIV: "snaps_disj_on UNIV"
@@ -1274,10 +1281,11 @@ lemma mutex_trans:
   "mutex_snap_action (at_end a) (at_end b) \<longleftrightarrow> mutex_annotated_action (AtEnd a) (AtEnd b)" 
   unfolding mutex_snap_action_def mutex_annotated_action_def anno_trans[symmetric] by blast+
 
+provenance ai
 text \<open>When the domain map is injective there are no duplicate plan actions (weaker than no
 self-overlap). Two transfer lemmas relate the @{const ran}-quantified pairwise condition to the
 @{const dom}-quantified one; @{text inj_mutex_def} is then immediate.\<close>
-lemma ran_pair_imp_dom_pair:
+lemma \<^marker>\<open>provenance ai_human\<close> ran_pair_imp_dom_pair:
   assumes inj: "inj_on \<pi> (dom \<pi>)"
       and ran: "\<And>a ta da b tb db.
         (a, ta, da) \<in> ran \<pi> \<Longrightarrow> (b, tb, db) \<in> ran \<pi> \<Longrightarrow> (a, ta, da) \<noteq> (b, tb, db)
@@ -1285,20 +1293,20 @@ lemma ran_pair_imp_dom_pair:
       and ij: "i \<in> dom \<pi>" "j \<in> dom \<pi>" "i \<noteq> j"
       and \<pi>ij: "\<pi> i = Some (a, ta, da)" "\<pi> j = Some (b, tb, db)"
     shows "P a ta da b tb db"
-proof -
+proof \<^marker>\<open>provenance ai\<close> -
   have "\<pi> i \<noteq> \<pi> j" by (rule inj_on_contraD[OF inj ij(3,1,2)])
   hence ne: "(a, ta, da) \<noteq> (b, tb, db)" using \<pi>ij by simp
   have "(a, ta, da) \<in> ran \<pi>" "(b, tb, db) \<in> ran \<pi>" using \<pi>ij by (auto simp: ran_def)
   thus ?thesis using ran ne by blast
 qed
 
-lemma dom_pair_imp_ran_pair:
+lemma \<^marker>\<open>provenance human\<close> dom_pair_imp_ran_pair:
   assumes dom: "\<And>i j.
         i \<in> dom \<pi> \<Longrightarrow> j \<in> dom \<pi> \<Longrightarrow> i \<noteq> j
           \<Longrightarrow> \<pi> i = Some (a, ta, da) \<Longrightarrow> \<pi> j = Some (b, tb, db) \<Longrightarrow> P a ta da b tb db"
       and ran: "(a, ta, da) \<in> ran \<pi>" "(b, tb, db) \<in> ran \<pi>" "(a, ta, da) \<noteq> (b, tb, db)"
     shows "P a ta da b tb db"
-proof -
+proof \<^marker>\<open>provenance ai_human\<close> -
   obtain i where i: "\<pi> i = Some (a, ta, da)" using ran(1) unfolding ran_def by blast
   obtain j where j: "\<pi> j = Some (b, tb, db)" using ran(2) unfolding ran_def by blast
   have "i \<noteq> j" using i j ran(3) by auto
@@ -1363,10 +1371,10 @@ lemma mutex_valid_plan_injE:
       and "\<And>a t d. (a, t, d) \<in> ran \<pi> \<Longrightarrow> d = 0 \<or> d < \<epsilon> \<Longrightarrow> \<not> mutex_snap_action (at_start a) (at_end a)"
   using assms by (blast dest: mutex_valid_plan_injD1 mutex_valid_plan_injD2)
 
-lemma inj_mutex_def:
+lemma \<^marker>\<open>provenance human\<close> inj_mutex_def:
   assumes inj: "inj_on \<pi> (dom \<pi>)"
   shows "mutex_valid_plan = mutex_valid_plan_inj"
-  unfolding mutex_valid_plan_eq
+  unfolding \<^marker>\<open>provenance ai\<close> mutex_valid_plan_eq
 proof (rule iffI)
   assume A: "mutex_valid_plan_alt"
   show "mutex_valid_plan_inj"
@@ -1403,13 +1411,14 @@ next
   qed
 qed
 
-lemma invs_at_plan_inv_seq_alt:
+lemma \<^marker>\<open>provenance human\<close> invs_at_plan_inv_seq_alt:
   "invs_at plan_inv_seq t = {p. \<exists>a d t'. p \<in> over_all a \<and> (a, t', d) \<in> ran \<pi> \<and> t' < t \<and> t \<le> t' + d}"
   unfolding invs_at_def plan_inv_seq_def by auto
   
 end
 
 
+provenance ai
 text \<open>Numeric plan-level locale: the propositional @{locale temp_plan_defs} merged with the numeric
 data of @{locale numeric_action_defs}, sharing the @{locale action_defs} parameters. This is the
 @{emph \<open>parallel\<close>} (additive) numeric hierarchy -- the propositional development is untouched.\<close>
@@ -1647,6 +1656,7 @@ qed
 end
 
 
+provenance human
 locale temp_plan_for_action_defs =
   temp_plan_defs +
   temp_planning_problem_and_actions

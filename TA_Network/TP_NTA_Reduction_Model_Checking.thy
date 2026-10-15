@@ -1,6 +1,7 @@
 theory TP_NTA_Reduction_Model_Checking
-  imports TP_NTA_Reduction_Defs
+  imports TP_NTA_Reduction_Defs "Provenance.Provenance"
 begin
+provenance human
 
 locale tp_nta_reduction_model_checking = tp_nta_reduction_defs
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name +

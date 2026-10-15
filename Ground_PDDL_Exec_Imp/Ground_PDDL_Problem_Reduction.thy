@@ -1,6 +1,7 @@
 theory Ground_PDDL_Problem_Reduction
-  imports Ground_PDDL_Problem_Defs
+  imports Ground_PDDL_Problem_Defs "Provenance.Provenance"
 begin
+provenance human
 
 context ground_ast_problem_base
 begin
@@ -19,14 +20,14 @@ proof
     unfolding wf_domain_signature_def props_spec_def 
     by simp
   show "distinct actions_spec"
-  proof -
+  proof \<^marker>\<open>provenance ai_human\<close> -
     have "distinct (map ast_temporal_action_schema_name actions_spec)"
       using distinct_act_names .
     thus ?thesis
       using distinct_map by blast
   qed                                         
   show "\<forall>a\<in>set actions_spec. distinct (over_all_spec a)"
-    by (simp add: pre_spec_alt)
+    by \<^marker>\<open>provenance ai\<close> (simp add: pre_spec_alt)
   show "set goal_spec - set props_spec \<subseteq> set init_spec - set props_spec"
     \<comment> \<open>@{text goal_in_props} makes the LHS empty; @{text init_in_props} is no longer needed (and is a
         @{text no_functions}-leaf lemma, unavailable in @{text ground_ast_problem_core}).\<close>
@@ -52,14 +53,14 @@ proof
     hence "x \<in> {}" 
     proof (cases)
       case 1
-      have a': "wf_ground_action (at_start_spec a)" using start_snaps_wf[OF a_in_acts] .
+      have \<^marker>\<open>provenance ai_human\<close> a': "wf_ground_action (at_start_spec a)" using start_snaps_wf[OF a_in_acts] .
       have "(set \<circ> pre_spec) (at_start_spec a) \<union> (set \<circ> adds_spec) (at_start_spec a) \<union> (set \<circ> dels_spec) (at_start_spec a) \<subseteq> set props_spec"
         using wf_ground_action_pres_in_props wf_ground_action_dels_in_props wf_ground_action_adds_in_props
         using a' by simp
       then show ?thesis using 1 unfolding action_and_prop_set.snap_consts_def by blast
     next
       case 2
-      have a': "wf_ground_action (at_end_spec a)" using end_snaps_wf[OF a_in_acts] .
+      have \<^marker>\<open>provenance ai_human\<close> a': "wf_ground_action (at_end_spec a)" using end_snaps_wf[OF a_in_acts] .
       have "(set \<circ> pre_spec) (at_end_spec a) \<union> (set \<circ> adds_spec) (at_end_spec a) \<union> (set \<circ> dels_spec) (at_end_spec a) \<subseteq> set props_spec"
         using wf_ground_action_pres_in_props wf_ground_action_dels_in_props wf_ground_action_adds_in_props
         using a' by simp
@@ -68,10 +69,10 @@ proof
       case 3
       then show ?thesis using a_in_acts over_all_in_props by auto
     qed
-    thus "x \<in> set init_spec - set props_spec" by simp \<comment> \<open>ex-falso from @{text \<open>x \<in> {}\<close>}\<close>
+    thus "x \<in> set init_spec - set props_spec" by \<^marker>\<open>provenance ai_human\<close> simp \<comment> \<open>ex-falso from @{text \<open>x \<in> {}\<close>}\<close>
   qed
   show "inj_on act_to_name_spec (set actions_spec)"
-  proof -
+  proof \<^marker>\<open>provenance ai_human\<close> -
     have "distinct (map act_to_name_spec actions_spec)" 
       using distinct_act_names unfolding act_to_name_spec_def .
     thus ?thesis unfolding distinct_map by blast

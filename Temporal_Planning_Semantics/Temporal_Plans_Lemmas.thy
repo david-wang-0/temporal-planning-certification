@@ -1,6 +1,7 @@
 theory Temporal_Plans_Lemmas
-  imports Temporal_Plans_Instances Temporal_Planning_Common.ListMisc
+  imports Temporal_Plans_Instances Temporal_Planning_Common.ListMisc "Provenance.Provenance"
 begin
+provenance human
 
 context temp_plan_for_actions_with_unique_snaps_nso_dg0
 begin                                  

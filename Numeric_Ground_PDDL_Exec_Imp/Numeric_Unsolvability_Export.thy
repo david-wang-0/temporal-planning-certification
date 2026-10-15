@@ -2,7 +2,9 @@ theory Numeric_Unsolvability_Export
   imports
     "PDDL_TP_Reduction.Check_Unsolvability"
     Ground_PDDL_Numeric_Code_Export
+    "Provenance.Provenance"
 begin
+provenance ai
 
 text \<open>Containers instances for the reduction's OWN numeric expression / comparison types
   (\<open>nexp\<close> / \<open>comp\<close> / \<open>cmp_op\<close> from theory \<open>Temporal_Plans\<close>) -- these are distinct from the FPS

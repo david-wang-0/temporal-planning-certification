@@ -1,6 +1,7 @@
 theory Sequences
-  imports TP_Utils
+  imports TP_Utils "Provenance.Provenance"
 begin
+provenance human
 
 definition "seq_apply fs x = map (\<lambda>i. (fold (id) (take i fs) x)) [1..<length fs + 1]"
 

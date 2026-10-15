@@ -2,7 +2,9 @@ theory TP_NTA_Reduction_Numeric_Inference
   imports
     TP_NTA_Reduction_Numeric_Bounds
     Numeric_Bound_Inference.Numeric_Bound_Inference_Extract
+    "Provenance.Provenance"
 begin
+provenance ai
 
 section \<open>Discharging the bound certificate from the interval bound inference\<close>
 

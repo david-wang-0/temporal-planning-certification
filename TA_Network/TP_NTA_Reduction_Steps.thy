@@ -1,6 +1,7 @@
 theory TP_NTA_Reduction_Steps
-  imports TP_NTA_Reduction_Properties
+  imports TP_NTA_Reduction_Properties "Provenance.Provenance"
 begin
+provenance human
 context tp_nta_reduction_correctness
 begin
 (* apply all snap actions of the nth happening in the plan *)
@@ -69,11 +70,11 @@ schematic_goal dom_map_of_net_bounds_exact: "dom (map_of net_bounds) = ?x"
   ..
 
 
-lemma initial_step_possible: "graph_impl.steps ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0]) 
+lemma \<^marker>\<open>provenance ai_human\<close> initial_step_possible: "graph_impl.steps ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0]) 
     \<and> init_planning_state_props' (last ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0]))
     \<and> LvP (last ((ext_seq \<circ> seq_apply) [main_auto_init_edge_effect] [a\<^sub>0]))"
 proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composable[where R = init_state_props and S = "\<lambda>x. init_planning_state_props x \<and> LvP x"])
-  show "graph_impl.steps (map (\<lambda>(x, y). (x, case y of (x, y) \<Rightarrow> (x, \<lambda>x. real_of_int (y x)))) [a\<^sub>0]) \<and> init_state_props (last (map (\<lambda>(x, y). (x, case y of (x, y) \<Rightarrow> (x, \<lambda>x. real_of_int (y x)))) [a\<^sub>0]))"
+  show \<^marker>\<open>provenance human\<close> "graph_impl.steps (map (\<lambda>(x, y). (x, case y of (x, y) \<Rightarrow> (x, \<lambda>x. real_of_int (y x)))) [a\<^sub>0]) \<and> init_state_props (last (map (\<lambda>(x, y). (x, case y of (x, y) \<Rightarrow> (x, \<lambda>x. real_of_int (y x)))) [a\<^sub>0]))"
   proof (intro conjI, goal_cases)
     case 1
     then show ?case unfolding a\<^sub>0_def 
@@ -103,6 +104,7 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
       apply (rule conjI)
        prefer 2 apply simp
       apply (drule conjunct1)
+      provenance_in_proof human
       apply (cases x)
       subgoal for L v c
         apply simp
@@ -135,7 +137,7 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
       done
     done
   show "\<And>x. init_state_props x \<Longrightarrow> (init_planning_state_props (main_auto_init_edge_effect x) \<and> LvP (main_auto_init_edge_effect x)) \<and> graph_impl.steps [x, main_auto_init_edge_effect x]"
-  proof -
+  proof \<^marker>\<open>provenance human\<close> -
     fix x
     assume a: "init_state_props x"
     obtain L v c where
@@ -144,6 +146,7 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
       Lvc': "main_auto_init_edge_effect x = (L', v', c')" by (erule prod_cases3)
     have v': "v' = v(planning_lock \<mapsto> 1, acts_active \<mapsto> 0, map prop_to_var init [\<mapsto>] map (\<lambda>x. 1) (map prop_to_var init))"
       using Lvc' Lvc using main_auto_init_edge_effect_alt by auto
+    provenance_in_proof ai_human
     have bv: "bounded (map_of net_bounds) v" using init_state_props_dests(1)[OF a Lvc] .
     have b1: "bounded (map_of net_bounds) (v(planning_lock \<mapsto> 1))"
       by (rule single_upd_bounded[OF bv map_of_net_bounds_planning_lock]; simp)
@@ -190,6 +193,7 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
         subgoal by (rule variable_sets_unique(12))
         by (simp add: variables_unique)
     qed
+    provenance_in_proof human
     have x: "init_planning_state_props (main_auto_init_edge_effect x)"
       apply (insert a)
       apply (rule init_planning_state_propsI)
@@ -263,13 +267,13 @@ proof (rule steps_seq.ext_seq_comp_seq_apply_single_list_prop_and_post_composabl
               apply (subst map_map[symmetric])
               apply blast
              apply simp
-           apply (rule bnd)
+           apply \<^marker>\<open>provenance ai_human\<close> (rule bnd)
           by (simp add: is_upd_const_simp)+
       qed
       thus "(case x of (L, s, u) \<Rightarrow> \<lambda>(L', s', u'). net_impl.sem \<turnstile> \<langle>L, s, u\<rangle> \<rightarrow> \<langle>L', s', u'\<rangle>) (main_auto_init_edge_effect x)"
         using Lvc Lvc' by auto
     qed
-    show "(init_planning_state_props (main_auto_init_edge_effect x) \<and> LvP (main_auto_init_edge_effect x)) \<and> graph_impl.steps [x, main_auto_init_edge_effect x]"
+    show \<^marker>\<open>provenance ai_human\<close> "(init_planning_state_props (main_auto_init_edge_effect x) \<and> LvP (main_auto_init_edge_effect x)) \<and> graph_impl.steps [x, main_auto_init_edge_effect x]"
       using x lvp steps by blast
   qed
 qed
@@ -311,14 +315,14 @@ lemma v_pl_cond_sat:
   unfolding check_bexp_simps is_val_simps
   using assms unfolding Lv_conds_def by simp
 
-lemma end_starts_possible:
+lemma \<^marker>\<open>provenance ai_human\<close> end_starts_possible:
   assumes "graph_impl.steps xs \<and> happening_pre_end_starts i (last xs) \<and> LvP (last xs)"
       and end_indices: "end_indices = filter (is_ending_index (planning_sem.time_index i)) [0..<length actions]"
       and i: "i < length planning_sem.htpl"
     shows "graph_impl.steps ((ext_seq \<circ> seq_apply) (map edge_3_effect end_indices) xs) \<and> 
           happening_pre_instants i (last ((ext_seq \<circ> seq_apply) (map edge_3_effect end_indices) xs)) \<and> 
           LvP (last ((ext_seq \<circ> seq_apply) (map edge_3_effect end_indices) xs))"
-proof -
+proof \<^marker>\<open>provenance human\<close> -
   interpret eip: filter_sorted_distinct_list "[0..<length actions]" "is_ending_index (planning_sem.time_index i)" end_indices 
     apply (unfold_locales)
     using end_indices by auto
@@ -359,6 +363,7 @@ proof -
     apply (subst (asm) set_conv_nth)
     by auto
 
+  provenance_in_proof ai_human
   show ?thesis
   proof (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[
             where R = "\<lambda>s. happening_pre_end_starts i s \<and> LvP s" 
@@ -370,10 +375,11 @@ proof -
               OF assms(1), simplified length_map nth_map],
             goal_cases)
     case (1 j s)
+    provenance_in_proof human
 
     have j: "j < length end_indices" using 1 by blast
     have esp: "end_start_pre i (end_indices ! j) s" using 1 by simp
-    have lvp: "LvP s" using 1 by simp
+    have \<^marker>\<open>provenance ai\<close> lvp: "LvP s" using 1 by simp
 
     have eij_in_act: "end_indices ! j < length actions"
                     "actions ! (end_indices ! j) \<in> set actions"
@@ -388,7 +394,7 @@ proof -
     obtain L v c where
       s: "s = (L, v, c)" using prod_cases3 by blast
 
-    have lv: "Lv_conds L v" using lvp unfolding s by simp
+    have \<^marker>\<open>provenance ai\<close> lv: "Lv_conds L v" using lvp unfolding s by simp
 
     have v_prop_to_lock: "v (prop_to_lock p) = Some (int (partially_updated_locked_before (planning_sem.time_index i) p (end_indices ! j)))"
       if p_in_vars: "p \<in> set props" "prop_to_lock p \<in> dom (map_of net_bounds)" for p
@@ -466,7 +472,7 @@ proof -
     have bounded_after: "Simple_Network_Language.bounded (map_of net_bounds) v'"
     proof (rule updated_bounded[OF _ _ v'_def], goal_cases)
       case 1
-      show ?case using Lv_conds_dests(3)[OF lv] .
+      show ?case using \<^marker>\<open>provenance ai_human\<close> Lv_conds_dests(3)[OF lv] .
     next
       case 2
       then show ?case by simp
@@ -578,7 +584,9 @@ proof -
           subgoal apply (intro allI impI)
             subgoal for k
               apply (subst nth_list_update)
+              provenance_in_proof ai_human
               using Lv_conds_dests(1)[OF lv] eij_in_act apply simp
+              provenance_in_proof human
               apply (cases "k < end_indices ! j")
               by (auto dest: end_start_pre_dests)
             done
@@ -603,7 +611,7 @@ proof -
                 using end_start_pre_dests by auto
               done
         subgoal
-          unfolding s edge_3_effect_alt
+          unfolding \<^marker>\<open>provenance ai_human\<close> s edge_3_effect_alt
           apply (simp only: LvP.simps)
           apply (rule Lv_conds_maintained[OF lv])
              apply simp
@@ -616,21 +624,23 @@ proof -
           unfolding s prod.case edge_3_effect_alt Let_def prod.case
           apply (rule non_t_step_intro[where a="Internal (STR '''')", simplified])
            prefer 2
-          subgoal by (rule Lv_conds_dests(3)[OF lv])
+          subgoal by \<^marker>\<open>provenance ai_human\<close> (rule Lv_conds_dests(3)[OF lv])
           unfolding net_impl.sem_def
           apply (rule step_u.step_int[simplified TAG_def])
                     apply (subst conv_trans[of "Suc (end_indices ! j)"])
           using eij_in_act timed_automaton_net_def apply simp
                     apply (rule image_eqI[of _ _ "edge_3 (actions ! (end_indices ! j))"])
                      apply (subst edge_3_def)
+                     provenance_in_proof ai_human
                      apply (simp add: Let_def prod.case)
+          provenance_in_proof human
           using nth_auto_trans eij_in_act apply simp
           subgoal apply (rule disjI2) 
             apply (intro strip)
             apply (subst conv_committed, simp)
             apply (subst no_committed)
             by (auto simp: length_net_automata)
-          subgoal by (rule v_pl_cond_sat[OF lv])
+          subgoal by \<^marker>\<open>provenance ai_human\<close> (rule v_pl_cond_sat[OF lv])
           subgoal apply (intro guard_append)
             using eij_in_act eij_ending
             apply (auto intro: ending_actions_sat_dur_const_specs dest!: end_start_pre_dests(1)  end_start_invs_dests(1)  happening_invs_dests(1) simp: is_ending_index_def)[2]
@@ -646,7 +656,7 @@ proof -
             done
           subgoal using no_invs by simp
           subgoal using eij_in_act eij_ending by (blast dest: end_start_pre_dests)
-          subgoal using eij_in_act by (auto dest!: end_start_pre_dests(1) end_start_invs_dests(1) happening_invs_dests(1) simp: Lv_conds_dests(1)[OF lv])
+          subgoal using \<^marker>\<open>provenance ai_human\<close> eij_in_act by (auto dest!: end_start_pre_dests(1) end_start_invs_dests(1) happening_invs_dests(1) simp: Lv_conds_dests(1)[OF lv])
           subgoal by blast
           subgoal by simp
           subgoal using is_upds by blast
@@ -658,6 +668,7 @@ proof -
       apply (insert 2)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction s)
       subgoal for L v c
         unfolding comp_def
@@ -691,6 +702,7 @@ proof -
       apply (insert 3)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c
         unfolding comp_def
@@ -717,6 +729,7 @@ proof -
       apply (insert 4)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c 
         unfolding comp_def
@@ -749,6 +762,7 @@ proof -
       apply (insert 5)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c
         apply (elim conjE)
@@ -770,6 +784,7 @@ proof -
       apply (insert 6)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c
       apply (elim conjE)
@@ -784,6 +799,7 @@ qed
 
 lemma Suc_lessI: "n < m - 1 \<Longrightarrow> Suc n < m" by auto
 
+provenance ai_human
 lemma instant_actions_possible:
   assumes "graph_impl.steps xs \<and> happening_pre_instants i (last xs) \<and> LvP (last xs)"
       and instant_indices: "instant_indices = filter (is_instant_index (planning_sem.time_index i)) [0..<length actions]"
@@ -791,7 +807,7 @@ lemma instant_actions_possible:
     shows "graph_impl.steps (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) instant_indices) xs) 
   \<and> happening_pre_start_starts i (last (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) instant_indices) xs))
   \<and> LvP (last (fold (ext_seq \<circ> seq_apply) (map (\<lambda>n. [start_edge_effect n, instant_trans_edge_effect n, end_edge_effect n]) instant_indices) xs))"
-proof -                             
+proof \<^marker>\<open>provenance human\<close> -                             
   interpret iip: filter_sorted_distinct_list "[0..<length actions]" "is_instant_index (planning_sem.time_index i)" instant_indices
     apply (unfold_locales)
     using instant_indices by auto
@@ -834,6 +850,7 @@ proof -
 
   have nat_leE: thesis if  "x \<le> y" "x < y \<Longrightarrow> thesis" "x = y \<Longrightarrow> thesis"  for x y::nat and thesis using that by linarith
 
+  provenance_in_proof ai_human
   show ?thesis
   proof (rule steps_seq.fold_ext_seq_comp_seq_apply_induct_list_prop_composable[
         where R = "\<lambda>s. happening_pre_instants i s \<and> LvP s" 
@@ -845,9 +862,11 @@ proof -
         OF assms(1)], 
       goal_cases)
     case (1 f)
+    provenance_in_proof human
     then show ?case by auto
   next
     case (2 j s)
+    provenance_in_proof human
 
     
     have iij_set: "instant_indices ! j \<in> set instant_indices" using 2 by auto
@@ -1005,19 +1024,23 @@ proof -
 
     show ?case 
       apply (insert 2)
+      provenance_in_proof ai_human
       apply (subst (1 2) last_ConsR[symmetric, where x = s, OF seq_apply_not_Nil, OF list.distinct(2)])
       apply (erule steps_seq.seq_apply_ConsI[where P = "\<lambda>s. instant_pre i (instant_indices ! j) s \<and> LvP s" and Q = "\<lambda>s. instant_starting_cond i (instant_indices ! j) s \<and> LvP s"])
       apply (erule steps_seq.seq_apply_ConsI[where P = "\<lambda>s. instant_starting_cond i (instant_indices ! j) s \<and> LvP s" and Q = "\<lambda>s. instant_ending_cond i (instant_indices ! j) s \<and> LvP s"])
       apply (erule steps_seq.seq_apply_ConsI[where P = "\<lambda>s. instant_ending_cond i (instant_indices ! j) s \<and> LvP s" and Q = "\<lambda>s. instant_post i (instant_indices ! j) s \<and> LvP s"])
+      provenance_in_proof human
       subgoal by auto
       unfolding triv_forall_equality 
       subgoal for x 
         apply (induction x)
         subgoal for L v c
           unfolding end_edge_effect_alt Let_def prod.case
+          provenance_in_proof ai_human
           apply (elim conjE)
           apply (rule conjI)
           subgoal
+          provenance_in_proof human
           apply (rule instant_postI)
           subgoal apply (frule instant_ending_cond_dests(1)) 
             apply (erule instant_action_invs_maintained)
@@ -1037,8 +1060,8 @@ proof -
               apply (subst map_upds_apply_nontin, force simp: variables_unique)+
               apply (subst fun_upd_other)
               by (simp_all add: variables_unique)
-            subgoal by simp
-            subgoal by simp
+            subgoal by \<^marker>\<open>provenance ai_human\<close> simp
+            subgoal by \<^marker>\<open>provenance ai_human\<close> simp
             subgoal
               apply (intro allI impI)
               subgoal for k apply (cases "(instant_indices ! j)  = k")
@@ -1083,7 +1106,9 @@ proof -
             apply (intro allI impI)
             subgoal for k
               apply (subst nth_list_update)
+               provenance_in_proof ai_human
                apply (force simp: LvP.simps Lv_conds_dests(1) iij_ran)
+              provenance_in_proof human
               apply (cases "k = instant_indices ! j")
               by (auto dest: instant_ending_cond_dests)
             done
@@ -1124,7 +1149,9 @@ proof -
                  apply (subst conv_trans)
       using iij_ran length_net_automata apply simp
                  apply (rule image_eqI[where x = "end_edge (actions ! (instant_indices ! j))"])
+      provenance_in_proof ai_human
       apply (subst end_edge_def) apply (simp add: Let_def prod.case)
+                 provenance_in_proof human
                  apply (subst nth_auto_trans)
       using iij_ran apply simp
                  apply simp
@@ -1173,9 +1200,11 @@ proof -
     apply (induction x)
     subgoal for L v c
       unfolding instant_trans_edge_effect_alt Let_def prod.case
+      provenance_in_proof ai_human
       apply (elim conjE)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (rule instant_ending_condI)
       subgoal
         apply (drule instant_starting_cond_dests(1))
@@ -1185,6 +1214,7 @@ proof -
           subgoal apply (intro strip)
             apply (subst fun_upd_other)
             using clocks_unique by auto
+          provenance_in_proof ai_human
           subgoal
             apply (intro strip)
             subgoal for ia
@@ -1212,6 +1242,7 @@ proof -
                apply (use iij_instant_index index_case_disj in blast)
               by (rule HOL.refl)
             done
+          provenance_in_proof human
           subgoal apply (intro strip)
             apply (subst nth_list_update_neq)
             using iij_instant_index index_case_disj 
@@ -1221,6 +1252,7 @@ proof -
         subgoal using clocks_unique by auto
         subgoal
           apply (intro strip)
+          provenance_in_proof ai_human
           subgoal for ia
             apply (subst fun_upd_other)
              apply (rule clocks_unique(9)[OF nth_mem nth_mem nth_actions_unique])
@@ -1282,7 +1314,9 @@ proof -
       using iij_ran apply simp
                   apply (rule image_eqI[where x = "instant_trans_edge (actions ! (instant_indices ! j))"])
                    apply (subst instant_trans_edge_def)
+                   provenance_in_proof ai_human
                    apply (simp add: Let_def prod.case)
+                  provenance_in_proof human
                   apply simp
       subgoal apply (intro disjI2 strip)
         apply (subst conv_committed, simp)
@@ -1324,15 +1358,18 @@ proof -
     apply (induction x)
     subgoal for L v c
       unfolding start_edge_effect_alt
+      provenance_in_proof ai_human
       apply (elim conjE)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (rule instant_starting_condI)
       subgoal
         apply (frule instant_pre_dests(1))
         apply (erule instant_action_invs_maintained)
         subgoal
           apply (erule happening_invs_maintained)
+          provenance_in_proof ai_human
           subgoal
             apply (intro strip)
             subgoal for ia
@@ -1358,12 +1395,14 @@ proof -
                apply (use iij_instant_index index_case_disj in blast)
               by (rule HOL.refl)
             done
+          provenance_in_proof human
           subgoal by (use iij_ran fun_upd_other clocks_unique in auto)
           subgoal apply (intro strip)
             apply (rule nth_list_update_neq)
             using iij_instant_index index_case_disj by blast
           done
         subgoal by ((subst map_upds_apply_nontin | subst fun_upd_other), fastforce simp: variables_unique)+ simp
+        provenance_in_proof ai_human
         subgoal
           apply (intro strip)
           subgoal for ia
@@ -1376,6 +1415,7 @@ proof -
              apply (use iij_instant_index index_case_disj in blast)
             by (rule HOL.refl)
           done
+          provenance_in_proof human
           subgoal by (use iij_ran fun_upd_other clocks_unique in auto)
         using iij_instant_index iij_ran nth_actions_unique
         by (auto dest: index_case_dests_disj intro: nth_list_update_neq)
@@ -1459,7 +1499,9 @@ proof -
       using iij_ran timed_automaton_net_def apply simp
                   apply (rule image_eqI[where x = "start_edge (actions ! (instant_indices ! j))"])
                    apply (subst start_edge_def)
+                   provenance_in_proof ai_human
                    apply (simp add: Let_def prod.case)
+                  provenance_in_proof human
                   apply (subst nth_auto_trans)
       using iij_ran timed_automaton_net_def apply simp
                   apply simp
@@ -1510,6 +1552,7 @@ proof -
       apply (insert 3)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction s)
       subgoal for L v c
         apply (elim conjE)
@@ -1545,6 +1588,7 @@ proof -
       done
   next
     case (4 x)
+    provenance_in_proof human
     from \<open>0 = length instant_indices\<close>
     have no_instant_indices: "set instant_indices = {}" by simp
     hence "planning_sem.instant_actions_at (planning_sem.time_index i) = {}"
@@ -1561,8 +1605,10 @@ proof -
       apply (subst (asm) instant_indices)  by simp
     show ?case 
       apply (insert 4)
+      provenance_in_proof ai_human
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c
         apply (elim conjE)
@@ -1582,6 +1628,7 @@ proof -
       apply (insert 5)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c
         apply (elim conjE)
@@ -1607,6 +1654,7 @@ proof -
       apply (insert 6)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c
         apply (elim conjE)
@@ -1651,6 +1699,7 @@ proof -
       apply (insert 7)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c
         apply (elim conjE)
@@ -1671,7 +1720,7 @@ lemma start_starts_possible:
   assumes start_indices: "start_indices = filter (is_starting_index (planning_sem.time_index i)) [0..<length actions]"
   shows " graph_impl.steps ((ext_seq \<circ> seq_apply) (map start_edge_effect start_indices) xs) \<and>  happening_pre_end_ends i (last ((ext_seq \<circ> seq_apply) (map start_edge_effect start_indices) xs)) \<and>
           LvP (last ((ext_seq \<circ> seq_apply) (map start_edge_effect start_indices) xs))"
-proof -
+proof \<^marker>\<open>provenance human\<close> -
   interpret sip: filter_sorted_distinct_list "[0..<length actions]" "is_starting_index (planning_sem.time_index i)" start_indices
     apply (unfold_locales)
     using start_indices by auto
@@ -1712,6 +1761,7 @@ proof -
 
 
 
+  provenance_in_proof ai_human
   show ?thesis
   proof (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[
           where R = "\<lambda>s. happening_pre_start_starts i s \<and> LvP s" 
@@ -1722,6 +1772,7 @@ proof -
             and Q = "\<lambda>j s. (start_start_post i o ((!) start_indices)) j s \<and> LvP s",
             simplified length_map nth_map, OF assms(1)], goal_cases)
     case j: (1 j s)
+      provenance_in_proof human
       have sij_set: "start_indices ! j \<in> set start_indices"  using j by auto
       with image_start_indices_conv_actions
       have *: "(actions ! (start_indices ! j)) \<in> planning_sem.starting_actions_at (planning_sem.time_index i)" using j by blast
@@ -1741,6 +1792,7 @@ proof -
         and pre_in_props: "set (pre (at_start (actions ! (start_indices ! j)))) \<subseteq> set props"
         using acts_ref_props using sij_in_act planning_sem.act_ref_props_def planning_sem.snap_ref_props_def by auto
 
+      provenance_in_proof ai
       have ssp: "start_start_pre i (start_indices ! j) s" using j by (simp add: comp_def)
       have jlen: "j < length start_indices" using j by blast
       have lvp: "LvP s" using j by simp
@@ -1759,13 +1811,14 @@ proof -
           map prop_to_var ?dels [\<mapsto>] map (\<lambda>x. 0) ?dels,
           map prop_to_var ?adds [\<mapsto>] map (\<lambda>x. 1) ?adds))"
 
-      have bounded_after: "Simple_Network_Language.bounded (map_of net_bounds) v'"
+      provenance_in_proof human
+      have \<^marker>\<open>provenance ai_human\<close> bounded_after: "Simple_Network_Language.bounded (map_of net_bounds) v'"
         apply (insert ssp[unfolded s])
         unfolding v'_def
-        apply (rule upds_map_bounded'[OF _ _ HOL.refl])
+        apply \<^marker>\<open>provenance human\<close> (rule upds_map_bounded'[OF _ _ HOL.refl])
             apply (rule upds_map_bounded'[OF _ _ HOL.refl])
           subgoal apply (rule single_upd_bounded)
-            subgoal by (rule Lv_conds_dests(3)[OF lv])
+            subgoal by \<^marker>\<open>provenance ai_human\<close> (rule Lv_conds_dests(3)[OF lv])
                 apply (rule map_of_net_bounds_acts_active)
                apply (force dest: start_start_pre_dests)
             by (drule start_start_pre_dests(3), use  updated_active_before_less_if_starting sij_starting_index i sij_ran in fastforce)
@@ -1906,6 +1959,7 @@ proof -
         using 1 2 3 4 5 by auto
     qed
 
+    provenance_in_proof ai_human
     show ?case
       apply (rule conjI)
       apply (rule conjI)
@@ -1913,6 +1967,7 @@ proof -
         apply (insert ssp)
         unfolding s comp_def start_edge_effect_alt
         apply (rule start_start_postI)
+        provenance_in_proof human
         subgoal
           apply (frule start_start_pre_dests(1))
           apply (erule start_start_invs_maintained)
@@ -2016,6 +2071,7 @@ proof -
       subgoal
         apply (insert ssp jlen)
         unfolding s comp_def start_edge_effect_alt
+        provenance_in_proof human
         apply (rule single_step_intro)
         unfolding prod.case
         apply (rule non_t_step_intro[where a = "Internal (STR '''')"])
@@ -2025,14 +2081,18 @@ proof -
                     apply (subst conv_trans[where p = "Suc (start_indices ! j)"])
         using sij_ran length_net_automata apply simp
                     apply (rule image_eqI[where x = "start_edge (actions ! (start_indices ! j))"])
+                     provenance_in_proof ai_human
                      apply (simp add: start_edge_def Let_def prod.case)
+                    provenance_in_proof human
                     apply (simp add: sij_ran nth_auto_trans)
         subgoal apply (intro disjI2 strip)
           apply (subst conv_committed, simp)
           apply (subst no_committed, simp)
           by auto
         subgoal apply (rule check_bexp_Cons)
+           provenance_in_proof ai_human
            apply (force intro: v_pl_cond_sat[OF lv] start_start_pre_dests start_start_invs_dests happening_invs_dests)
+          provenance_in_proof human
           by (auto intro: check_bexp_all_append v_pre_conds_sat v_lock_conds_sat start_start_pre_dests start_start_invs_dests)
         subgoal using mutex_conds_sat by auto
         subgoal using conv_invs no_invs by auto
@@ -2041,6 +2101,7 @@ proof -
         subgoal by simp
         subgoal by simp
         subgoal using is_upds by auto
+        provenance_in_proof ai_human
         subgoal using bounded_after unfolding v'_def by simp
         subgoal by (rule Lv_conds_dests(3)[OF lv])
         by simp
@@ -2051,6 +2112,7 @@ proof -
       apply (insert 2)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       unfolding comp_def
       apply (induction s)
       subgoal for L v c
@@ -2091,6 +2153,7 @@ proof -
       apply (insert 3)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       unfolding comp_def
       apply (induction x)
       subgoal for L v c
@@ -2120,6 +2183,7 @@ proof -
       apply (insert 4)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       unfolding comp_def
       apply (induction x)
       subgoal for L v c
@@ -2152,6 +2216,7 @@ proof -
       done
   next
     case (5 x)
+    provenance_in_proof human
     hence no_starting_indices: "set start_indices = {}" by simp
     hence "planning_sem.starting_actions_at (planning_sem.time_index i) = {}"
       apply -
@@ -2167,8 +2232,10 @@ proof -
       apply (subst (asm) start_indices)  by simp
     show ?case 
       apply (insert 5)
+      provenance_in_proof ai_human
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c
         apply (elim conjE)
@@ -2188,7 +2255,7 @@ proof -
       apply (insert 6)
       apply (rule conjI)
       subgoal
-        by (induction x) (auto intro: happening_pre_end_endsI end_end_invsI happening_post_start_starts_dests start_start_invs_dests dest: conjunct1)
+        by \<^marker>\<open>provenance human\<close> (induction x) (auto intro: happening_pre_end_endsI end_end_invsI happening_post_start_starts_dests start_start_invs_dests dest: conjunct1)
       subgoal by simp
       done
   qed
@@ -2200,7 +2267,7 @@ lemma end_ends_possible:
       and end_indices: "end_indices = (filter (is_ending_index (planning_sem.time_index i)) [0..<length actions])"
     shows "graph_impl.steps ((ext_seq \<circ> seq_apply) (map end_edge_effect end_indices) xs) \<and> happening_pre_start_ends i (last ((ext_seq \<circ> seq_apply) (map end_edge_effect end_indices) xs)) \<and>
           LvP (last ((ext_seq \<circ> seq_apply) (map end_edge_effect end_indices) xs))"
-proof -
+proof \<^marker>\<open>provenance human\<close> -
   interpret eip: filter_sorted_distinct_list "[0..<length actions]" "is_ending_index (planning_sem.time_index i)" end_indices
     apply (unfold_locales)
     using end_indices by auto
@@ -2240,6 +2307,7 @@ proof -
   have nat_leE: thesis if  "x \<le> y" "x < y \<Longrightarrow> thesis" "x = y \<Longrightarrow> thesis"  for x y::nat and thesis using that by linarith
   have nat_less_SucE: thesis if "x < Suc y" "x = y \<Longrightarrow> thesis" "x < y \<Longrightarrow> thesis" for x y::nat and thesis using that by linarith
 
+  provenance_in_proof ai_human
   show ?thesis
   proof (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[
         where R = "\<lambda>s. happening_pre_end_ends i s \<and> LvP s" 
@@ -2252,6 +2320,7 @@ proof -
         OF assms(1)], 
       goal_cases)
     case j: (1 j s)
+    provenance_in_proof human
     have eij_set: "end_indices ! j \<in> set end_indices"  using j by auto
     with image_end_indices_conv_actions
     have *: "(actions ! (end_indices ! j)) \<in> planning_sem.ending_actions_at (planning_sem.time_index i)" using j by blast
@@ -2272,6 +2341,7 @@ proof -
         using acts_ref_props using eij_in_act planning_sem.act_ref_props_def planning_sem.snap_ref_props_def by auto
 
 
+    provenance_in_proof ai
     have eep: "end_end_pre i (end_indices ! j) s" using j by (simp add: comp_def)
     have lvp: "LvP s" using j by simp
 
@@ -2286,7 +2356,7 @@ proof -
         map prop_to_var (dels (at_end (actions ! (end_indices ! j)))) [\<mapsto>] map (\<lambda>x. 0) (map prop_to_var (dels (at_end (actions ! (end_indices ! j))))),
         map prop_to_var (adds (at_end (actions ! (end_indices ! j)))) [\<mapsto>] map (\<lambda>x. 1) (map prop_to_var (adds (at_end (actions ! (end_indices ! j)))))))"
 
-    have bounded_after: "Simple_Network_Language.bounded (map_of net_bounds) v'"
+    have \<^marker>\<open>provenance ai_human\<close> bounded_after: "Simple_Network_Language.bounded (map_of net_bounds) v'"
       apply (insert eep[unfolded s])
       unfolding v'_def
       apply (rule upds_map_bounded'[OF _ _ HOL.refl])
@@ -2311,6 +2381,7 @@ proof -
           by auto
         done
 
+    provenance_in_proof human
     have v_pre_conds_sat: "Simple_Expressions.check_bexp w (bexp_and_all (map (is_prop_ab 1) (pre (at_end (actions ! (end_indices ! j)))))) True"
       if prop_state: "\<forall>p. p \<in> set props \<and> prop_to_var p \<in> dom (map_of net_bounds) \<longrightarrow> w (prop_to_var p) = Some (ending_part_updated_prop_state i (end_indices ! j) p)" for w
     proof -
@@ -2399,12 +2470,14 @@ proof -
         by auto
     qed
 
+    provenance_in_proof ai_human
     show ?case
       apply (rule conjI)
       apply (rule conjI)
       subgoal
         apply (insert eep)
         unfolding s comp_def end_edge_effect_alt
+        provenance_in_proof human
         apply (rule end_end_postI)
         subgoal apply (frule end_end_pre_dests(1))
           apply (erule end_end_invs_maintained)
@@ -2461,6 +2534,7 @@ proof -
       subgoal
         apply (insert eep)
         unfolding s comp_def end_edge_effect_alt
+        provenance_in_proof human
         apply (rule single_step_intro)
         unfolding prod.case
         apply (rule non_t_step_intro[where a = "Internal (STR '''')"])
@@ -2470,11 +2544,15 @@ proof -
                     apply (subst conv_trans[where p = "Suc (end_indices ! j)"])
                      apply (simp add: eij_ran length_net_automata)
                     apply (rule image_eqI[where x = "end_edge (actions ! (end_indices ! j))"])
+                     provenance_in_proof ai_human
                      apply (simp add: end_edge_def Let_def prod.case)
+                    provenance_in_proof human
                     apply (simp add: eij_ran nth_auto_trans)
         subgoal by (intro disjI2 strip) ((subst conv_committed no_committed | simp)+)
         subgoal  apply (rule check_bexp_Cons)
+           provenance_in_proof ai_human
            apply (force intro: v_pl_cond_sat[OF lv] end_end_pre_dests end_end_invs_dests happening_invs_dests)
+          provenance_in_proof human
           by (auto intro: check_bexp_all_append v_pre_conds_sat v_lock_conds_sat end_end_pre_dests end_end_invs_dests)
         subgoal by simp
         subgoal using conv_invs no_invs by force
@@ -2483,6 +2561,7 @@ proof -
         subgoal by auto
         subgoal by auto
         subgoal using is_upds by blast
+        provenance_in_proof ai_human
         subgoal using bounded_after unfolding v'_def by simp
         subgoal by (rule Lv_conds_dests(3)[OF lv])
         apply simp
@@ -2494,6 +2573,7 @@ proof -
       apply (insert 2)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       unfolding comp_def
       apply (induction s)
       subgoal for L v c
@@ -2527,6 +2607,7 @@ proof -
       apply (insert 3)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       unfolding comp_def
       apply (induction x)
       subgoal for L v c
@@ -2554,6 +2635,7 @@ proof -
       apply (insert 4)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       unfolding comp_def
       apply (induction x)
       subgoal for L v c
@@ -2583,6 +2665,7 @@ proof -
       done
   next
     case (5 x)
+    provenance_in_proof human
     hence no_ending_indices: "set end_indices = {}" by simp
     hence "planning_sem.ending_actions_at (planning_sem.time_index i) = {}"
       apply -
@@ -2599,8 +2682,10 @@ proof -
 
     show ?case 
       apply (insert 5)
+      provenance_in_proof ai_human
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c
         apply (elim conjE)
@@ -2622,6 +2707,7 @@ proof -
       apply (insert 6)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x) 
       subgoal for L v c
         apply (elim conjE)
@@ -2644,7 +2730,7 @@ lemma start_ends_possible:
       and start_indices: "start_indices = (filter (is_starting_index (planning_sem.time_index i)) [0..<length actions])"
     shows "graph_impl.steps ((ext_seq \<circ> seq_apply) (map edge_2_effect start_indices) xs) \<and> happening_post i (last ((ext_seq \<circ> seq_apply) (map edge_2_effect start_indices) xs)) \<and>
           LvP (last ((ext_seq \<circ> seq_apply) (map edge_2_effect start_indices) xs))"
-proof -
+proof \<^marker>\<open>provenance human\<close> -
   interpret sip: filter_sorted_distinct_list "[0..<length actions]" "is_starting_index (planning_sem.time_index i)" start_indices
     apply (unfold_locales)
     using start_indices by auto
@@ -2685,6 +2771,7 @@ proof -
 
 
   have nat_leE: thesis if  "x \<le> y" "x < y \<Longrightarrow> thesis" "x = y \<Longrightarrow> thesis"  for x y::nat and thesis using that by linarith
+  provenance_in_proof ai_human
   show ?thesis
   proof (rule steps_seq.ext_seq_comp_seq_apply_induct_list_prop_composable[
         where R = "\<lambda>s. happening_pre_start_ends i s \<and> LvP s" 
@@ -2696,6 +2783,7 @@ proof -
           simplified length_map nth_map,
           OF assms(1)], goal_cases)
     case j: (1 j s)
+      provenance_in_proof human
       have sij_set: "start_indices ! j \<in> set start_indices"  using j by auto
       with image_start_indices_conv_actions
       have *: "(actions ! (start_indices ! j)) \<in> planning_sem.starting_actions_at (planning_sem.time_index i)" using j by blast
@@ -2717,6 +2805,7 @@ proof -
         using acts_ref_props using sij_in_act planning_sem.act_ref_props_def planning_sem.snap_ref_props_def by auto
 
 
+    provenance_in_proof ai_human
     have sep: "start_end_pre i (start_indices ! j) s" using j by (simp add: comp_def)
     have lvp: "LvP s" using j by simp
 
@@ -2730,6 +2819,7 @@ proof -
     have *: "start_end_pre i (start_indices ! j) (L, v, c)" using sep unfolding s by simp
     have **: "start_end_invs i (L, v, c)" using start_end_pre_dests * by auto
 
+    provenance_in_proof human
     define v' where "v' = (v(map prop_to_lock (over_all (actions ! (start_indices ! j))) [\<mapsto>] map (\<lambda>x. plus_int (the (v x)) 1) (map prop_to_lock (over_all (actions ! (start_indices ! j))))))"
 
     have variables_locked_after: "v' (prop_to_lock p) = Some (int (updated_locked_during i (Suc (start_indices ! j)) p))" 
@@ -2766,7 +2856,7 @@ proof -
     have bounded_after: "Simple_Network_Language.bounded (map_of net_bounds) v'"
     proof (rule updated_bounded[OF _ _ v'_def], goal_cases)
       case 1
-      show ?case by (rule Lv_conds_dests(3)[OF lv])
+      show ?case by \<^marker>\<open>provenance ai_human\<close> (rule Lv_conds_dests(3)[OF lv])
     next
       case 2
       then show ?case by simp
@@ -2845,6 +2935,7 @@ proof -
         by blast
     qed
 
+    provenance_in_proof ai_human
     show ?case
       apply (rule conjI)
       apply (rule conjI)
@@ -2853,6 +2944,7 @@ proof -
         unfolding s comp_def edge_2_effect_alt
         apply (rule start_end_postI)
         subgoal
+          provenance_in_proof human
           apply (rule start_end_invs_maintained[OF **])
           subgoal
             apply (erule happening_invs_maintained)
@@ -2893,6 +2985,7 @@ proof -
       subgoal
         apply (insert sep)
         unfolding s comp_def edge_2_effect_alt
+        provenance_in_proof human
         apply (rule single_step_intro)
         unfolding prod.case
         apply (rule non_t_step_intro[where a = "Internal (STR '''')"])
@@ -2902,12 +2995,16 @@ proof -
                     apply (subst conv_trans[where p = "Suc (start_indices ! j)"])
                      apply (simp add: sij_ran length_net_automata)
                     apply (rule image_eqI[where x = "edge_2 (actions ! (start_indices ! j))"])
+                     provenance_in_proof ai_human
                      apply (simp add: edge_2_def Let_def prod.case)
+                    provenance_in_proof human
                     apply (simp add: sij_ran nth_auto_trans)
         subgoal apply (intro disjI2 strip)
           by (subst conv_committed no_committed | simp)+
         subgoal apply (rule check_bexp_Cons)
+           provenance_in_proof ai_human
            apply (force intro: v_pl_cond_sat[OF lv] start_end_pre_dests start_end_invs_dests happening_invs_dests)
+          provenance_in_proof human
           using v_pre_sat by simp
         subgoal by simp
         subgoal using conv_invs no_invs by auto
@@ -2916,6 +3013,7 @@ proof -
         subgoal by simp
         subgoal by simp
         subgoal by (rule upds)
+        provenance_in_proof ai_human
         subgoal using bounded_after unfolding v'_def by simp
         subgoal by (rule Lv_conds_dests(3)[OF lv])
         apply simp
@@ -2927,6 +3025,7 @@ proof -
       apply (insert 2)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       unfolding comp_def
       apply (induction s)
       subgoal for L v c
@@ -2956,6 +3055,7 @@ proof -
       apply (insert 3)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       unfolding comp_def
       apply (induction x)
       subgoal for L v c
@@ -2978,6 +3078,7 @@ proof -
       apply (insert 4)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       unfolding comp_def
       apply (induction x)
       subgoal for L v c
@@ -3001,6 +3102,7 @@ proof -
       done
   next
     case (5 x)
+    provenance_in_proof human
     hence no_starting_indices: "set start_indices = {}" by simp
     hence "planning_sem.starting_actions_at (planning_sem.time_index i) = {}"
       apply -
@@ -3016,8 +3118,10 @@ proof -
       apply (subst (asm) start_indices)  by simp
     show ?case 
       apply (insert 5)
+      provenance_in_proof ai_human
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c
         apply (elim conjE)
@@ -3034,6 +3138,7 @@ proof -
       apply (insert 6)
       apply (rule conjI)
       subgoal
+      provenance_in_proof human
       apply (induction x)
       subgoal for L v c
         apply (elim conjE)
@@ -3041,6 +3146,7 @@ proof -
         subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
         subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
         subgoal by (blast intro: happening_post_start_ends_dests happening_invs_dests start_end_invs_dests)
+        provenance_in_proof ai_human
         \<comment> \<open>The \<open>off_loc\<close> location conjunct (\<open>closed_active_count = 0\<close>): the old
             \<open>blast intro: happening_invs_dests start_end_invs_dests\<close> diverges under the post-refactor goal
             shape, so discharge it by the same targeted case-split idiom as the \<open>running_loc\<close> conjunct

@@ -3,13 +3,16 @@ theory Check_Unsolvability
     Ground_PDDL_NTA_Reduction_Impl
     "Show.Shows_Literal"
     Munta_Certificate_Checker.Simple_Network_Language_Certificate_Code
+    "Provenance.Provenance"
 begin
+provenance ai
 
 text \<open>Re-suppress the FPS \<open>Syntax_Utils.app\<close> \<open>|>\<close> notation: importing the vendored Analysis-free
   wf-checker (through \<open>Ground_PDDL_NTA_Reduction_Impl\<close>) re-introduces it alongside Munta's
   \<open>Error_List_Monad.app\<close> \<open>|>\<close>, making \<open>|>\<close> ambiguous here -- same fix as \<open>Ground_PDDL_Plan_Defs\<close>.\<close>
 no_notation Syntax_Utils.app (infixl "|>" 59)
 
+provenance human
 lemma set_foldl_append: "(set (foldl (@) xs ys)) = \<Union>(set ` (insert xs (set ys)))"
   apply (induction ys arbitrary: xs)
   by auto
@@ -1200,8 +1203,8 @@ declare certificate_checker3_def[code del]
 
 text \<open>Delete the \<open>Collections.Diff_Array\<close> \<open>STArray\<close>/\<open>FArray\<close> code modules, which are generated but
   unused and otherwise cause SML compilation errors (same as FPS' checker-export setup).\<close>
-code_printing code_module "STArray" \<rightharpoonup> (SML) \<open>\<close>
-code_printing code_module "FArray" \<rightharpoonup> (SML) \<open>\<close>
+code_printing \<^marker>\<open>provenance ai\<close> code_module "STArray" \<rightharpoonup> (SML) \<open>\<close>
+code_printing \<^marker>\<open>provenance ai\<close> code_module "FArray" \<rightharpoonup> (SML) \<open>\<close>
 
 text \<open>Containers-framework instances for the FPS AST types, needed by the executable wf-checker's
   Mapping/set code (e.g. \<open>ast_cont_domain.mp_constT = Mapping.of_alist\<close> over \<open>object\<close> requires
@@ -1238,7 +1241,7 @@ text \<open>card_UNIV / cproper_interval for the AST types used in NESTED sets (
   (Userguide S3.6-3.7); not \<open>derive\<close>-able, so instantiated manually (all AST types are infinite,
   injecting from the infinite \<^type>\<open>String.literal\<close> name).\<close>
 lemma infinite_UNIV_predicate: "infinite (UNIV :: predicate set)"
-proof
+proof \<^marker>\<open>provenance ai\<close>
   assume "finite (UNIV :: predicate set)"
   hence "finite (Pred ` (UNIV :: name set))" by (blast intro: finite_subset)
   moreover have "inj_on Pred (UNIV :: name set)" by (simp add: inj_on_def)
@@ -1252,6 +1255,7 @@ definition "card_UNIV = Phantom(predicate) 0"
 instance by intro_classes (simp_all add: finite_UNIV_predicate_def card_UNIV_predicate_def infinite_UNIV_predicate)
 end
 
+provenance ai
 instantiation predicate :: cproper_interval begin
 definition cproper_interval_predicate :: "predicate proper_interval" where "cproper_interval_predicate _ _ = undefined"
 instance by intro_classes (simp add: infinite_UNIV_predicate)
@@ -1265,6 +1269,7 @@ declare ast_cont_problem.wf_fmla_atom2'_def[code]
 declare ast_cont_problem.wf_func_assign'.simps[code]
 
 (* Ask what is going on with Typerep and Integer *)
+provenance ai_human
 export_code
   check_and_cert_pddl_problem_no_return check_and_make_network_opt
   parse_convert_run (* For model checking *)

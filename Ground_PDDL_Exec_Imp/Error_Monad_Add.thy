@@ -6,7 +6,9 @@ theory Error_Monad_Add
 imports
   "Certification_Monads.Check_Monad"
   "Show.Show_Instances"
+  "Provenance.Provenance"
 begin
+provenance human
   (* General-purpose; could live in a library theory. *)
   abbreviation "assert_opt \<Phi> \<equiv> if \<Phi> then Some () else None"
 

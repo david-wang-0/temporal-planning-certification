@@ -3,7 +3,9 @@ theory Ground_PDDL_Numeric_NTA_Reduction_Correctness
     PDDL_TP_Reduction.Ground_PDDL_NTA_Reduction_Correctness
     Ground_PDDL_Numeric_Problem_Defs
     "TP_NTA_Reduction_Numeric.TP_NTA_Reduction_Correctness_Numeric"
+    "Provenance.Provenance"
 begin
+provenance ai
 
 text \<open>The ground-level soundness lift over the \<^emph>\<open>numeric\<close> net. The numeric twin of
   @{text ground_ast_problem.valid_ground_plan_imp_form_holds}

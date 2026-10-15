@@ -1,8 +1,9 @@
 theory NTA_Temp_Planning_Sem
   imports Temporal_Planning_Semantics.Temporal_Plans_Instances
           Temporal_Planning_Semantics.Temporal_Plans_Lemmas
-          "HOL-Library.Multiset"
+          "HOL-Library.Multiset" "Provenance.Provenance"
 begin
+provenance human
 
 lemma GreatestI_time: "P (k::'t::time) \<Longrightarrow> (\<And>y. P y \<Longrightarrow> y \<le> k) \<Longrightarrow> P (Greatest P)"
   apply (rule GreatestI2_order)

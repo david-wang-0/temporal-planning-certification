@@ -2,7 +2,9 @@ theory Ground_PDDL_Numeric_NTA_Reduction_Impl
   imports
     Ground_PDDL_Numeric_NTA_Reduction_Correctness
     PDDL_TP_Reduction.Ground_PDDL_NTA_Reduction_Impl
+    "Provenance.Provenance"
 begin
+provenance ai
 
 text \<open>The \<^emph>\<open>executable\<close> numeric net and its refinement to the abstract numeric net
   @{text num_net_impl} (theory \<open>Ground_PDDL_Numeric_NTA_Reduction_Correctness\<close>).
@@ -548,6 +550,7 @@ proof -
     by (force simp: filter_id_conv)
 qed
 
+provenance ai
 text \<open>The abstract @{text ndefs} mutex test on LABELLED snaps coincides with the executable
   @{const mutex_snap_action'}; the primed net's @{text pre_imp_restr_list} collapses to
   @{text pre_imp_list} on the reachable snaps via @{thm pre_imp_restr_equiv_pre_imp}.\<close>

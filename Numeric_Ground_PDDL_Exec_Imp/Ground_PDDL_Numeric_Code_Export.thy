@@ -1,6 +1,7 @@
 theory Ground_PDDL_Numeric_Code_Export
-  imports Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
+  imports Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl "Provenance.Provenance"
 begin
+provenance ai
 
 section \<open>The verified bound inference at the ground problem: executable twin + code equations\<close>
 

@@ -1,6 +1,7 @@
 theory TP_NTA_Reduction_Numeric_Model_Checking
-  imports TP_NTA_Reduction.TP_NTA_Reduction_Correctness TP_NTA_Reduction_Numeric_Defs
+  imports TP_NTA_Reduction.TP_NTA_Reduction_Correctness TP_NTA_Reduction_Numeric_Defs "Provenance.Provenance"
 begin
+provenance ai
 
 subsection \<open>Generic fold reparametrization under a collapsing reindex\<close>
 

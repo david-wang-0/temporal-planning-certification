@@ -1,6 +1,7 @@
 theory TP_NTA_Reduction_Properties
-  imports TP_NTA_Reduction_Happenings
+  imports TP_NTA_Reduction_Happenings "Provenance.Provenance"
 begin
+provenance human
 context tp_nta_reduction_correctness
 begin
 
@@ -566,7 +567,7 @@ lemma Lv_conds_maintained:
   shows "Lv_conds L' v'"
   using assms unfolding Lv_conds_def by simp
 
-lemma happening_invs_maintained:
+lemma \<^marker>\<open>provenance ai_human\<close> happening_invs_maintained:
   assumes "happening_invs n (L, v, c)"
       and clock: 
           "\<forall>i<length actions. is_ending_index (planning_sem.time_index n) i \<longrightarrow> c' (act_to_start_clock (actions ! i))  = c (act_to_start_clock (actions ! i))"
@@ -626,7 +627,7 @@ lemma start_start_invs_maintained:
           "(\<forall>ia<length actions. is_ending_index (planning_sem.time_index i) ia \<longrightarrow> L' ! Suc ia = L ! Suc ia)"
           "(\<forall>ia<length actions. is_instant_index (planning_sem.time_index i) ia \<longrightarrow> L' ! Suc ia = L ! Suc ia)"
   shows "start_start_invs i (L', v', c')"
-  using assms unfolding start_start_invs_def Let_def by (auto split: prod.splits)
+  using \<^marker>\<open>provenance ai_human\<close> assms unfolding start_start_invs_def Let_def by (auto split: prod.splits)
 
 lemma end_end_invs_maintained:
   assumes "end_end_invs i (L, v, c)"

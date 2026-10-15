@@ -1,6 +1,7 @@
 theory TP_Utils
-  imports Main "Containers.Containers"
+  imports Main "Containers.Containers" "Provenance.Provenance"
 begin
+provenance human
 
 section \<open>Utility Functions and Lemmas\<close>
 
@@ -224,6 +225,7 @@ lemma takeWhile_all:
   using assms by auto
 
 
+provenance ai
 subsection \<open>Binary option combinators\<close>
 
 text \<open>Applicative @{term liftA2} (@{text lift2_option}) and a fail-allowing bind variant

@@ -1,6 +1,7 @@
 theory Ground_PDDL_Plan_Reduction
-  imports Ground_PDDL_Plan_Defs Ground_PDDL_Problem_Reduction
+  imports Ground_PDDL_Plan_Defs Ground_PDDL_Problem_Reduction "Provenance.Provenance"
 begin
+provenance human
 
 context valid_ground_plan
 begin

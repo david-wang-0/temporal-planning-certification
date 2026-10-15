@@ -1,6 +1,7 @@
 theory Ground_PDDL_NTA_Reduction_Correctness
-imports Ground_PDDL_Plan_Reduction "TP_NTA_Reduction.TP_NTA_Reduction_Correctness"
+imports Ground_PDDL_Plan_Reduction "TP_NTA_Reduction.TP_NTA_Reduction_Correctness" "Provenance.Provenance"
 begin
+provenance human
 
 context valid_ground_plan
 begin
@@ -34,14 +35,14 @@ begin
     shows "\<not>(\<exists>tp. valid_ground_plan P tp)"
     using valid_ground_plan_imp_form_holds assms by auto
 
-  lemma num_valid_ground_plan_imp_form_holds:
+  lemma \<^marker>\<open>provenance ai\<close> num_valid_ground_plan_imp_form_holds:
     assumes "\<exists>\<pi>. abstr_model_checking.numeric_plan_for_problem \<pi>"
     shows "abstr_model_checking.ref_model_checking.net_impl.sem,
       abstr_model_checking.ref_model_checking.a\<^sub>0
       \<Turnstile> abstr_model_checking.reduction_ref_impl.reach_formula"
     using assms by (rule abstr_model_checking.numeric_valid_temp_plan_imp_form_holds)
 
-  corollary num_form_not_sat_imp_no_valid_ground_plan:
+  corollary \<^marker>\<open>provenance ai\<close> num_form_not_sat_imp_no_valid_ground_plan:
     assumes "\<not>(abstr_model_checking.ref_model_checking.net_impl.sem,
       abstr_model_checking.ref_model_checking.a\<^sub>0
       \<Turnstile> abstr_model_checking.reduction_ref_impl.reach_formula)"

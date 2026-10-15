@@ -1,9 +1,11 @@
 theory TP_NTA_Reduction_Utils
-  imports TP_NTA_Reduction_Model_Checking
+  imports TP_NTA_Reduction_Model_Checking "Provenance.Provenance"
 begin
+provenance ai
 
 text \<open>Generic helper lemmas (pure-HOL + Munta-global), factored out of the reduction proofs.\<close>
 
+provenance human
 lemma fold_union:
   "fold (\<union>) S T =  \<Union> (set S) \<union> T"
   by (induction S arbitrary: T) auto

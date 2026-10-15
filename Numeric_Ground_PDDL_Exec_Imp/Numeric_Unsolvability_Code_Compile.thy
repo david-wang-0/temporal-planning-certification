@@ -1,6 +1,7 @@
 theory Numeric_Unsolvability_Code_Compile
-  imports Numeric_Unsolvability_Export
+  imports Numeric_Unsolvability_Export "Provenance.Provenance"
 begin
+provenance ai_human
 
 text \<open>Post-process the unified \<open>Converter\<close> export (propositional + numeric) exactly as the old
   propositional \<open>Unsolvability_Code_Compile\<close> did: replace the arbitrary-precision \<open>IntInf\<close> with the

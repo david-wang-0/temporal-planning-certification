@@ -2,7 +2,9 @@ theory Ground_PDDL_Numeric_NTA_Reduction_Cert_Impl
   imports
     Ground_PDDL_Numeric_NTA_Reduction_Impl
     Ground_PDDL_Numeric_NTA_Reduction_Bounds
+    "Provenance.Provenance"
 begin
+provenance ai
 
 text \<open>\<^bold>\<open>No per-plan bounds.\<close> Compose the executable numeric net refinement
   (@{thm [source] numeric_ground_ast_problem.num_model_checking_problem_refine}) with the

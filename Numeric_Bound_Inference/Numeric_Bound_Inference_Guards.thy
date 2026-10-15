@@ -1,6 +1,7 @@
 theory Numeric_Bound_Inference_Guards
-  imports Numeric_Bound_Inference_Threshold
+  imports Numeric_Bound_Inference_Threshold "Provenance.Provenance"
 begin
+provenance ai
 
 section \<open>Guard refinement: recovering bounds that numeric guards enforce\<close>
 
@@ -187,6 +188,7 @@ lemma refine_guard_sound:
 
 subsection \<open>Guarded abstract transfer and soundness\<close>
 
+provenance ai_human
 text \<open>Checking that the new environment can possibly satisfy the guard.\<close>
 fun aenv_inter_gcomp::"'n aenv \<Rightarrow> 'n gcomp \<Rightarrow> bool" where
   "aenv_inter_gcomp E (GCmp p a b) =
@@ -224,10 +226,11 @@ lemma aenv_inter_guard_sound:
   shows "aenv_inter_guard E G"
   using assms aenv_inter_gcomp_sound aenv_inter_guard_def sat_guard_def by blast
 
+provenance ai
 lemma gastep_upds_sound:
   assumes "v \<in> \<gamma>_env E" and "sat_guard v (fst ga)"
   shows "dapply_upds (snd ga) v \<in> \<gamma>_env (gastep_upds ga E)"
-proof -
+proof \<^marker>\<open>provenance ai_human\<close> -
   have "v \<in> \<gamma>_env (refine_guard (fst ga) E)" using assms by (simp add: refine_guard_sound)
   moreover
   have "aenv_inter_guard E (fst ga)" using assms aenv_inter_guard_sound by blast

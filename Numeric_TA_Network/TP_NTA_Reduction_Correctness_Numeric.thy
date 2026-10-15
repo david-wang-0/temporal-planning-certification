@@ -1,6 +1,7 @@
 theory TP_NTA_Reduction_Correctness_Numeric
-  imports TP_NTA_Reduction_Numeric_Steps
+  imports TP_NTA_Reduction_Numeric_Steps "Provenance.Provenance"
 begin
+provenance ai
 
 context numeric_tp_nta_reduction_correctness
 begin

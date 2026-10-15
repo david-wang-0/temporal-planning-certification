@@ -40,8 +40,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *)
 
 theory Interval_Domain
-  imports Main "HOL-Library.Extended" "HOL-Library.While_Combinator"
+  imports Main "HOL-Library.Extended" "HOL-Library.While_Combinator" "Provenance.Provenance"
 begin
+provenance ai
 
 section \<open>Vendored interval abstract domain (from HOL-IMP)\<close>
 
@@ -70,6 +71,7 @@ text \<open>The lattice notation @{text "\<sqinter>"} / @{text "\<squnion>"} / @
 unbundle lattice_syntax
 
 
+provenance human
 subsection \<open>Generic lattice class and function concretisation (Abs_Int0)\<close>
 
 class semilattice_sup_top = semilattice_sup + order_top
@@ -378,39 +380,40 @@ lemma add_mono_Fin_le:
   "\<lbrakk>Fin y1 \<le> x1; Fin y2 \<le> x2\<rbrakk> \<Longrightarrow> Fin(y1 + y2::'a::ordered_ab_group_add) \<le> x1 + x2"
 by(drule (1) add_mono) simp
 
+provenance ai
 text \<open>The facts the \<open>HOL-IMP\<close> \<open>global_interpretation\<close>s of \<open>Val_semilattice\<close> /
   \<open>Val_lattice_gamma\<close> / \<open>Val_inv\<close> generate, restated as plain lemmas (same proofs).\<close>
 
 lemma mono_gamma_ivl: "a \<le> b \<Longrightarrow> \<gamma>_ivl a \<le> \<gamma>_ivl b"
-by transfer (simp add: le_iff_subset)
+by \<^marker>\<open>provenance human\<close> transfer (simp add: le_iff_subset)
 
 lemma gamma_Top_ivl[simp]: "\<gamma>_ivl \<top> = UNIV"
-by transfer (simp add: \<gamma>_rep_def)
+by \<^marker>\<open>provenance human\<close> transfer (simp add: \<gamma>_rep_def)
 
 lemma gamma_num': "i \<in> \<gamma>_ivl (num_ivl i)"
-by transfer (simp add: \<gamma>_rep_def)
+by \<^marker>\<open>provenance human\<close> transfer (simp add: \<gamma>_rep_def)
 
 lemma gamma_plus': "i1 \<in> \<gamma>_ivl a1 \<Longrightarrow> i2 \<in> \<gamma>_ivl a2 \<Longrightarrow> i1+i2 \<in> \<gamma>_ivl (a1 + a2)"
-apply transfer
+apply \<^marker>\<open>provenance human\<close> transfer
 apply(auto simp: \<gamma>_rep_def plus_rep_def add_mono_le_Fin add_mono_Fin_le)
 by(auto simp: empty_rep_def is_empty_rep_def)
 
 lemma gamma_bot_ivl[simp]: "\<gamma>_ivl \<bottom> = {}"
-unfolding bot_ivl_def by transfer simp
+unfolding \<^marker>\<open>provenance human\<close> bot_ivl_def by transfer simp
 
 lemma test_num': "in_ivl i a = (i \<in> \<gamma>_ivl a)"
-by transfer (auto simp: \<gamma>_rep_def)
+by \<^marker>\<open>provenance human\<close> transfer (auto simp: \<gamma>_rep_def)
 
 lemma inv_plus': "inv_plus_ivl a a1 a2 = (a\<^sub>1',a\<^sub>2') \<Longrightarrow>
   i1 \<in> \<gamma>_ivl a1 \<Longrightarrow> i2 \<in> \<gamma>_ivl a2 \<Longrightarrow> i1+i2 \<in> \<gamma>_ivl a \<Longrightarrow> i1 \<in> \<gamma>_ivl a\<^sub>1' \<and> i2 \<in> \<gamma>_ivl a\<^sub>2'"
-unfolding inv_plus_ivl_def minus_ivl_def
+unfolding \<^marker>\<open>provenance human\<close> inv_plus_ivl_def minus_ivl_def
 apply(clarsimp simp add: \<gamma>_inf)
 using gamma_plus'[of "i1+i2" _ "-i1"] gamma_plus'[of "i1+i2" _ "-i2"]
 by(simp add:  \<gamma>_uminus)
 
 lemma inv_less': "inv_less_ivl (i1<i2) a1 a2 = (a\<^sub>1',a\<^sub>2') \<Longrightarrow>
   i1 \<in> \<gamma>_ivl a1 \<Longrightarrow> i2 \<in> \<gamma>_ivl a2 \<Longrightarrow> i1 \<in> \<gamma>_ivl a\<^sub>1' \<and> i2 \<in> \<gamma>_ivl a\<^sub>2'"
-unfolding inv_less_ivl_def minus_ivl_def one_extended_def
+unfolding \<^marker>\<open>provenance human\<close> inv_less_ivl_def minus_ivl_def one_extended_def
 apply(clarsimp simp add: \<gamma>_inf split: if_splits)
 using gamma_plus'[of "i1+1" _ "-1"] gamma_plus'[of "i2 - 1" _ "1"]
 apply(simp add: \<gamma>_belowI[of i2] \<gamma>_aboveI[of i1]
@@ -418,6 +421,7 @@ apply(simp add: \<gamma>_belowI[of i2] \<gamma>_aboveI[of i1]
 apply(simp add: \<gamma>_aboveI[of i2] \<gamma>_belowI[of i1])
 done
 
+provenance human
 text\<open>Monotonicity:\<close>
 
 lemma mono_plus_ivl: "iv1 \<le> iv2 \<Longrightarrow> iv3 \<le> iv4 \<Longrightarrow> iv1+iv3 \<le> iv2+(iv4::ivl)"
