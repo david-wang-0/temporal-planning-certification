@@ -3,9 +3,7 @@ theory Index
           "Munta_Model_Checker.Simple_Network_Language_Impl"
           "Numeric_Ground_PDDL_Exec_Imp.Ground_PDDL_Numeric_NTA_Reduction_Correctness"
           "Numeric_Ground_PDDL_Exec_Imp.Numeric_Unsolvability_Export"
-          "Provenance.Provenance"
 begin
-provenance human
 
 
 subsection \<open>Definitions\<close>
@@ -185,7 +183,6 @@ text \<open>Definition 5 (Clock updates):
       @{thm [source] step_u.step_int} (\<open>u' = [r\<rightarrow>0]u\<close>),
       etc.
 \<close>
-provenance ai_human
 text \<open>Definition 6 (Timed Automaton):
   Now also contains the timed transition relation (the paper's former separate definition).
 
@@ -285,7 +282,6 @@ text \<open>Definition 8 (Network of Timed Automata Transitions):
     reflexive-transitive closure of the transitions:
       @{const steps_u}
 \<close>
-provenance ai
 text \<open>Definition 9 (Run):
   Timed Automata (Munta):
 
@@ -298,7 +294,6 @@ text \<open>Definition 9 (Run):
     infinite run:
       @{const Graph_Defs.run}
 \<close>
-provenance human
 text \<open>Definition 10 (Valuation):
   PDDL:
 
@@ -317,7 +312,6 @@ text \<open>Definition 10 (Valuation):
     model of a set of propositions:
       @{term \<open>(\<subseteq>)\<close>} (source: @{const temp_plan_defs.valid_state_sequence})
 \<close>
-provenance ai_human
 text \<open>Definition 11 (Temporal planning problem):
   PDDL:
 
@@ -394,14 +388,12 @@ text \<open>Definition 11 (Temporal planning problem):
     numeric effects):
       parameters \<open>pre\<close>, \<open>n_pre\<close>, \<open>adds\<close>, \<open>dels\<close>, \<open>upds\<close> of @{locale numeric_action_defs}
 \<close>
-provenance human
 text \<open>Definition 12 (MatchCellar Template): an example; decide whether it needs an entry
   example:
     @{dir \<open>examples/ground/MatchCellar-possible\<close>}:
       @{file \<open>examples/ground/MatchCellar-possible/instance_solvable_domain.pddl\<close>}
       @{file \<open>examples/ground/MatchCellar-possible/instance_solvable_problem.pddl\<close>}
 \<close>
-provenance ai_human
 text \<open>Definition 13 (Effect application):
   PDDL:
 
@@ -418,7 +410,6 @@ text \<open>Definition 13 (Effect application):
       unlike the paper (\<open>\<S>'\<close> undefined), an update evaluating to @{term None} leaves the
       fluent unassigned; later conditions on it are then not satisfied
 \<close>
-provenance human
 text \<open>Definition 14 (Interference):
   PDDL:
 
@@ -530,7 +521,6 @@ text \<open>Definition 17 (Valid plan):
     valid plan:
       @{const temp_plan_defs.valid_plan} and @{const numeric_temp_plan_defs.num_valid_plan}
 \<close>
-provenance ai
 text \<open>Definition 18 (Integer variables):
   Encoding:
     The bounds are passed in @{const tp_nta_reduction_defs.all_vars} and
@@ -694,7 +684,6 @@ text \<open>Definition 22 (Network for a planning problem):
     acceptance condition:
       unchanged, @{const tp_nta_reduction_defs.reach_formula} (the numeric goal is checked on the goal edge)
 \<close>
-provenance ai_human
 text \<open>Definition 23 (Encoded states):
   Proof (propositional):
 
@@ -730,7 +719,6 @@ text \<open>Definition 24 (Encoded states before):
       @{const numeric_tp_nta_reduction_correctness.num_happening_pre}
       (before the delay: @{const numeric_tp_nta_reduction_correctness.num_happening_pre_pre_delay})
 \<close>
-provenance ai
 text \<open>Definition 25 (Encoded initial state):
   Proof (propositional):
 
@@ -744,7 +732,6 @@ text \<open>Definition 25 (Encoded initial state):
       @{const numeric_tp_nta_reduction_correctness.num_init_planning_state_props'}
 \<close>
 
-provenance ai_human
 subsection \<open>Theorems\<close>
 text \<open>Theorem 1 (main theorem: a valid plan implies that the goal location is reachable):
   Proof (propositional):
@@ -763,7 +750,6 @@ text \<open>Theorem 1 (main theorem: a valid plan implies that the goal location
       contrapositive, for executable certificate checking:
         @{thm [source] make_certified_numeric_net_okay}
 \<close>
-provenance ai
 text \<open>Lemma 1 (variable bounds respected): TODO (the paper's statement is still a placeholder)
   Proof (numeric extension):
 
@@ -772,7 +758,6 @@ text \<open>Lemma 1 (variable bounds respected): TODO (the paper's statement is 
     the inferred bounds establish the bound invariant (candidate):
       @{thm [source] numeric_tp_nta_reduction.inferred_box_imp_num_bound_inv}
 \<close>
-provenance ai_human
 text \<open>Lemma 2 (plan transitions possible):
   Proof (propositional):
 
@@ -807,7 +792,6 @@ text \<open>Lemma 4 (goal transition possible):
       @{thm [source] numeric_tp_nta_reduction_correctness.num_final_step_possible}
 \<close>
 
-provenance human
 subsection \<open>Locales\<close>
 text \<open>Our locales for the propositional part are:\<close>
 text \<open>\<open>\<Pi>\<close>:\<close>
