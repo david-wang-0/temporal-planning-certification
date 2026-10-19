@@ -88,6 +88,7 @@ locale tp_nta_reduction_defs = temp_planning_problem_list_impl_int
     and actions :: "'action list" +
   fixes act_to_name :: "'action \<Rightarrow> String.literal"
     and prop_to_name :: "'proposition \<Rightarrow> String.literal"
+    and mutex_effects :: "'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool"
 begin
 
 definition "prop_to_var p \<equiv> STR ''var_'' + prop_to_name p"
@@ -149,11 +150,10 @@ definition
   
 
 subsection \<open>Automata for individual actions\<close>
-abbreviation mutex_effects::"
-   'snap_action 
-\<Rightarrow> 'snap_action 
-\<Rightarrow> bool" where
-"mutex_effects a b \<equiv> rat_impl.set_impl.mutex_snap_action a b"
+text \<open>The interference relation \<open>mutex_effects\<close> is a parameter: the clocks of the snap actions
+interfering with \<open>s\<close> guard \<open>s\<close>, so that interfering snap actions are \<open>\<epsilon>\<close>-separated. The propositional
+reduction instantiates it with @{const action_defs.mutex_snap_action} (\<open>tp_nta_reduction_defs'\<close>); the
+numeric reduction additionally guards numerically interfering snap actions.\<close>
 
 definition net_int_clocks::"'snap_action \<Rightarrow> String.literal list" where
 "net_int_clocks s \<equiv>
@@ -227,7 +227,8 @@ in
 
 text \<open>Checking that no interfering snap-action is starting is done with the clock constraints. It is
 enough to check that the end does not interfere with the start: interference is reflexive and the start
-clock has already been reset.\<close>
+clock has already been reset. (Interference is symmetric: assumption \<open>mutex_effects_sym\<close> of
+\<open>tp_nta_reduction_model_checking\<close>.)\<close>
 definition instant_trans_edge::"'action 
   \<Rightarrow> nat 
     \<times> (String.literal, int) Simple_Expressions.bexp 
@@ -420,7 +421,10 @@ end
 
 
 text \<open>The primed reduction layer (on \<open>temp_planning_problem_list_impl_int'\<close>): its
-\<open>reduction_ref_impl\<close> sublocale instantiates the unprimed reduction on the restricted problem.\<close>
+\<open>reduction_ref_impl\<close> sublocale instantiates the unprimed reduction on the restricted problem, with
+the propositional interference relation @{const action_defs.mutex_snap_action} of the restricted
+problem as \<open>mutex_effects\<close>. (The numeric primed layer does not go through this locale, so it can
+instantiate \<open>mutex_effects\<close> differently.)\<close>
 locale tp_nta_reduction_defs' = temp_planning_problem_list_impl_int'
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
   for init :: "'proposition list"
@@ -444,7 +448,8 @@ sublocale reduction_ref_impl: tp_nta_reduction_defs
   "rat_impl.list_inter props goal"
   AtStart AtEnd rat_impl.over_all_restr_list lower upper 
   rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
-  \<epsilon> props actions act_to_name prop_to_name 
+  \<epsilon> props actions act_to_name prop_to_name
+  rat_imp'.prob_list_impl.set_impl.mutex_snap_action
   by unfold_locales
 end
 end

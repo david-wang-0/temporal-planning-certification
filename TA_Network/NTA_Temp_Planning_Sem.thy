@@ -1,3 +1,4 @@
+
 theory NTA_Temp_Planning_Sem
   imports Temporal_Planning_Semantics.Temporal_Plans_Instances
           Temporal_Planning_Semantics.Temporal_Plans_Lemmas
@@ -7,6 +8,43 @@ begin
 lemma GreatestI_time: "P (k::'t::time) \<Longrightarrow> (\<And>y. P y \<Longrightarrow> y \<le> k) \<Longrightarrow> P (Greatest P)"
   apply (rule GreatestI2_order)
   by blast
+
+subsection \<open>Separation of interfering snap actions\<close>
+
+text \<open>The generalisation of @{const temp_plan_defs.nm_happ_seq} to an arbitrary interference relation
+\<open>R\<close>: two distinct occurrences of \<open>R\<close>-interfering snap actions in the happening sequence \<open>B\<close> are at
+least \<open>\<epsilon>\<close> apart, and two distinct snap actions at the same instant do not interfere. The reduction
+to timed automata guards exactly the relation it is given, so this is what a plan must satisfy for
+the guards to be met: with \<open>R\<close> the propositional @{const action_defs.mutex_snap_action} it is
+@{const temp_plan_defs.nm_happ_seq} (@{text nm_happ_seq_eq_eps_separated} below); the numeric
+reduction also separates numerically interfering snap actions.\<close>
+definition eps_separated_happ_seq :: "('s \<Rightarrow> 's \<Rightarrow> bool) \<Rightarrow> 't::{ord, minus} \<Rightarrow> ('t \<times> 's) set \<Rightarrow> bool" where
+"eps_separated_happ_seq R \<epsilon> B \<equiv>
+  (\<forall>t u a b. t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> (t, a) \<in> B \<and> (u, b) \<in> B
+    \<and> (a \<noteq> b \<or> t \<noteq> u) \<longrightarrow> \<not> R a b)
+  \<and> (\<forall>t a b. (t, a) \<in> B \<and> (t, b) \<in> B \<and> a \<noteq> b \<longrightarrow> \<not> R a b)"
+
+lemma eps_separated_happ_seq_closeD:
+  assumes "eps_separated_happ_seq R \<epsilon> B"
+      and "(t, a) \<in> B"
+      and "(u, b) \<in> B"
+      and "t - u < \<epsilon>"
+      and "u - t < \<epsilon>"
+      and "a \<noteq> b \<or> t \<noteq> u"
+    shows "\<not> R a b"
+  using assms unfolding eps_separated_happ_seq_def by blast
+
+lemma eps_separated_happ_seq_instantD:
+  assumes "eps_separated_happ_seq R \<epsilon> B"
+      and "(t, a) \<in> B"
+      and "(t, b) \<in> B"
+      and "a \<noteq> b"
+    shows "\<not> R a b"
+  using assms unfolding eps_separated_happ_seq_def by blast
+
+lemma (in temp_plan_defs) nm_happ_seq_eq_eps_separated:
+  "nm_happ_seq B \<longleftrightarrow> eps_separated_happ_seq mutex_snap_action \<epsilon> B"
+  unfolding nm_happ_seq_def eps_separated_happ_seq_def by blast
 
 locale nta_temp_planning = temp_plan_for_problem_impl 
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> actions props
@@ -136,150 +174,169 @@ lemma updated_exec_time_and_next:
   using subseq_last_snap_exec[OF assms] exec_time_def exec_time'_def by simp
 
 
+lemma exec_time_and_separation_wrt:
+  assumes sep: "eps_separated_happ_seq R \<epsilon> plan_happ_seq"
+      and a_at_t: "(t, a) \<in> plan_happ_seq"
+      and mutex: "R a b"
+    shows "\<epsilon> \<le> exec_time b t"
+      and "0 < exec_time b t"
+proof -
+  have "exec_time b t \<ge> \<epsilon> \<and> exec_time b t > 0"
+  proof (cases "\<exists>u < t. (u, b) \<in> plan_happ_seq")
+    case True
+
+    from a_at_t
+    have "t \<in> htps" using a_in_B_iff_t_in_htps unfolding plan_happ_seq_def by fast
+    then obtain j where
+      j: "t = time_index j"
+      "j < card htps" using time_index_img_set by blast
+    
+    have P_iff: "(\<lambda>t'. t' < t \<and> (t', b) \<in> plan_happ_seq) = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> i < j \<and> (time_index i, b) \<in> plan_happ_seq)" (is "?P = ?P'")
+    proof -
+      have "(\<lambda>t'. t' < t \<and> (t', b) \<in> plan_happ_seq) = (\<lambda>t'. t' \<in> htps \<and> t' < t \<and> (t', b) \<in> plan_happ_seq)" using a_in_B_iff_t_in_htps unfolding plan_happ_seq_def by fast
+      also have "... = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> t' < t \<and> (time_index i, b) \<in> plan_happ_seq)" using time_index_img_set by force
+      also have "... = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> i < j \<and> (time_index i, b) \<in> plan_happ_seq)"
+        unfolding j(1) 
+        using time_index_strict_sorted_set'[where j = j] 
+        using time_index_strict_sorted_set[OF _ j(2)] 
+        by blast
+      finally show ?thesis .
+    qed
+    
+    obtain u where
+      u: "u < t"
+      "(u, b) \<in> plan_happ_seq"
+      using True by blast
+    hence "u \<in> htps" using a_in_B_iff_t_in_htps plan_happ_seq_def by fast
+    hence "\<exists>i < card htps. i < j \<and> (time_index i, b) \<in> plan_happ_seq" (is "Ex ?P2") using P_iff u by meson
+    moreover
+    have P2_int: "\<And>x. ?P2 x \<Longrightarrow> x \<le> j" using time_index_sorted_set' by auto
+    ultimately
+    have P2: "?P2 (Greatest ?P2)" using GreatestI_ex_nat[where P = ?P2] by blast
+
+    have P_1: "?P (time_index (Greatest ?P2))" 
+    proof -
+      from P2 time_index_strict_sorted_set[OF _ j(2)] 
+      show ?thesis unfolding j(1) by blast
+    qed
+    
+    have P_max: "x \<le> time_index (Greatest ?P2)" if assm: "?P x" for x 
+    proof -
+      from assm P_iff
+      have "\<exists>i<card htps. time_index i = x \<and> i < j \<and> (time_index i, b) \<in> plan_happ_seq" by meson
+      then
+      obtain i where
+        i: "?P2 i"
+        "x = time_index i" by auto
+      moreover
+      have "i \<le> Greatest ?P2" using Greatest_le_nat[where P = ?P2] i(1) P2_int by blast
+      moreover
+      have "Greatest ?P2 < card htps" using P2 ..
+      ultimately
+      show "x \<le> time_index (Greatest ?P2)" using time_index_sorted_set by blast
+    qed
+
+    have "?P (Greatest ?P)" 
+      apply (rule GreatestI_time)
+       apply (rule P_1)
+      using P_max by simp
+    moreover
+    have 1: "last_snap_exec b t = (GREATEST t'. t' < t \<and> (t', b) \<in> plan_happ_seq)" using True unfolding pt_def by auto
+    ultimately
+    have b_at_t': "(\<lambda>u. u < t \<and> (u, b) \<in> plan_happ_seq) (last_snap_exec b t)" (is "?t < t \<and> (?t, b) \<in> plan_happ_seq") by auto
+
+    { assume a: "(t, a) \<in> plan_happ_seq" "(?t, b) \<in> plan_happ_seq"
+
+      have nm_cond: "t - ?t < \<epsilon> \<and> ?t - t < \<epsilon> \<and> (a \<noteq> b \<or> t \<noteq> ?t) \<or> (t = ?t \<and> a \<noteq> b) \<longrightarrow> \<not>R a b" 
+        using a sep unfolding eps_separated_happ_seq_def by auto
+      hence "R a b \<longrightarrow> (t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon> \<or> (a = b \<and> t = ?t)) \<and> (t \<noteq> ?t \<or> a = b)" by auto
+      hence "R a b \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon> \<or> (a = b \<and> t = ?t)" 
+            "R a b \<longrightarrow> (t \<noteq> ?t \<or> a = b)" by auto
+
+      hence "\<not>(\<not>(a \<noteq> b \<or> t \<noteq> ?t) \<or> \<not>R a b) \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>" by auto
+      hence "((a \<noteq> b \<or> t \<noteq> ?t) \<and> R a b) \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  using a_at_t b_at_t' by blast
+      hence "(a \<noteq> b \<or> t \<noteq> ?t) \<and> R a b \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  by blast  
+      moreover
+      have "a \<noteq> b \<longrightarrow> R a b" using mutex by blast
+      ultimately
+      have "a \<noteq> b \<or> (t \<noteq> ?t \<and> R a b) \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>" by blast
+      moreover
+      have "t \<noteq> ?t" using b_at_t' by auto
+      ultimately
+      consider "t - ?t \<ge> \<epsilon>" | "?t - t \<ge> \<epsilon>" using mutex by blast
+    }
+    note c = this
+    
+    have t: "t > ?t" using b_at_t' by blast
+    moreover
+    have "\<epsilon> \<ge> 0" using eps_ran less_le_not_le by fastforce
+    ultimately 
+    have "t - ?t \<ge> \<epsilon>"  
+      apply (cases rule: c) 
+      subgoal using assms by simp 
+      subgoal using b_at_t' by simp 
+      subgoal by blast 
+      apply (drule order.trans)
+       apply assumption
+      by auto
+    thus ?thesis
+      apply -
+      apply (rule conjI)
+       apply (subst exec_time_def)
+       apply simp
+      using t unfolding exec_time_def by fastforce
+  next
+    case False
+    have 1: "time_index 0 \<le> u" if "\<exists>h. (u, h) \<in> plan_happ_seq" for u
+    proof -
+      have "u \<in> set htpl" using that a_in_B_iff_t_in_htps htps_set_htpl valid_plan_finite unfolding plan_happ_seq_def by fast
+      hence "\<exists>i. time_index i = u \<and> i < length htpl" using time_index_img_list by force
+      thus "time_index 0 \<le> u" using time_index_sorted_list by blast
+    qed
+    with a_at_t
+    have 2: "time_index 0 \<le> t" by auto
+    
+    have 3: "Least (\<lambda>t. \<exists>x. (t, x) \<in> plan_happ_seq) = (time_index 0)" 
+    proof (rule Least_equality[OF _ 1])
+      have "card htps > 0" apply (subst card_gt_0_iff) 
+        using a_in_B_iff_t_in_htps a_at_t finite_htps valid_plan_finite unfolding plan_happ_seq_def by fast
+      hence "time_index 0 \<in> htps" using time_index_img_set valid_plan_finite vp by blast
+      thus "\<exists>x. (time_index 0, x) \<in> plan_happ_seq" using a_in_B_iff_t_in_htps plan_happ_seq_def by fast
+    qed
+
+    have "last_snap_exec b t = (LEAST t'. \<exists>x. (t', x) \<in> plan_happ_seq) - (\<epsilon> + c)" using False unfolding pt_def by argo
+    from this[simplified 3]
+    have "last_snap_exec b t = time_index 0 - (\<epsilon> + c)" .
+    hence 4: "t - last_snap_exec b t = \<epsilon> + c + t - time_index 0" by auto
+    with 2
+    have "0 < c + t - time_index 0" using c by (simp add: add_strict_increasing)
+    with 4
+    have "\<epsilon> < t - last_snap_exec b t" unfolding 4
+      by auto
+    thus ?thesis unfolding exec_time_def Let_def using eps_ran
+      apply -
+      apply (rule conjI)
+       apply simp
+       by order
+  qed
+  thus "\<epsilon> \<le> exec_time b t" and "0 < exec_time b t" by simp_all
+qed
+
 lemma exec_time_and_separation:
   assumes  a_at_t: "(t, a) \<in> plan_happ_seq"
       and mutex: "mutex_snap_action a b"
     shows "exec_time b t \<ge> \<epsilon> \<and> exec_time b t > 0"
-proof (cases "\<exists>u < t. (u, b) \<in> plan_happ_seq")
-  case True
+  using exec_time_and_separation_wrt[OF nm_happ_seq[unfolded nm_happ_seq_eq_eps_separated] a_at_t mutex]
+  by simp
 
-  have "\<forall>u. (u, b) \<in> plan_happ_seq \<longrightarrow> \<not> (t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> t \<noteq> u)" using assms nm_happ_seq 
-    unfolding nm_happ_seq_def mutex_snap_action_def[symmetric] by blast
-
-  from a_at_t
-  have "t \<in> htps" using a_in_B_iff_t_in_htps unfolding plan_happ_seq_def by fast
-  then obtain j where
-    j: "t = time_index j"
-    "j < card htps" using time_index_img_set by blast
-  
-  have P_iff: "(\<lambda>t'. t' < t \<and> (t', b) \<in> plan_happ_seq) = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> i < j \<and> (time_index i, b) \<in> plan_happ_seq)" (is "?P = ?P'")
-  proof -
-    have "(\<lambda>t'. t' < t \<and> (t', b) \<in> plan_happ_seq) = (\<lambda>t'. t' \<in> htps \<and> t' < t \<and> (t', b) \<in> plan_happ_seq)" using a_in_B_iff_t_in_htps unfolding plan_happ_seq_def by fast
-    also have "... = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> t' < t \<and> (time_index i, b) \<in> plan_happ_seq)" using time_index_img_set by force
-    also have "... = (\<lambda>t'. \<exists>i < card htps. time_index i = t' \<and> i < j \<and> (time_index i, b) \<in> plan_happ_seq)"
-      unfolding j(1) 
-      using time_index_strict_sorted_set'[where j = j] 
-      using time_index_strict_sorted_set[OF _ j(2)] 
-      by blast
-    finally show ?thesis .
-  qed
-  
-  obtain u where
-    u: "u < t"
-    "(u, b) \<in> plan_happ_seq"
-    using True by blast
-  hence "u \<in> htps" using a_in_B_iff_t_in_htps plan_happ_seq_def by fast
-  hence "\<exists>i < card htps. i < j \<and> (time_index i, b) \<in> plan_happ_seq" (is "Ex ?P2") using P_iff u by meson
-  moreover
-  have P2_int: "\<And>x. ?P2 x \<Longrightarrow> x \<le> j" using time_index_sorted_set' by auto
-  ultimately
-  have P2: "?P2 (Greatest ?P2)" using GreatestI_ex_nat[where P = ?P2] by blast
-
-  have P_1: "?P (time_index (Greatest ?P2))" 
-  proof -
-    from P2 time_index_strict_sorted_set[OF _ j(2)] 
-    show ?thesis unfolding j(1) by blast
-  qed
-  
-  have P_max: "x \<le> time_index (Greatest ?P2)" if assm: "?P x" for x 
-  proof -
-    from assm P_iff
-    have "\<exists>i<card htps. time_index i = x \<and> i < j \<and> (time_index i, b) \<in> plan_happ_seq" by meson
-    then
-    obtain i where
-      i: "?P2 i"
-      "x = time_index i" by auto
-    moreover
-    have "i \<le> Greatest ?P2" using Greatest_le_nat[where P = ?P2] i(1) P2_int by blast
-    moreover
-    have "Greatest ?P2 < card htps" using P2 ..
-    ultimately
-    show "x \<le> time_index (Greatest ?P2)" using time_index_sorted_set by blast
-  qed
-
-  have "?P (Greatest ?P)" 
-    apply (rule GreatestI_time)
-     apply (rule P_1)
-    using P_max by simp
-  moreover
-  have 1: "last_snap_exec b t = (GREATEST t'. t' < t \<and> (t', b) \<in> plan_happ_seq)" using True unfolding pt_def by auto
-  ultimately
-  have b_at_t': "(\<lambda>u. u < t \<and> (u, b) \<in> plan_happ_seq) (last_snap_exec b t)" (is "?t < t \<and> (?t, b) \<in> plan_happ_seq") by auto
-
-  { assume a: "(t, a) \<in> plan_happ_seq" "(?t, b) \<in> plan_happ_seq"
-
-    have nm_cond: "t - ?t < \<epsilon> \<and> ?t - t < \<epsilon> \<and> (a \<noteq> b \<or> t \<noteq> ?t) \<or> (t = ?t \<and> a \<noteq> b) \<longrightarrow> \<not>mutex_snap_action a b" 
-      using a nm_happ_seq unfolding nm_happ_seq_def by auto
-    hence "mutex_snap_action a b \<longrightarrow> (t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon> \<or> (a = b \<and> t = ?t)) \<and> (t \<noteq> ?t \<or> a = b)" by auto
-    hence "mutex_snap_action a b \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon> \<or> (a = b \<and> t = ?t)" 
-          "mutex_snap_action a b \<longrightarrow> (t \<noteq> ?t \<or> a = b)" by auto
-
-    hence "\<not>(\<not>(a \<noteq> b \<or> t \<noteq> ?t) \<or> \<not>mutex_snap_action a b) \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>" by auto
-    hence "((a \<noteq> b \<or> t \<noteq> ?t) \<and> mutex_snap_action a b) \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  using a_at_t b_at_t' by blast
-    hence "(a \<noteq> b \<or> t \<noteq> ?t) \<and> mutex_snap_action a b \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>"  by blast  
-    moreover
-    have "a \<noteq> b \<longrightarrow> mutex_snap_action a b" using mutex by blast
-    ultimately
-    have "a \<noteq> b \<or> (t \<noteq> ?t \<and> mutex_snap_action a b) \<longrightarrow> t - ?t \<ge> \<epsilon> \<or> ?t - t \<ge> \<epsilon>" by blast
-    moreover
-    have "t \<noteq> ?t" using b_at_t' by auto
-    ultimately
-    consider "t - ?t \<ge> \<epsilon>" | "?t - t \<ge> \<epsilon>" using mutex by blast
-  }
-  note c = this
-  
-  have t: "t > ?t" using b_at_t' by blast
-  moreover
-  have "\<epsilon> \<ge> 0" using eps_ran less_le_not_le by fastforce
-  ultimately 
-  have "t - ?t \<ge> \<epsilon>"  
-    apply (cases rule: c) 
-    subgoal using assms by simp 
-    subgoal using b_at_t' by simp 
-    subgoal by blast 
-    apply (drule order.trans)
-     apply assumption
-    by auto
-  thus ?thesis
-    apply -
-    apply (rule conjI)
-     apply (subst exec_time_def)
-     apply simp
-    using t unfolding exec_time_def by fastforce
-next
-  case False
-  have 1: "time_index 0 \<le> u" if "\<exists>h. (u, h) \<in> plan_happ_seq" for u
-  proof -
-    have "u \<in> set htpl" using that a_in_B_iff_t_in_htps htps_set_htpl valid_plan_finite unfolding plan_happ_seq_def by fast
-    hence "\<exists>i. time_index i = u \<and> i < length htpl" using time_index_img_list by force
-    thus "time_index 0 \<le> u" using time_index_sorted_list by blast
-  qed
-  with a_at_t
-  have 2: "time_index 0 \<le> t" by auto
-  
-  have 3: "Least (\<lambda>t. \<exists>x. (t, x) \<in> plan_happ_seq) = (time_index 0)" 
-  proof (rule Least_equality[OF _ 1])
-    have "card htps > 0" apply (subst card_gt_0_iff) 
-      using a_in_B_iff_t_in_htps a_at_t finite_htps valid_plan_finite unfolding plan_happ_seq_def by fast
-    hence "time_index 0 \<in> htps" using time_index_img_set valid_plan_finite vp by blast
-    thus "\<exists>x. (time_index 0, x) \<in> plan_happ_seq" using a_in_B_iff_t_in_htps plan_happ_seq_def by fast
-  qed
-
-  have "last_snap_exec b t = (LEAST t'. \<exists>x. (t', x) \<in> plan_happ_seq) - (\<epsilon> + c)" using False unfolding pt_def by argo
-  from this[simplified 3]
-  have "last_snap_exec b t = time_index 0 - (\<epsilon> + c)" .
-  hence 4: "t - last_snap_exec b t = \<epsilon> + c + t - time_index 0" by auto
-  with 2
-  have "0 < c + t - time_index 0" using c by (simp add: add_strict_increasing)
-  with 4
-  have "\<epsilon> < t - last_snap_exec b t" unfolding 4
-    by auto
-  thus ?thesis unfolding exec_time_def Let_def using eps_ran
-    apply -
-    apply (rule conjI)
-     apply simp
-     by order
-qed
+text \<open>Generalised twin of @{text mutex_same_instant_is_same}.\<close>
+lemma mutex_same_instant_is_same_wrt:
+  assumes sep: "eps_separated_happ_seq R \<epsilon> plan_happ_seq"
+      and "(t, a) \<in> plan_happ_seq"
+      and "(t, b) \<in> plan_happ_seq"
+      and "R a b"
+    shows "a = b"
+  using eps_separated_happ_seq_instantD[OF sep] assms(2-4) by blast
 
 
 lemma exec_time_when_ending:
@@ -388,5 +445,11 @@ lemma action_happening_exec_times:
   by (intro a_not_in_b_exec_time'_unchanged a_in_b_exec_time'_0, elim action_happening_case_dests)+
 
 end
+
+text \<open>A valid plan of the executable problem separates propositionally interfering snap actions: the
+instance of @{const eps_separated_happ_seq} the propositional reduction is checked against.\<close>
+lemma (in temp_plan_for_problem_list_impl_int) mutex_eps_separated:
+  "eps_separated_happ_seq rat_impl.set_impl.mutex_snap_action (rat_of_int \<epsilon>) rat_impl.plan_happ_seq"
+  using abstr_impl.nm_happ_seq unfolding rat_impl.nm_happ_seq_eq_eps_separated .
 
 end

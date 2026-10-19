@@ -1,9 +1,11 @@
 theory TP_NTA_Reduction_Model_Checking
   imports TP_NTA_Reduction_Defs
+          NTA_Temp_Planning_Sem
 begin
 
 locale tp_nta_reduction_model_checking = tp_nta_reduction_defs
-  init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name +
+  init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
+  mutex_effects +
   action_names: unique_names act_to_name "set actions" +
   prop_names: unique_names prop_to_name "set props"
   for init :: "'proposition list"
@@ -21,6 +23,8 @@ locale tp_nta_reduction_model_checking = tp_nta_reduction_defs
     and actions :: "'action list"
     and act_to_name :: "'action \<Rightarrow> String.literal"
     and prop_to_name :: "'proposition \<Rightarrow> String.literal"
+    and mutex_effects :: "'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" +
+  assumes mutex_effects_sym: "mutex_effects a b \<Longrightarrow> mutex_effects b a"
 begin
 
 
@@ -175,13 +179,17 @@ sublocale ref_model_checking: tp_nta_reduction_model_checking
   "rat_impl.list_inter props goal"
   AtStart AtEnd rat_impl.over_all_restr_list lower upper 
   rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
-  \<epsilon> props actions act_to_name prop_to_name 
-  by unfold_locales 
+  \<epsilon> props actions act_to_name prop_to_name
+  rat_imp'.prob_list_impl.set_impl.mutex_snap_action
+  using rat_imp'.prob_list_impl.set_impl.mutex_snap_action_refl by unfold_locales simp
 
 end
 
 
-text \<open>Now we add the assumption that a plan exists.\<close>
+text \<open>Now we add the assumption that a plan exists. The plan must also \<open>\<epsilon>\<close>-separate the snap
+actions that interfere w.r.t. the relation \<open>mutex_effects\<close> the network guards
+(@{const eps_separated_happ_seq}); for the propositional relation this follows from plan validity
+(@{text mutex_eps_separated}).\<close>
 
 text \<open>This locale is not meant to directly be instantiated.\<close>
 locale tp_nta_reduction_correctness = temp_plan_for_problem_list_impl_int 
@@ -204,9 +212,12 @@ locale tp_nta_reduction_correctness = temp_plan_for_problem_list_impl_int
     and \<pi>:: "('i, 'action, int) temp_plan"
     and act_to_name :: "'action \<Rightarrow> String.literal"
     and prop_to_name :: "'proposition \<Rightarrow> String.literal"
+    and mutex_effects :: "'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" +
+  assumes mutex_effects_sym: "mutex_effects a b \<Longrightarrow> mutex_effects b a"
+      and mutex_effects_sep: "eps_separated_happ_seq mutex_effects (rat_of_int \<epsilon>) rat_impl.plan_happ_seq"
 begin
 sublocale tp_nta_reduction_model_checking 
-  by unfold_locales
+  using mutex_effects_sym by unfold_locales
 end
 
 
@@ -241,8 +252,13 @@ sublocale ref_correctness: tp_nta_reduction_correctness
   "rat_impl.list_inter props goal"
   AtStart AtEnd rat_impl.over_all_restr_list lower upper 
   rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
-  \<epsilon> props actions \<pi> act_to_name prop_to_name 
-  by unfold_locales
+  \<epsilon> props actions \<pi> act_to_name prop_to_name
+  rat_imp'.prob_list_impl.set_impl.mutex_snap_action
+proof unfold_locales
+  show "rat_imp'.prob_list_impl.set_impl.mutex_snap_action b a"
+    if "rat_imp'.prob_list_impl.set_impl.mutex_snap_action a b" for a b
+    using that rat_imp'.prob_list_impl.set_impl.mutex_snap_action_refl by simp
+qed (rule conc_ref_impl.mutex_eps_separated)
 
 end
 
