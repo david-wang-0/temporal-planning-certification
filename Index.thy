@@ -566,7 +566,8 @@ text \<open>Definition 18 (Action clocks):
       @{const tp_nta_reduction_defs.act_to_end_clock}
     clock of a snap action of unspecified kind:
       @{const tp_nta_reduction_defs.net_int_clocks} collects the start and end
-      clocks of the snap actions interfering with a given one.
+      clocks of the snap actions interfering with a given one under the reduction's interference
+      relation \<open>mutex_effects\<close> (a parameter of @{locale tp_nta_reduction_defs}).
       No single function; represented by strings.
 
     not in the paper:
@@ -608,7 +609,9 @@ text \<open>Definition 20 (Action Automata):
   helpers below):
 
     interference guard \<open>mutex\<close>:
-      the clock constraints \<open>> 0\<close> and \<open>\<ge> \<epsilon>\<close> on @{const tp_nta_reduction_defs.net_int_clocks}
+      the clock constraints \<open>> 0\<close> and \<open>\<ge> \<epsilon>\<close> on @{const tp_nta_reduction_defs.net_int_clocks},
+      for the interference relation @{const action_defs.mutex_snap_action} (the instance in
+      @{locale tp_nta_reduction_defs'})
     duration guard \<open>dur\<close>:
       @{const tp_nta_reduction_defs.l_dur} and
       @{const tp_nta_reduction_defs.u_dur}
@@ -661,10 +664,19 @@ text \<open>Definition 20 (Action Automata):
 
 
     interference guard \<open>mutex\<close>:
-      unchanged, @{const tp_nta_reduction_defs.net_int_clocks}. Unlike in the paper, the numeric
-      interference conditions (v)--(vii) are not encoded as clock guards: the guards only cover
-      propositional interference. This is sound for Theorem 1, which only goes from a valid plan to
-      a run: a valid plan respects all interference conditions, so fewer guards cannot block its run.
+      @{const tp_nta_reduction_defs.net_int_clocks} for the interference relation \<open>mutex_effects\<close> of
+      @{locale numeric_tp_nta_reduction_defs'}: snap actions that interfere propositionally
+      (@{const action_defs.mutex_snap_action}) or numerically
+      (@{const numeric_action_defs.num_mutex_snap_action}, conditions (v)--(vii)) are guarded, as in
+      the paper. A valid plan separates them by \<open>\<epsilon>\<close> (@{const eps_separated_happ_seq}; numeric part
+      @{thm [source] numeric_temp_plan_defs.num_mutex_eps_separated}), which discharges the
+      assumption \<open>mutex_effects_sep\<close> of @{locale tp_nta_reduction_correctness}
+      (@{thm [source] numeric_tp_nta_reduction_correctness'.ref_mutex_effects_sep}).
+      Executable: @{const numeric_ground_ast_problem_defs.mutex_effects'},
+      @{const numeric_ground_ast_problem_defs.num_net_int_clocks'},
+      @{const numeric_ground_ast_problem_defs.start_edge_num'},
+      @{const numeric_ground_ast_problem_defs.edge_3_num'},
+      @{const numeric_ground_ast_problem_defs.instant_trans_edge_num'}.
 
 \<close>
 text \<open>Definition 21 (Network for a planning problem):

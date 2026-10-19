@@ -24,12 +24,15 @@ harness is in the sibling folder `benchmarks/`.
 
 ## What is verified and what is trusted
 
-One weakness: unlike the paper's Definition 20, the numeric extension does not add clock guards for
-snap actions that interfere only numerically (conditions (v)–(vii) of the paper's Definition 13);
-the guards cover propositional interference only (`Index.thy`, Definition 20). This loses
-precision, but not trust: fewer guards only allow more runs, so an unreachable goal still means
-that no valid plan exists. A problem whose unsolvability depends on numeric interference cannot be
-certified yet.
+The numeric extension guards numeric interference as in the paper's Definition 20. The clock
+guards on an action's start, end and instant edges cover every snap action that interferes with it
+propositionally or numerically (conditions (v)–(vii) of the paper's Definition 13), through the
+reduction's interference relation `mutex_effects` (numeric instance in
+`numeric_tp_nta_reduction_defs'`; executable: `mutex_effects'`, `num_net_int_clocks'`,
+`start_edge_num'`, `edge_3_num'`, `instant_trans_edge_num'`). The paper's evaluation used the
+earlier version without the numeric guards (branch `artifact-2026`, `plan_cert` binary sha256
+`611b70924b60…`). That version was sound, since fewer guards only allow more runs, but less
+precise, so results on problems whose unsolvability depends on numeric interference may differ.
 
 `plan_cert -certify numeric-tchecker` ends in the capstone `check_and_cert_numeric_pddl_problem_okay`
 (`Numeric_Ground_PDDL_Exec_Imp/Numeric_Unsolvability_Export.thy`): when it reports
@@ -94,7 +97,7 @@ with `-d`, not registered as components.
 To build and check the formal proof and export code:
 
 ```shell
-isabelle build -d . -e PDDL_TP_Reduction
+isabelle build -d . -e Numeric_Ground_PDDL_Exec_Imp
 ```
 
 `-d .` is necessary to ensure the code is exported into the right folder.
