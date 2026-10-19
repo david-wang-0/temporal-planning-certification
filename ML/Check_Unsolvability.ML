@@ -4532,6 +4532,12 @@ val card_UNIV_func =
   {finite_UNIV_card_UNIV = finite_UNIV_func, card_UNIV = card_UNIV_funca} :
   func card_UNIV;
 
+val cEnum_func :
+  (func list * (((func -> bool) -> bool) * ((func -> bool) -> bool))) option
+  = NONE;
+
+val cenum_func = {cEnum = cEnum_func} : func cenum;
+
 val ccompare_funca : (func -> func -> ordera) option = SOME comparator_func;
 
 val ccompare_func = {ccompare = ccompare_funca} : func ccompare;
@@ -8071,6 +8077,10 @@ fun nexp_fluents (A1_, A2_, A3_) (NConst uu) = bot_set (A1_, A2_, A3_)
   | nexp_fluents (A1_, A2_, A3_) (NDiv (a, b)) =
     sup_seta (A1_, A2_) (nexp_fluents (A1_, A2_, A3_) a)
       (nexp_fluents (A1_, A2_, A3_) b);
+
+fun comp_fluents (A1_, A2_, A3_) (Comp (uu, a, b)) =
+  sup_seta (A1_, A2_) (nexp_fluents (A1_, A2_, A3_) a)
+    (nexp_fluents (A1_, A2_, A3_) b);
 
 fun save_time_impl x =
   ((fn a => (fn () => a)) o (fn a => Timing.save_time a)) x;
@@ -24465,6 +24475,128 @@ fun check_numeric_ground_problem A_ p fluent_lo fluent_hi =
 
 val num_reach_formula : (nat, nat, string, inta) formulaa = reach_formula;
 
+fun num_mutex_snap_action a b =
+  let
+    val ua = app_snap at_start_spec at_end_spec upds a;
+    val ub = app_snap at_start_spec at_end_spec upds b;
+    val wa =
+      image (ceq_prod ceq_func (ceq_nexp equal_func equal_rat),
+              ccompare_prod ccompare_func
+                (ccompare_nexp ccompare_func ccompare_rat))
+        (ceq_func, ccompare_func, set_impl_func) fst
+        (set (ceq_prod ceq_func (ceq_nexp equal_func equal_rat),
+               ccompare_prod ccompare_func
+                 (ccompare_nexp ccompare_func ccompare_rat),
+               set_impl_prod set_impl_func set_impl_nexp)
+          ua);
+    val wb =
+      image (ceq_prod ceq_func (ceq_nexp equal_func equal_rat),
+              ccompare_prod ccompare_func
+                (ccompare_nexp ccompare_func ccompare_rat))
+        (ceq_func, ccompare_func, set_impl_func) fst
+        (set (ceq_prod ceq_func (ceq_nexp equal_func equal_rat),
+               ccompare_prod ccompare_func
+                 (ccompare_nexp ccompare_func ccompare_rat),
+               set_impl_prod set_impl_func set_impl_nexp)
+          ub);
+    val ra =
+      fold (sup_seta (ceq_func, ccompare_func))
+        (map (comp_fluents (ceq_func, ccompare_func, set_impl_func))
+           (app_snap at_start_spec at_end_spec n_pre a) @
+          map (nexp_fluents (ceq_func, ccompare_func, set_impl_func) o snd) ua)
+        (set_empty (ceq_func, ccompare_func) (of_phantom set_impl_funca));
+    val rb =
+      fold (sup_seta (ceq_func, ccompare_func))
+        (map (comp_fluents (ceq_func, ccompare_func, set_impl_func))
+           (app_snap at_start_spec at_end_spec n_pre b) @
+          map (nexp_fluents (ceq_func, ccompare_func, set_impl_func) o snd) ub)
+        (set_empty (ceq_func, ccompare_func) (of_phantom set_impl_funca));
+  in
+    not (set_eq (cenum_func, ceq_func, ccompare_func)
+          (inf_seta (ceq_func, ccompare_func) wa wb)
+          (set_empty (ceq_func, ccompare_func)
+            (of_phantom set_impl_funca))) orelse
+      (not (set_eq (cenum_func, ceq_func, ccompare_func)
+             (inf_seta (ceq_func, ccompare_func) wa rb)
+             (set_empty (ceq_func, ccompare_func)
+               (of_phantom set_impl_funca))) orelse
+        not (set_eq (cenum_func, ceq_func, ccompare_func)
+              (inf_seta (ceq_func, ccompare_func) wb ra)
+              (set_empty (ceq_func, ccompare_func)
+                (of_phantom set_impl_funca))))
+  end;
+
+fun mutex_effects a b = mutex_snap_actiona a b orelse num_mutex_snap_action a b;
+
+fun num_net_int_clocks p a =
+  map_filter
+    (fn x =>
+      (if mutex_effects a (AtStart x)
+        then SOME (act_to_start_clock_impl (fn xa => nameb (heada xa)) x)
+        else NONE))
+    (actions_spec p) @
+    map_filter
+      (fn x =>
+        (if mutex_effects a (AtEnd x)
+          then SOME (act_to_end_clock_impl (fn xa => nameb (heada xa)) x)
+          else NONE))
+      (actions_spec p);
+
+fun instant_trans_edge_num A_ p a =
+  let
+    val end_snap = AtEnd a;
+    val int_clocks =
+      map (fn x => GTa (x, zero_inta)) (num_net_int_clocks p end_snap) @
+        map (fn x => GEa (x, zero_inta)) (num_net_int_clocks p end_snap);
+    val guard = l_dur_impl a @ u_dur_impl a @ int_clocks;
+    val resets = [act_to_end_clock_impl (fn x => nameb (heada x)) a];
+  in
+    (starting_loc_impl,
+      (Eqa (Var planning_lock_impl, Const (one A_)),
+        (guard, (Sil "", ([], (resets, ending_loc_impl))))))
+  end;
+
+fun start_edge_num (A1_, A2_) B_ (C1_, C2_, C3_) p a =
+  let
+    val start_snap = AtStart a;
+    val guard =
+      map (fn x => GTa (x, zero B_)) (num_net_int_clocks p start_snap) @
+        map (fn x => GEa (x, zero B_)) (num_net_int_clocks p start_snap);
+    val not_locked_check =
+      map_filter
+        (fn x =>
+          (if not (membera equal_predicate
+                    (add_imp_list at_start_spec at_end_spec adds_spec
+                      start_snap)
+                    x)
+            then SOME (((fn v => Eqa (Var v, Const (zero A2_))) o
+                         prop_to_lock_impl namea)
+                        x)
+            else NONE))
+        (del_imp_list at_start_spec at_end_spec dels_spec start_snap);
+    val pre_check =
+      map ((fn v => Eqa (Var v, Const (one A1_))) o prop_to_var_impl namea)
+        (pre_imp_list at_start_spec at_end_spec pre_spec start_snap);
+    val var_check =
+      bexp_and_all
+        (Eqa (Var planning_lock_impl, Const (one A1_)) ::
+          not_locked_check @ pre_check);
+    val add_upds =
+      map ((fn v => (v, Const (one C1_))) o prop_to_var_impl namea)
+        (add_imp_list at_start_spec at_end_spec adds_spec start_snap);
+    val del_upds =
+      map ((fn v => (v, Const (zero C3_))) o prop_to_var_impl namea)
+        (del_imp_list at_start_spec at_end_spec dels_spec start_snap);
+    val upds =
+      (acts_active_impl,
+        Binop (plus C2_, Var acts_active_impl, Const (one C1_))) ::
+        del_upds @ add_upds;
+    val resets = [act_to_start_clock_impl (fn x => nameb (heada x)) a];
+  in
+    (off_loc_impl,
+      (var_check, (guard, (Sil "", (upds, (resets, starting_loc_impl))))))
+  end;
+
 fun fluent_to_name_spec x = name x;
 
 fun fluent_to_var_spec f = "fluent_" ^ fluent_to_name_spec f;
@@ -24487,7 +24619,7 @@ fun augment_edge_impl g u e =
 fun num_start_edge A_ p a =
   augment_edge_impl (num_pre_guard (at_start_spec a))
     (num_upd (at_start_spec a))
-    (start_edge (one_int, zero_int) A_ (one_int, plus_int, zero_int) p a);
+    (start_edge_num (one_int, zero_int) A_ (one_int, plus_int, zero_int) p a);
 
 fun num_end_edge a =
   augment_edge_impl (num_pre_guard (at_end_spec a)) (num_upd (at_end_spec a))
@@ -24496,8 +24628,28 @@ fun num_end_edge a =
 fun num_inv_guard a =
   bexp_and_all (map (comp_to_bexp fluent_to_var_spec const_to_int) (n_inv a));
 
+fun edge_3_num A_ (B1_, B2_, B3_) p a =
+  let
+    val end_snap = AtEnd a;
+    val int_clocks =
+      map (fn x => GTa (x, zero_inta)) (num_net_int_clocks p end_snap) @
+        map (fn x => GEa (x, zero_inta)) (num_net_int_clocks p end_snap);
+    val guard = l_dur_impl a @ u_dur_impl a @ int_clocks;
+    val upds =
+      map ((fn v =>
+             (v, Binop (plus B2_, Var v, Const (uminus B3_ (one B1_))))) o
+            prop_to_lock_impl namea)
+        (over_all_spec a);
+    val resets = [act_to_end_clock_impl (fn x => nameb (heada x)) a];
+  in
+    (running_loc_impl,
+      (Eqa (Var planning_lock_impl, Const (one A_)),
+        (guard, (Sil "", (upds, (resets, ending_loc_impl))))))
+  end;
+
 fun num_edge_3 (A1_, A2_, A3_) p a =
-  augment_edge_impl (num_inv_guard a) [] (edge_3 one_int (A1_, A2_, A3_) p a);
+  augment_edge_impl (num_inv_guard a) []
+    (edge_3_num one_int (A1_, A2_, A3_) p a);
 
 fun num_edge_2 (B1_, B2_) a =
   augment_edge_impl (num_inv_guard a) [] (edge_2 one_int (B1_, B2_) a);
@@ -24509,7 +24661,7 @@ fun num_action_to_automaton p a =
     val edges =
       [num_start_edge zero_int p a, num_edge_2 (one_int, plus_int) a,
         num_edge_3 (one_int, plus_int, uminus_int) p a, num_end_edge a,
-        instant_trans_edge one_int p a];
+        instant_trans_edge_num one_int p a];
     val invs = [];
   in
     (committed_locs, (urgent_locs, (edges, invs)))
