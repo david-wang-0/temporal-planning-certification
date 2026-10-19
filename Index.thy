@@ -6,13 +6,12 @@ theory Index
 begin
 
 subsection \<open>Definitions\<close>
-text \<open>Keyed by the paper's number and title (numbers as in the paper's note-free build).
-  TODO marks a definition whose formal counterpart is still to be filled in.\<close>
+text \<open>Keyed by the paper's number and title (numbers as in the paper's note-free build).\<close>
 text \<open>Definition 1 (Boolean expression):
   Grounded PDDL:
 
-    number (\<open>\<D>\<close>):
-      TODO
+    number (\<open>\<bbbD>\<close>):
+      real
 
     variable/fluent:
       @{typ \<open>object primitive_numeric_expression\<close>}
@@ -55,8 +54,8 @@ text \<open>Definition 1 (Boolean expression):
 text \<open>Definition 2 (Variable assignment):
   PDDL:
 
-    number (\<open>\<D>\<close>):
-      TODO
+    number (\<open>\<bbbD>\<close>):
+      real
 
     variable assignment:
       @{type numeric_world_model}
@@ -67,7 +66,7 @@ text \<open>Definition 2 (Variable assignment):
     Boolean expression evaluation:
       @{const map_formula_semantics}
 
-    Undefinedness in the \<open>\<V>\<close> is represented by a mapping to @{term None}.
+    Undefinedness in \<open>v\<close> is represented by a mapping to @{term None}.
 
     @{const valuation} hides the syntax of atoms (propositional or numeric) from formula semantics.
 
@@ -121,7 +120,7 @@ text \<open>Definition 3 (Variable updates):
     read variables:
       @{const ast_effect_enumerate_rhs_primitive_numeric_expressions}
       @{const additive_lvalues} (only for effects other than Assign)
-      @{const rvalues}
+      @{const rvalues} (this also includes the precondition's reads)
 
   Planning:
 
@@ -134,7 +133,8 @@ text \<open>Definition 3 (Variable updates):
     written variables:
       @{const numeric_action_defs.snap_writes}
     read variables:
-      @{const numeric_action_defs.snap_reads}
+      @{const nexp_fluents} of the right-hand side
+      (@{const numeric_action_defs.snap_reads} also has the precondition's reads)
 
   Timed Automata (Munta):
 
@@ -213,7 +213,7 @@ text \<open>Definition 6 (Timed Automaton):
       \<open>\<L>\<close> is not a component, but read off the transitions as above)
 \<close>
 text \<open>Definition 7 (Network of Timed Automata):
-  Now a tuple \<open>\<langle>automata, \<V>, \<C>, \<B>, \<langle>urg\<^sub>0, \<dots>, urg\<^sub>n\<rangle>\<rangle>\<close>; urgency and the variable
+  Now a tuple \<open>\<langle>\<T>, \<V>, \<X>, \<D>, \<langle>urg\<^sub>0, \<dots>, urg\<^sub>n\<rangle>\<rangle>\<close>; urgency and the variable
   bounds moved here from Definition 8.
 
   Timed Automata (Munta):
@@ -241,12 +241,12 @@ text \<open>Definition 7 (Network of Timed Automata):
       (already indexed)
     set of variables \<open>\<V>\<close>:
       @{const Prod_TA_Defs.var_set} (the variables read or written by the transitions)
-      Same as the set of variables with an initial assignment:
+      Contained in the set of variables with bounds and an initial assignment:
       @{const Simple_Network_Language.bounded} and
       @{thm [source] Simple_Network_Impl_nat_ceiling_start_state.s\<^sub>0_bounded}
-    set of clocks \<open>\<C>\<close>:
+    set of clocks \<open>\<X>\<close>:
       @{const Simple_Network_Impl.clk_set'} (the clocks in guards, invariants and resets)
-    variable bounds \<open>\<B>\<close> (finite integer intervals):
+    variable bounds \<open>\<D>\<close> (finite integer intervals):
       @{const Prod_TA_Defs.bounds}
       or @{const Simple_Network_Impl_nat_defs.bounds_map} (for integers)
     urgent locations \<open>urg\<^sub>i\<close>:
@@ -262,7 +262,7 @@ text \<open>Definition 8 (Network of Timed Automata Transitions):
       written @{term \<open>A, (a\<^sub>0::('s list * ('x \<rightharpoonup> 'v::linorder) * ('c, 't::time) cval)) \<Turnstile> \<Phi>\<close>}
       This is not an inherent component of the network.
       It's needed for CTL semantics.
-    initial variable assignment within the bounds (\<open>\<V>\<^sub>I(z) \<in> \<B>\<^sub>z\<close>):
+    initial variable assignment within the bounds (\<open>v\<^sub>I(z) \<in> \<D>\<^sub>z\<close>):
       assumption \<open>s\<^sub>0_bounded\<close> (\<open>bounded bounds (map_of s\<^sub>0)\<close>) of
       @{locale Simple_Network_Impl_nat_ceiling_start_state};
       its domain is fixed by the pre-checks (see \<open>\<V>\<close> in Definition 7)
@@ -274,8 +274,12 @@ text \<open>Definition 8 (Network of Timed Automata Transitions):
       only allows 0 delays in urgent locations.
     internal transition:
       @{thm [source] step_u.step_int}
-    updated values within the bounds (\<open>eval(\<V>, e) \<in> \<B>\<^sub>z\<close>, replaces \<open>\<noteq> \<bottom>\<close>):
-      the ''bounded'' premise of @{thm [source] step_u.step_t}
+    updated values within the bounds (\<open>eval(v, e) \<in> \<D>\<^sub>z\<close>, replaces \<open>\<noteq> \<bottom>\<close>):
+      the ''bounded'' premise of @{thm [source] step_u.step_int}
+      
+      Note that Munta applies updates sequentially, so this is only exactly our paper definition
+      if the updates have no cross-reads (@{const upds_no_cross_read_list}).
+      
     reflexive-transitive closure of the transitions:
       @{const steps_u}
 \<close>
@@ -333,9 +337,9 @@ text \<open>Definition 11 (Temporal planning problem):
 
     components as read by the reduction (@{locale ground_ast_problem_defs},
     @{locale numeric_ground_ast_problem_defs}):
-      propositions \<open>\<P>\<close>: @{const ground_ast_problem_defs.props_spec}
-      fluents \<open>\<F>\<close>: @{const numeric_ground_ast_problem_defs.nfluents}
-      actions \<open>\<A>\<close>: @{const ground_ast_problem_defs.actions_spec}
+      propositions \<open>P\<close>: @{const ground_ast_problem_defs.props_spec}
+      fluents \<open>F\<close>: @{const numeric_ground_ast_problem_defs.nfluents}
+      actions \<open>A\<close>: @{const ground_ast_problem_defs.actions_spec}
       start/end snap actions: @{const ground_ast_problem_defs.at_start_spec} /
         @{const ground_ast_problem_defs.at_end_spec}
       invariants: @{const ground_ast_problem_defs.over_all_spec} (propositional),
@@ -371,12 +375,12 @@ text \<open>Definition 11 (Temporal planning problem):
       @{locale temp_planning_problem} (just propositional)
       @{locale numeric_temp_plan_defs} (numeric addition, skipped the problem part)
 
-    propositions \<open>\<P>\<close>:
+    propositions \<open>P\<close>:
       parameter \<open>props\<close> of @{locale action_and_prop_set}
       (a list in @{locale temp_planning_problem_list_defs})
-    fluents \<open>\<F>\<close>:
+    fluents \<open>F\<close>:
       the type @{typ \<open>'n\<close>}; no explicit set
-    actions \<open>\<A>\<close>:
+    actions \<open>A\<close>:
       parameter \<open>actions\<close> of @{locale temp_planning_problem_list_defs}
     invariants:
       parameters \<open>over_all\<close> (propositional) and \<open>n_inv\<close> (numeric) of
@@ -385,13 +389,7 @@ text \<open>Definition 11 (Temporal planning problem):
     numeric effects):
       parameters \<open>pre\<close>, \<open>n_pre\<close>, \<open>adds\<close>, \<open>dels\<close>, \<open>upds\<close> of @{locale numeric_action_defs}
 \<close>
-text \<open>Definition 12 (MatchCellar Template): an example; decide whether it needs an entry
-  example:
-    @{dir \<open>examples/ground/MatchCellar-possible\<close>}:
-      @{file \<open>examples/ground/MatchCellar-possible/instance_solvable_domain.pddl\<close>}
-      @{file \<open>examples/ground/MatchCellar-possible/instance_solvable_problem.pddl\<close>}
-\<close>
-text \<open>Definition 13 (Effect application):
+text \<open>Definition 12 (Effect application):
   PDDL:
 
     effect application:
@@ -407,7 +405,7 @@ text \<open>Definition 13 (Effect application):
       unlike the paper (\<open>\<S>'\<close> undefined), an update evaluating to @{term None} leaves the
       fluent unassigned; later conditions on it are then not satisfied
 \<close>
-text \<open>Definition 14 (Interference):
+text \<open>Definition 13 (Interference):
   PDDL:
 
     read variables of a snap action:
@@ -430,7 +428,7 @@ text \<open>Definition 14 (Interference):
       @{const numeric_action_defs.num_mutex_snap_action} (numeric) and
       @{const action_defs.mutex_snap_action} (propositional)
 \<close>
-text \<open>Definition 15 (Plan):
+text \<open>Definition 14 (Plan):
   PDDL:
 
     plan:
@@ -446,7 +444,7 @@ text \<open>Definition 15 (Plan):
     happening time points:
       @{const temp_plan_defs.htps}, enumerated by @{const temp_plan_defs.time_index}
 \<close>
-text \<open>Definition 16 (Valid state sequence):
+text \<open>Definition 15 (Valid state sequence):
   PDDL:
 
     induced parallel plan:
@@ -471,17 +469,20 @@ text \<open>Definition 16 (Valid state sequence):
       @{const temp_plan_defs.plan_happ_seq}, read at @{const temp_plan_defs.time_index}
     active invariants:
       @{const temp_plan_defs.plan_inv_seq}, read at @{const temp_plan_defs.time_index}
-    0-separation / \<epsilon>-separation:
+    0-separation / \<epsilon>-separation (condition (iii)):
       parameter \<open>\<epsilon>\<close> of @{locale temp_plan_defs} or @{locale numeric_temp_plan_defs}
-      (pass 0 or some constant)
-    valid state sequence:
+      (pass 0 or some constant);
+      The condition on a plan level:
+        @{const temp_plan_defs.mutex_valid_plan}
+        or @{const numeric_temp_plan_defs.num_mutex_valid_plan}
+    valid state sequence (conditions (i), (ii) and (iv)):
       @{const temp_plan_defs.valid_state_sequence}
       or @{const numeric_temp_plan_defs.num_valid_state_sequence}
 
     Assume that states can be accessed by index.
     Time points can be accessed by index through @{const temp_plan_defs.time_index}.
 \<close>
-text \<open>Definition 17 (Valid plan):
+text \<open>Definition 16 (Valid plan):
   PDDL:
 
     no self-overlap:
@@ -516,9 +517,16 @@ text \<open>Definition 17 (Valid plan):
     duration constraint satisfaction:
       @{const temp_plan_defs.durations_valid}
     valid plan:
-      @{const temp_plan_defs.valid_plan} and @{const numeric_temp_plan_defs.num_valid_plan}
+      @{const temp_plan_defs.valid_plan} and @{const temp_plan_defs.no_self_overlap}
+      (numeric: @{const numeric_temp_plan_defs.num_valid_plan} and
+      @{const temp_plan_defs.no_self_overlap});
+      @{const temp_plan_defs.no_self_overlap} is a separate assumption (\<open>nso\<close> of
+      @{locale temp_plan_for_problem_list_impl_int'}), not part of @{const temp_plan_defs.valid_plan}.
+      @{const temp_plan_defs.valid_plan} also contains the non-interference condition (iii) of
+      the valid state sequence (@{const temp_plan_defs.mutex_valid_plan}),
+      @{const temp_plan_defs.durations_ge_0} and @{const temp_plan_defs.finite_plan}.
 \<close>
-text \<open>Definition 18 (Integer variables):
+text \<open>Definition 17 (Integer variables \<V>):
   Encoding:
 
     The bounds are passed in @{const tp_nta_reduction_defs.all_vars} and
@@ -526,9 +534,9 @@ text \<open>Definition 18 (Integer variables):
 
     proposition variables \<open>v\<^sub>p\<close> (bounds \<open>[0, 1]\<close>):
       @{const tp_nta_reduction_defs.prop_to_var}
-    lock counters \<open>l\<^sub>p\<close> (bounds \<open>[0, |\<A>|]\<close>):
+    lock counters \<open>l\<^sub>p\<close> (bounds \<open>[0, |A|]\<close>):
       @{const tp_nta_reduction_defs.prop_to_lock}
-    active-action counter (bounds \<open>[0, |\<A>|]\<close>):
+    active-action counter (bounds \<open>[0, |A|]\<close>):
       @{const tp_nta_reduction_defs.acts_active}
     planning-phase variable (bounds \<open>[0, 2]\<close>):
       @{const tp_nta_reduction_defs.planning_lock}
@@ -538,7 +546,7 @@ text \<open>Definition 18 (Integer variables):
     set of variables \<open>\<V>\<close> with bounds:
       @{const tp_nta_reduction_defs.all_vars} (propositional; keeps only the proposition variables
       and locks that occur), @{const numeric_tp_nta_reduction_defs.num_all_vars} (with fluents)
-    freshness w.r.t. \<open>\<F>\<close>:
+    freshness w.r.t. \<open>F\<close>:
       @{thm [source] numeric_tp_nta_reduction.fluent_vars_fresh} for fluents.
       @{locale unique_names} for propositions, fluents, and actions.
 
@@ -549,7 +557,7 @@ text \<open>Definition 18 (Integer variables):
         (propositions, actions: sublocale \<open>abstr_model_checking\<close>) and by
         @{thm [source] numeric_ground_ast_problem.fluent_to_name_spec_inj} (fluents).
 \<close>
-text \<open>Definition 19 (Action clocks):
+text \<open>Definition 18 (Action clocks):
   Encoding:
 
     start clock:
@@ -566,7 +574,7 @@ text \<open>Definition 19 (Action clocks):
       the fresh clock Munta needs to encode urgency
       using resets and an invariant in urgent locations.
 \<close>
-text \<open>Definition 20 (Main Automaton):
+text \<open>Definition 19 (Main Automaton):
   Encoding (propositional):
 
     main automaton:
@@ -595,7 +603,7 @@ text \<open>Definition 20 (Main Automaton):
     loop edge:
       unchanged, @{const tp_nta_reduction_defs.main_auto_loop}
 \<close>
-text \<open>Definition 21 (Action Automata):
+text \<open>Definition 20 (Action Automata):
   Encoding (propositional; the encodings are let-bindings inside the edges, built from the
   helpers below):
 
@@ -650,21 +658,29 @@ text \<open>Definition 21 (Action Automata):
       unchanged, @{const tp_nta_reduction_defs.instant_trans_edge}
     action automaton:
       @{const numeric_tp_nta_reduction_defs.num_action_to_automaton}
+
+
+    interference guard \<open>mutex\<close>:
+      unchanged, @{const tp_nta_reduction_defs.net_int_clocks}. Unlike in the paper, the numeric
+      interference conditions (v)--(vii) are not encoded as clock guards: the guards only cover
+      propositional interference. This is sound for Theorem 1, which only goes from a valid plan to
+      a run: a valid plan respects all interference conditions, so fewer guards cannot block its run.
+
 \<close>
-text \<open>Definition 22 (Network for a planning problem):
+text \<open>Definition 21 (Network for a planning problem):
   Encoding (propositional):
 
-    list of automata \<open>\<langle>\<A>\<^sub>M, \<A>\<^sub>1, \<dots>, \<A>\<^sub>N\<rangle>\<close>:
+    list of automata \<open>\<langle>\<T>\<^sub>M, \<T>\<^sub>1, \<dots>, \<T>\<^sub>N\<rangle>\<close>:
       automata: @{const tp_nta_reduction_defs.timed_automaton_net}:
       bounds: @{const tp_nta_reduction_defs.all_vars}
       no broadcast channels: (@{const tp_nta_reduction_defs.net_broadcast})
-    initial locations \<open>\<L>\<^sub>I\<close>:
+    initial locations \<open>L\<^sub>I\<close>:
       @{const tp_nta_reduction_defs.init_locs}
     initial variable assignment (each variable at its lower bound):
       @{const tp_nta_reduction_defs.init_vars}
     initial configuration:
       @{const tp_nta_reduction_model_checking.a\<^sub>0} (clocks at 0)
-    acceptance condition \<open>EF(loc(\<A>\<^sub>M) = goal)\<close>:
+    acceptance condition \<open>EF(loc(\<T>\<^sub>M) = goal)\<close>:
       @{const tp_nta_reduction_defs.reach_formula}
 
   Encoding (numeric extension):
@@ -681,42 +697,58 @@ text \<open>Definition 22 (Network for a planning problem):
     acceptance condition:
       unchanged, @{const tp_nta_reduction_defs.reach_formula} (the numeric goal is checked on the goal edge)
 \<close>
-text \<open>Definition 23 (Encoded states):
+text \<open>Definition 22 (Encoded states):
   Proof (propositional):
 
-    running at, \<open>\<triangleleft>\<close> is \<open>\<le>\<close> (\<open>running_at\<close>, a count, 0 or 1 without self-overlap):
+    running at, \<open>\<triangleleft>\<close> is \<open>\<le>\<close> (\<open>runs-at\<close>, a count, 0 or 1 without self-overlap):
       @{const temp_plan_for_problem_impl.closed_active_count}
     running before, \<open>\<triangleleft>\<close> is \<open><\<close>:
       @{const temp_plan_for_problem_impl.open_active_count}
-    time since at, \<open>\<triangleleft>\<close> is \<open>\<le>\<close> (\<open>time_since_at\<close>):
+    time since at, \<open>\<triangleleft>\<close> is \<open>\<le>\<close> (\<open>ran-for-at\<close>):
       @{const nta_temp_planning.exec_time'}
     time since before, \<open>\<triangleleft>\<close> is \<open><\<close>:
       @{const nta_temp_planning.exec_time}
-      (no earlier snap: \<open>t\<^sub>i - t\<^sub>0 + \<epsilon> + c\<close>, \<open>c\<close> is the paper's \<open>d\<close>;
-      TODO: check \<open>\<epsilon>\<close> in the paper; see @{const nta_temp_planning.pt})
-    encoded state after (\<open>encaft\<close>):
-      @{const tp_nta_reduction_correctness.happening_post}
+      (no earlier snap: \<open>t\<^sub>i - t\<^sub>0 + \<epsilon> + c\<close>, \<open>c\<close> is the paper's \<open>\<kappa>\<close>;
+      see @{const nta_temp_planning.pt})
+    encoded state after (\<open>enc-after\<close>):
+      @{const tp_nta_reduction_correctness.happening_post} and
+      @{const tp_nta_reduction_correctness.LvP}
 
   Proof (numeric extension):
 
-    encoded state after (\<open>encaft\<close>), with fluents:
-      @{const numeric_tp_nta_reduction_correctness.num_happening_post}
+    encoded state after (\<open>enc-after\<close>), with fluents:
+      @{const numeric_tp_nta_reduction_correctness.num_happening_post} and
+      @{const numeric_tp_nta_reduction_correctness.num_LvP}
 \<close>
-text \<open>Definition 24 (Encoded states before):
+text \<open>Definition 23 (MatchCellar Template):
+  @{file \<open>examples/matchcellar/domain.pddl\<close>}
+\<close>
+text \<open>Definition 24 (MatchCellar Example Instance):
+  @{file \<open>examples/matchcellar/example_instance.pddl\<close>}
+\<close>
+text \<open>Definition 25 (MatchCellar Unsolvable Instance):
+  @{file \<open>examples/matchcellar/unsolvable_instance.pddl\<close>}
+
+  The same instance without the counters is the benchmark instance
+  \<open>benchmarks/benchmarks/MatchCellar-impossible/instances/instance_2.pddl\<close> (in the artifact),
+  which the certifier certifies. With the counter \<open>matches-lit\<close>, the bound inference finds no
+  upper bound, so the certifier gives no verdict.
+\<close>
+text \<open>Definition 26 (Encoded states before):
   Proof (propositional):
 
-    encoded state before (\<open>encbef\<close>):
+    encoded state before (\<open>encodes-before\<close>):
       @{const tp_nta_reduction_correctness.happening_pre}
       (= @{const tp_nta_reduction_correctness.happening_pre_post_delay};
       before the delay to \<open>t\<^sub>i\<close>: @{const tp_nta_reduction_correctness.happening_pre_pre_delay})
 
   Proof (numeric extension):
 
-    encoded state before (\<open>encbef\<close>), with fluents:
+    encoded state before (\<open>encodes-before\<close>), with fluents:
       @{const numeric_tp_nta_reduction_correctness.num_happening_pre}
       (before the delay: @{const numeric_tp_nta_reduction_correctness.num_happening_pre_pre_delay})
 \<close>
-text \<open>Definition 25 (Encoded initial state):
+text \<open>Definition 27 (Encoded initial state):
   Proof (propositional):
 
     encoded state after the initial edge (no happening time points needed):
@@ -734,7 +766,13 @@ text \<open>Theorem 1 (main theorem: a valid plan implies that the goal location
   Proof (propositional):
 
     main theorem:
-      @{thm [source] tp_nta_reduction_correctness.valid_plan_imp_form_holds}
+      @{thm [source] tp_nta_reduction_model_checking'.valid_temp_plan_imp_form_holds}
+
+        (the locale assumptions of @{locale tp_nta_reduction_correctness'} follow from the plan by
+        @{thm [source] tp_nta_reduction_model_checking'.valid_plan_imp_locale_inst})
+
+      the proof, inside the locale:
+        @{thm [source] tp_nta_reduction_correctness.valid_plan_imp_form_holds}
 
       contrapositive, for executable certificate checking:
         @{thm [source] make_certified_net_okay}
@@ -747,28 +785,40 @@ text \<open>Theorem 1 (main theorem: a valid plan implies that the goal location
       contrapositive, for executable certificate checking:
         @{thm [source] make_certified_numeric_net_okay}
 \<close>
-text \<open>Lemma 1 (variable bounds respected): TODO (the paper's statement is still a placeholder)
+text \<open>Lemma 1 (variable bounds respected):
   Proof (numeric extension):
 
     the threshold-widening inference over-approximates every reachable valuation:
       @{thm [source] ginfer_thr_on_sound}
-      and, excluding infinite bounds, the finite box extracted from it:
+    if the bounds are finite then:
       @{thm [source] infer_fluent_bounds_on_sound}
 
-    From which we get:
-      fluents of a valid state sequence stay in their bounds:
-        @{thm [source] numeric_tp_nta_reduction_correctness.num_seq_fluent_in_bounds}
+    claims 1 and 3: if the inferred box is the network's fluent bounds, the bound invariant holds
+    (the initial valuation is in the box, and every update lands in it):
+      @{thm [source] numeric_tp_nta_reduction.inferred_box_imp_num_bound_inv}
+      at the ground level, for the bounds the certifier declares:
+        @{thm [source] numeric_ground_ast_problem_cert.num_bound_inv}
 
-    Hence:
-      claims 1 and 3:
-        @{thm [source] numeric_tp_nta_reduction.inferred_box_imp_num_bound_inv}
+    Every state of the plan only assigns values in bounds:
+      @{thm [source] numeric_tp_nta_reduction_bounds.num_seq_in_bounds_derived}
+
+    This discharges \<open>num_seq_in_bounds\<close>, the locale assumption of
+    @{locale numeric_tp_nta_reduction_correctness} under which Theorem 1's
+    @{thm [source] numeric_tp_nta_reduction_correctness.num_valid_plan_imp_form_holds} is proved:
+      @{thm [source] numeric_valid_ground_plan_cert.num_valid_plan_imp_form_holds}
+      @{thm [source] numeric_ground_ast_problem_cert.num_valid_ground_plan_imp_num_form_holds}
+
+    Separately:
       claim 2:
         @{thm [source] numeric_tp_nta_reduction_correctness.is_upds_num_upd}
         @{thm [source] numeric_tp_nta_reduction_correctness.num_data_upd_edge}
 
         Munta applies a snap's updates in sequence (@{const is_upds}) and checks the bounds on the
-        result only; without cross reads (@{const upds_no_cross_read_list}) the sequential result is
-        the simultaneous @{const apply_upds}, which is within the bounds by claim 1.
+        result only; without cross reads/interference (@{const upds_no_cross_read_list}) the 
+        sequential result (in the specified order) is no different from the simultaneous one 
+        (@{const apply_upds}), which is within the bounds by claim 1.
+        This is weaker than Claim 2 from the paper (which claims any order), 
+        but sufficient for the formalisation.
 
     Recall that variable bounds are in @{const Simple_Network_Language.bounded}, which a transition
     checks once, on the valuation after all of its updates
@@ -777,11 +827,15 @@ text \<open>Lemma 1 (variable bounds respected): TODO (the paper's statement is 
 text \<open>Lemma 2 (plan transitions possible):
   Proof (propositional):
 
+    inductive step (the transitions of one happening):
+      @{thm [source] tp_nta_reduction_correctness.happening_steps_possible}
     plan transitions:
       @{thm [source] tp_nta_reduction_correctness.plan_steps_possible}
 
   Proof (numeric extension):
 
+    inductive step (the transitions of one happening):
+      @{thm [source] numeric_tp_nta_reduction_correctness.num_happening_steps_possible}
     plan transitions:
       @{thm [source] numeric_tp_nta_reduction_correctness.num_plan_steps_possible}
 \<close>
@@ -845,8 +899,7 @@ term ground_ast_problem
 text \<open>\<open>\<pi>Sg:\<close>\<close>
 term valid_ground_plan
 text \<open>\<open>\<Pi>SgD:\<close>\<close>
-term ground_ast_problem
-text \<open>Or@{locale ground_ast_problem_defs}\<close>
+text \<open>no locale: the Containers instances in theory @{theory PDDL_TP_Reduction.Check_Unsolvability}\<close>
 text \<open>\<open>\<Pi>S:\<close>\<close>
 term wf_ast_temporal_problem
 

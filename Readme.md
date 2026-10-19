@@ -24,6 +24,13 @@ harness is in the sibling folder `benchmarks/`.
 
 ## What is verified and what is trusted
 
+One weakness: unlike the paper's Definition 20, the numeric extension does not add clock guards for
+snap actions that interfere only numerically (conditions (v)–(vii) of the paper's Definition 13);
+the guards cover propositional interference only (`Index.thy`, Definition 20). This loses
+precision, but not trust: fewer guards only allow more runs, so an unreachable goal still means
+that no valid plan exists. A problem whose unsolvability depends on numeric interference cannot be
+certified yet.
+
 `plan_cert -certify numeric-tchecker` ends in the capstone `check_and_cert_numeric_pddl_problem_okay`
 (`Numeric_Ground_PDDL_Exec_Imp/Numeric_Unsolvability_Export.thy`): when it reports
 "The numeric planning problem is unsolvable.", there is no `π` with `num_ground_plan_valid P π`,
