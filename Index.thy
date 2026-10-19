@@ -5,11 +5,9 @@ theory Index
           "Numeric_Ground_PDDL_Exec_Imp.Numeric_Unsolvability_Export"
 begin
 
-
 subsection \<open>Definitions\<close>
 text \<open>Keyed by the paper's number and title (numbers as in the paper's note-free build).
   TODO marks a definition whose formal counterpart is still to be filled in.\<close>
-
 text \<open>Definition 1 (Boolean expression):
   Grounded PDDL:
 
@@ -25,13 +23,13 @@ text \<open>Definition 1 (Boolean expression):
     logical connectives, Boolean expression:
       @{typ \<open>object atom formula\<close>}
 
-    Note that @{const Formulas.Top} is in @{type formula} and atoms also contain propositions 
+    Note that @{const Formulas.Top} is in @{type formula} and atoms also contain propositions
     (@{const predAtm}) from PDDL's abstract syntax.
     @{typ object} is the type of parameters of grounded/instantiated functions.
     A fluent is @{typ \<open>object primitive_numeric_expression\<close>}.
-    
+
   Planning:
-    
+
     variable/fluent:
       @{typ \<open>'n\<close>}
     number:
@@ -44,7 +42,7 @@ text \<open>Definition 1 (Boolean expression):
       @{typ \<open>('n, 'r) comp set\<close>}
 
   Timed Automata (Munta):
-    
+
     variable (instantiated with @{typ String.literal}):
       @{typ \<open>'a\<close>}
     number (instantiated with @{typ rat} or @{typ int}):
@@ -59,7 +57,7 @@ text \<open>Definition 2 (Variable assignment):
 
     number (\<open>\<D>\<close>):
       TODO
-    
+
     variable assignment:
       @{type numeric_world_model}
     expression evaluation:
@@ -68,7 +66,7 @@ text \<open>Definition 2 (Variable assignment):
       @{const valuation}
     Boolean expression evaluation:
       @{const map_formula_semantics}
-  
+
     Undefinedness in the \<open>\<V>\<close> is represented by a mapping to @{term None}.
 
     @{const valuation} hides the syntax of atoms (propositional or numeric) from formula semantics.
@@ -76,7 +74,7 @@ text \<open>Definition 2 (Variable assignment):
     This is in progress, so division by 0 currently falls back to 0 (the default in HOL's semantics).
 
   Planning:
-  
+
     variable:
       @{typ \<open>'n\<close>}
     number:
@@ -93,7 +91,7 @@ text \<open>Definition 2 (Variable assignment):
     Division by zero evaluates to @{term None}.
 
   Timed Automata:
-    
+
     variable:
       @{typ \<open>'a\<close>}
     number:
@@ -105,8 +103,8 @@ text \<open>Definition 2 (Variable assignment):
     Boolean expression evaluation as relation/function:
       @{const Simple_Expressions.check_bexp}/@{const Simple_Network_Language_Impl_Refine.bval}
 
-    Munta can handle division, but we have not implemented it. 
-    In parsed networks, it uses HOL's division, which falls back to zero on undefined values. 
+    Munta can handle division, but we have not implemented it.
+    In parsed networks, it uses HOL's division, which falls back to zero on undefined values.
     It also rounds down for inexact integer divisions.
     Our certifier rejects division, for now.
 \<close>
@@ -178,7 +176,7 @@ text \<open>Definition 5 (Clock updates):
 
     clock reset:
       @{const clock_set}, written @{term \<open>[r\<rightarrow>0]u\<close>}
-      (resets the clocks in the list \<open>r\<close>), 
+      (resets the clocks in the list \<open>r\<close>),
       in the ''new valuation'' premise of
       @{thm [source] step_u.step_int} (\<open>u' = [r\<rightarrow>0]u\<close>),
       etc.
@@ -193,7 +191,7 @@ text \<open>Definition 6 (Timed Automaton):
     clock:
       @{typ \<open>'c\<close>}
     time:
-      @{typ \<open>'t::time\<close>} 
+      @{typ \<open>'t::time\<close>}
     location:
       @{typ \<open>'s\<close>}
     variable:
@@ -244,7 +242,7 @@ text \<open>Definition 7 (Network of Timed Automata):
     set of variables \<open>\<V>\<close>:
       @{const Prod_TA_Defs.var_set} (the variables read or written by the transitions)
       Same as the set of variables with an initial assignment:
-      @{const Simple_Network_Language.bounded} and 
+      @{const Simple_Network_Language.bounded} and
       @{thm [source] Simple_Network_Impl_nat_ceiling_start_state.s\<^sub>0_bounded}
     set of clocks \<open>\<C>\<close>:
       @{const Simple_Network_Impl.clk_set'} (the clocks in guards, invariants and resets)
@@ -254,7 +252,6 @@ text \<open>Definition 7 (Network of Timed Automata):
     urgent locations \<open>urg\<^sub>i\<close>:
       @{const Simple_Network_Language.urgent}
 \<close>
-
 text \<open>Definition 8 (Network of Timed Automata Transitions):
   Timed Automata (Munta):
 
@@ -263,13 +260,13 @@ text \<open>Definition 8 (Network of Timed Automata Transitions):
     initial configuration:
       \<open>a\<^sub>0\<close> in @{const Simple_Network_Language_Model_Checking.models},
       written @{term \<open>A, (a\<^sub>0::('s list * ('x \<rightharpoonup> 'v::linorder) * ('c, 't::time) cval)) \<Turnstile> \<Phi>\<close>}
-      This is not an inherent component of the network. 
+      This is not an inherent component of the network.
       It's needed for CTL semantics.
     initial variable assignment within the bounds (\<open>\<V>\<^sub>I(z) \<in> \<B>\<^sub>z\<close>):
       assumption \<open>s\<^sub>0_bounded\<close> (\<open>bounded bounds (map_of s\<^sub>0)\<close>) of
       @{locale Simple_Network_Impl_nat_ceiling_start_state};
       its domain is fixed by the pre-checks (see \<open>\<V>\<close> in Definition 7)
-      
+
     delay transition:
       @{thm [source] step_u.step_t}
     no delay while a location is urgent:
@@ -481,7 +478,7 @@ text \<open>Definition 16 (Valid state sequence):
       @{const temp_plan_defs.valid_state_sequence}
       or @{const numeric_temp_plan_defs.num_valid_state_sequence}
 
-    Assume that states can be accessed by index. 
+    Assume that states can be accessed by index.
     Time points can be accessed by index through @{const temp_plan_defs.time_index}.
 \<close>
 text \<open>Definition 17 (Valid plan):
@@ -493,7 +490,7 @@ text \<open>Definition 17 (Valid plan):
       @{const inst_snap_action_body_elements},
       @{const inst_temporal_snap_action_body},
       @{const inst_temporal_snap_action}, passed to @{locale action_instantiations}
-      
+
       @{const duration_constraint_as_formula} turns each duration constraint into a numeric
       comparison with \<open>DurationExpr\<close>, which @{const inst_duration_in_numeric_expression}
       replaces by the planned duration.
@@ -504,7 +501,7 @@ text \<open>Definition 17 (Valid plan):
         (@{thm [source] ground_plan_defs.durations_match_imp_sat_lb},
          @{thm [source] ground_plan_defs.durations_match_imp_sat_ub},
          @{thm [source] valid_ground_plan.durations_match_of_valid}).
-      
+
       The reduction reads the constraints as constant bounds and ignores the annotation; this
       agrees with PDDL only because the right-hand sides are constants.
 
@@ -523,6 +520,7 @@ text \<open>Definition 17 (Valid plan):
 \<close>
 text \<open>Definition 18 (Integer variables):
   Encoding:
+
     The bounds are passed in @{const tp_nta_reduction_defs.all_vars} and
     @{const numeric_tp_nta_reduction_defs.num_all_vars}
 
@@ -563,7 +561,6 @@ text \<open>Definition 19 (Action clocks):
       clocks of the snap actions interfering with a given one.
       No single function; represented by strings.
 
-
     not in the paper:
       @{const tp_nta_reduction_defs.urge_clock},
       the fresh clock Munta needs to encode urgency
@@ -575,7 +572,7 @@ text \<open>Definition 20 (Main Automaton):
     main automaton:
       @{const tp_nta_reduction_defs.main_auto}
     locations:
-      @{const tp_nta_reduction_defs.init_loc}, 
+      @{const tp_nta_reduction_defs.init_loc},
       @{const tp_nta_reduction_defs.planning_loc},
       @{const tp_nta_reduction_defs.goal_loc}
     initial edge:
@@ -605,7 +602,7 @@ text \<open>Definition 21 (Action Automata):
     interference guard \<open>mutex\<close>:
       the clock constraints \<open>> 0\<close> and \<open>\<ge> \<epsilon>\<close> on @{const tp_nta_reduction_defs.net_int_clocks}
     duration guard \<open>dur\<close>:
-      @{const tp_nta_reduction_defs.l_dur} and 
+      @{const tp_nta_reduction_defs.l_dur} and
       @{const tp_nta_reduction_defs.u_dur}
     effect encoding \<open>eff\<close>:
       @{const tp_nta_reduction_defs.set_prop_ab} (deletions then additions (respects Fox and Long))
@@ -616,8 +613,8 @@ text \<open>Definition 21 (Action Automata):
     planning-phase condition \<open>(pl = 1)\<close>:
       @{const tp_nta_reduction_defs.pl_is_1}
     locations:
-      @{const tp_nta_reduction_defs.off_loc}, 
-      @{const tp_nta_reduction_defs.starting_loc}, 
+      @{const tp_nta_reduction_defs.off_loc},
+      @{const tp_nta_reduction_defs.starting_loc},
       @{const tp_nta_reduction_defs.running_loc},
       @{const tp_nta_reduction_defs.ending_loc}
     start-start edge:
@@ -753,10 +750,29 @@ text \<open>Theorem 1 (main theorem: a valid plan implies that the goal location
 text \<open>Lemma 1 (variable bounds respected): TODO (the paper's statement is still a placeholder)
   Proof (numeric extension):
 
-    fluents of a valid state sequence stay in their bounds (candidate):
-      @{thm [source] numeric_tp_nta_reduction_correctness.num_seq_fluent_in_bounds}
-    the inferred bounds establish the bound invariant (candidate):
-      @{thm [source] numeric_tp_nta_reduction.inferred_box_imp_num_bound_inv}
+    the threshold-widening inference over-approximates every reachable valuation:
+      @{thm [source] ginfer_thr_on_sound}
+      and, excluding infinite bounds, the finite box extracted from it:
+      @{thm [source] infer_fluent_bounds_on_sound}
+
+    From which we get:
+      fluents of a valid state sequence stay in their bounds:
+        @{thm [source] numeric_tp_nta_reduction_correctness.num_seq_fluent_in_bounds}
+
+    Hence:
+      claims 1 and 3:
+        @{thm [source] numeric_tp_nta_reduction.inferred_box_imp_num_bound_inv}
+      claim 2:
+        @{thm [source] numeric_tp_nta_reduction_correctness.is_upds_num_upd}
+        @{thm [source] numeric_tp_nta_reduction_correctness.num_data_upd_edge}
+
+        Munta applies a snap's updates in sequence (@{const is_upds}) and checks the bounds on the
+        result only; without cross reads (@{const upds_no_cross_read_list}) the sequential result is
+        the simultaneous @{const apply_upds}, which is within the bounds by claim 1.
+
+    Recall that variable bounds are in @{const Simple_Network_Language.bounded}, which a transition
+    checks once, on the valuation after all of its updates
+    (@{thm [source] Simple_Network_Language.step_u.step_int}).
 \<close>
 text \<open>Lemma 2 (plan transitions possible):
   Proof (propositional):
@@ -824,7 +840,6 @@ term tp_nta_reduction_correctness'
 text \<open>\<open>\<T>:\<close>\<close>
 term Simple_Network_Impl_nat
 text \<open>Or @{locale Simple_Network_Impl}\<close>
-
 text \<open>\<open>\<Pi>Sg:\<close>\<close>
 term ground_ast_problem
 text \<open>\<open>\<pi>Sg:\<close>\<close>
