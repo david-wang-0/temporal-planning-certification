@@ -77,21 +77,91 @@ definition "num_init_upd' =
 definition "num_fluent_vars' lo hi =
   map (\<lambda>f. (fluent_to_var_spec f, lo f, hi f)) nfluents"
 
+text \<open>The numeric net's interference relation (Definition 20 of the paper), executably: two snap
+  actions interfere when they are propositionally mutex (@{const mutex_snap_action'}) or numerically
+  mutex -- one writes a fluent the other reads or writes
+  (@{const numeric_action_defs.num_mutex_snap_action} over the list-valued ground data
+  @{const n_pre}/@{const upds}).  Its clocks guard the numeric net's clock-guarded edges.\<close>
+definition "num_mutex_snap_action' a b =
+  numeric_action_defs.num_mutex_snap_action
+    (\<lambda>s. set (imp_defs.rat_impl.set_impl.app_snap n_pre s))
+    (\<lambda>s. set (imp_defs.rat_impl.set_impl.app_snap upds s)) a b"
+
+definition "mutex_effects' a b \<longleftrightarrow> mutex_snap_action' a b \<or> num_mutex_snap_action' a b"
+
+definition "num_net_int_clocks' a =
+    map (act_to_start_clock_impl ast_temporal_action_schema_name) (filter (\<lambda>b. mutex_effects' a (AtStart b)) actions_spec)
+  @ map (act_to_end_clock_impl ast_temporal_action_schema_name) (filter (\<lambda>b. mutex_effects' a (AtEnd b)) actions_spec)"
+
+text \<open>Code equation for @{const num_mutex_snap_action'}: the fluents read by a snap are collected by a
+  @{const fold} of unions over the ground lists (instead of the indexed unions of
+  @{const numeric_action_defs.snap_reads}).\<close>
+lemma num_mutex_snap_action'_code:
+  "num_mutex_snap_action' a b =
+    (let
+      ua = imp_defs.rat_impl.set_impl.app_snap upds a;
+      ub = imp_defs.rat_impl.set_impl.app_snap upds b;
+      wa = fst ` set ua;
+      wb = fst ` set ub;
+      ra = fold (\<union>) (map comp_fluents (imp_defs.rat_impl.set_impl.app_snap n_pre a) @ map (nexp_fluents \<circ> snd) ua) {};
+      rb = fold (\<union>) (map comp_fluents (imp_defs.rat_impl.set_impl.app_snap n_pre b) @ map (nexp_fluents \<circ> snd) ub) {}
+    in wa \<inter> wb \<noteq> {} \<or> wa \<inter> rb \<noteq> {} \<or> wb \<inter> ra \<noteq> {})"
+proof -
+  have reads: "fold (\<union>) (map comp_fluents ps @ map (nexp_fluents \<circ> snd) us) {}
+      = (\<Union>c \<in> set ps. comp_fluents c) \<union> (\<Union>(f, e) \<in> set us. nexp_fluents e)"
+    for ps :: "(func, rat) comp list" and us :: "(func \<times> (func, rat) nexp) list"
+    unfolding fold_union' by auto
+  show ?thesis
+    unfolding num_mutex_snap_action'_def numeric_action_defs.num_mutex_snap_action_def
+      numeric_action_defs.snap_writes_def numeric_action_defs.snap_reads_def Let_def reads ..
+qed
+
+text \<open>The propositional executable edges that carry clock guards, with the numeric net's interference
+  clocks @{const num_net_int_clocks'} in place of the propositional @{const net_int_clocks'}.  (Twins
+  rather than a clock-list parameter, so the propositional certifier's code stays as it is.)\<close>
+definition "start_edge_num' a =
+(let start_snap = AtStart a; guard = map (\<lambda>x. acconstraint.GT x 0) (num_net_int_clocks' start_snap) @ map (\<lambda>x. acconstraint.GE x 0) (num_net_int_clocks' start_snap);
+  not_locked_check = map ((var_is 0 \<circ>\<circ> prop_to_lock_impl) predicate.name) (filter (\<lambda>p. p \<notin> set (imp_defs.rat_impl.add_imp_list start_snap)) (imp_defs.rat_impl.del_imp_list start_snap));
+  pre_check = map ((var_is 1 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.pre_imp_list start_snap);
+  var_check = bexp_and_all (var_is 1 planning_lock_impl # not_locked_check @ pre_check);
+  add_upds = map ((set_var 1 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.add_imp_list start_snap);
+  del_upds = map ((set_var 0 \<circ>\<circ> prop_to_var_impl) predicate.name) (imp_defs.rat_impl.del_imp_list start_snap);
+  upds = (inc_var 1 acts_active_impl) # del_upds @ add_upds;
+  resets = [act_to_start_clock_impl ast_temporal_action_schema_name a]
+ in (off_loc_impl, var_check, guard, Sil STR '''', upds, resets, starting_loc_impl))"
+
+definition "edge_3_num' a =
+(let
+  end_snap = AtEnd a;
+  int_clocks = map (\<lambda>x. acconstraint.GT x 0) (num_net_int_clocks' end_snap) @ map (\<lambda>x. acconstraint.GE x 0) (num_net_int_clocks' end_snap);
+  guard = l_dur_impl a @ u_dur_impl a @ int_clocks;
+  upds = map ((inc_var (- 1) \<circ>\<circ> prop_to_lock_impl) predicate.name) (over_all_spec a);
+  resets = [act_to_end_clock_impl ast_temporal_action_schema_name a]
+in (running_loc_impl, var_is 1 planning_lock_impl, guard, Sil STR '''', upds, resets, ending_loc_impl))"
+
+definition "instant_trans_edge_num' a =
+(let
+  end_snap = AtEnd a;
+  int_clocks = map (\<lambda>x. acconstraint.GT x 0) (num_net_int_clocks' end_snap) @ map (\<lambda>x. acconstraint.GE x 0) (num_net_int_clocks' end_snap);
+  guard = l_dur_impl a @ u_dur_impl a @ int_clocks;
+  resets = [act_to_end_clock_impl ast_temporal_action_schema_name a]
+in (starting_loc_impl, var_is 1 planning_lock_impl, guard, Sil STR '''', [], resets, ending_loc_impl))"
+
 definition "num_start_edge' a =
-  augment_edge_impl (num_pre_guard' (at_start_spec a)) (num_upd' (at_start_spec a)) (start_edge' a)"
+  augment_edge_impl (num_pre_guard' (at_start_spec a)) (num_upd' (at_start_spec a)) (start_edge_num' a)"
 
 definition "num_end_edge' a =
   augment_edge_impl (num_pre_guard' (at_end_spec a)) (num_upd' (at_end_spec a)) (end_edge' a)"
 
 definition "num_edge_2' a = augment_edge_impl (num_inv_guard' a) [] (edge_2' a)"
 
-definition "num_edge_3' a = augment_edge_impl (num_inv_guard' a) [] (edge_3' a)"
+definition "num_edge_3' a = augment_edge_impl (num_inv_guard' a) [] (edge_3_num' a)"
 
 definition "num_action_to_automaton' a =
 (let
   committed_locs = (Nil::nat list);
   urgent_locs = [starting_loc_impl, ending_loc_impl];
-  edges = [num_start_edge' a, num_edge_2' a, num_edge_3' a, num_end_edge' a, instant_trans_edge' a];
+  edges = [num_start_edge' a, num_edge_2' a, num_edge_3' a, num_end_edge' a, instant_trans_edge_num' a];
   invs = []::(nat \<times> (String.literal, int) acconstraint list) list
 in (committed_locs, urgent_locs, edges, invs))"
 
@@ -137,6 +207,12 @@ lemmas numeric_ground_net_code[code] =
   numeric_ground_ast_problem_defs.num_upd'_def
   numeric_ground_ast_problem_defs.num_init_upd'_def
   numeric_ground_ast_problem_defs.num_fluent_vars'_def
+  numeric_ground_ast_problem_defs.num_mutex_snap_action'_code
+  numeric_ground_ast_problem_defs.mutex_effects'_def
+  numeric_ground_ast_problem_defs.num_net_int_clocks'_def
+  numeric_ground_ast_problem_defs.start_edge_num'_def
+  numeric_ground_ast_problem_defs.edge_3_num'_def
+  numeric_ground_ast_problem_defs.instant_trans_edge_num'_def
   numeric_ground_ast_problem_defs.num_start_edge'_def
   numeric_ground_ast_problem_defs.num_end_edge'_def
   numeric_ground_ast_problem_defs.num_edge_2'_def
@@ -548,32 +624,49 @@ proof -
     by (force simp: filter_id_conv)
 qed
 
-text \<open>The abstract @{text ndefs} mutex test on LABELLED snaps coincides with the executable
-  @{const mutex_snap_action'}; the primed net's @{text pre_imp_restr_list} collapses to
-  @{text pre_imp_list} on the reachable snaps via @{thm pre_imp_restr_equiv_pre_imp}.\<close>
+text \<open>The propositional part of the abstract @{text ndefs} interference relation on LABELLED snaps
+  coincides with the executable @{const mutex_snap_action'}; the primed net's
+  @{text pre_imp_restr_list} collapses to @{text pre_imp_list} on the reachable snaps via
+  @{thm pre_imp_restr_equiv_pre_imp}.\<close>
 lemma ndefs_mutex_snap_refine:
   assumes "a \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
       and "b \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
-  shows "ndefs.mutex_effects a b = mutex_snap_action' a b"
+  shows "abstr_model_checking.rat_imp'.prob_list_impl.set_impl.mutex_snap_action a b = mutex_snap_action' a b"
   unfolding mutex_snap_action'_def
   apply (subst abstr_model_checking.rat_imp'.prob_list_impl.set_impl.mutex_snap_action_def)
   unfolding comp_def apply (subst pre_imp_restr_equiv_pre_imp, use assms in blast)+
   apply (subst action_defs.mutex_snap_action_def[symmetric])
   by simp
 
+text \<open>The numeric part: the executable @{const num_mutex_snap_action'} is the abstract
+  @{const numeric_action_defs.num_mutex_snap_action} over the set-valued snap data of @{text ndefs}.\<close>
+lemma num_mutex_snap_refine:
+  "num_mutex_snap_action' a b =
+    numeric_action_defs.num_mutex_snap_action
+      (set o imp_defs.rat_impl.set_impl.app_snap n_pre) (set o imp_defs.rat_impl.set_impl.app_snap upds) a b"
+  unfolding num_mutex_snap_action'_def comp_def ..
+
+text \<open>Hence the whole interference relation the numeric net guards (@{text ndefs.mutex_effects},
+  propositional or numeric) is the executable @{const mutex_effects'} on the reachable snaps.\<close>
+lemma ndefs_mutex_effects_refine:
+  assumes "a \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
+      and "b \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
+  shows "ndefs.mutex_effects a b = mutex_effects' a b"
+  unfolding mutex_effects'_def ndefs_mutex_snap_refine[OF assms] num_mutex_snap_refine ..
+
 lemma ndefs_net_int_clocks_refine:
   assumes "a \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
-  shows "ndefs.net_int_clocks a = net_int_clocks' a"
+  shows "ndefs.net_int_clocks a = num_net_int_clocks' a"
 proof -
-  have 1: "filter (\<lambda>aa. ndefs.mutex_effects a (AtStart aa)) actions_spec = filter (\<lambda>b. mutex_snap_action' a (AtStart b)) actions_spec"
+  have 1: "filter (\<lambda>aa. ndefs.mutex_effects a (AtStart aa)) actions_spec = filter (\<lambda>b. mutex_effects' a (AtStart b)) actions_spec"
     apply (rule filter_eq_conv)
-    using ndefs_mutex_snap_refine[OF assms] by simp
-  have 2: "filter (\<lambda>aa. ndefs.mutex_effects a (AtEnd aa)) actions_spec = filter (\<lambda>aa. mutex_snap_action' a (AtEnd aa)) actions_spec"
+    using ndefs_mutex_effects_refine[OF assms] by simp
+  have 2: "filter (\<lambda>aa. ndefs.mutex_effects a (AtEnd aa)) actions_spec = filter (\<lambda>aa. mutex_effects' a (AtEnd aa)) actions_spec"
     apply (rule filter_eq_conv)
-    using ndefs_mutex_snap_refine[OF assms] by simp
+    using ndefs_mutex_effects_refine[OF assms] by simp
   show ?thesis
     unfolding ndefs.net_int_clocks_def Let_def
-    unfolding 1 2 net_int_clocks'_def
+    unfolding 1 2 num_net_int_clocks'_def
     unfolding ndefs_act_to_start_clock ndefs_act_to_end_clock
     by blast
 qed
@@ -586,8 +679,8 @@ text \<open>Each RAW abstract propositional edge (the @{text ndefs} interpretati
 
 lemma ndefs_start_edge_refine:
   assumes "a \<in> set actions_spec"
-  shows "ndefs.start_edge a = start_edge' a"
-  unfolding ndefs.start_edge_def start_edge'_def Let_def
+  shows "ndefs.start_edge a = start_edge_num' a"
+  unfolding ndefs.start_edge_def start_edge_num'_def Let_def
   unfolding ndefs_is_prop_ab ndefs_is_prop_lock_ab ndefs_set_prop_ab
   unfolding ndefs_pl_is_1 ndefs_acts_active ndefs_off_loc ndefs_starting_loc
   unfolding ndefs_act_to_start_clock
@@ -632,8 +725,8 @@ lemma ndefs_u_dur_refine: "ndefs.u_dur a = u_dur_impl a"
 
 lemma ndefs_edge_3_refine:
   assumes "a \<in> set actions_spec"
-  shows "ndefs.edge_3 a = edge_3' a"
-  unfolding ndefs.edge_3_def edge_3'_def Let_def
+  shows "ndefs.edge_3 a = edge_3_num' a"
+  unfolding ndefs.edge_3_def edge_3_num'_def Let_def
   unfolding ndefs_inc_prop_lock_ab ndefs_pl_is_1
   unfolding ndefs_running_loc ndefs_ending_loc ndefs_act_to_end_clock
   unfolding ndefs_l_dur_refine ndefs_u_dur_refine
@@ -642,8 +735,8 @@ lemma ndefs_edge_3_refine:
 
 lemma ndefs_instant_trans_edge_refine:
   assumes "a \<in> set actions_spec"
-  shows "ndefs.instant_trans_edge a = instant_trans_edge' a"
-  unfolding ndefs.instant_trans_edge_def instant_trans_edge'_def Let_def
+  shows "ndefs.instant_trans_edge a = instant_trans_edge_num' a"
+  unfolding ndefs.instant_trans_edge_def instant_trans_edge_num'_def Let_def
   unfolding ndefs_pl_is_1 ndefs_starting_loc ndefs_ending_loc ndefs_act_to_end_clock
   unfolding ndefs_l_dur_refine ndefs_u_dur_refine
   using ndefs_net_int_clocks_refine assms

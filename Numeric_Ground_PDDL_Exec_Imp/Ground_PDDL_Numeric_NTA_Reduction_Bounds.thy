@@ -46,7 +46,7 @@ sublocale nred': numeric_tp_nta_reduction
   "imp_defs.rat_impl.list_inter props_spec init_spec" "imp_defs.rat_impl.list_inter props_spec goal_spec"
   AtStart AtEnd imp_defs.rat_impl.over_all_restr_list lower_spec upper_spec
   imp_defs.rat_impl.pre_imp_restr_list imp_defs.rat_impl.add_imp_list imp_defs.rat_impl.del_imp_list
-  0 props_spec actions_spec act_to_name_spec prop_to_name_spec
+  0 props_spec actions_spec act_to_name_spec prop_to_name_spec ndefs.mutex_effects
   "imp_defs.rat_impl.set_impl.app_snap n_pre" n_inv "imp_defs.rat_impl.set_impl.app_snap upds"
   num_init num_goal nfluents fluent_to_name_spec fluent_lo fluent_hi const_to_int
   apply unfold_locales
