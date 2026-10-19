@@ -166,15 +166,15 @@ lemma mutex_0_constraint_sat:
       and e_corr: "\<forall>a \<in> set actions. (t, at_end a) \<notin> planning_sem.plan_happ_seq \<or> h = at_end a \<longrightarrow> act_clock_pre_happ c act_to_end_clock a t"
     shows "c \<turnstile> map conv_ac (map (\<lambda>x. acconstraint.GT x 0) (net_int_clocks h))"
 proof -
-  from planning_sem.exec_time_and_separation[OF h_at_t]
-  have mutex_time: "planning_sem.mutex_snap_action h b \<Longrightarrow> 0 < planning_sem.exec_time b t" for b by blast
+  have mutex_time: "mutex_effects h b \<Longrightarrow> 0 < planning_sem.exec_time b t" for b
+    using planning_sem.exec_time_and_separation_wrt[OF mutex_effects_sep_sem h_at_t] by blast
 
   { fix act
-    assume a: "act \<in> set actions" "planning_sem.mutex_snap_action h (at_start act)"
+    assume a: "act \<in> set actions" "mutex_effects h (at_start act)"
     from mutex_time[OF a(2)]
     have "0 < planning_sem.exec_time (at_start act) t" by simp
     moreover
-    have "(t, at_start act) \<notin> planning_sem.plan_happ_seq \<or> h = at_start act" using a(2) h_at_t planning_sem.mutex_same_instant_is_same by blast
+    have "(t, at_start act) \<notin> planning_sem.plan_happ_seq \<or> h = at_start act" using a(2) h_at_t planning_sem.mutex_same_instant_is_same_wrt[OF mutex_effects_sep_sem] by blast
     ultimately
     have "0 < c (act_to_start_clock act)" using s_corr act_clock_pre_happ_def a(1) by simp
     hence "c \<turnstile>\<^sub>a conv_ac (acconstraint.GT (act_to_start_clock act) 0)"
@@ -189,16 +189,15 @@ proof -
     subgoal for x act
       apply (erule ssubst[of x])
       apply (rule 1)
-      apply simp
-      unfolding planning_sem.mutex_snap_action_def comp_apply action_defs.mutex_snap_action_def by simp
+      by simp_all
     done
   moreover
   { fix act
-    assume a: "act \<in> set actions" "planning_sem.mutex_snap_action h (at_end act)"
+    assume a: "act \<in> set actions" "mutex_effects h (at_end act)"
     from mutex_time[OF a(2)]
     have "0 < planning_sem.exec_time (at_end act) t" by simp
     moreover
-    have "(t, at_end act) \<notin> planning_sem.plan_happ_seq \<or> h = at_end act" using a(2) h_at_t planning_sem.mutex_same_instant_is_same by blast
+    have "(t, at_end act) \<notin> planning_sem.plan_happ_seq \<or> h = at_end act" using a(2) h_at_t planning_sem.mutex_same_instant_is_same_wrt[OF mutex_effects_sep_sem] by blast
     ultimately
     have "0 < c (act_to_end_clock act)" using e_corr act_clock_pre_happ_def clock_cons_unique a(1) by simp
     hence "c \<turnstile>\<^sub>a conv_ac (acconstraint.GT (act_to_end_clock act) 0)"
@@ -213,8 +212,7 @@ proof -
     subgoal for x act
       apply (erule ssubst[of x])
       apply (rule 2)
-      apply simp
-      unfolding planning_sem.mutex_snap_action_def comp_apply action_defs.mutex_snap_action_def by simp
+      by simp_all
     done
   ultimately
   show ?thesis 
@@ -229,15 +227,14 @@ lemma mutex_eps_constraint_sat:
       and e_corr: "\<forall>a \<in> set actions. (t, at_end a) \<notin> planning_sem.plan_happ_seq \<or> h = at_end a \<longrightarrow> act_clock_pre_happ c act_to_end_clock a t"
     shows "c \<turnstile> map conv_ac (map (\<lambda>x. acconstraint.GE x \<epsilon>) (net_int_clocks h))"
 proof -
-  from planning_sem.exec_time_and_separation[OF h_at_t]
-  have mutex_time: "planning_sem.mutex_snap_action h b \<Longrightarrow> rat_of_int \<epsilon> \<le> planning_sem.exec_time b t" for b 
-    unfolding Rat.of_int_def by simp
+  have mutex_time: "mutex_effects h b \<Longrightarrow> rat_of_int \<epsilon> \<le> planning_sem.exec_time b t" for b
+    using planning_sem.exec_time_and_separation_wrt[OF mutex_effects_sep_sem h_at_t] by blast
 
   { fix act
-    assume a: "act \<in> set actions" "planning_sem.mutex_snap_action h (at_start act)"
+    assume a: "act \<in> set actions" "mutex_effects h (at_start act)"
     from mutex_time[OF a(2)]
     have x: "rat_of_int \<epsilon> \<le> planning_sem.exec_time (at_start act) t" by simp
-    have c: "(t, at_start act) \<notin> planning_sem.plan_happ_seq \<or> h = at_start act" using a(2) h_at_t planning_sem.mutex_same_instant_is_same by blast
+    have c: "(t, at_start act) \<notin> planning_sem.plan_happ_seq \<or> h = at_start act" using a(2) h_at_t planning_sem.mutex_same_instant_is_same_wrt[OF mutex_effects_sep_sem] by blast
     have "real_of_rat (rat_of_int \<epsilon>) \<le> c (act_to_start_clock act)"
       using s_corr[THEN bspec, OF a(1), THEN mp, OF c, simplified]
       using x of_rat_less_eq unfolding act_clock_pre_happ_def
@@ -253,15 +250,14 @@ proof -
     subgoal for x act
       apply (erule ssubst[of x])
       apply (rule 1)
-      apply simp
-      unfolding planning_sem.mutex_snap_action_def comp_apply action_defs.mutex_snap_action_def by blast
+      by simp_all
     done
   moreover
   { fix act
-    assume a: "act \<in> set actions" "planning_sem.mutex_snap_action h (at_end act)"
+    assume a: "act \<in> set actions" "mutex_effects h (at_end act)"
     from mutex_time[OF a(2)]
     have x: "rat_of_int \<epsilon> \<le> planning_sem.exec_time (at_end act) t" by simp
-    have c: "(t, at_end act) \<notin> planning_sem.plan_happ_seq \<or> h = at_end act" using a(2) h_at_t planning_sem.mutex_same_instant_is_same by blast
+    have c: "(t, at_end act) \<notin> planning_sem.plan_happ_seq \<or> h = at_end act" using a(2) h_at_t planning_sem.mutex_same_instant_is_same_wrt[OF mutex_effects_sep_sem] by blast
     have "real_of_rat (rat_of_int \<epsilon>) \<le> c (act_to_end_clock act)"
       using e_corr[THEN bspec, OF a(1), THEN mp, OF c, simplified]
       using x of_rat_less_eq unfolding act_clock_pre_happ_def
@@ -278,8 +274,7 @@ proof -
     subgoal for x act
       apply (erule ssubst[of x])
       apply (rule 2)
-      apply simp
-      unfolding planning_sem.mutex_snap_action_def comp_apply action_defs.mutex_snap_action_def by simp
+      by simp_all
     done
   ultimately
   show ?thesis 
