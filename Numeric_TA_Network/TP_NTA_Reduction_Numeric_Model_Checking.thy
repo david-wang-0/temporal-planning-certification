@@ -426,6 +426,78 @@ qed
 
 end
 
+subsection \<open>Separation of numerically interfering snap actions\<close>
+
+text \<open>The numeric net guards the union of the propositional and the numeric interference relation,
+so a plan it certifies must \<open>\<epsilon>\<close>-separate both (@{const eps_separated_happ_seq}). Separation is
+closed under union of the relations.\<close>
+lemma eps_separated_happ_seq_disjI:
+  assumes "eps_separated_happ_seq R \<epsilon> B"
+      and "eps_separated_happ_seq S \<epsilon> B"
+    shows "eps_separated_happ_seq (\<lambda>a b. R a b \<or> S a b) \<epsilon> B"
+  using assms unfolding eps_separated_happ_seq_def by blast
+
+text \<open>A numerically mutex-valid plan separates numerically interfering snap actions. Two happenings
+from distinct plan entries are covered by the \<open>\<epsilon>\<close>-window clause of @{const
+numeric_temp_plan_defs.num_mutex_valid_plan}; the start and end of one entry are less than \<open>\<epsilon>\<close> apart
+only if its duration is below \<open>\<epsilon>\<close> (or \<open>0\<close>, if they share an instant), which the self-pair clause
+covers.\<close>
+lemma (in numeric_temp_plan_defs) num_mutex_eps_separated:
+  assumes nm: "num_mutex_valid_plan"
+  shows "eps_separated_happ_seq num_mutex_snap_action \<epsilon> plan_happ_seq"
+proof -
+  have distinct: "\<not> num_mutex_snap_action sa sb"
+    if "\<pi> i = Some (a, ta, da)"
+       and "\<pi> j = Some (b, tb, db)"
+       and "i \<noteq> j"
+       and "sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da"
+       and "sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db"
+       and "t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u"
+     for i j a ta da b tb db sa sb t u
+    using nm that unfolding num_mutex_valid_plan_def by blast
+  have self: "\<not> num_mutex_snap_action (at_start a) (at_end a)"
+    if "\<pi> i = Some (a, ta, da)"
+       and "da = 0 \<or> da < \<epsilon>"
+     for i a ta da
+  proof -
+    have "(a, ta, da) \<in> ran \<pi>" using that(1) by (rule ranI)
+    thus ?thesis using nm that(2) unfolding num_mutex_valid_plan_def by blast
+  qed
+  have key: "\<not> num_mutex_snap_action sa sb"
+    if ht: "(t, sa) \<in> plan_happ_seq"
+       and hu: "(u, sb) \<in> plan_happ_seq"
+       and ne: "sa \<noteq> sb \<or> t \<noteq> u"
+       and cl: "t - u < \<epsilon> \<and> u - t < \<epsilon> \<or> t = u"
+     for t u sa sb
+  proof -
+    obtain i a ta da where
+      i: "\<pi> i = Some (a, ta, da)"
+      and sa: "sa = at_start a \<and> t = ta \<or> sa = at_end a \<and> t = ta + da"
+      using ht unfolding plan_happ_seq_def ran_def by blast
+    obtain j b tb db where
+      j: "\<pi> j = Some (b, tb, db)"
+      and sb: "sb = at_start b \<and> u = tb \<or> sb = at_end b \<and> u = tb + db"
+      using hu unfolding plan_happ_seq_def ran_def by blast
+    show ?thesis
+    proof (cases "i = j")
+      case False
+      show ?thesis by (rule distinct[OF i j False sa sb cl])
+    next
+      case True
+      hence "b = a" "tb = ta" "db = da" using i j by simp_all
+      hence sb': "sb = at_start a \<and> u = ta \<or> sb = at_end a \<and> u = ta + da" using sb by simp
+      have short: "da = 0 \<or> da < \<epsilon>"
+        if "t = ta \<and> u = ta + da \<or> t = ta + da \<and> u = ta"
+        using that cl by auto
+      show ?thesis
+        using sa sb' ne short self[OF i] num_mutex_snap_action_refl by auto
+    qed
+  qed
+  show ?thesis
+    unfolding eps_separated_happ_seq_def
+    using key by blast
+qed
+
 section \<open>Numeric reduction correctness (Layer B)\<close>
 
 text \<open>The numeric correctness locale merges three layers at the @{emph \<open>same\<close>} propositional
@@ -442,10 +514,11 @@ the numeric plan is valid (@{text num_rat_impl.num_valid_plan}), strengthening t
 @{text valid_plan} the reduction already assumes.\<close>
 locale numeric_tp_nta_reduction_correctness =
   tp_nta_reduction_correctness
-    init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name +
+    init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name
+    mutex_effects +
   numeric_tp_nta_reduction
     init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
-    n_pre n_inv upds num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int +
+    mutex_effects n_pre n_inv upds num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int +
   num_plan: numeric_temp_plan_for_problem_list_impl_int
     at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi>
     "set o n_pre" "set o n_inv" "set o upds"
@@ -466,6 +539,7 @@ locale numeric_tp_nta_reduction_correctness =
     and \<pi> :: "('i, 'action, int) temp_plan"
     and act_to_name :: "'action \<Rightarrow> String.literal"
     and prop_to_name :: "'proposition \<Rightarrow> String.literal"
+    and mutex_effects :: "'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool"
     and n_pre :: "'snap_action \<Rightarrow> ('n, 'r::linordered_field) comp list"
     and n_inv :: "'action \<Rightarrow> ('n, 'r) comp list"
     and upds :: "'snap_action \<Rightarrow> ('n \<times> ('n, 'r) nexp) list"
@@ -520,13 +594,20 @@ text \<open>Primed numeric correctness layer -- the numeric twin of @{locale tp_
   numeric net over injective @{const AtStart}/@{const AtEnd} snaps -- no snap-distinctness obligation)
   plus the numeric well-formedness as explicit assumptions over the raw snaps, and the primed numeric
   plan @{locale numeric_temp_plan_for_problem_list_impl_int'}.  The @{text ref_correctness} sublocale
-  re-derives the unprimed capstone at the injective snaps.  (The @{text reduction_ref_impl}-qualified
+  re-derives the unprimed capstone at the injective snaps, with the numeric net's interference relation
+  @{text mutex_effects} (propositional or numeric mutex) of @{locale numeric_tp_nta_reduction_defs'}.
+  This locale is built on @{locale temp_plan_for_problem_list_impl_int'} directly, not on
+  @{locale tp_nta_reduction_correctness'}: the latter interprets the propositional reduction with the
+  propositional relation under the same prefixes, so its facts would stand beside (and could be
+  silently used in place of) those of the numeric net.  (The @{text reduction_ref_impl}-qualified
   faithfulness predicates below -- @{text num_val_ok}/@{text nexp_ok}/@{text comp_ok}/@{text
   fluent_in_bounds} -- are snap-independent, so they are exactly the ones @{text ref_correctness}
   needs.)\<close>
 locale numeric_tp_nta_reduction_correctness' =
-  tp_nta_reduction_correctness'
-    init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions \<pi> act_to_name prop_to_name +
+  temp_plan_for_problem_list_impl_int'
+    at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi> +
+  action_names: unique_names act_to_name "set actions" +
+  prop_names: unique_names prop_to_name "set props" +
   numeric_tp_nta_reduction_defs'
     init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
     n_pre n_inv upds num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int +
@@ -628,11 +709,45 @@ sublocale nre: num_relabel_equiv at_start at_end "set o over_all"
     using num_valid unfolding num_plan.num_rat_impl.num_valid_plan_def by blast
   done
 
+text \<open>The numeric mutex-validity of the plan over the restricted, injective snaps: the propositional
+half from the restricted propositional plan, the numeric clauses transferred by @{text nre}.\<close>
+lemma ref_num_mutex_valid_plan:
+  "numeric_temp_plan_defs.num_mutex_valid_plan AtStart AtEnd ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.pre_imp_restr_list at_start at_end) pre props) ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.add_imp_list at_start) at_end adds) ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.del_imp_list at_start) at_end dels) (rat_of_int \<epsilon>) (map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ> \<pi>) num_plan.num_rat_impl.n_pre_imp num_plan.num_rat_impl.upds_imp"
+proof -
+  have rnm: "num_plan.num_rat_impl.num_mutex_valid_plan"
+    using num_valid unfolding num_plan.num_rat_impl.num_valid_plan_def by blast
+  have pmx: "valid_plan_valid_2.plan2.mutex_valid_plan"
+    using conc_ref_impl.vp unfolding valid_plan_valid_2.plan2.valid_plan_def by blast
+  show ?thesis
+    unfolding numeric_temp_plan_defs.num_mutex_valid_plan_def[OF num_plan.num_rat_impl.numeric_temp_plan_defs_axioms]
+    using pmx nre.num_clauses2[OF rnm] by blast
+qed
+
+text \<open>The plan separates the snap actions the numeric net guards against each other
+(@{text mutex_effects}): propositionally interfering ones by @{text mutex_eps_separated}, numerically
+interfering ones by @{text num_mutex_eps_separated}.\<close>
+lemma ref_mutex_effects_sep:
+  "eps_separated_happ_seq mutex_effects (rat_of_int \<epsilon>) valid_plan_valid_2.plan2.plan_happ_seq"
+proof -
+  have bu: "(set \<circ>\<circ>\<circ> action_defs.app_snap at_start) at_end upds = num_plan.num_rat_impl.upds_imp"
+    by (rule ext, rename_tac x, case_tac x) (simp_all add: num_plan.num_rat_impl.upds_imp_def)
+  have bp: "(set \<circ>\<circ>\<circ> action_defs.app_snap at_start) at_end n_pre = num_plan.num_rat_impl.n_pre_imp"
+    by (rule ext, rename_tac x, case_tac x) (simp_all add: num_plan.num_rat_impl.n_pre_imp_def)
+  have num: "eps_separated_happ_seq
+      (numeric_action_defs.num_mutex_snap_action num_plan.num_rat_impl.n_pre_imp num_plan.num_rat_impl.upds_imp)
+      (rat_of_int \<epsilon>) valid_plan_valid_2.plan2.plan_happ_seq"
+    by (rule numeric_temp_plan_defs.num_mutex_eps_separated[OF
+          num_plan.num_rat_impl.numeric_temp_plan_defs_axioms ref_num_mutex_valid_plan])
+  show ?thesis
+    using eps_separated_happ_seq_disjI[OF conc_ref_impl.mutex_eps_separated num]
+    unfolding bu bp .
+qed
+
 sublocale ref_correctness: numeric_tp_nta_reduction_correctness
   "rat_impl.list_inter props init" "rat_impl.list_inter props goal"
   AtStart AtEnd rat_impl.over_all_restr_list lower upper
   rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
-  \<epsilon> props actions \<pi> act_to_name prop_to_name
+  \<epsilon> props actions \<pi> act_to_name prop_to_name mutex_effects
   "rat_impl.set_impl.app_snap n_pre" n_inv "rat_impl.set_impl.app_snap upds"
   num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int
   apply unfold_locales
@@ -642,6 +757,9 @@ sublocale ref_correctness: numeric_tp_nta_reduction_correctness
         snap_writes_nfluents_start snap_writes_nfluents_end
         snap_upds_nexp_ok_start snap_upds_nexp_ok_end
         snap_pre_comp_ok_start snap_pre_comp_ok_end snap_inv_comp_ok num_goal_comp_ok)
+  \<comment> \<open>The guard relation @{text mutex_effects}: symmetric, and the plan separates it.\<close>
+  subgoal by (rule mutex_effects_sym)
+  subgoal by (rule ref_mutex_effects_sep)
   \<comment> \<open>Remaining goals 1--2: the numeric plan-validity / state-sequence TRANSFER under the
      restrict-to-props + @{const AtStart}/@{const AtEnd} relabeling (numeric analog of the
      propositional @{text restr_to_props_valid}). Numeric conjuncts are transferred via the
@@ -658,13 +776,11 @@ sublocale ref_correctness: numeric_tp_nta_reduction_correctness
       rvss: "num_plan.num_rat_impl.num_valid_state_sequence M"
       and r0: "snd (M 0) = (\<lambda>f. if f \<in> set nfluents then Some (num_init f) else None)"
       and rsg: "sat_comps (snd (M (length valid_plan_valid_2.plan2.htpl))) (set num_goal)"
-      and rnm: "num_plan.num_rat_impl.num_mutex_valid_plan"
       using num_valid unfolding num_plan.num_rat_impl.num_valid_plan_def by blast
     obtain MS where
       pvss: "valid_plan_valid_2.plan2.valid_state_sequence MS"
       and p0: "MS 0 = set (filter (\<lambda>p. p \<in> set props) init)"
       and pg: "set (filter (\<lambda>p. p \<in> set props) goal) \<subseteq> MS (length valid_plan_valid_2.plan2.htpl)"
-      and pmx: "valid_plan_valid_2.plan2.mutex_valid_plan"
       and pdg: "valid_plan_valid_2.plan2.durations_ge_0"
       and pdv: "valid_plan_valid_2.plan2.durations_valid"
       and pfp: "valid_plan_valid_2.plan2.finite_plan"
@@ -681,28 +797,25 @@ sublocale ref_correctness: numeric_tp_nta_reduction_correctness
     proof (intro allI impI)
       fix i assume ilt: "i < length valid_plan_valid_2.plan2.htpl"
       from pvss ilt have PROP:
-        "ref_correctness.planning_sem.apply_effects (ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) (MS i) = MS (Suc i)
-         \<and> ref_correctness.planning_sem.invs_at valid_plan_valid_2.plan2.plan_inv_seq (valid_plan_valid_2.plan2.time_index i) \<subseteq> MS i
-         \<and> \<Union> ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.pre_imp_restr_list at_start at_end) pre props ` ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) \<subseteq> MS i"
+        "valid_plan_valid_2.plan2.apply_effects (valid_plan_valid_2.plan2.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) (MS i) = MS (Suc i)
+         \<and> valid_plan_valid_2.plan2.invs_at valid_plan_valid_2.plan2.plan_inv_seq (valid_plan_valid_2.plan2.time_index i) \<subseteq> MS i
+         \<and> \<Union> ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.pre_imp_restr_list at_start at_end) pre props ` valid_plan_valid_2.plan2.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) \<subseteq> MS i"
         unfolding valid_plan_valid_2.plan2.valid_state_sequence_def Let_def by blast
       note NUM = nre.num_seq_transfer[OF rvss ilt fin]
-      show "ref_correctness.planning_sem.apply_effects (ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) (fst (M' i)) = fst (M' (Suc i))
-         \<and> ref_correctness.planning_sem.invs_at valid_plan_valid_2.plan2.plan_inv_seq (valid_plan_valid_2.plan2.time_index i) \<subseteq> fst (M' i)
-         \<and> \<Union> ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.pre_imp_restr_list at_start at_end) pre props ` ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) \<subseteq> fst (M' i)
-         \<and> nre.plan2.happening_num_update_set (ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) (snd (M' i)) = snd (M' (Suc i))
-         \<and> (\<forall>s\<in>ref_correctness.planning_sem.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i). sat_comps (snd (M' i)) (num_plan.num_rat_impl.n_pre_imp s))
+      show "valid_plan_valid_2.plan2.apply_effects (valid_plan_valid_2.plan2.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) (fst (M' i)) = fst (M' (Suc i))
+         \<and> valid_plan_valid_2.plan2.invs_at valid_plan_valid_2.plan2.plan_inv_seq (valid_plan_valid_2.plan2.time_index i) \<subseteq> fst (M' i)
+         \<and> \<Union> ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.pre_imp_restr_list at_start at_end) pre props ` valid_plan_valid_2.plan2.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) \<subseteq> fst (M' i)
+         \<and> nre.plan2.happening_num_update_set (valid_plan_valid_2.plan2.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i)) (snd (M' i)) = snd (M' (Suc i))
+         \<and> (\<forall>s\<in>valid_plan_valid_2.plan2.snap_at valid_plan_valid_2.plan2.plan_happ_seq (valid_plan_valid_2.plan2.time_index i). sat_comps (snd (M' i)) (num_plan.num_rat_impl.n_pre_imp s))
          \<and> (\<forall>a\<in>nre.plan2.active_actions (valid_plan_valid_2.plan2.time_index i). sat_comps (snd (M' i)) ((set \<circ> n_inv) a))"
         using PROP NUM by (simp add: M'_def)
     qed
-    have nmx': "numeric_temp_plan_defs.num_mutex_valid_plan AtStart AtEnd ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.pre_imp_restr_list at_start at_end) pre props) ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.add_imp_list at_start) at_end adds) ((set \<circ>\<circ>\<circ> temp_planning_problem_list_defs.del_imp_list at_start) at_end dels) (rat_of_int \<epsilon>) (map_option (map_prod id (map_prod rat_of_int rat_of_int)) \<circ> \<pi>) num_plan.num_rat_impl.n_pre_imp num_plan.num_rat_impl.upds_imp"
-      unfolding numeric_temp_plan_defs.num_mutex_valid_plan_def[OF num_plan.num_rat_impl.numeric_temp_plan_defs_axioms]
-      using pmx nre.num_clauses2[OF rnm] by blast
     have pg': "{x \<in> set goal. x \<in> set props} \<subseteq> MS (length valid_plan_valid_2.plan2.htpl)"
       using pg by (simp add: set_filter)
     have p0': "MS 0 = {x \<in> set init. x \<in> set props}" using p0 by (simp add: set_filter)
     show ?thesis
       unfolding bu bp numeric_temp_plan_defs.num_valid_plan_def[OF num_plan.num_rat_impl.numeric_temp_plan_defs_axioms]
-      by (intro exI[of _ M'] conjI vss' nmx' pdg pdv pfp)
+      by (intro exI[of _ M'] conjI vss' ref_num_mutex_valid_plan pdg pdv pfp)
          (simp_all add: M'_def r0 rsg p0' pg')
   qed
   subgoal premises hyps for M i
@@ -732,14 +845,14 @@ sublocale ref_correctness: numeric_tp_nta_reduction_correctness
       note RNninv = RNj[THEN conjunct2, THEN conjunct2, THEN conjunct2, THEN conjunct2, THEN conjunct2]
       from rpvss jlt have RP:
         "rat_impl.apply_effects (rat_impl.happ_at rat_impl.plan_happ_seq (valid_plan_valid_2.plan2.time_index j)) (MSr j) = MSr (Suc j)
-         \<and> ref_correctness.planning_sem.invs_at unique_ref.plan_inv_seq (valid_plan_valid_2.plan2.time_index j) \<subseteq> MSr j
+         \<and> valid_plan_valid_2.plan2.invs_at unique_ref.plan_inv_seq (valid_plan_valid_2.plan2.time_index j) \<subseteq> MSr j
          \<and> \<Union> ((set \<circ> pre) ` rat_impl.happ_at rat_impl.plan_happ_seq (valid_plan_valid_2.plan2.time_index j)) \<subseteq> MSr j"
         unfolding rat_impl.valid_state_sequence_def Let_def by blast
       note REV = nre.num_seq_transfer_rev[OF fin RNfold RNnpre]
       have Rf: "fst (M'' k) = MSr k" and Rs: "snd (M'' k) = snd (M k)" for k
         by (simp_all add: M''_def)
       show "rat_impl.apply_effects (rat_impl.happ_at rat_impl.plan_happ_seq (valid_plan_valid_2.plan2.time_index j)) (fst (M'' j)) = fst (M'' (Suc j))
-         \<and> ref_correctness.planning_sem.invs_at unique_ref.plan_inv_seq (valid_plan_valid_2.plan2.time_index j) \<subseteq> fst (M'' j)
+         \<and> valid_plan_valid_2.plan2.invs_at unique_ref.plan_inv_seq (valid_plan_valid_2.plan2.time_index j) \<subseteq> fst (M'' j)
          \<and> \<Union> ((set \<circ> pre) ` rat_impl.happ_at rat_impl.plan_happ_seq (valid_plan_valid_2.plan2.time_index j)) \<subseteq> fst (M'' j)
          \<and> num_plan.num_rat_impl.happening_num_update_set (rat_impl.happ_at rat_impl.plan_happ_seq (valid_plan_valid_2.plan2.time_index j)) (snd (M'' j)) = snd (M'' (Suc j))
          \<and> (\<forall>s\<in>rat_impl.happ_at rat_impl.plan_happ_seq (valid_plan_valid_2.plan2.time_index j). sat_comps (snd (M'' j)) ((set \<circ> n_pre) s))
