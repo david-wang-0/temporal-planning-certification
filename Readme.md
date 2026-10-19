@@ -151,9 +151,10 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
 
 - `plan_cert`: in the artifact, `benchmarks/tools/plan_cert` (a build of this repository);
   otherwise build it as above.
-- `tck-reach` from [TChecker](https://github.com/ticktac-project/tchecker). We use commit
-  [d711ace](https://github.com/ticktac-project/tchecker/commit/d711ace9ff754d8d952f5d491a31591115300c7f);
-  the artifact includes a later build of TChecker master as `benchmarks/tools/tck-reach`.
+- `tck-reach` from [TChecker](https://github.com/ticktac-project/tchecker). The artifact's results
+  were produced with TChecker master built 2026-07-26, included as `benchmarks/tools/tck-reach`;
+  the earlier pipeline used commit
+  [d711ace](https://github.com/ticktac-project/tchecker/commit/d711ace9ff754d8d952f5d491a31591115300c7f).
 - The `convert_models` Python package (in this directory; in the artifact also in
   `benchmarks/tools/`) and `python3` on `PATH`. The two conversions `plan_cert` runs use only the
   Python standard library; pydot is needed only by `convert_models/model_to_dot.py`, which
