@@ -1069,11 +1069,13 @@ definition nm_anno_act_seq where
 
 subsubsection \<open>Non-Interference w.r.t the Happening Sequence\<close>
 
+provenance ai_human
 text \<open>This definition comes from the statement in Gigante, Micheli, Montanari and Scala, \<open>Decidability and Complexity of Action-Based Temporal Planning over Dense Time\<close> (AAAI 2020), that every at-start 
 snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
 snap-actions. Moreover, in their definition of a planning problem, the assumption is made that 
 no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at-end(b) and at-start(a) \<noteq> at-end(a).\<close>
 
+provenance human
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_happ_seq B \<equiv> 
   (\<forall>t u a b. t - u < \<epsilon> \<and> u - t < \<epsilon> \<and> a \<in> happ_at B t \<and> b \<in> happ_at B u

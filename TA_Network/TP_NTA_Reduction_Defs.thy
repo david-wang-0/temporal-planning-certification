@@ -76,6 +76,7 @@ lemma b:
 lemmas names_unique = a b
 end
 
+provenance ai_human
 locale tp_nta_reduction_defs = temp_planning_problem_list_impl_int
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions
   for init :: "'proposition list"
@@ -95,6 +96,7 @@ locale tp_nta_reduction_defs = temp_planning_problem_list_impl_int
     and prop_to_name :: "'proposition \<Rightarrow> String.literal"
     and mutex_effects :: "'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool"
 begin
+provenance human
 
 definition "prop_to_var p \<equiv> STR ''var_'' + prop_to_name p"
 definition "prop_to_lock p \<equiv> STR ''lock_'' + prop_to_name p"
@@ -155,11 +157,13 @@ definition
   
 
 subsection \<open>Automata for individual actions\<close>
+provenance ai
 text \<open>The interference relation \<open>mutex_effects\<close> is a parameter: the clocks of the snap actions
 interfering with \<open>s\<close> guard \<open>s\<close>, so that interfering snap actions are \<open>\<epsilon>\<close>-separated. The propositional
 reduction instantiates it with @{const action_defs.mutex_snap_action} (\<open>tp_nta_reduction_defs'\<close>); the
 numeric reduction additionally guards numerically interfering snap actions.\<close>
 
+provenance human
 definition net_int_clocks::"'snap_action \<Rightarrow> String.literal list" where
 "net_int_clocks s \<equiv>
 let 
@@ -456,6 +460,7 @@ locale tp_nta_reduction_defs' = temp_planning_problem_list_impl_int'
     and act_to_name :: "'action \<Rightarrow> String.literal"
     and prop_to_name :: "'proposition \<Rightarrow> String.literal"
 begin
+provenance ai_human
 sublocale reduction_ref_impl: tp_nta_reduction_defs 
   "rat_impl.list_inter props init" 
   "rat_impl.list_inter props goal"
@@ -463,6 +468,6 @@ sublocale reduction_ref_impl: tp_nta_reduction_defs
   rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
   \<epsilon> props actions act_to_name prop_to_name
   rat_imp'.prob_list_impl.set_impl.mutex_snap_action
-  by unfold_locales
+  by \<^marker>\<open>provenance human\<close> unfold_locales
 end
 end

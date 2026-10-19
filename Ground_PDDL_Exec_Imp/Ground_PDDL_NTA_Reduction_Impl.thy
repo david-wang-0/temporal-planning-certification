@@ -585,15 +585,15 @@ lemma net_int_clocks_refine:
   assumes "a \<in> AtStart ` set actions_spec \<union> AtEnd ` set actions_spec"
   shows "abstr_model_checking.reduction_ref_impl.net_int_clocks a = net_int_clocks' a"
 proof -
-  have 1: "filter (\<lambda>aa. abstr_model_checking.rat_imp'.prob_list_impl.set_impl.mutex_snap_action a (AtStart aa)) actions_spec =
+  have \<^marker>\<open>provenance ai_human\<close> 1: "filter (\<lambda>aa. abstr_model_checking.rat_imp'.prob_list_impl.set_impl.mutex_snap_action a (AtStart aa)) actions_spec =
     filter (\<lambda>b. mutex_snap_action' a (AtStart b)) actions_spec"
-    apply (rule filter_eq_conv)
+    apply \<^marker>\<open>provenance human\<close> (rule filter_eq_conv)
     using mutex_snap_action_refine[OF assms]
     by simp
   
-  have 2: "filter (\<lambda>aa. abstr_model_checking.rat_imp'.prob_list_impl.set_impl.mutex_snap_action a (AtEnd aa)) actions_spec =
+  have \<^marker>\<open>provenance ai_human\<close> 2: "filter (\<lambda>aa. abstr_model_checking.rat_imp'.prob_list_impl.set_impl.mutex_snap_action a (AtEnd aa)) actions_spec =
     filter (\<lambda>aa. mutex_snap_action' a (AtEnd aa)) actions_spec"
-    apply (rule filter_eq_conv)
+    apply \<^marker>\<open>provenance human\<close> (rule filter_eq_conv)
     using mutex_snap_action_refine[OF assms]
     by simp
   

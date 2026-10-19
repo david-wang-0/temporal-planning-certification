@@ -38,11 +38,13 @@ sublocale planning_sem: nta_temp_planning
   apply standard 
   by auto
 
+provenance ai
 text \<open>The separation assumption, restated for the happening sequence of @{text planning_sem}.\<close>
 lemma mutex_effects_sep_sem:
   "eps_separated_happ_seq mutex_effects (rat_of_int \<epsilon>) planning_sem.plan_happ_seq"
   using mutex_effects_sep unfolding \<pi>_sem_def .
 
+provenance human
 subsection \<open>Preliminaries?\<close>
 
 lemma card_action_set: "card (set actions) = length actions" using distinct_actions distinct_card by blast

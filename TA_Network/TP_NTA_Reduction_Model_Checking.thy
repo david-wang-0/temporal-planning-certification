@@ -5,6 +5,7 @@ theory TP_NTA_Reduction_Model_Checking
 begin
 provenance human
 
+provenance ai_human
 locale tp_nta_reduction_model_checking = tp_nta_reduction_defs
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
   mutex_effects +
@@ -28,6 +29,7 @@ locale tp_nta_reduction_model_checking = tp_nta_reduction_defs
     and mutex_effects :: "'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" +
   assumes mutex_effects_sym: "mutex_effects a b \<Longrightarrow> mutex_effects b a"
 begin
+provenance human
 
 
 lemma variables_unique: 
@@ -176,6 +178,7 @@ locale tp_nta_reduction_model_checking' = tp_nta_reduction_defs'
 begin
 (* Plans are equivalent for both locales, but the other one has a few things that make 
   proofs easier. I.e. labelled actions as opposed to snap actions *)
+provenance ai_human
 sublocale ref_model_checking: tp_nta_reduction_model_checking 
   "rat_impl.list_inter props init" 
   "rat_impl.list_inter props goal"
@@ -193,7 +196,9 @@ actions that interfere w.r.t. the relation \<open>mutex_effects\<close> the netw
 (@{const eps_separated_happ_seq}); for the propositional relation this follows from plan validity
 (@{text mutex_eps_separated}).\<close>
 
+provenance human
 text \<open>This locale is not meant to directly be instantiated.\<close>
+provenance ai_human
 locale tp_nta_reduction_correctness = temp_plan_for_problem_list_impl_int 
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> props actions \<pi> +
   action_names: unique_names act_to_name "set actions" +
@@ -218,8 +223,9 @@ locale tp_nta_reduction_correctness = temp_plan_for_problem_list_impl_int
   assumes mutex_effects_sym: "mutex_effects a b \<Longrightarrow> mutex_effects b a"
       and mutex_effects_sep: "eps_separated_happ_seq mutex_effects (rat_of_int \<epsilon>) rat_impl.plan_happ_seq"
 begin
+provenance human
 sublocale tp_nta_reduction_model_checking 
-  using mutex_effects_sym by unfold_locales
+  using \<^marker>\<open>provenance ai_human\<close> mutex_effects_sym by unfold_locales
 end
 
 
@@ -249,6 +255,7 @@ sublocale ref_model_checking: tp_nta_reduction_model_checking'
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
   by unfold_locales 
          
+provenance ai_human
 sublocale ref_correctness: tp_nta_reduction_correctness
   "rat_impl.list_inter props init" 
   "rat_impl.list_inter props goal"
@@ -256,7 +263,7 @@ sublocale ref_correctness: tp_nta_reduction_correctness
   rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
   \<epsilon> props actions \<pi> act_to_name prop_to_name
   rat_imp'.prob_list_impl.set_impl.mutex_snap_action
-proof unfold_locales
+proof \<^marker>\<open>provenance ai\<close> unfold_locales
   show "rat_imp'.prob_list_impl.set_impl.mutex_snap_action b a"
     if "rat_imp'.prob_list_impl.set_impl.mutex_snap_action a b" for a b
     using that rat_imp'.prob_list_impl.set_impl.mutex_snap_action_refl by simp
@@ -264,6 +271,7 @@ qed (rule conc_ref_impl.mutex_eps_separated)
 
 end
 
+provenance human
 context tp_nta_reduction_model_checking'
 begin
 

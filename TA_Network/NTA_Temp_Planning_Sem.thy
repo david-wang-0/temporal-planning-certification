@@ -10,6 +10,7 @@ lemma GreatestI_time: "P (k::'t::time) \<Longrightarrow> (\<And>y. P y \<Longrig
   apply (rule GreatestI2_order)
   by blast
 
+provenance ai
 subsection \<open>Separation of interfering snap actions\<close>
 
 text \<open>The generalisation of @{const temp_plan_defs.nm_happ_seq} to an arbitrary interference relation
@@ -47,6 +48,7 @@ lemma (in temp_plan_defs) nm_happ_seq_eq_eps_separated:
   "nm_happ_seq B \<longleftrightarrow> eps_separated_happ_seq mutex_snap_action \<epsilon> B"
   unfolding nm_happ_seq_def eps_separated_happ_seq_def by blast
 
+provenance human
 locale nta_temp_planning = temp_plan_for_problem_impl 
   at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi> actions props
     for at_start::"'action  \<Rightarrow> 'snap_action" 
@@ -175,14 +177,14 @@ lemma updated_exec_time_and_next:
   using subseq_last_snap_exec[OF assms] exec_time_def exec_time'_def by simp
 
 
-lemma exec_time_and_separation_wrt:
+lemma \<^marker>\<open>provenance ai\<close> exec_time_and_separation_wrt:
   assumes sep: "eps_separated_happ_seq R \<epsilon> plan_happ_seq"
       and a_at_t: "(t, a) \<in> plan_happ_seq"
       and mutex: "R a b"
     shows "\<epsilon> \<le> exec_time b t"
       and "0 < exec_time b t"
 proof -
-  have "exec_time b t \<ge> \<epsilon> \<and> exec_time b t > 0"
+  have \<^marker>\<open>provenance ai_human\<close> "exec_time b t \<ge> \<epsilon> \<and> exec_time b t > 0"
   proof (cases "\<exists>u < t. (u, b) \<in> plan_happ_seq")
     case True
 
@@ -327,9 +329,10 @@ lemma exec_time_and_separation:
   assumes  a_at_t: "(t, a) \<in> plan_happ_seq"
       and mutex: "mutex_snap_action a b"
     shows "exec_time b t \<ge> \<epsilon> \<and> exec_time b t > 0"
-  using exec_time_and_separation_wrt[OF nm_happ_seq[unfolded nm_happ_seq_eq_eps_separated] a_at_t mutex]
+  using \<^marker>\<open>provenance ai\<close> exec_time_and_separation_wrt[OF nm_happ_seq[unfolded nm_happ_seq_eq_eps_separated] a_at_t mutex]
   by simp
 
+provenance ai
 text \<open>Generalised twin of @{text mutex_same_instant_is_same}.\<close>
 lemma mutex_same_instant_is_same_wrt:
   assumes sep: "eps_separated_happ_seq R \<epsilon> plan_happ_seq"
@@ -340,6 +343,7 @@ lemma mutex_same_instant_is_same_wrt:
   using eps_separated_happ_seq_instantD[OF sep] assms(2-4) by blast
 
 
+provenance human
 lemma exec_time_when_ending:
   assumes a_in_actions: "a \<in> actions"
       and ending: "(t, at_end a) \<in> plan_happ_seq"
@@ -447,6 +451,7 @@ lemma action_happening_exec_times:
 
 end
 
+provenance ai
 text \<open>A valid plan of the executable problem separates propositionally interfering snap actions: the
 instance of @{const eps_separated_happ_seq} the propositional reduction is checked against.\<close>
 lemma (in temp_plan_for_problem_list_impl_int) mutex_eps_separated:
