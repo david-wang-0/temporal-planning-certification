@@ -10,7 +10,7 @@ This `README` contains instructions for:
 - Building, inspecting, and checking the Isabelle theories.
 - Generating code from the verified theories (optional).
 - Building a verified encoder for ground PDDL temporal planning problems to a network of timed automata.
-- Building the pipeline and running it or individual components.
+- Running the certifier, `plan_cert -certify numeric-tchecker`, on a PDDL problem.
 
 ## Numeric extension (post-paper)
 
@@ -139,105 +139,93 @@ Build the Certifier:
 make build_certifier
 ```
 
-## Running the pipeline
+The binary is `ML/out/plan_cert`.
 
-### Install Python 3
+## Running the certifier
 
-Follow the instructions in: https://www.python.org/downloads/
+`plan_cert -certify numeric-tchecker` runs the whole pipeline in one call: it parses and grounds
+the PDDL problem and runs the verified capstone, which builds the timed-automata network, hands it
+to the external tck-reach oracle and checks the returned certificate with Munta's verified checker.
 
-### Install TChecker
+### What it needs
 
-Please refer to instructions here: https://github.com/ticktac-project/tchecker
+- `plan_cert`: in the artifact, `benchmarks/tools/plan_cert` (a build of this repository);
+  otherwise build it as above.
+- `tck-reach` from [TChecker](https://github.com/ticktac-project/tchecker). We use commit
+  [d711ace](https://github.com/ticktac-project/tchecker/commit/d711ace9ff754d8d952f5d491a31591115300c7f);
+  the artifact includes a later build of TChecker master as `benchmarks/tools/tck-reach`.
+- The `convert_models` Python package (in this directory; in the artifact also in
+  `benchmarks/tools/`) and `python3` on `PATH`. The two conversions `plan_cert` runs use only the
+  Python standard library; pydot is needed only by `convert_models/model_to_dot.py`, which
+  `plan_cert` does not call. So a direct call needs no virtual environment; the one that
+  `benchmarks/setup.sh` creates is for the benchmark harness.
+- Optionally `nmo` from [Nemo v0.10.0](https://github.com/knowsys/nemo/releases/tag/v0.10.0), which
+  prunes unreachable action instances during grounding; in the artifact, `benchmarks/tools/nmo`.
 
-We use commit: [d711ace](https://github.com/ticktac-project/tchecker/commit/d711ace9ff754d8d952f5d491a31591115300c7f)
+`plan_cert` finds these through environment variables:
 
-Once completed, move `tck-reach` from the output directory into this folder.
+| variable | meaning | default | when the tool is not there |
+|---|---|---|---|
+| `TCHECKER_PKG_ROOT` | directory containing `convert_models`; `plan_cert` runs `python3 -m convert_models.…` there | `.` | `No module named 'convert_models'`, then `muntax->tck (convert) failed:`; no verdict |
+| `TCK_REACH_BIN` | the `tck-reach` binary | `./tck-reach` | `unhandled exception: SysErr: No such file or directory [noent]`, exit status 1 |
+| `NMO` | the `nmo` binary | `nmo`, looked up on `PATH` | grounding without pruning, silently (no `+ nemo reachability` line), so the ground problem can be much larger |
+| `TCK_ALGO` | the algorithm passed to `tck-reach -a` | `covreach` | (not a tool) |
 
-### Install Isabelle and the AFP
+### Command
 
-Follow the steps above to install Isabelle and the AFP.
-
-### Build muntac from the AFP
-
-Build `muntac` from the AFP and move it here (`.`):
-```shell
-isabelle build -e Munta_Certificate_Checker
-mv -t . <path-to-afp-2025>/thys/Munta_Certificate_Checker/muntac
-```
-
-### Running the entire pipeline
-
-The pipeline needs names to be provided for every input and ouput file, namely: 
-- Ground pddl domain
-- Ground pddl problem
-- Muntax network
-- TChecker network
-- TChecker dot certificate
-- Muntac certificate
-- Muntac renaming
-
-```shell
-chmod +x run.sh
-./run <ground-domain>.pddl <ground-problem>.pddl
-```
-
-Example:
-```shell
-./run.sh examples/ground/MatchCellar-impossible/instance_03_domain.pddl examples/ground/MatchCellar-impossible/instance_03_problem.pddl
-```
-
-## Running individual components
-
-### Install Python 3
-
-Follow the instructions in: https://www.python.org/downloads/
-
-### Install TChecker
-
-Follow the steps above.
-
-### Install Isabelle and the AFP
-
-Follow the steps above.
-
-### Build muntac from the AFP
-
-Follow the steps above.
-
-### Running the verified component
-The checker is in `ML/out`.
-
-From this directory:
-```shell
-./ML/out/plan_cert -domain <ground-domain>.pddl -problem <ground-problem>.pddl -model <network>.muntax
-```
-
-### Converting muntax to TChecker format
+In the artifact, from its root directory:
 
 ```shell
-python -m convert_models.convert <model>.muntax <model>.tck
+T=$PWD/benchmarks/tools
+E=temporal-planning-certification/examples/ground
+W=$(mktemp -d)
+env TCHECKER_PKG_ROOT=$T TCK_REACH_BIN=$T/tck-reach NMO=$T/nmo $T/plan_cert -certify numeric-tchecker \
+  -domain $E/MatchCellar-impossible/instance_03_domain.pddl \
+  -problem $E/MatchCellar-impossible/instance_03_problem.pddl \
+  -model $W/model.muntax -renaming $W/renaming.json -certificate $W/cert.bin
 ```
 
-### Running TChecker on a model to ouput a certificate
+Outside the artifact, from this directory, with `tck-reach` copied here and `nmo` on `PATH`, the
+defaults apply:
 
 ```shell
-./tck-reach -a covreach -C graph -s dfs -o <certificate>.dot <model>.tck
+W=$(mktemp -d)
+./ML/out/plan_cert -certify numeric-tchecker \
+  -domain examples/ground/MatchCellar-impossible/instance_03_domain.pddl \
+  -problem examples/ground/MatchCellar-impossible/instance_03_problem.pddl \
+  -model $W/model.muntax -renaming $W/renaming.json -certificate $W/cert.bin
 ```
 
-### Creating a renaming for the model
-```shell
-./ML/out/plan_cert -model <model>.muntax -renaming <model_renaming>.rnm
-```
+`-model`, `-renaming` and `-certificate` are output paths: the network (muntax), the renaming and
+the binary certificate. Next to the certificate, `plan_cert` also writes the TChecker model
+(`<certificate>.tck`) and the zone graph that tck-reach returns (`<certificate>.dot`). `-num-threads N`
+(default 1) sets the threads of the certificate check.
 
-### Converting certificates
+### Examples and output
 
-```shell
- python -m convert_models.convert_certificate -m <model>.muntax <certificate>.dot <model_renaming>.rnm <certificate>.cert
-```
+| example in `examples/ground/` | expected lines near the end of the output |
+|---|---|
+| `MatchCellar-impossible/instance_03_domain.pddl`, `instance_03_problem.pddl` | `Certificate was accepted`, then `The numeric planning problem is unsolvable.` |
+| `MatchCellar-possible/instance_solvable_domain.pddl`, `instance_solvable_problem.pddl` (solvable) | `Certificate was rejected`, then `Something went wrong.` |
 
-### Checking a certificate agains the network and renaming
+`The numeric planning problem is unsolvable.` is printed only by the verified capstone, after the
+checker has accepted the certificate; it is the verdict. A rejected certificate is no verdict: it
+does not mean that the problem is solvable. The lines `+ STAGE <name>: <ms> ms` give the wall time
+of each stage in milliseconds, in the order `ground`, `infer-box`, `write-muntax`, `renaming`,
+`write-renaming`, `convert-tck`, `tck`, `convert-back`, `read-cert`, `check` (in the artifact,
+`benchmarks/README.md`, "What is measured", says what each covers). The last line,
+`+ Total Time: : <s>`, is the total in seconds.
 
-```shell
-./muntac -m <model>.muntax -r <renaming>.rnm -c <certificate>.cert
-```
+The exit status does not tell the verdict: `plan_cert` exits with 0 also after a rejected
+certificate and after a failed external stage (such as the converter not being found). Exit status
+1 comes only from some errors: a parse error, or an uncaught exception such as a missing
+`tck-reach`. Read the verdict from the output; the benchmark harness does so too.
 
+### The earlier pipeline (`run.sh`, `run.py`)
+
+`run.sh` runs the earlier multi-step pipeline: `plan_cert` writes the network and the renaming in
+separate calls, the Python converters and tck-reach produce the certificate, and `muntac`, built from
+the AFP entry Munta_Certificate_Checker, checks it. Neither this repository nor the artifact
+includes `muntac`, and the verified check now runs inside `plan_cert`, so `run.sh` is kept for
+reference only. `run.py` is the batch script of the FORMATS 2020 artifact; it calls a `muntac` build
+as well and is not used here.
