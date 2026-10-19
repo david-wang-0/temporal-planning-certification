@@ -15,6 +15,7 @@ that \<open>pre\<close>/\<open>adds\<close>/\<open>dels\<close> carry.\<close>
 
 locale numeric_tp_nta_reduction_defs = tp_nta_reduction_defs
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
+  mutex_effects
   for init :: "'proposition list"
     and goal :: "'proposition list"
     and at_start :: "'action \<Rightarrow> 'snap_action"
@@ -29,7 +30,8 @@ locale numeric_tp_nta_reduction_defs = tp_nta_reduction_defs
     and props :: "'proposition list"
     and actions :: "'action list"
     and act_to_name :: "'action \<Rightarrow> String.literal"
-    and prop_to_name :: "'proposition \<Rightarrow> String.literal" +
+    and prop_to_name :: "'proposition \<Rightarrow> String.literal"
+    and mutex_effects :: "'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" +
   fixes n_pre :: "'snap_action \<Rightarrow> ('n, 'r::linordered_field) comp list"
     and n_inv :: "'action \<Rightarrow> ('n, 'r) comp list"
     and upds :: "'snap_action \<Rightarrow> ('n \<times> ('n, 'r) nexp) list"
@@ -186,7 +188,7 @@ variable names, so numeric variables never gate a propositional edge -- the keys
 additive-tracking architecture).\<close>
 locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
-  n_pre n_inv upds num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int +
+  mutex_effects n_pre n_inv upds num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int +
   fluent_names: unique_names fluent_to_name "set nfluents"
   for init :: "'proposition list"
     and goal :: "'proposition list"
@@ -203,6 +205,7 @@ locale numeric_tp_nta_reduction = numeric_tp_nta_reduction_defs
     and actions :: "'action list"
     and act_to_name :: "'action \<Rightarrow> String.literal"
     and prop_to_name :: "'proposition \<Rightarrow> String.literal"
+    and mutex_effects :: "'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool"
     and n_pre :: "'snap_action \<Rightarrow> ('n, 'r::linordered_field) comp list"
     and n_inv :: "'action \<Rightarrow> ('n, 'r) comp list"
     and upds :: "'snap_action \<Rightarrow> ('n \<times> ('n, 'r) nexp) list"
@@ -312,12 +315,30 @@ locale numeric_tp_nta_reduction_defs' = temp_planning_problem_list_impl_int'
     and fluent_hi :: "'n \<Rightarrow> int"
     and const_to_int :: "'r \<Rightarrow> int"
 begin
+
+text \<open>The interference relation the numeric net guards (Definition 20 of the paper): two snap actions
+interfere when they are propositionally mutex (@{const action_defs.mutex_snap_action}, as in the
+propositional net) or numerically mutex (@{const numeric_action_defs.num_mutex_snap_action}: one
+writes a fluent the other reads or writes). Both relations are those of the restricted, injective
+problem the net is built from.\<close>
+abbreviation mutex_effects :: "'action snap_action \<Rightarrow> 'action snap_action \<Rightarrow> bool" where
+"mutex_effects a b \<equiv> rat_imp'.prob_list_impl.set_impl.mutex_snap_action a b
+  \<or> numeric_action_defs.num_mutex_snap_action
+      (set o rat_impl.set_impl.app_snap n_pre) (set o rat_impl.set_impl.app_snap upds) a b"
+
+lemma mutex_effects_sym:
+  assumes "mutex_effects a b"
+  shows "mutex_effects b a"
+  using assms rat_imp'.prob_list_impl.set_impl.mutex_snap_action_refl
+        numeric_action_defs.num_mutex_snap_action_refl
+  by metis
+
 sublocale reduction_ref_impl: numeric_tp_nta_reduction_defs
   "rat_impl.list_inter props init"
   "rat_impl.list_inter props goal"
   AtStart AtEnd rat_impl.over_all_restr_list lower upper
   rat_impl.pre_imp_restr_list rat_impl.add_imp_list rat_impl.del_imp_list
-  \<epsilon> props actions act_to_name prop_to_name
+  \<epsilon> props actions act_to_name prop_to_name mutex_effects
   "rat_impl.set_impl.app_snap n_pre" n_inv "rat_impl.set_impl.app_snap upds"
   num_init num_goal nfluents fluent_to_name fluent_lo fluent_hi const_to_int
   by unfold_locales
@@ -351,7 +372,6 @@ text \<open>Drop-in re-exposure: the ground numeric leaf refers to every reducti
   abbreviation "main_auto_goal_edge \<equiv> reduction_ref_impl.main_auto_goal_edge"
   abbreviation "main_auto_init_edge \<equiv> reduction_ref_impl.main_auto_init_edge"
   abbreviation "main_auto_loop \<equiv> reduction_ref_impl.main_auto_loop"
-  abbreviation "mutex_effects \<equiv> reduction_ref_impl.mutex_effects"
   abbreviation "net_bounds \<equiv> reduction_ref_impl.net_bounds"
   abbreviation "net_broadcast \<equiv> reduction_ref_impl.net_broadcast"
   abbreviation "net_int_clocks \<equiv> reduction_ref_impl.net_int_clocks"
