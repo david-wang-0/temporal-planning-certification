@@ -11,7 +11,12 @@ text \<open>The \<^emph>\<open>executable\<close> numeric net and its refinement
   net is a thin \<^emph>\<open>augmentation\<close> of the propositional net (@{text augment_edge}: conjoin a numeric
   @{typ \<open>(String.literal, int) bexp\<close>} guard + append numeric @{typ \<open>(String.literal, int) exp\<close>} updates
   to each propositional edge; @{text \<open>num_all_vars = all_vars @ num_fluent_vars\<close>}), so the refinement
-  lifts the existing propositional @{text \<open>*_refine\<close>} lemmas through the augmentation. Only the
+  lifts the existing propositional @{text \<open>*_refine\<close>} lemmas through the augmentation. The one
+  exception is the interference clock guards (Definition 20 of the paper): the numeric net guards
+  snap actions that interfere propositionally OR numerically (@{text mutex_effects'}), so the three
+  clock-guarded edges are numeric twins (@{text start_edge_num'}, @{text edge_3_num'},
+  @{text instant_trans_edge_num'}) built from @{text num_net_int_clocks'} instead of the propositional
+  @{text net_int_clocks'}, and are refined to the abstract numeric net's edges directly. Only the
   boundedness parameters @{text fluent_lo}/@{text fluent_hi} (the fluent bounds) are carried as inputs; the
   fluent encoding is the DEFINED @{const numeric_ground_ast_problem_defs.fluent_to_var_spec}, proved
   equal to the abstract @{text ndefs.fluent_to_var} by @{text fluent_to_var_spec_eq}.\<close>
@@ -193,8 +198,9 @@ end
 text \<open>Code equations for the numeric net constructors (numeric twin of the classical
   @{thm [source] ground_ast_problem_code}).  Isabelle does not auto-generate code equations for
   locale constants, so we wire the numeric-net constructor @{text \<open>_def\<close>}s (and the locale-local
-  fluent naming @{const numeric_ground_ast_problem_defs.fluent_to_var_spec}) as @{text \<open>[code]\<close>}.
-  All the propositional edge helpers they augment (@{text start_edge'}/@{text net_bounds'}/... ),
+  fluent naming @{const numeric_ground_ast_problem_defs.fluent_to_var_spec}, and the numeric
+  interference guard with its clock-guarded edge twins) as @{text \<open>[code]\<close>}.
+  All the propositional edge helpers they augment (@{text end_edge'}/@{text net_bounds'}/... ),
   the numeric ground-data accessors (@{text n_pre}/@{text upds}/... ), and the pure augmentation
   @{const augment_edge_impl} are already @{text \<open>[code]\<close>} (classical @{text ground_ast_problem_code}
   bundle / numeric @{text numeric_ground_data_code} bundle / top-level definition).\<close>
