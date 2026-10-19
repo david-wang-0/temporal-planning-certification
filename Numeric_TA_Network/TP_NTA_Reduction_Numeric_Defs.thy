@@ -10,8 +10,12 @@ locale extending \<open>tp_nta_reduction_defs\<close> with the numeric data (\<o
 \<open>num_goal\<close>), a fluent-naming map \<open>fluent_to_var\<close>, per-fluent integer bounds, and the value-to-int map
 \<open>const_to_int\<close>. The numeric net reuses the propositional definitions and APPENDS fluent
 var-declarations / numeric guards / numeric updates, so its propositional projection is the
-propositional net unchanged. Numeric fields are sets/functions, so they sidestep the list-vs-set split
-that \<open>pre\<close>/\<open>adds\<close>/\<open>dels\<close> carry.\<close>
+propositional net built with the same interference relation \<open>mutex_effects\<close>. That relation is a
+parameter of \<open>tp_nta_reduction_defs\<close>, passed through here: the primed layer
+(\<open>numeric_tp_nta_reduction_defs'\<close>) instantiates it with propositional OR numeric interference
+(@{const numeric_action_defs.num_mutex_snap_action}), so the clock guards of the start and end edges
+also separate numerically interfering snap actions (Definition 20 of the paper). Numeric fields are
+sets/functions, so they sidestep the list-vs-set split that \<open>pre\<close>/\<open>adds\<close>/\<open>dels\<close> carry.\<close>
 
 locale numeric_tp_nta_reduction_defs = tp_nta_reduction_defs
   init goal at_start at_end over_all lower upper pre adds dels \<epsilon> props actions act_to_name prop_to_name
@@ -112,7 +116,8 @@ lemma fluent_in_bounds_imp_num_val_ok: "fluent_in_bounds w \<Longrightarrow> num
 text \<open>Append a numeric \<open>bexp\<close> guard (conjoined) and numeric \<open>(var, exp)\<close> updates (after the
 propositional ones) to a propositional edge, leaving source/target locations, clock constraints, the
 action label and clock resets untouched -- so the numeric net's propositional projection is the
-propositional net.\<close>
+propositional net for the same \<open>mutex_effects\<close>. The interference clock guards are thus not added
+here: they are already in the propositional edges, built from \<open>mutex_effects\<close>.\<close>
 definition augment_edge where
 "augment_edge g u e =
   (let (src, b, ac, act, upd, rst, tgt) = e in (src, bexp.and b g, ac, act, upd @ u, rst, tgt))"
