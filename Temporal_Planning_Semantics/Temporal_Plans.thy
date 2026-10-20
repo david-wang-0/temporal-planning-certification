@@ -99,10 +99,14 @@ fun comp_fluents :: "('n, 'r) comp \<Rightarrow> 'n set" where
 
 subsection \<open>Numeric effects\<close>
 text \<open>A numeric effect set @{term U} maps each affected fluent to the expression assigned to it. Two
-well-formedness conditions (fail-closed, checked per snap): the left-hand side is
+well-formedness conditions on an effect set: the left-hand side is
 @{emph \<open>functional\<close>} (no fluent assigned twice), and no effect reads a fluent that the same snap also
 writes (@{emph \<open>no intra-snap read-after-write\<close>}) -- PDDL snap effects are simultaneous, but Munta
-edge updates are sequential, so we reject the case where the two differ.\<close>
+edge updates are sequential, so the two readings can differ otherwise. This theory does not impose
+them; the reduction checks list-level counterparts (@{text upds_functional_list},
+@{text upds_no_cross_read_list} in @{text \<open>Numeric_TA_Network/TP_NTA_Reduction_Numeric_Defs\<close>},
+the latter allowing an effect to read its own left-hand side) in the admission check
+@{text check_numeric_ground_problem}.\<close>
 
 definition upds_functional :: "('n \<times> ('n, 'r) nexp) set \<Rightarrow> bool" where
   "upds_functional U \<longleftrightarrow> (\<forall>(f, e) \<in> U. \<forall>(f', e') \<in> U. f = f' \<longrightarrow> e = e')"
@@ -166,8 +170,8 @@ proof -
 qed
 
 section \<open>Plan validity\<close>
-text \<open>This and similar notions need to be used in multiple places. I formulate this to a 
-sufficient level of abstraction.\<close>
+text \<open>Plan validity is stated over locale parameters (abstract actions, snap actions and propositions),
+so that the same notions can be reused by every instantiation.\<close>
 
 type_synonym 'p state = "'p set"
 
@@ -186,9 +190,9 @@ datatype (action: 'a) snap_action =
   AtEnd 'a
 
 
-text \<open>Temporal plans could be multi-sets, lists or just the range of a partial function. 
-It is only necessary that the entries do not have to be unique, because unique entries are a 
-consequence of prohibiting self-overlap. I chose a partial function.\<close>
+text \<open>A temporal plan is a partial function from indices to (action, start time, duration) triples.
+Two indices may carry the same triple; such duplicates are excluded by prohibiting self-overlap, not
+by the representation.\<close>
 type_synonym ('i, 'a, 't) temp_plan = "'i \<rightharpoonup> ('a \<times> 't \<times> 't)"
 
 
@@ -214,7 +218,8 @@ begin
 
 subsubsection \<open>Mutual exclusivity\<close>
 
-text \<open>We want to define a plan in an abstract manner. This needs to be more abstract.\<close>
+text \<open>Two snap actions are mutually exclusive when one's precondition meets the other's effects, or
+one adds what the other deletes.\<close>
 definition mutex_snap_action::"'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" where
 "mutex_snap_action a b = (
   (pre a) \<inter> ((adds b) \<union> (dels b)) \<noteq> {} \<or>
@@ -351,10 +356,12 @@ text \<open>Two snaps numerically interfere when one writes a fluent the other r
 @{const mutex_snap_action}). Because all reads are pre-state, a @{emph \<open>simultaneous\<close>} set of snaps is
 well defined only when its snaps pairwise do not interfere -- in particular no two may write a common
 fluent. @{emph \<open>Soundness caveat\<close>}: treating every shared write as interference is stricter than PDDL
-for additive @{text increase}/@{text decrease} effects, which PDDL accumulates; the supported fragment
-(Gigante) never additively co-writes a fluent (e.g. the painter @{text counter} is serialised by its
-@{text \<open>(= item_id counter)\<close>} guard), and the Layer-C checker rejects (fail-closed) any task that could.
-This includes the @{emph \<open>self\<close>}-pair @{term \<open>at_start a\<close>}/@{term \<open>at_end a\<close>} of one action when its
+for additive @{text increase}/@{text decrease} effects, which PDDL accumulates. A plan in which two snaps
+write a common fluent less than @{text \<epsilon>} apart is invalid here (@{text num_mutex_valid_plan}) even
+where PDDL would accept it; the reduction's numeric net enforces the same separation by its clock
+guards (@{text mutex_effects} in @{text \<open>Numeric_TA_Network/TP_NTA_Reduction_Numeric_Defs\<close>}).
+The admission check @{text check_numeric_ground_problem} validates only the per-snap conditions
+(functional effects, no cross-read). The interference relation includes the @{emph \<open>self\<close>}-pair @{term \<open>at_start a\<close>}/@{term \<open>at_end a\<close>} of one action when its
 duration collapses (@{term \<open>d = 0\<close>}/@{term \<open>d < \<epsilon>\<close>}): an action's own start/end effects must not write a
 common fluent (mirrors the propositional self-pair clause in @{term mutex_valid_plan}).\<close>
 definition num_mutex_snap_action :: "'snap_action \<Rightarrow> 'snap_action \<Rightarrow> bool" where
@@ -394,9 +401,14 @@ This mirrors PDDL's happening update @{text action_list_numeric_update_function}
 effects: co-occurring additive writes of one fluent must @{emph \<open>accumulate\<close>} (@{text \<open>f+ea\<close>} then
 @{text \<open>+eb\<close>}), which a union would wrongly dedup.
 
-Key obligation (next milestone): independence of the list order under non-interference -- the abstract
-analog of PDDL's @{text same_actions_then_happening_numeric_update_function_equal}, via commutativity of
-@{const snap_num_update} for non-@{const num_mutex_snap_action} snaps. Interference itself is discharged by
+Under non-interference the list order does not matter -- the abstract analog of PDDL's
+@{text same_actions_then_happening_numeric_update_function_equal}. This rests on commutativity of
+@{const snap_num_update} for non-@{const num_mutex_snap_action} snaps (@{text snap_num_update_commute}
+below), which gives the adjacent swap @{text happening_num_update_swap} and the order-independent
+set-level update @{text happening_num_update_set} (via @{text comp_fun_commute_on_snap_num_update});
+@{text happening_num_update_set_eq_fold_list}
+(@{text \<open>Numeric_TA_Network/TP_NTA_Reduction_Numeric_Edges\<close>}) identifies the latter with this fold
+over any distinct enumeration of a happening. Interference itself is discharged by
 the existing clock/\<epsilon>-separation machinery: mutex snaps are forced \<ge>\<epsilon> apart, so they never co-occur in a
 happening -- only commuting (non-interfering) snaps do.\<close>
 definition happening_num_update :: "'snap_action list \<Rightarrow> ('n \<rightharpoonup> 'r) \<Rightarrow> ('n \<rightharpoonup> 'r)" where
@@ -493,9 +505,11 @@ proof (rule ext)
   qed
 qed
 
-text \<open>Adjacent swap of two non-interfering snaps in a happening leaves the numeric update unchanged --
-the inductive engine for full order-independence of @{const happening_num_update} (lift to arbitrary
-permutations of a pairwise-non-interfering happening is the remaining step).\<close>
+text \<open>Adjacent swap of two non-interfering snaps in a happening leaves the numeric update unchanged.
+Full order-independence is stated for the set-level update @{text happening_num_update_set} below; its
+agreement with @{const happening_num_update} over any distinct enumeration is
+@{text happening_num_update_set_eq_fold_list}
+(@{text \<open>Numeric_TA_Network/TP_NTA_Reduction_Numeric_Edges\<close>}).\<close>
 lemma happening_num_update_swap:
   assumes "upds_functional (upds a)" and "upds_functional (upds b)"
       and "\<not> num_mutex_snap_action a b"
@@ -504,7 +518,7 @@ lemma happening_num_update_swap:
   by (simp add: happening_num_update_Cons)
 
 text \<open>On a functional, pairwise-non-interfering set of snaps the per-snap updates commute, so
-@{const Finite_Set.fold} of @{const snap_num_update} is **order-independent** -- this is the set-level
+@{const Finite_Set.fold} of @{const snap_num_update} is @{emph \<open>order-independent\<close>} -- this is the set-level
 numeric happening update, the abstract analog of PDDL's
 @{text same_actions_then_happening_numeric_update_function_equal}. The two hypotheses hold for a real
 happening: @{term \<open>upds a\<close>} is functional by construction (same-fluent effects are combined into one), and pairwise
@@ -1001,8 +1015,9 @@ definition satisfies_duration_bounds::"'action \<Rightarrow> 'time \<Rightarrow>
   ub = satisfies_upper_bound (upper a) t
   in lb \<and> ub
 "
-(* An action with a duration of 0 is an instant snap-action. We restrict this to 0 < d for some 
-proofs, because of how some automata are constructed. *)
+(* An action with a duration of 0 is instantaneous: its start and end snaps happen at the same time.
+Only 0 <= d is required; where a positive duration is needed (e.g. is_starting_action_plan_exD in
+Temporal_Plans_Lemmas), 0 < d is derived from the happening sequence. *)
 definition durations_ge_0::bool where
 "durations_ge_0 \<equiv> \<forall>a t d. (a, t, d) \<in> ran \<pi> \<longrightarrow> 0 \<le> d"
 
@@ -1034,7 +1049,6 @@ definition no_self_overlap::"bool" where
   \<and> Some (a, u, e) = \<pi> j
   \<and> t \<le> u \<and> u \<le> t + d)"
 
-(* move this *)
 definition mutex_valid_plan_inj::bool where
 "mutex_valid_plan_inj \<equiv> 
   (\<forall>a ta da b tb db. 
@@ -1062,10 +1076,11 @@ definition nm_anno_act_seq where
 
 subsubsection \<open>Non-Interference w.r.t the Happening Sequence\<close>
 
-text \<open>This definition comes from the statement in \<^cite>\<open>giganteDecidabilityComplexityActionBased2020\<close>, that every at-start 
-snap-action interferes with itself for self-overlap. Therefore, we can assume the same for at-end
-snap-actions. Moreover, in their definition of a planning problem, the assumption is made that 
-no two actions share snap-actions. at-start(a) \<noteq> at-start(b) and at-start(a) \<noteq> at-end(b) and at-start(a) \<noteq> at-end(a).\<close>
+text \<open>Non-interference of a happening sequence: two snap-action occurrences less than @{text \<epsilon>}
+apart must not be mutex, unless they are the same snap at the same time, and neither may two distinct
+snaps at the same time. This follows the non-interference condition of
+\<^cite>\<open>giganteDecidabilityComplexityActionBased2020\<close>, where an at-start snap action is also taken to
+interfere with itself, which excludes self-overlap.\<close>
 
 definition nm_happ_seq::"('time \<times> 'snap_action) set \<Rightarrow> bool" where
 "nm_happ_seq B \<equiv> 
@@ -1494,7 +1509,7 @@ proof -
   qed
 qed
 
-text \<open>**Conservativity lemma.** With empty numeric data the numeric state-sequence
+text \<open>@{emph \<open>Conservativity lemma.\<close>} With empty numeric data the numeric state-sequence
 validity is @{emph \<open>definitionally\<close>} the propositional one on the @{term fst} projection, plus a
 constant valuation. So the numeric semantics conservatively generalises the propositional one: every
 propositional plan lifts (pick any constant valuation), and certifying the empty-numeric task is the
@@ -1554,7 +1569,7 @@ definition num_valid_plan :: bool where
     \<and> num_mutex_valid_plan
     \<and> finite_plan"
 
-text \<open>**Migration lemma for plan validity** (the capstone of the migration story). With empty numeric
+text \<open>@{emph \<open>Migration lemma for plan validity\<close>} (the capstone of the migration story). With empty numeric
 data and no numeric goal, numeric plan validity is the propositional one: forward via the two component
 migrations; backward by the constant-valuation witness @{term \<open>M i = (M' i, num_init)\<close>}. (Finite
 happenings -- the @{term finhap} hypothesis -- follow from @{const finite_plan} via
@@ -1611,8 +1626,9 @@ qed
 text \<open>General projection, the non-empty generalisation of
 \<open>num_valid_plan_empty\<close>: numeric conditions only add constraints, so the propositional projection
 \<open>\<lambda>i. fst (M i)\<close> of a numerically valid plan is propositionally valid -- unconditionally (no
-empty-numeric hypotheses). It feeds the numeric capstone: project to \<open>valid_plan\<close>, reuse the
-existing reduction's goal-reaching run, then track the numerics on top.\<close>
+empty-numeric hypotheses). With \<open>num_mutex_valid_plan_imp_mutex\<close> it gives
+\<open>num_valid_plan_imp_valid_plan\<close>, a sanity check that the numeric semantics refines the
+propositional one.\<close>
 lemma num_valid_state_sequence_imp_valid:
   assumes "num_valid_state_sequence M"
   shows "valid_state_sequence (\<lambda>i. fst (M i))"
@@ -3286,48 +3302,6 @@ proof -
 qed
 
 
-(* Todo: Maybe move or delete
-text \<open>Move to other locale\<close>
-lemma plan_acts_mod_props_nm_happ_seq_equiv: "nm_happ_seq (plan_happ_seq) 
-  \<longleftrightarrow> rtf.nm_happ_seq (plan_happ_seq)"
-proof -
-  from plan_acts_mod_props
-  have "const_resp_happ_seq" using cr_plan_cr_happ_seq by blast
-  from this[simplified const_resp_happ_seq_def]
-  have "\<forall>s t a b. a \<in> happ_at (plan_happ_seq) s \<and> b \<in> happ_at (plan_happ_seq) t
-    \<longrightarrow> (mutex_snap_action a b \<longleftrightarrow> rtf.mutex_snap_action a b)" unfolding mutex_snap_action_def 
-    apply -
-    apply (intro allI; rule impI; rule iffI; erule conjE)
-     apply (elim disjE)
-    subgoal for s t a b
-      apply (frule spec, drule bspec[where x = a], assumption)
-      apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre_restr_def snap_mod_props_def by auto
-    subgoal for s t a b
-      apply (frule spec, drule bspec[where x = a], assumption)
-      apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre_restr_def by auto
-    subgoal for s t a b
-      apply (frule spec, drule bspec[where x = a], assumption)
-      apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre_restr_def snap_mod_props_def by auto
-    subgoal for s t a b
-      apply (frule spec, drule bspec[where x = a], assumption)
-      apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre_restr_def by auto
-    subgoal for s t a b
-      apply (frule spec, drule bspec[where x = a], assumption)
-      apply (drule spec, drule bspec[where x = b], assumption)
-      unfolding pre_restr_def by auto
-    done
-  thus ?thesis unfolding nm_happ_seq_def by blast
-qed
- *)
-
-text \<open>An attempt was made to remove these assumptions by proving that constants in a plan are
-      indeed constant. However, this only works for the direction of the proof that does not 
-      need it.\<close>
-
 lemma plan_acts_mod_props_mutex_plan_equiv:
   "mutex_valid_plan \<longleftrightarrow> rtf.mutex_valid_plan"
 proof -
@@ -3596,57 +3570,4 @@ sublocale temp_plan_nso_dg0
   by unfold_locales
 end
 
-
-(* To do: Replacement of definitions on domain actions. The locale to do that. *)
-(* To do: Conditions on props (fluents?) on domain actions *)
-
-(* 
-locale temp_plan_for_actions = 
-  temp_plan_defs at_start at_end over_all lower upper pre adds dels init goal \<epsilon> \<pi>
-    for at_start::"'action  \<Rightarrow> 'snap_action" 
-    and at_end::  "'action  \<Rightarrow> 'snap_action"
-    and over_all::"'action  \<Rightarrow> 'proposition set"
-    and lower::   "'action  \<rightharpoonup> ('time::time) lower_bound"
-    and upper::   "'action  \<rightharpoonup> 'time upper_bound"
-    and pre::     "'snap_action \<Rightarrow> 'proposition set"
-    and adds::    "'snap_action \<Rightarrow> 'proposition set"
-    and dels::    "'snap_action \<Rightarrow> 'proposition set"
-    and init::"'proposition set"
-    and goal::"'proposition set"
-    and \<epsilon>::"'time"
-    and \<pi>::"('i, 'action, 'time::time) temp_plan" +
-  fixes actions:: "'action set"
-  assumes pap: "\<forall>(a, t, d) \<in> ran \<pi>. a \<in> actions"
-begin
-
-lemma exists_actions_happening_at_time_index:
-  assumes "i < length htpl"
-  shows "\<exists>a \<in> actions. (time_index i, at_start a) \<in> plan_happ_seq \<or> (time_index i, at_end a) \<in> plan_happ_seq"
-  apply (insert time_index_htpsD[OF assms])
-  apply (erule htpsE)
-  subgoal for a t d
-    apply (rule bexI[of _ a])
-    apply (rule disjI1)
-    unfolding plan_happ_seq_def apply blast
-    using pap by blast
-  subgoal for a t d
-    apply (rule bexI[of _ a])
-    apply (rule disjI2)
-    unfolding plan_happ_seq_def apply blast
-    using pap by blast
-  done
-lemma actions_at_time_index_cases:
-  assumes  "i < length htpl"
-    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> thesis"
-    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
-  shows thesis using assms exists_actions_happening_at_time_index by blast
-
-lemma actions_at_time_index_exhaustive_cases:
-  assumes "i < length htpl"
-    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
-    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<in> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<notin> plan_happ_seq \<Longrightarrow> thesis"
-    and "\<And>a. a \<in> actions \<Longrightarrow> (time_index i, at_start a) \<notin> plan_happ_seq \<Longrightarrow> (time_index i, at_end a) \<in> plan_happ_seq \<Longrightarrow> thesis"
-  shows thesis using assms exists_actions_happening_at_time_index by blast
-end
- *)
 end
