@@ -1,5 +1,6 @@
 tp_cert
 out/*
+!out/plan_cert
 output.txt
 comple_sxml.err
 plan_cert.ast

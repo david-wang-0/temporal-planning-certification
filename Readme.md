@@ -34,6 +34,11 @@ earlier version without the numeric guards (branch `artifact-2026`, `plan_cert` 
 `611b70924b60…`). That version was sound, since fewer guards only allow more runs, but less
 precise, so results on problems whose unsolvability depends on numeric interference may differ.
 
+`ML/out/plan_cert` is the certifier built from this version (sha256
+`f5367170292fb62c33111255473171e8b78ddb30d9878abfa8674a4b29da04de`; Isabelle2025-2 with the AFP
+release afp-2026-10-06, MLton 20241230, GCC 16.2.1). It is not the binary of the paper's
+evaluation; `make build_certifier` (below) rebuilds it.
+
 `plan_cert -certify numeric-tchecker` ends in the capstone `check_and_cert_numeric_pddl_problem_okay`
 (`Numeric_Ground_PDDL_Exec_Imp/Numeric_Unsolvability_Export.thy`): when it reports
 "The numeric planning problem is unsolvable.", there is no `π` with `num_ground_plan_valid P π`,
