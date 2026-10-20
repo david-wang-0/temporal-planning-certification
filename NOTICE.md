@@ -16,8 +16,8 @@ distributed under GPL-3.0-or-later (`LICENSES/GPL-3.0.txt`). This includes a bin
 alongside this repository, such as `benchmarks/tools/plan_cert` in the TACAS artifact. The
 complete corresponding source is this repository: `ML/` with its submodules `ML/lib/parcom`,
 `ML/lib/cmlib` and `ML/lib/mlunta`, the exported code `ML/Check_Unsolvability.ML`, and the
-theories it is generated from. Build instructions are in `README.md`, "Building the executable
-encoder". Our sources remain under BSD-3-Clause. That licence, and the licences of the other
+theories it is generated from. Build instructions are in `README.md`, "Building the
+certifier". Our sources remain under BSD-3-Clause. That licence, and the licences of the other
 components linked into `plan_cert` (below), are compatible with GPL-3.0.
 
 ## SML libraries and code linked into `plan_cert`

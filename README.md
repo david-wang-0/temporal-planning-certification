@@ -1,26 +1,32 @@
-# This Repository
+# temporal-planning-certification
 
-This contains the original source code for our paper: "Formally Verified Certification of Unsolvability of Temporal Planning Problems"
+The source code for our paper "Formally Verified Certification of Unsolvability of Temporal
+Planning Problems": the reduction of temporal planning to timed automata and its correctness
+proofs in Isabelle/HOL, and `plan_cert`, the verified certifier of unsolvability built from them.
+[Index.thy](Index.thy) maps the theorems, lemmas and definitions of the paper to the theories.
 
-The theorems and lemmas from the paper can be found in [Index.thy](Index.thy).
-Follow the instructions in [Checking Isabelle Proofs and Exporting Code](#checking-isabelle-proofs-and-exporting-code) to navigate the project with jEdit.
-
-## This README
-This `README` contains instructions for:
-- Building, inspecting, and checking the Isabelle theories.
-- Generating code from the verified theories (optional).
-- Building a verified encoder for ground PDDL temporal planning problems to a network of timed automata.
-- Running the certifier, `plan_cert -certify numeric-tchecker`, on a PDDL problem.
-
-## Numeric extension (post-paper)
-
-The development now also certifies unsolvability of **numeric** temporal problems end to end:
-interval bound inference with relational (fluent-vs-fluent) guard refinement, nemo
-datalog-reachability pruning in the grounder, and a verified certifier capstone
+The development also certifies unsolvability of **numeric** temporal problems end to end (this
+part is not in the paper): interval bound inference with relational (fluent-vs-fluent) guard
+refinement, nemo datalog-reachability pruning in the grounder, and a verified certifier capstone
 (`check_and_cert_numeric_pddl_problem`) that hands the built network in-process to an external
 tck-reach oracle and checks the returned certificate with Munta's verified checker
 (`plan_cert -certify numeric-tchecker`, per-stage profiled). In the artifact, the benchmark
 harness is in the sibling folder `benchmarks/`.
+
+The code exported from the theories (`ML/Check_Unsolvability.ML`) and the certifier built from it
+(`ML/out/plan_cert`) are included, so the certifier can be run without Isabelle or MLton. This
+README covers:
+
+- [What is verified and what is trusted](#what-is-verified-and-what-is-trusted): what a verdict of
+  `plan_cert` guarantees.
+- [Checking the proofs and exporting the code](#checking-the-proofs-and-exporting-the-code-optional)
+  (optional): building the Isabelle theories, regenerating `ML/Check_Unsolvability.ML`, and
+  navigating the theories in Isabelle/jEdit.
+- [Building the certifier](#building-the-certifier-optional) (optional): compiling `plan_cert`
+  from the exported code with MLton.
+- [Running the certifier](#running-the-certifier): `plan_cert -certify numeric-tchecker` on a PDDL
+  problem.
+- [Third-party components and licences](#third-party-components-and-licences).
 
 ## What is verified and what is trusted
 
@@ -65,41 +71,23 @@ only when the expression is a single constant or a sum of constants: a product o
 would be scaled by K², a quotient not at all. Every duration in the benchmarks is a single constant
 (after static fluents are folded), so this does not arise there.
 
-# Third-party components and licences
-
-Our sources are under the BSD-3-Clause licence (`LICENSE`). Third-party material is listed in
-[NOTICE.md](NOTICE.md), with licence texts in `LICENSES/`. In short:
-
-- A built `plan_cert` binary is distributed under **GPL-3.0-or-later**: its PDDL parser uses the
-  GPL-licensed parcom library (`ML/lib/parcom`). The corresponding source is this repository.
-- The Python files (`run.py`, `convert_models/`) are from the artifact of Wimmer, Herbreteau and
-  van de Pol, FORMATS 2020 (https://doi.org/10.6084/m9.figshare.12620582, CC BY 4.0). Some of
-  them have been updated for compatibility with newer TChecker versions.
-- The SML libraries in `ML/lib/` are mlunta (Joshua von Mutius, BSD-3-Clause), CMlib (MIT),
-  parcom (GPL-3.0-or-later) and SML driver files of Munta from the AFP (`ML/lib/munta_util/`,
-  Simon Wimmer, BSD). This code is not critical for our correctness proofs.
-- `ML/Check_Unsolvability.ML` is generated from our theories together with Isabelle/HOL and
-  AFP entries, which are under BSD licences except for Show and parts of Deriving (LGPL 2.1).
-
-# How to use
+## Checking the proofs and exporting the code (optional)
 
 In the artifact, the instructions in the top-level README supersede this section: the PDDL
 semantics and the grounder sessions it needs are in sibling folders and are passed to Isabelle
 with `-d`, not registered as components.
 
-## Checking Isabelle Proofs and Exporting Code
-
-### Using Isabelle to check the formal proof and export code
-
-To build and check the formal proof and export code:
+To build and check the formal proof and export the code:
 
 ```shell
 isabelle build -d . -e PDDL_TP_Reduction
 ```
 
-`-d .` is necessary to ensure the code is exported into the right folder.
+`-d .` is necessary to ensure the code is exported into the right folder. The export regenerates
+`ML/Check_Unsolvability.ML`; with the same Isabelle and AFP versions it is byte-identical to the
+included file.
 
-### Navigating the contents of the files
+### Navigating the theories
 
 Build the Munta component:
 
@@ -118,35 +106,20 @@ Navigate to this directory in the jEdit UI.
 
 Open [Index.thy](Index.thy) for some pointers to relevant files.
 
-## Building the executable encoder
+## Building the certifier (optional)
 
-### Install GNU make
+`ML/out/plan_cert` is included; this rebuilds it from the exported code. It needs GNU make
+(https://www.gnu.org/software/make/#download) and MLton (http://www.mlton.org/Installation).
 
-See: https://www.gnu.org/software/make/#download
-
-### Install MLton
-
-Install MLton. See: http://www.mlton.org/Installation
-
-### Make Isabelle export code (optional)
-
-Follow the above steps to make Isabelle export code.
-
-### Build the Certifier
-
-Navigate to the `ML` folder:
+Navigate to the `ML` folder and build the certifier:
 
 ```shell
 cd ML
-```
-
-Build the Certifier:
-
-```shell
 make build_certifier
 ```
 
-The binary is `ML/out/plan_cert`.
+The binary is `ML/out/plan_cert`, overwriting the included one. The MLton build is reproducible:
+the same sources, MLton and C compiler give a byte-identical binary.
 
 ## Running the certifier
 
@@ -156,8 +129,8 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
 
 ### What it needs
 
-- `plan_cert`: in the artifact, `benchmarks/tools/plan_cert` (a build of this repository);
-  otherwise build it as above.
+- `plan_cert`: `ML/out/plan_cert` (in the artifact also `benchmarks/tools/plan_cert`, the same
+  binary); or build it as above.
 - `tck-reach` from [TChecker](https://github.com/ticktac-project/tchecker). The artifact's results
   were produced with TChecker master built 2026-07-26, included as `benchmarks/tools/tck-reach`;
   the earlier pipeline used commit
@@ -237,3 +210,19 @@ the AFP entry Munta_Certificate_Checker, checks it. Neither this repository nor 
 includes `muntac`, and the verified check now runs inside `plan_cert`, so `run.sh` is kept for
 reference only. `run.py` is the batch script of the FORMATS 2020 artifact; it calls a `muntac` build
 as well and is not used here.
+
+## Third-party components and licences
+
+Our sources are under the BSD-3-Clause licence (`LICENSE`). Third-party material is listed in
+[NOTICE.md](NOTICE.md), with licence texts in `LICENSES/`. In short:
+
+- A built `plan_cert` binary is distributed under **GPL-3.0-or-later**: its PDDL parser uses the
+  GPL-licensed parcom library (`ML/lib/parcom`). The corresponding source is this repository.
+- The Python files (`run.py`, `convert_models/`) are from the artifact of Wimmer, Herbreteau and
+  van de Pol, FORMATS 2020 (https://doi.org/10.6084/m9.figshare.12620582, CC BY 4.0). Some of
+  them have been updated for compatibility with newer TChecker versions.
+- The SML libraries in `ML/lib/` are mlunta (Joshua von Mutius, BSD-3-Clause), CMlib (MIT),
+  parcom (GPL-3.0-or-later) and SML driver files of Munta from the AFP (`ML/lib/munta_util/`,
+  Simon Wimmer, BSD). This code is not critical for our correctness proofs.
+- `ML/Check_Unsolvability.ML` is generated from our theories together with Isabelle/HOL and
+  AFP entries, which are under BSD licences except for Show and parts of Deriving (LGPL 2.1).
