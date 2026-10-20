@@ -5,7 +5,7 @@ This contains the original source code for our paper: "Formally Verified Certifi
 The theorems and lemmas from the paper can be found in [Index.thy](Index.thy).
 Follow the instructions in [Checking Isabelle Proofs and Exporting Code](#checking-isabelle-proofs-and-exporting-code) to navigate the project with jEdit.
 
-## This Readme
+## This README
 This `README` contains instructions for:
 - Building, inspecting, and checking the Isabelle theories.
 - Generating code from the verified theories (optional).
