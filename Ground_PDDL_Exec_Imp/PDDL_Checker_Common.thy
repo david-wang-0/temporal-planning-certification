@@ -452,7 +452,7 @@ context ast_cont_problem begin
   text \<open>Implementation of executable refinements for @{const acts_non_intrf} 
   \& @{const apply_ground_actions}\<close>
 
-  text \<open>a list of simulataneous \& non-interfering grounded actions are all applied at once\<close>
+  text \<open>a list of simultaneous \& non-interfering grounded actions are all applied at once\<close>
   fun apply_ground_actions_exec :: "ground_action list \<Rightarrow> world_model \<Rightarrow> world_model" where
     "apply_ground_actions_exec A\<^sub>i s = 
       ((let 
