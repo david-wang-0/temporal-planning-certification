@@ -2,7 +2,7 @@
 
 This folder is the development of the sibling folder `temporal-planning-certification/` (the version
 used for the paper's evaluation) with one correction made after the evaluation, described below.
-Everything else is the same: see that folder's `Readme.md` for what the development contains, what
+Everything else is the same: see that folder's `README.md` for what the development contains, what
 is verified and what is trusted, the third-party components and licences, and how to check the
 proofs, export the code, build the certifier and run it. All its instructions apply to this folder
 unchanged, run from here instead; the artifact's top-level `README.md` ("Two versions of the
