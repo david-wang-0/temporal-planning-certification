@@ -808,7 +808,7 @@ lemma net_bounds_refine:
   by auto
 
 
-text \<open>Refinining the initial configuration and formula\<close>
+text \<open>Refining the initial configuration and formula\<close>
 lemma init_locs_refine:
   "abstr_model_checking.reduction_ref_impl.init_locs = init_locs'"
   unfolding abstr_model_checking.reduction_ref_impl.init_locs_def

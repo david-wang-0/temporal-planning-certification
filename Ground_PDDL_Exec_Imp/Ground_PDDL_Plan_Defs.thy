@@ -370,7 +370,7 @@ qed
   (* Every ground action of a plan at a time point is in the induced happening sequence *)
   (* The induced happening sequence is well formed *)
   (* The actions at the time point are well formed *)
-  (* Application of well formed ground actions resutls in a well formed world model *)
+  (* Application of well formed ground actions results in a well formed world model *)
   (* Induction *)
 
 end

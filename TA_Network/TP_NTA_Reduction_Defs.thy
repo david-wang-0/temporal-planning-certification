@@ -226,9 +226,9 @@ in
 "
 
 text \<open>Checking that no interfering snap-action is starting is done with the clock constraints. It is
-enough to check that the end does not interfere with the start: interference is reflexive and the start
-clock has already been reset. (Interference is symmetric: assumption \<open>mutex_effects_sym\<close> of
-\<open>tp_nta_reduction_model_checking\<close>.)\<close>
+enough to check that the end does not interfere with the start: interference is symmetric (assumption
+\<open>mutex_effects_sym\<close> of \<open>tp_nta_reduction_model_checking\<close>) and the start clock has already been
+reset.\<close>
 definition instant_trans_edge::"'action 
   \<Rightarrow> nat 
     \<times> (String.literal, int) Simple_Expressions.bexp 

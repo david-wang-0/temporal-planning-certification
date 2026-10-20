@@ -185,7 +185,7 @@ lemma upds_no_cross_read_listD:
     shows "g = f"
   using assms unfolding upds_no_cross_read_list_def by fast
 
-text \<open>The numeric reduction propeItr: the spec locale plus well-formedness. \<open>upds\<close> is functional (one
+text \<open>The numeric reduction proper: the spec locale plus well-formedness. \<open>upds\<close> is functional (one
 assignment per fluent, from the grounder's combination-normalisation) and cross-read-free; per-fluent
 bounds are valid; the fluent variable names are injective and FRESH (disjoint from the propositional
 variable names, so numeric variables never gate a propositional edge -- the keystone of the
