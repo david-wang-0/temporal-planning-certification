@@ -3,9 +3,10 @@
 This folder is the development of the sibling folder `temporal-planning-certification/` (the version
 used for the paper's evaluation) with one correction made after the evaluation, described below.
 Everything else is the same: see that folder's `README.md` for what the development contains, what
-is verified and what is trusted, the third-party components and licences, and how to check the
-proofs, export the code, build the certifier and run it. All its instructions apply to this folder
-unchanged, run from here instead; the artifact's top-level `README.md` ("Two versions of the
+is verified and what is trusted, how to check the proofs and export the code, build the certifier
+and run it, and the third-party components and licences. All its instructions apply to this folder
+unchanged, run from here instead; like that folder, this one includes the exported code and the
+certifier built from it. The artifact's top-level `README.md` ("Two versions of the
 formalisation") says how the two folders are built side by side.
 
 ## What changed
@@ -16,7 +17,7 @@ actions that interfere only numerically (one writes a fluent the other reads or 
 (v)–(vii) of the paper's Definition 13) got no guard, unlike Definition 20 of the paper. This
 version guards both, in the formal model and in the executable certifier: an action's start, end
 and instant edges check the clocks of every snap action that interferes with it propositionally or
-numerically. The paragraph "One weakness: …" of the other folder's Readme ("What is verified and
+numerically. The paragraph "One weakness: …" of the other folder's README ("What is verified and
 what is trusted") therefore no longer applies. The old guards were a sound under-approximation
 (fewer guards only admit more runs, so an unreachable goal still means no valid plan exists), so no
 result of the paper is invalidated; they could only leave some unsolvable instances uncertified.
@@ -35,13 +36,13 @@ The evaluation results in `benchmarks/` were produced with the old binary.
   `18db4c263533cba009e58953c0c9abb9ba19bb20b06bb363b2eb523489f6ff11`).
 - Binary: `ML/out/plan_cert` is the certifier built from this version (sha256
   `f5367170292fb62c33111255473171e8b78ddb30d9878abfa8674a4b29da04de`; Isabelle2025-2 with the AFP
-  release afp-2026-10-06, MLton 20241230, GCC 16.2.1). It is not the paper's binary
-  (`benchmarks/tools/plan_cert`, sha256 `611b70924b60…`); `make -C ML build_certifier` reproduces it.
+  release afp-2026-10-06, MLton 20241230, GCC 16.2.1). It is not the paper's binary (the other
+  folder's `ML/out/plan_cert` = `benchmarks/tools/plan_cert`, sha256 `611b70924b60…`);
+  `make -C ML build_certifier` reproduces it.
   Networks for problems without numeric interference are identical; for the others the new guards
   add clock constraints to the edges.
 - Documentation: the export command is `isabelle build -d . -e Numeric_Ground_PDDL_Exec_Imp` (the
-  other folder's Readme names `PDDL_TP_Reduction`, which does not export the numeric certifier);
-  comments in the theories were refreshed and typos fixed.
+  other folder's README names `PDDL_TP_Reduction`, which does not export the numeric certifier).
 
 The provenance tags (`provenance` commands, see the artifact's `PROVENANCE.md`) cover the changed
 lines too: the fix was implemented by AI agents, so its lines are tagged `ai` and `ai_human`.
