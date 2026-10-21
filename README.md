@@ -21,7 +21,10 @@ numerically. The paragraph "One weakness: …" of the other folder's README ("Wh
 what is trusted") therefore no longer applies. The old guards were a sound under-approximation
 (fewer guards only admit more runs, so an unreachable goal still means no valid plan exists), so no
 result of the paper is invalidated; they could only leave some unsolvable instances uncertified.
-The evaluation results in `benchmarks/` were produced with the old binary.
+The paper's evaluation results in `benchmarks/` were produced with the old binary; a rerun of
+all 410 `ours` runs with this folder's binary (`benchmarks/results/results-ours-fixed.csv`, raw
+output in `benchmarks/results/benchexec/ours-fixed/`) certifies the same 75 instances, with no
+other change of outcome.
 
 - Formal model: the interference relation is a parameter `mutex_effects` of the reduction
   (`tp_nta_reduction_defs`, `TA_Network/TP_NTA_Reduction_Defs.thy`); the propositional reduction
