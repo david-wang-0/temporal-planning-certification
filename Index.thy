@@ -792,7 +792,13 @@ text \<open>Theorem 1 (main theorem: a valid plan implies that the goal location
   Proof (numeric extension):
 
     main theorem:
-      @{thm [source] numeric_tp_nta_reduction_correctness.num_valid_plan_imp_form_holds}
+      @{thm [source] numeric_ground_ast_problem_cert.num_valid_ground_plan_imp_num_form_holds}
+
+        (for one valid ground plan, with the locale assumptions discharged:
+        @{thm [source] numeric_valid_ground_plan_cert.num_valid_plan_imp_form_holds})
+
+      the proof, inside the locale:
+        @{thm [source] numeric_tp_nta_reduction_correctness.num_valid_plan_imp_form_holds}
 
       contrapositive, for executable certificate checking:
         @{thm [source] make_certified_numeric_net_okay}
