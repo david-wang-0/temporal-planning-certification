@@ -768,8 +768,10 @@ text \<open>Theorem 1 (main theorem: a valid plan implies that the goal location
     main theorem:
       @{thm [source] tp_nta_reduction_model_checking'.valid_temp_plan_imp_form_holds}
 
-        (the locale assumptions of @{locale tp_nta_reduction_correctness'} follow from the plan by
-        @{thm [source] tp_nta_reduction_model_checking'.valid_plan_imp_locale_inst})
+        the locale assumptions of @{locale tp_nta_reduction_correctness'} follow from the plan by:
+          @{thm [source] tp_nta_reduction_model_checking'.valid_plan_imp_locale_inst}
+
+        this is needed for the proof.
 
       the proof, inside the locale:
         @{thm [source] tp_nta_reduction_correctness.valid_plan_imp_form_holds}
@@ -780,7 +782,13 @@ text \<open>Theorem 1 (main theorem: a valid plan implies that the goal location
   Proof (numeric extension):
 
     main theorem:
-      @{thm [source] numeric_tp_nta_reduction_correctness.num_valid_plan_imp_form_holds}
+      @{thm [source] numeric_ground_ast_problem_cert.num_valid_ground_plan_imp_num_form_holds}
+                                                              
+        (for one valid ground plan, with the locale assumptions discharged:
+        @{thm [source] numeric_valid_ground_plan_cert.num_valid_plan_imp_form_holds})
+
+        the proof, inside the locale:
+          @{thm [source] numeric_tp_nta_reduction_correctness.num_valid_plan_imp_form_holds}
 
       contrapositive, for executable certificate checking:
         @{thm [source] make_certified_numeric_net_okay}
