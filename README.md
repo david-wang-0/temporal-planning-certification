@@ -153,26 +153,24 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
 
 ### Command
 
-In the artifact, from its root directory:
+`plan_cert` reads lifted PDDL and grounds it itself. In the artifact, from its root directory:
 
 ```shell
 T=$PWD/benchmarks/tools/ours
-E=temporal-planning-certification/examples/ground
+B=benchmarks/benchmarks/MatchCellar-impossible
 W=$(mktemp -d)
 env TCHECKER_PKG_ROOT=$T TCK_REACH_BIN=$T/tck-reach NMO=$T/nmo $T/plan_cert -certify numeric-tchecker \
-  -domain $E/MatchCellar-impossible/instance_03_domain.pddl \
-  -problem $E/MatchCellar-impossible/instance_03_problem.pddl \
+  -domain $B/domain.pddl -problem $B/instances/instance_3.pddl \
   -model $W/model.muntax -renaming $W/renaming.json -certificate $W/cert.bin
 ```
 
 Outside the artifact, from this directory, with `tck-reach` copied here and `nmo` on `PATH`, the
-defaults apply:
+defaults apply; `DOMAIN` and `PROBLEM` are a PDDL domain and problem file, e.g. a benchmark
+instance:
 
 ```shell
 W=$(mktemp -d)
-./ML/out/plan_cert -certify numeric-tchecker \
-  -domain examples/ground/MatchCellar-impossible/instance_03_domain.pddl \
-  -problem examples/ground/MatchCellar-impossible/instance_03_problem.pddl \
+./ML/out/plan_cert -certify numeric-tchecker -domain DOMAIN -problem PROBLEM \
   -model $W/model.muntax -renaming $W/renaming.json -certificate $W/cert.bin
 ```
 
@@ -181,12 +179,13 @@ the binary certificate. Next to the certificate, `plan_cert` also writes the TCh
 (`<certificate>.tck`) and the zone graph that tck-reach returns (`<certificate>.dot`). `-num-threads N`
 (default 1) sets the threads of the certificate check.
 
-### Examples and output
+### Output
 
-| example in `examples/ground/` | expected lines near the end of the output |
-|---|---|
-| `MatchCellar-impossible/instance_03_domain.pddl`, `instance_03_problem.pddl` | `Certificate was accepted`, then `The numeric planning problem is unsolvable.` |
-| `MatchCellar-possible/instance_solvable_domain.pddl`, `instance_solvable_problem.pddl` (solvable) | `Certificate was rejected`, then `Something went wrong.` |
+On the instance above, the output ends with `Certificate was accepted`, then
+`The numeric planning problem is unsolvable.` and the stage lines. The paper's MatchCellar
+examples in `examples/matchcellar/` give no verdict: with the counter `matches-lit`, the bound
+inference finds no upper bound, and `plan_cert` prints
+`numeric bound inference failed (a fluent is unbounded or out of scope)`.
 
 `The numeric planning problem is unsolvable.` is printed only by the verified capstone, after the
 checker has accepted the certificate; it is the verdict. A rejected certificate is no verdict: it
