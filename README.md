@@ -130,8 +130,9 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
   `benchmarks/tools/ours/`) and `python3` on `PATH`. The two conversions `plan_cert` runs use only the
   Python standard library; pydot is needed only by `convert_models/model_to_dot.py`, which
   `plan_cert` does not call. So a direct call needs no virtual environment.
-- Optionally `nmo` from [Nemo v0.10.0](https://github.com/knowsys/nemo/releases/tag/v0.10.0), which
-  prunes unreachable action instances during grounding; in the artifact, `benchmarks/tools/ours/nmo`.
+- `nmo` from [Nemo v0.10.0](https://github.com/knowsys/nemo/releases/tag/v0.10.0): the grounder keeps
+  only the action instances that Nemo finds reachable in the delete relaxation; in the artifact,
+  `benchmarks/tools/ours/nmo`.
 
 `plan_cert` finds these through environment variables:
 
