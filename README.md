@@ -102,11 +102,12 @@ Open [Index.thy](Index.thy) for some pointers to relevant files.
 `ML/out/plan_cert` is included; this rebuilds it from the exported code. It needs GNU make
 (https://www.gnu.org/software/make/#download) and MLton (http://www.mlton.org/Installation).
 
-Navigate to the `ML` folder and build the certifier:
+Navigate to the `ML` folder and build the certifier (`-B` forces the build: otherwise `make` sees
+the included binary as up to date):
 
 ```sh
 cd ML
-make build_certifier
+make -B build_certifier
 ```
 
 The binary is `ML/out/plan_cert`, overwriting the included one.
