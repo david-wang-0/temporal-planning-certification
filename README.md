@@ -129,18 +129,18 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
 
 ### What it needs
 
-- `plan_cert`: `ML/out/plan_cert` (in the artifact also `benchmarks/tools/plan_cert`, the same
+- `plan_cert`: `ML/out/plan_cert` (in the artifact also `benchmarks/tools/ours/plan_cert`, the same
   binary); or build it as above.
 - `tck-reach` from [TChecker](https://github.com/ticktac-project/tchecker). The artifact's results
-  were produced with TChecker master built 2026-07-26, included as `benchmarks/tools/tck-reach`;
+  were produced with TChecker master built 2026-07-26, included as `benchmarks/tools/ours/tck-reach`;
   the earlier pipeline used commit
   [d711ace](https://github.com/ticktac-project/tchecker/commit/d711ace9ff754d8d952f5d491a31591115300c7f).
 - The `convert_models` Python package (in this directory; in the artifact also in
-  `benchmarks/tools/`) and `python3` on `PATH`. The two conversions `plan_cert` runs use only the
+  `benchmarks/tools/ours/`) and `python3` on `PATH`. The two conversions `plan_cert` runs use only the
   Python standard library; pydot is needed only by `convert_models/model_to_dot.py`, which
   `plan_cert` does not call. So a direct call needs no virtual environment.
 - Optionally `nmo` from [Nemo v0.10.0](https://github.com/knowsys/nemo/releases/tag/v0.10.0), which
-  prunes unreachable action instances during grounding; in the artifact, `benchmarks/tools/nmo`.
+  prunes unreachable action instances during grounding; in the artifact, `benchmarks/tools/ours/nmo`.
 
 `plan_cert` finds these through environment variables:
 
@@ -156,7 +156,7 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
 In the artifact, from its root directory:
 
 ```shell
-T=$PWD/benchmarks/tools
+T=$PWD/benchmarks/tools/ours
 E=temporal-planning-certification/examples/ground
 W=$(mktemp -d)
 env TCHECKER_PKG_ROOT=$T TCK_REACH_BIN=$T/tck-reach NMO=$T/nmo $T/plan_cert -certify numeric-tchecker \
