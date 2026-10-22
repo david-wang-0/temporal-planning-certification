@@ -18,9 +18,9 @@ actions that interfere only numerically (one writes a fluent the other reads or 
 version guards both, in the formal model and in the executable certifier: an action's start, end
 and instant edges check the clocks of every snap action that interferes with it propositionally or
 numerically. The paragraph "One weakness: …" of the other folder's README ("What is verified and
-what is trusted") therefore no longer applies. The old guards were a sound under-approximation
-(fewer guards only admit more runs, so an unreachable goal still means no valid plan exists), so no
-result of the paper is invalidated; they could only leave some unsolvable instances uncertified.
+what is trusted") therefore no longer applies. With the old guards the network was a sound
+over-approximation with respect to reachability (fewer guards only admit more runs, so an
+unreachable goal still means no valid plan exists), so no result of the paper is invalidated; they could only leave some unsolvable instances uncertified.
 The paper's evaluation results in `benchmarks/` were produced with the old binary; a rerun of
 all 410 `ours` runs with this folder's binary (the artifact's `benchmarks-ours-rerun/`, kept apart from the
 paper's data) certifies the same 75 instances, with no other change of outcome.
