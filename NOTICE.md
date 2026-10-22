@@ -13,7 +13,7 @@ GPL-3.0-or-later. The parser is part of every build: `ML/plan_cert/src/plan_cert
 `ML/lib/parcom/src/{parse,charparse,tokparse,langparse}.sml`. A `plan_cert` binary built from this
 repository (`make build_certifier` in `ML/`) is therefore a combined work, and it may only be
 distributed under GPL-3.0-or-later (`LICENSES/GPL-3.0.txt`). This includes a binary shipped
-alongside this repository, such as `benchmarks/tools/plan_cert` in the TACAS artifact. The
+alongside this repository, such as `benchmarks/tools/ours/plan_cert` in the TACAS artifact. The
 complete corresponding source is this repository: `ML/` with its submodules `ML/lib/parcom`,
 `ML/lib/cmlib` and `ML/lib/mlunta`, the exported code `ML/Check_Unsolvability.ML`, and the
 theories it is generated from. Build instructions are in `README.md`, "Building the executable

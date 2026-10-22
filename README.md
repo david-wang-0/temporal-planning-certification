@@ -39,7 +39,7 @@ paper's data) certifies the same 75 instances, with no other change of outcome.
 - Binary: `ML/out/plan_cert` is the certifier built from this version (sha256
   `f5367170292fb62c33111255473171e8b78ddb30d9878abfa8674a4b29da04de`; Isabelle2025-2 with the AFP
   release afp-2026-10-06, MLton 20241230, GCC 16.2.1). It is not the paper's binary (the other
-  folder's `ML/out/plan_cert` = `benchmarks/tools/plan_cert`, sha256 `611b70924b60…`);
+  folder's `ML/out/plan_cert` = `benchmarks/tools/ours/plan_cert`, sha256 `611b70924b60…`);
   `make -C ML build_certifier` reproduces it.
   Networks for problems without numeric interference are identical; for the others the new guards
   add clock constraints to the edges.
