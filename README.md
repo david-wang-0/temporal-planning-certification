@@ -118,7 +118,7 @@ The binary is `ML/out/plan_cert`, overwriting the included one.
 the PDDL problem and runs the verified capstone, which builds the timed-automata network, hands it
 to the external tck-reach oracle and checks the returned certificate with Munta's verified checker.
 
-### What it needs
+### Requirements
 
 - `plan_cert`: `ML/out/plan_cert` (in the artifact also `benchmarks/tools/ours/plan_cert`, the same
   binary); or build it as above.
