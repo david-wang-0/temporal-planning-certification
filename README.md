@@ -84,8 +84,7 @@ isabelle build -d . -e PDDL_TP_Reduction
 ```
 
 `-d .` is necessary to ensure the code is exported into the right folder. The export regenerates
-`ML/Check_Unsolvability.ML`; with the same Isabelle and AFP versions it is byte-identical to the
-included file.
+`ML/Check_Unsolvability.ML`.
 
 ### Navigating the theories
 
@@ -118,8 +117,7 @@ cd ML
 make build_certifier
 ```
 
-The binary is `ML/out/plan_cert`, overwriting the included one. The MLton build is reproducible:
-the same sources, MLton and C compiler give a byte-identical binary.
+The binary is `ML/out/plan_cert`, overwriting the included one.
 
 ## Running the certifier
 
