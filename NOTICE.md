@@ -6,19 +6,12 @@ binary built from it. Licence texts that do not ship with a component are in `LI
 
 ## The `plan_cert` binary is GPL-3.0-or-later
 
-The PDDL parser of `plan_cert` (`ML/plan_cert/src/parsing/pddl_refactor.sml`) is written with the
-parser combinators of parcom (`ParserCombinators`, `CharParser`, `TokenParser`), which is under
-GPL-3.0-or-later. The parser is part of every build: `ML/plan_cert/src/plan_cert.mlb` includes
-`parsing/pddl_validate_plan.mlb`, which includes `ML/plan_cert/imports/parcom.mlb`, which compiles
-`ML/lib/parcom/src/{parse,charparse,tokparse,langparse}.sml`. A `plan_cert` binary built from this
-repository (`make build_certifier` in `ML/`) is therefore a combined work, and it may only be
-distributed under GPL-3.0-or-later (`LICENSES/GPL-3.0.txt`). This includes a binary shipped
-alongside this repository, such as `benchmarks/tools/ours/plan_cert` in the TACAS artifact. The
-complete corresponding source is this repository: `ML/` with its submodules `ML/lib/parcom`,
-`ML/lib/cmlib` and `ML/lib/mlunta`, the exported code `ML/Check_Unsolvability.ML`, and the
-theories it is generated from. Build instructions are in `README.md`, "Building the executable
-encoder". Our sources remain under BSD-3-Clause. That licence, and the licences of the other
-components linked into `plan_cert` (below), are compatible with GPL-3.0.
+The PDDL parser of `plan_cert` uses the parcom library (`ML/lib/parcom`, GPL-3.0-or-later), so
+every `plan_cert` binary built from this repository, including `ML/out/plan_cert`, may only be
+distributed under GPL-3.0-or-later (`LICENSES/GPL-3.0.txt`). Its complete corresponding source is
+this repository: `ML/` with `ML/lib/`, the exported code `ML/Check_Unsolvability.ML` and the
+theories it is generated from. Our sources remain under BSD-3-Clause, which, like the licences of
+the other components linked into `plan_cert` (below), is compatible with GPL-3.0.
 
 ## SML libraries and code linked into `plan_cert`
 
