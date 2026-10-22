@@ -82,7 +82,7 @@ isabelle build -d . -e PDDL_TP_Reduction
 
 Build the Munta component:
 
-```
+```shell
 isabelle build -b Munta_Certificate_Checker
 ```
 This avoids a long startup time.
