@@ -65,37 +65,26 @@ scales constant leaves; both hold for the benchmarks.
 
 ## Checking the proofs and exporting the code (optional)
 
-In the artifact, the instructions in the top-level README supersede this section: the PDDL
-semantics and the grounder sessions it needs are in sibling folders and are passed to Isabelle
-with `-d`, not registered as components.
-
-To build and check the formal proof and export the code:
+The sessions build on `formal-pddl-semantics`, `pddl-grounding` and `isabelle-provenance`, which
+must be registered as Isabelle components (in the artifact they are sibling folders; its top-level
+README, "Checking the proofs", shows how). From this directory:
 
 ```sh
-isabelle build -d . -e PDDL_TP_Reduction
+isabelle build -d . PDDL_TP_Reduction_Index            # check all proofs and Index.thy
+isabelle build -d . -e Numeric_Ground_PDDL_Exec_Imp    # regenerate ML/Check_Unsolvability.ML
 ```
 
-`-d .` is necessary to ensure the code is exported into the right folder. The export regenerates
-`ML/Check_Unsolvability.ML`.
+`-d .` makes the export land in this folder.
 
 ### Navigating the theories
 
-Build the Munta component:
-
 ```sh
-isabelle build -b Munta_Certificate_Checker
-```
-This avoids a long startup time.
-
-Start Isabelle/jEdit in this directory with the Munta component loaded:
-
-```sh
-isabelle jedit -d . -l Munta_Certificate_Checker
+isabelle build -b -d . Numeric_Ground_PDDL_Exec_Imp
+isabelle jedit -d . -l Numeric_Ground_PDDL_Exec_Imp Index.thy
 ```
 
-Navigate to this directory in the jEdit UI.
-
-Open [Index.thy](Index.thy) for some pointers to relevant files.
+The first command builds the heap jEdit loads (the full check already leaves it behind), so
+jEdit does not build it at start-up. [Index.thy](Index.thy) maps the paper to the theories.
 
 ## Building the certifier (optional)
 
