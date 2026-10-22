@@ -10,8 +10,8 @@ part is not in the paper): interval bound inference with relational (fluent-vs-f
 refinement, nemo datalog-reachability pruning in the grounder, and a verified certifier capstone
 (`check_and_cert_numeric_pddl_problem`) that hands the built network in-process to an external
 tck-reach oracle and checks the returned certificate with Munta's verified checker
-(`plan_cert -certify numeric-tchecker`, per-stage profiled). In the artifact, the benchmark
-harness is in the sibling folder `benchmarks/`.
+(`plan_cert -certify numeric-tchecker`, per-stage profiled). In the artifact, the benchmarks,
+the solver binaries and our results are in the sibling folder `benchmarks/`.
 
 The code exported from the theories (`ML/Check_Unsolvability.ML`) and the certifier built from it
 (`ML/out/plan_cert`) are included, so the certifier can be run without Isabelle or MLton. This
@@ -199,7 +199,7 @@ of each stage in milliseconds, in the order `ground`, `infer-box`, `write-muntax
 The exit status does not tell the verdict: `plan_cert` exits with 0 also after a rejected
 certificate and after a failed external stage (such as the converter not being found). Exit status
 1 comes only from some errors: a parse error, or an uncaught exception such as a missing
-`tck-reach`. Read the verdict from the output; the benchmark harness does so too.
+`tck-reach`. Read the verdict from the output; our benchmark runs did so too.
 
 ### The earlier pipeline (`run.sh`, `run.py`)
 
