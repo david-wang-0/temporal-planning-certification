@@ -99,9 +99,7 @@ addition to ours.
 
 | file | origin | licence |
 |---|---|---|
-| `run.py` | unchanged from the artifact of Wimmer, Herbreteau, van de Pol, "Certifying Emptiness of Timed Büchi Automata", FORMATS 2020: <https://doi.org/10.6084/m9.figshare.12620582> | CC BY 4.0 (<https://creativecommons.org/licenses/by/4.0/>) |
-| `convert_models/` | from the same artifact, four files modified by us; `scc.py` from an ActiveState Code recipe by Mark Dickinson. Details in `convert_models/NOTICE.md` | CC BY 4.0; `scc.py`: MIT (text in `convert_models/NOTICE.md`) |
-| `run.sh` | its `getopts` loop follows the Stack Overflow answer by Bruno Bronosky, <https://stackoverflow.com/a/14203146> | Stack Overflow content of that date: CC BY-SA 3.0 |
+| `convert_models/` | from the artifact of Wimmer, Herbreteau, van de Pol, "Certifying Emptiness of Timed Büchi Automata", FORMATS 2020: <https://doi.org/10.6084/m9.figshare.12620582>, four files modified by us; `scc.py` from an ActiveState Code recipe by Mark Dickinson. Details in `convert_models/NOTICE.md` | CC BY 4.0; `scc.py`: MIT (text in `convert_models/NOTICE.md`) |
 
 ## Example instances
 

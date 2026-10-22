@@ -123,9 +123,7 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
 - `plan_cert`: `ML/out/plan_cert` (in the artifact also `benchmarks/tools/ours/plan_cert`, the same
   binary); or build it as above.
 - `tck-reach` from [TChecker](https://github.com/ticktac-project/tchecker). The artifact's results
-  were produced with TChecker master built 2026-07-26, included as `benchmarks/tools/ours/tck-reach`;
-  the earlier pipeline used commit
-  [d711ace](https://github.com/ticktac-project/tchecker/commit/d711ace9ff754d8d952f5d491a31591115300c7f).
+  were produced with TChecker master built 2026-07-26, included as `benchmarks/tools/ours/tck-reach`.
 - The `convert_models` Python package (in this directory; in the artifact also in
   `benchmarks/tools/ours/`) and `python3` on `PATH`. The two conversions `plan_cert` runs use only the
   Python standard library; pydot is needed only by `convert_models/model_to_dot.py`, which
@@ -192,15 +190,6 @@ certificate and after a failed external stage (such as the converter not being f
 1 comes only from some errors: a parse error, or an uncaught exception such as a missing
 `tck-reach`. Read the verdict from the output; our benchmark runs did so too.
 
-### The earlier pipeline (`run.sh`, `run.py`)
-
-`run.sh` runs the earlier multi-step pipeline: `plan_cert` writes the network and the renaming in
-separate calls, the Python converters and tck-reach produce the certificate, and `muntac`, built from
-the AFP entry Munta_Certificate_Checker, checks it. Neither this repository nor the artifact
-includes `muntac`, and the verified check now runs inside `plan_cert`, so `run.sh` is kept for
-reference only. `run.py` is the batch script of the FORMATS 2020 artifact; it calls a `muntac` build
-as well and is not used here.
-
 ## Third-party components and licences
 
 Our sources are under the BSD-3-Clause licence (`LICENSE`). Third-party material is listed in
@@ -208,9 +197,9 @@ Our sources are under the BSD-3-Clause licence (`LICENSE`). Third-party material
 
 - A built `plan_cert` binary is distributed under **GPL-3.0-or-later**: its PDDL parser uses the
   GPL-licensed parcom library (`ML/lib/parcom`). The corresponding source is this repository.
-- The Python files (`run.py`, `convert_models/`) are from the artifact of Wimmer, Herbreteau and
+- The Python package `convert_models/` is from the artifact of Wimmer, Herbreteau and
   van de Pol, FORMATS 2020 (https://doi.org/10.6084/m9.figshare.12620582, CC BY 4.0). Some of
-  them have been updated for compatibility with newer TChecker versions.
+  its files have been updated for compatibility with newer TChecker versions.
 - The SML libraries in `ML/lib/` are mlunta (Joshua von Mutius, BSD-3-Clause), CMlib (MIT),
   parcom (GPL-3.0-or-later) and SML driver files of Munta from the AFP (`ML/lib/munta_util/`,
   Simon Wimmer, BSD). This code is not critical for our correctness proofs.
