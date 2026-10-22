@@ -138,8 +138,7 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
 - The `convert_models` Python package (in this directory; in the artifact also in
   `benchmarks/tools/`) and `python3` on `PATH`. The two conversions `plan_cert` runs use only the
   Python standard library; pydot is needed only by `convert_models/model_to_dot.py`, which
-  `plan_cert` does not call. So a direct call needs no virtual environment; the one that
-  `benchmarks/setup.sh` creates is for the benchmark harness.
+  `plan_cert` does not call. So a direct call needs no virtual environment.
 - Optionally `nmo` from [Nemo v0.10.0](https://github.com/knowsys/nemo/releases/tag/v0.10.0), which
   prunes unreachable action instances during grounding; in the artifact, `benchmarks/tools/nmo`.
 
@@ -194,7 +193,7 @@ checker has accepted the certificate; it is the verdict. A rejected certificate 
 does not mean that the problem is solvable. The lines `+ STAGE <name>: <ms> ms` give the wall time
 of each stage in milliseconds, in the order `ground`, `infer-box`, `write-muntax`, `renaming`,
 `write-renaming`, `convert-tck`, `tck`, `convert-back`, `read-cert`, `check` (in the artifact,
-`benchmarks/README.md`, "What is measured", says what each covers). The last line,
+`benchmarks/results/README.md`, "Columns", says what each covers). The last line,
 `+ Total Time: : <s>`, is the total in seconds.
 
 The exit status does not tell the verdict: `plan_cert` exits with 0 also after a rejected
