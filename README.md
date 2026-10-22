@@ -71,7 +71,7 @@ with `-d`, not registered as components.
 
 To build and check the formal proof and export the code:
 
-```shell
+```sh
 isabelle build -d . -e PDDL_TP_Reduction
 ```
 
@@ -82,14 +82,14 @@ isabelle build -d . -e PDDL_TP_Reduction
 
 Build the Munta component:
 
-```shell
+```sh
 isabelle build -b Munta_Certificate_Checker
 ```
 This avoids a long startup time.
 
 Start Isabelle/jEdit in this directory with the Munta component loaded:
 
-```shell
+```sh
 isabelle jedit -d . -l Munta_Certificate_Checker
 ```
 
@@ -104,7 +104,7 @@ Open [Index.thy](Index.thy) for some pointers to relevant files.
 
 Navigate to the `ML` folder and build the certifier:
 
-```shell
+```sh
 cd ML
 make build_certifier
 ```
@@ -145,7 +145,7 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
 
 `plan_cert` reads lifted PDDL and grounds it itself. In the artifact, from its root directory:
 
-```shell
+```sh
 T=$PWD/benchmarks/tools/ours
 B=benchmarks/benchmarks/MatchCellar-impossible
 W=$(mktemp -d)
@@ -158,7 +158,7 @@ Outside the artifact, from this directory, with `tck-reach` copied here and `nmo
 defaults apply; `DOMAIN` and `PROBLEM` are a PDDL domain and problem file, e.g. a benchmark
 instance:
 
-```shell
+```sh
 W=$(mktemp -d)
 ./ML/out/plan_cert -certify numeric-tchecker -domain DOMAIN -problem PROBLEM \
   -model $W/model.muntax -renaming $W/renaming.json -certificate $W/cert.bin
