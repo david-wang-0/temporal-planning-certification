@@ -11,7 +11,7 @@
      - numeric EFFECTS and numeric DURATION constraints ARE allowed and are kept.
 
    So this grounder does the TFD-style delete-relaxation of numeric PRECONDITIONS while
-   KEEPING numeric effects (cf. David's recipe):
+   KEEPING numeric effects:
      (1) instantiate each lifted temporal action schema over the objects (type-consistent,
          honouring subtypes) and substitute the parameters;
      (2) constant-fold ground (in)equalities (= o1 o2) by object identity -- dropping a

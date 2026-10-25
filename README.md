@@ -44,8 +44,6 @@ paper's data) certifies the same 75 instances, with no other change of outcome.
   `make -B -C ML build_certifier` rebuilds it.
   Networks for problems without numeric interference are identical; for the others the new guards
   add clock constraints to the edges.
-- Documentation: the export command is `isabelle build -d . -e Numeric_Ground_PDDL_Exec_Imp` (the
-  other folder's README names `PDDL_TP_Reduction`, which does not export the numeric certifier).
 
 The provenance tags (`provenance` commands, see the artifact's `PROVENANCE.md`) cover the changed
 lines too: the fix was implemented by AI agents, so its lines are tagged `ai` and `ai_human`.
