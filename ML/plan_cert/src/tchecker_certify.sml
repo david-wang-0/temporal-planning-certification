@@ -25,7 +25,7 @@ struct
     | verdict_to_string NoVerdict = "no verdict"
 
   (* per-stage wall-clock profiling: every named pipeline stage prints a machine-parseable
-     "+ STAGE <name>: <ms> ms" line (the unsolvability-benchmarks harness reads these) *)
+     "+ STAGE <name>: <ms> ms" line (the benchmark harness reads these) *)
   fun timeStage name f =
     let
       val t = Timer.startRealTimer ()
