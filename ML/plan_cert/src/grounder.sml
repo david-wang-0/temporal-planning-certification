@@ -25,8 +25,8 @@
          objects into the name; redeclare the resulting 0-ary predicates + functions; empty the
          objects/constants.
 
-   UNVERIFIED and (for now) a full cross-product instantiation with no reachability pruning --
-   task #22b replaces that with datalog reachability via nemo. *)
+   UNVERIFIED; the instantiation is restricted to the parameter tuples that nemo finds reachable
+   (NemoReach), or is the full cross-product without nemo. *)
 
 structure Grounder =
 struct
