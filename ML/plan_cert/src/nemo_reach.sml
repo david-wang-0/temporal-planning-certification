@@ -1,4 +1,4 @@
-(* Nemo datalog reachability for the grounder (task #22b).
+(* Nemo datalog reachability for the grounder.
 
    Builds the TFD-style delete-relaxed reachability datalog program from the LIFTED
    (parameterized) problem, runs the nemo engine (nmo), and returns a per-schema filter

@@ -214,7 +214,7 @@ fun infer_box_ms () = StageTiming.get_ms "infer-box"
 (* shared numeric front end: parse + ground (nemo-pruned) *)
 fun numeric_ground domain problem =
     let
-        (* nemo datalog reachability (task #22b): built from the quantifier-free C parse
+        (* nemo datalog reachability: built from the quantifier-free C parse
            regardless of the grounding strategy (the lifted reachable set is the same);
            NONE (nmo missing / NEMO_PRUNE=0 / failure) = no pruning, full cross-product *)
         val ground_prob = TCheckerCertify.timeStage "ground" (fn () =>
