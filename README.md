@@ -107,9 +107,8 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
 
 ### Requirements
 
-- `plan_cert`: `ML/out/plan_cert`, or build it as above. In the artifact,
-  `benchmarks/tools/ours/plan_cert` is the paper's binary, built from the version the evaluation
-  used, not from this one (see [What changed after the evaluation](#what-changed-after-the-evaluation)).
+- `plan_cert`: `ML/out/plan_cert`, or build it as above. It is not the binary that produced the
+  paper's results (see [What changed after the evaluation](#what-changed-after-the-evaluation)).
 - `tck-reach` from [TChecker](https://github.com/ticktac-project/tchecker). The artifact's results
   were produced with TChecker master built 2026-07-26, included as `benchmarks/tools/ours/tck-reach`.
 - The `convert_models` Python package (in this directory; in the artifact also in
@@ -134,7 +133,7 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
 `plan_cert` reads lifted PDDL and grounds it itself. In the artifact, from its root directory:
 
 ```sh
-P=$PWD/temporal-planning-certification-fixed/ML/out/plan_cert
+P=$PWD/temporal-planning-certification/ML/out/plan_cert
 T=$PWD/benchmarks/tools/ours
 B=benchmarks/benchmarks/MatchCellar-impossible
 W=$(mktemp -d)
@@ -143,7 +142,7 @@ env TCHECKER_PKG_ROOT=$T TCK_REACH_BIN=$T/tck-reach NMO=$T/nmo $P -certify numer
   -model $W/model.muntax -renaming $W/renaming.json -certificate $W/cert.bin
 ```
 
-With `P=$T/plan_cert` the same command runs the paper's binary. Outside the artifact, from this directory, with `tck-reach` copied here and `nmo` on `PATH`, the
+Outside the artifact, from this directory, with `tck-reach` copied here and `nmo` on `PATH`, the
 defaults apply; `DOMAIN` and `PROBLEM` are a PDDL domain and problem file, e.g. a benchmark
 instance:
 
@@ -224,9 +223,8 @@ no other change of outcome.
   `18db4c263533cba009e58953c0c9abb9ba19bb20b06bb363b2eb523489f6ff11`).
 - Binary: `ML/out/plan_cert` is the certifier built from this version (sha256
   `f5367170292fb62c33111255473171e8b78ddb30d9878abfa8674a4b29da04de`; Isabelle2025-2 with the AFP
-  release afp-2026-10-06, MLton 20241230, GCC 16.2.1). It is not the paper's binary (in the artifact
-  `benchmarks/tools/ours/plan_cert`, sha256 `611b70924b60…`, built from the evaluation version,
-  which the artifact does not include);
+  release afp-2026-10-06, MLton 20241230, GCC 16.2.1). It is not the paper's binary (sha256
+  `611b70924b60…`, built from the evaluation version; the artifact includes neither);
   `make -B -C ML build_certifier` rebuilds it.
   Networks for problems without numeric interference are identical; for the others the new guards
   add clock constraints to the edges.
