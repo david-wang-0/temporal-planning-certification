@@ -1,12 +1,12 @@
 # temporal-planning-certification
 
-The source code for our paper "Formally Verified Certification of Unsolvability of Temporal
-Planning Problems": the reduction of temporal planning to timed automata and its correctness
-proofs in Isabelle/HOL, and `plan_cert`, the verified certifier of unsolvability built from them.
-[Index.thy](Index.thy) maps the theorems, lemmas and definitions of the paper to the theories.
-This version contains one correction made after the paper's evaluation, the numeric interference
-guards of the paper's Definition 20; see
-[What changed after the evaluation](#what-changed-after-the-evaluation).
+The source code for our paper "Formally Verified Certification of Unsolvability of Temporal Planning
+Problems": the reduction of temporal planning to timed automata and its correctness proofs in
+Isabelle/HOL, and `plan_cert`, the verified certifier of unsolvability built from them.
+[Index.thy](Index.thy) maps the theorems, lemmas and definitions of the paper to the theories. This
+version contains one correction made after the paper's experimental evaluation, the numeric
+interference guards of the paper's Definition 20; see [What changed after the experimental
+evaluation](#what-changed-after-the-experimental-evaluation).
 
 The development also certifies unsolvability of **numeric** temporal problems end to end (this
 part is not in the paper): interval bound inference with relational (fluent-vs-fluent) guard
@@ -30,19 +30,22 @@ README covers:
 - [Running the certifier](#running-the-certifier): `plan_cert -certify numeric-tchecker` on a PDDL
   problem.
 - [Third-party components and licences](#third-party-components-and-licences).
-- [What changed after the evaluation](#what-changed-after-the-evaluation): the correction, and
-  how this version differs from the one the paper's evaluation used.
+- [What changed after the experimental evaluation](#what-changed-after-the-experimental-evaluation):
+  the correction, and how this version differs from the one the paper's experimental evaluation
+  used.
 
 ## What is verified and what is trusted
 
-`plan_cert -certify numeric-tchecker` ends in the capstone `check_and_cert_numeric_pddl_problem_okay`
-(`Numeric_Ground_PDDL_Exec_Imp/Numeric_Unsolvability_Export.thy`): when it reports
-"The numeric planning problem is unsolvable.", there is no `π` with `num_ground_plan_valid P π`,
-where `P` is the **ground** problem handed to it.
+`plan_cert -certify numeric-tchecker` ends in the capstone
+`check_and_cert_numeric_pddl_problem_okay`
+(`Numeric_Ground_PDDL_Exec_Imp/Numeric_Unsolvability_Export.thy`): when it reports "The numeric
+planning problem is unsolvable.", there is no `π` with `num_ground_plan_valid P π`, where `P` is the
+**ground** problem handed to it.
 
-- Untrusted, before the capstone: the PDDL parser and our own grounder (`ML/plan_cert/src/grounder.sml`,
-  written for `plan_cert`, not taken from another planner), including the nemo datalog-reachability
-  pruning (`ML/plan_cert/src/nemo_reach.sml`), static-fluent folding and the duration scaling below.
+- Untrusted, before the capstone: the PDDL parser and our own grounder
+  (`ML/plan_cert/src/grounder.sml`, written for `plan_cert`, not taken from another planner),
+  including the nemo datalog-reachability pruning (`ML/plan_cert/src/nemo_reach.sml`), static-fluent
+  folding and the duration scaling below.
 - Verified, inside the capstone: the executable admission check (it checks that `P` is a well-formed
   ground problem of the supported fragment, not that it is a faithful grounding of the lifted
   problem), the bound inference, the TA encoding, and Munta's certificate checker.
@@ -108,16 +111,18 @@ to the external tck-reach oracle and checks the returned certificate with Munta'
 ### Requirements
 
 - `plan_cert`: `ML/out/plan_cert`, or build it as above. It is not the binary that produced the
-  paper's results (see [What changed after the evaluation](#what-changed-after-the-evaluation)).
+  paper's results (see [What changed after the experimental
+  evaluation](#what-changed-after-the-experimental-evaluation)).
 - `tck-reach` from [TChecker](https://github.com/ticktac-project/tchecker). The artifact's results
-  were produced with TChecker master built 2026-07-26, included as `benchmarks/tools/ours/tck-reach`.
+  were produced with TChecker master built 2026-07-26, included as
+  `benchmarks/tools/ours/tck-reach`.
 - The `convert_models` Python package (in this directory; in the artifact also in
-  `benchmarks/tools/ours/`) and `python3` on `PATH`. The two conversions `plan_cert` runs use only the
-  Python standard library; pydot is needed only by `convert_models/model_to_dot.py`, which
+  `benchmarks/tools/ours/`) and `python3` on `PATH`. The two conversions `plan_cert` runs use only
+  the Python standard library; pydot is needed only by `convert_models/model_to_dot.py`, which
   `plan_cert` does not call. So a direct call needs no virtual environment.
-- `nmo` from [Nemo v0.10.0](https://github.com/knowsys/nemo/releases/tag/v0.10.0): the grounder keeps
-  only the action instances that Nemo finds reachable in the delete relaxation; in the artifact,
-  `benchmarks/tools/ours/nmo`.
+- `nmo` from [Nemo v0.10.0](https://github.com/knowsys/nemo/releases/tag/v0.10.0): the grounder
+  keeps only the action instances that Nemo finds reachable in the delete relaxation; in the
+  artifact, `benchmarks/tools/ours/nmo`.
 
 `plan_cert` finds these through environment variables:
 
@@ -154,8 +159,8 @@ W=$(mktemp -d)
 
 `-model`, `-renaming` and `-certificate` are output paths: the network (muntax), the renaming and
 the binary certificate. Next to the certificate, `plan_cert` also writes the TChecker model
-(`<certificate>.tck`) and the zone graph that tck-reach returns (`<certificate>.dot`). `-num-threads N`
-(default 1) sets the threads of the certificate check.
+(`<certificate>.tck`) and the zone graph that tck-reach returns (`<certificate>.dot`). `-num-threads
+N` (default 1) sets the threads of the certificate check.
 
 ### Output
 
@@ -194,21 +199,21 @@ Our sources are under the BSD-3-Clause licence (`LICENSE`). Third-party material
 - `ML/Check_Unsolvability.ML` is generated from our theories together with Isabelle/HOL and
   AFP entries, which are under BSD licences except for Show and parts of Deriving (LGPL 2.1).
 
-## What changed after the evaluation
+## What changed after the experimental evaluation
 
-**The numeric interference guards.** The reduction used for the paper's evaluation added clock
-guards to the action automata's edges only for snap actions that interfere propositionally; snap
-actions that interfere only numerically (one writes a fluent the other reads or writes, conditions
-(v)–(vii) of the paper's Definition 13) got no guard, unlike Definition 20 of the paper. This
-version guards both, in the formal model and in the executable certifier: an action's start, end
-and instant edges check the clocks of every snap action that interferes with it propositionally or
-numerically. With the old guards the network was a sound over-approximation with respect to
-reachability/solvability (fewer guards only admit more runs, so an unreachable goal still means no
-valid plan exists), so no result of the paper is invalidated; they could only leave some
-unsolvable instances uncertified. The paper's evaluation results in `benchmarks/` were produced
-with the old binary; a rerun of all 410 `ours` runs with this folder's binary (the artifact's
-`benchmarks-ours-rerun/`, kept apart from the paper's data) certifies the same 75 instances, with
-no other change of outcome.
+**The numeric interference guards.** The reduction used for the paper's experimental evaluation
+added clock guards to the action automata's edges only for snap actions that interfere
+propositionally; snap actions that interfere only numerically (one writes a fluent the other reads
+or writes, conditions (v)–(vii) of the paper's Definition 13) got no guard, unlike Definition 20 of
+the paper. This version guards both, in the formal model and in the executable certifier: an
+action's start, end and instant edges check the clocks of every snap action that interferes with it
+propositionally or numerically. With the old guards the network was a sound over-approximation with
+respect to reachability/solvability (fewer guards only admit more runs, so an unreachable goal still
+means no valid plan exists), so no result of the paper is invalidated; they could only leave some
+unsolvable instances uncertified. The results of the paper's experimental evaluation in
+`benchmarks/` were produced with the old binary; a rerun of all 410 `ours` runs with this folder's
+binary (the artifact's `benchmarks-ours-rerun/`, kept apart from the paper's data) certifies the
+same 75 instances, with no other change of outcome.
 
 - Formal model: the interference relation is a parameter `mutex_effects` of the reduction
   (`tp_nta_reduction_defs`, `TA_Network/TP_NTA_Reduction_Defs.thy`); the propositional reduction
@@ -219,15 +224,15 @@ no other change of outcome.
   of the correctness proof. `Index.thy`, Definitions 18 and 20, maps the changes to the paper.
 - Executable certifier: `mutex_effects'`, `num_net_int_clocks'`, `start_edge_num'`, `edge_3_num'`
   and `instant_trans_edge_num'` (`Numeric_Ground_PDDL_Exec_Imp/`). `ML/Check_Unsolvability.ML` is
-  re-exported from this version (+155/−3 lines against the evaluation version's; sha256
-  `18db4c263533cba009e58953c0c9abb9ba19bb20b06bb363b2eb523489f6ff11`).
+  re-exported from this version (sha256
+  `18db4c263533cba009e58953c0c9abb9ba19bb20b06bb363b2eb523489f6ff11`; +155/−3 lines against the
+  export of the version of the experimental evaluation).
 - Binary: `ML/out/plan_cert` is the certifier built from this version (sha256
   `f5367170292fb62c33111255473171e8b78ddb30d9878abfa8674a4b29da04de`; Isabelle2025-2 with the AFP
   release afp-2026-10-06, MLton 20241230, GCC 16.2.1). It is not the paper's binary (sha256
-  `611b70924b60…`, built from the evaluation version; the artifact includes neither);
-  `make -B -C ML build_certifier` rebuilds it.
-  Networks for problems without numeric interference are identical; for the others the new guards
-  add clock constraints to the edges.
+  `611b70924b60…`, built from the version of the experimental evaluation; the artifact includes
+  neither); `make -B -C ML build_certifier` rebuilds it. Networks for problems without numeric
+  interference are identical; for the others the new guards add clock constraints to the edges.
 
 The provenance tags (`provenance` commands, see the artifact's `PROVENANCE.md`) cover the changed
 lines too: the fix was implemented by AI agents, so its lines are tagged `ai` and `ai_human`.
