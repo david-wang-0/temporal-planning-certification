@@ -168,7 +168,8 @@ On the instance above, the output ends with `Certificate was accepted`, then
 `The numeric planning problem is unsolvable.` and the stage lines. The paper's MatchCellar
 examples in `examples/matchcellar/` give no verdict: with the counter `matches-lit`, the bound
 inference finds no upper bound, and `plan_cert` prints
-`numeric bound inference failed (a fluent is unbounded or out of scope)`.
+`numeric bound inference failed (a fluent is unbounded or out of scope)`. Without the counter,
+`domain_no_counter.pddl` with `unsolvable_instance_no_counter.pddl` is certified unsolvable.
 
 `The numeric planning problem is unsolvable.` is printed only by the verified capstone, after the
 checker has accepted the certificate; it is the verdict. A rejected certificate is no verdict: it

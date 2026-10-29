@@ -98,5 +98,5 @@ addition to ours.
 
 | files | origin | licence |
 |---|---|---|
-| `examples/matchcellar/` | a numeric variant of the MatchCellar domain with a solvable and an unsolvable instance, written by us as the example of our paper (cited in `Index.thy`); MatchCellar is originally an IPC 2011 domain | ours: BSD-3-Clause |
+| `examples/matchcellar/` | a numeric variant of the MatchCellar domain with a solvable and an unsolvable instance, written by us as the example of our paper (cited in `Index.thy`), and a variant of the domain and the unsolvable instance without the counter `matches-lit` (`*_no_counter.pddl`); MatchCellar is originally an IPC 2011 domain | ours: BSD-3-Clause |
 | `ML/plan_cert/test/resources/ground-blocks*.pddl` | grounded Blocksworld instances (IPC domain) | no licence stated |
